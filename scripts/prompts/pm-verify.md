@@ -11,6 +11,7 @@ You did NOT score this ticket. Read it fresh.
 ## Your job
 
 1. **Re-run** every `acceptance` command independently. Don't trust the score's recorded exits.
+   Record raw stdout of every acceptance command into evidence.cmd_output (truncate to last 4 KB if huge).
 2. **Re-inspect** the diff for:
    - Hidden side-effects (file deletes outside scope_paths, dependency changes, secret leakage)
    - Test gaming (tests that always pass, removed assertions, mocked-away assertions)
@@ -23,14 +24,21 @@ You did NOT score this ticket. Read it fresh.
 
 Keep all existing fields. Add:
 
+Verifier output MUST validate against schemas/verify.schema.json.
+
 ```json
 {
   "verifier": {
-    "passed": true|false,
+    "passed": true,
+    "evidence": {
+      "cmd_output": "<raw stdout of acceptance commands, last 4 KB>",
+      "files_checked": ["path/to/file1", "path/to/file2"],
+      "diff_sha": "abc1234"
+    },
     "reproductions": [
       {"scenario":"...","cmd":"...","observed":"..."}
     ],
-    "downgraded_to": null | "request-changes" | "reject",
+    "downgraded_to": null,
     "notes": "<paragraph>"
   }
 }
