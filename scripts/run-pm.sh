@@ -58,24 +58,42 @@ cd "$PROJECT"
 echo "[pm/$PM_MODEL] online project=$PROJECT" | tee -a "$LOG"
 
 # Phase 0a: explorer (run once per project unless re-bootstrapped)
+# Sentinel touched ONLY if required artifacts exist.
 if [ ! -f "$ROOT/knowledge/.explored" ]; then
   echo "[pm] swarm-explorer: scanning project" | tee -a "$LOG"
-  pm_call pm-explore.md "$ROOT/knowledge/explore.log" PROJECT="$PROJECT"
-  touch "$ROOT/knowledge/.explored"
+  if pm_call pm-explore.md "$ROOT/knowledge/explore.log" PROJECT="$PROJECT" \
+      --require "$ROOT/knowledge/project-snapshot.md" \
+      --require "$ROOT/knowledge/project-files.json"; then
+    touch "$ROOT/knowledge/.explored"
+  else
+    echo "[pm] explore incomplete — retry next loop" | tee -a "$LOG"
+    sleep 30; continue 2>/dev/null || exec "$0"
+  fi
 fi
 
 # Phase 0b: knowledge bootstrap (notebooklm + obsidian + context7 + web)
 if [ ! -f "$ROOT/knowledge/.bootstrapped" ]; then
   echo "[pm] knowledge bootstrap (notebooklm/obsidian/context7/web)" | tee -a "$LOG"
-  pm_call pm-bootstrap.md "$ROOT/knowledge/bootstrap.log" PROJECT="$PROJECT"
-  touch "$ROOT/knowledge/.bootstrapped"
+  if pm_call pm-bootstrap.md "$ROOT/knowledge/bootstrap.log" PROJECT="$PROJECT" \
+      --require "$ROOT/knowledge/synthesis.md" \
+      --require "$ROOT/knowledge/topics.json"; then
+    touch "$ROOT/knowledge/.bootstrapped"
+  else
+    echo "[pm] bootstrap incomplete — retry next loop" | tee -a "$LOG"
+    sleep 30; exec "$0"
+  fi
 fi
 
 # Phase 0c: decompose initial goal into roadmap of topics
 if [ ! -f "$ROOT/knowledge/.goal-decomposed" ]; then
   echo "[pm] goal decomposition" | tee -a "$LOG"
-  pm_call pm-goal-decompose.md "$ROOT/knowledge/goal.log" PROJECT="$PROJECT"
-  touch "$ROOT/knowledge/.goal-decomposed"
+  if pm_call pm-goal-decompose.md "$ROOT/knowledge/goal.log" PROJECT="$PROJECT" \
+      --require "$ROOT/knowledge/roadmap.json"; then
+    touch "$ROOT/knowledge/.goal-decomposed"
+  else
+    echo "[pm] goal decompose incomplete — retry next loop" | tee -a "$LOG"
+    sleep 30; exec "$0"
+  fi
 fi
 
 # Main loop

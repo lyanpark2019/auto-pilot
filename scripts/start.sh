@@ -21,11 +21,37 @@ if ! git -C "$PROJECT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "[start] $PROJECT is not a git repo. Run \`git init\` first." >&2
   exit 2
 fi
+# worktree-add HEAD needs at least one commit
+if ! git -C "$PROJECT" rev-parse --verify HEAD >/dev/null 2>&1; then
+  echo "[start] $PROJECT has no commits. Run \`git add <files> && git commit -m 'initial'\` first." >&2
+  exit 2
+fi
+# git identity required for worker commits
+if [ -z "$(git -C "$PROJECT" config user.email)" ] || [ -z "$(git -C "$PROJECT" config user.name)" ]; then
+  echo "[start] git user.email/user.name not set. Run \`git config user.email <addr>\` and \`git config user.name <name>\`." >&2
+  exit 2
+fi
 
 # 1. dependencies
 for cmd in tmux jq envsubst claude codex git; do
-  command -v "$cmd" >/dev/null || { echo "[start] missing dependency: $cmd" >&2; exit 3; }
+  command -v "$cmd" >/dev/null || { echo "[start] missing dependency: $cmd (install: brew install $cmd; envsubst comes from gettext)" >&2; exit 3; }
 done
+
+# 1b. schema validation — every value that flows into bash/jq/tmux must be sane
+schema_err() { echo "[start] invalid config: $1" >&2; exit 4; }
+jq -e '.pm.model == "claude-opus-4-7"' "$CONFIG" >/dev/null || schema_err 'pm.model must be "claude-opus-4-7"'
+jq -e '(.workers|type=="array") and (.workers|length>=4) and (.workers|length<=10)' "$CONFIG" >/dev/null \
+  || schema_err 'workers must be array length 4..10'
+jq -e '[.workers[].id] | (length == (unique|length))' "$CONFIG" >/dev/null \
+  || schema_err 'worker ids must be unique'
+jq -e '.workers[] | (.id|type=="number") and (.engine=="claude" or .engine=="codex")
+  and ((.engine=="claude" and (.model|startswith("claude-"))) or (.engine=="codex" and .model=="gpt-5"))
+  and ((.role|tostring) | test("^[a-z0-9][a-z0-9-]*$"))' "$CONFIG" >/dev/null \
+  || schema_err 'each worker needs integer id, engine∈{claude,codex}, matching model, lowercase role tag'
+jq -e '(.initial_goal.title|type=="string") and (.initial_goal.title|length>0) and (.initial_goal.title|length<=80)' "$CONFIG" >/dev/null \
+  || schema_err 'initial_goal.title 1..80 chars required'
+jq -e '(.initial_goal.success_criteria|type=="array") and (.initial_goal.success_criteria|length>=1)' "$CONFIG" >/dev/null \
+  || schema_err 'initial_goal.success_criteria needs ≥1 entry'
 
 # 2. message bus
 mkdir -p "$ROOT"/{in_progress,done,scores,ledger,knowledge,archive,logs,bench}

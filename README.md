@@ -13,6 +13,33 @@ notebooklm + obsidian + context7 + web research.
 Already in `~/.claude/plugins/autopilot-swarm/`. Register in `~/.claude/marketplace.json`
 or just call the skills directly.
 
+## Prerequisites
+
+```bash
+brew install tmux jq gettext            # gettext provides envsubst
+# Claude CLI w/ `claude -p`, Codex CLI w/ `codex exec`
+# `quality-eval` skill installed under ~/.claude/skills/
+```
+
+Target project must be a git repo with at least one commit and a configured identity:
+```bash
+git rev-parse --verify HEAD           # must succeed
+git status --short                    # should be clean
+git config user.email                 # must be non-empty
+git config user.name                  # must be non-empty
+```
+For a brand-new project:
+```bash
+git init
+git add <files>
+git commit -m "initial commit"
+git config user.email you@example.com   # only if not set globally
+git config user.name "Your Name"
+```
+
+NotebookLM, Obsidian, Context7, and web-search MCPs are optional — PM degrades
+gracefully and logs `skill unavailable: <name>` for each missing source.
+
 ## Quick start
 
 From any project root:

@@ -61,10 +61,29 @@ interactive Q&A. Output drives `start.sh`.
 - **PM model is forced to `claude-opus-4-7`** — never let the user override it.
 - Worker count must be in `[4, 10]`.
 - Per worker, `engine ∈ {claude, codex}`, `model` must match engine
-  (claude-* for claude, gpt-5 for codex), `role` is free-form lowercase tag.
-- `initial_goal.title` ≤ 80 chars, `success_criteria` ≥ 1 verifiable item.
-- If the project has no `.git`, refuse and tell user to `git init` first
-  (worktrees require a repo).
+  (claude-* for claude, gpt-5 for codex). `role` must match `^[a-z0-9][a-z0-9-]*$`.
+- `initial_goal.title` ≤ 80 chars, `success_criteria` ≥ 1 verifiable shell command.
+- Refuse and tell user to fix when:
+  - `git rev-parse --is-inside-work-tree` fails → `git init`
+  - `git rev-parse --verify HEAD` fails → at least one commit required
+  - `git config user.email` / `user.name` empty → set them
+- Worker IDs must be unique integers, assigned in prompt order starting at 1.
+
+## Normalization rules (NL parser)
+
+Apply BEFORE schema check. Always normalize aliases:
+
+| User says | Canonical |
+|---|---|
+| `opus`, `claude-opus`, `o4` | `claude-opus-4-7` |
+| `sonnet`, `claude-sonnet` | `claude-sonnet-4-6` |
+| `haiku`, `claude-haiku` | `claude-haiku-4-5` |
+| `codex`, `gpt`, `gpt-5` | engine `codex` + model `gpt-5` |
+| `arch-review`, `architecture`, `architectural-review` | `architecture-review` |
+| `codegen`, `code-generation`, `구현` | `codegen` |
+| `general`, `일반` | `general` |
+| `security`, `보안` | `security` |
+| `verification`, `검증` | `verification` |
 
 ## Steps
 
