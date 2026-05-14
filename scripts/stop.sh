@@ -5,6 +5,21 @@ BASE="$(basename "$PROJECT")"
 SESSION="autopilot-$BASE"
 CONFIG="$PROJECT/.planning/autopilot/config.json"
 
+_stop_cleanup() {
+  local lockdir="$PROJECT/.planning/autopilot/ledger/dispatch.lock.d"
+  if [ -d "$lockdir" ]; then
+    local lockholder_pid_file="$lockdir/lockholder.pid"
+    if [ ! -f "$lockholder_pid_file" ] || ! kill -0 "$(cat "$lockholder_pid_file")" 2>/dev/null; then
+      rm -rf "$lockdir" || true
+    fi
+  fi
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  echo "cleanup done" >&2
+}
+
+# Guarantee lockdir + tmux cleanup even when stop.sh is interrupted mid-loop.
+trap '_stop_cleanup' EXIT INT TERM
+
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   # -s scopes to target session; -a would ignore -t and hit every pane on the server.
   for p in $(tmux list-panes -s -t "$SESSION" -F "#{session_name}:#{window_index}.#{pane_index}"); do
