@@ -15,23 +15,59 @@ mkdir -p "$INBOX" "$OUTBOX" "$ROOT/in_progress" "$ROOT/done" "$ROOT/results"
 
 echo "[w$ID/$ENGINE/$MODEL/$ROLE] online wt=$WT" | tee -a "$LOG"
 
+# Optional auto-PR: only if `gh` is installed AND repo has an origin remote.
+PR_ENABLED=0
+command -v gh >/dev/null && git -C "$WT" remote get-url origin >/dev/null 2>&1 && PR_ENABLED=1
+
+open_pr() {
+  local TID="$1" TITLE="$2" BR="$3" RESULT_DIR="$4"
+  [ "$PR_ENABLED" -eq 1 ] || { echo "[w$ID] PR skipped (gh missing or no origin)" | tee -a "$LOG"; return 0; }
+  local AHEAD
+  AHEAD="$(git -C "$WT" rev-list --count "main..$BR" 2>/dev/null || echo 0)"
+  if [ "$AHEAD" -eq 0 ]; then
+    echo "[w$ID] $TID — no commits vs main, skip PR" | tee -a "$LOG"
+    return 0
+  fi
+  git -C "$WT" push -u origin "$BR" >> "$LOG" 2>&1 || {
+    echo "[w$ID] push failed for $BR" | tee -a "$LOG"
+    return 1
+  }
+  local BODY
+  BODY="$(printf 'Autopilot ticket %s\n\nWorker: %s (engine=%s, model=%s, role=%s)\nWorktree: %s\n\nSee `.planning/autopilot/done/%s.json` for the ticket spec.\n' \
+    "$TID" "$ID" "$ENGINE" "$MODEL" "$ROLE" "$WT" "$TID")"
+  gh pr create \
+    --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" \
+    --base main --head "$BR" \
+    --title "autopilot[$TID]: $TITLE" \
+    --body "$BODY" \
+    >> "$LOG" 2>&1 || echo "[w$ID] gh pr create failed for $TID" | tee -a "$LOG"
+  gh pr view "$BR" --json url -q .url > "$RESULT_DIR/pr.url" 2>/dev/null || true
+}
+
 while true; do
   TICKET="$(ls -t "$INBOX"/*.json 2>/dev/null | head -1 || true)"
   if [ -z "${TICKET:-}" ]; then sleep 8; continue; fi
   TID="$(basename "$TICKET" .json)"
   IP="$ROOT/in_progress/$TID.json"
-  # Atomic claim: `mv` of a vanished source returns nonzero. Under `set -e`
-  # that would kill the loop; guard with `|| { ... continue; }` so race losers
-  # just go back to polling.
   if ! mv "$TICKET" "$IP" 2>/dev/null; then
     echo "[w$ID] race-lost on $TID" | tee -a "$LOG"
     continue
   fi
   PROMPT="$(jq -r '.prompt' "$IP")"
+  TITLE="$(jq -r '.title // .id' "$IP")"
   RESULT_DIR="$ROOT/results/$TID"; mkdir -p "$RESULT_DIR"
   echo "[w$ID] claim $TID" | tee -a "$LOG"
 
   cd "$WT"
+  # Per-ticket branch off main so each PR is isolated (PR_ENABLED mode).
+  if [ "$PR_ENABLED" -eq 1 ]; then
+    BR="autopilot/$TID"
+    git -C "$WT" fetch origin main --quiet >> "$LOG" 2>&1 || true
+    git -C "$WT" checkout -B "$BR" origin/main >> "$LOG" 2>&1 || \
+      git -C "$WT" checkout -B "$BR" main >> "$LOG" 2>&1
+  else
+    BR="autopilot/worker-$ID"
+  fi
   case "$ENGINE" in
     claude)
       claude --model "$MODEL" -p --dangerously-skip-permissions \
@@ -65,8 +101,11 @@ $PROMPT" \
 
   git -C "$WT" add -A
   git -C "$WT" diff --cached > "$RESULT_DIR/diff.patch" || true
-  git -C "$WT" commit -m "autopilot: $TID" --allow-empty >/dev/null
+  git -C "$WT" commit -m "autopilot: $TID — $TITLE" --allow-empty >/dev/null
   git -C "$WT" rev-parse HEAD > "$RESULT_DIR/commit.sha"
+
+  # Open PR if remote + gh available; no-op otherwise.
+  open_pr "$TID" "$TITLE" "$BR" "$RESULT_DIR" || true
 
   mv "$IP" "$ROOT/done/$TID.json"
   echo "[w$ID] done $TID" | tee -a "$LOG"

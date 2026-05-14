@@ -17,9 +17,15 @@ or just call the skills directly.
 
 ```bash
 brew install tmux jq gettext            # gettext provides envsubst
+brew install gh                         # optional — enables auto-PR per ticket
 # Claude CLI w/ `claude -p`, Codex CLI w/ `codex exec`
 # `quality-eval` skill installed under ~/.claude/skills/
 ```
+
+Auto-PR mode kicks in when `gh` is installed AND the repo has an `origin`
+remote. Each successful worker ticket → its own branch `autopilot/T-<id>` off
+`main` + `gh pr create`. Without `gh`/`origin`, workers fall back to the
+shared per-worker branch (no push, local-only).
 
 Target project must be a git repo with at least one commit and a configured identity:
 ```bash
@@ -33,7 +39,7 @@ For a brand-new project:
 git init
 git add <files>
 git commit -m "initial commit"
-git config user.email you@example.com   # only if not set globally
+git config user.email "<your-address>"  # only if not set globally
 git config user.name "Your Name"
 ```
 
@@ -100,6 +106,38 @@ All distilled into `<project>/.planning/autopilot/knowledge/`.
 ├── archive/
 └── logs/
 ```
+
+## Ticket Lifecycle
+
+Every ticket walks the file bus through a small set of states. The diagram
+below renders the canonical happy path plus the reject branch as an embedded
+mermaid `stateDiagram-v2`. Ground-truth code: `scripts/run-pm.sh` (PM side)
+and `scripts/run-worker.sh` (worker side).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Issued
+    Issued --> Claimed : run-worker.sh atomic mv
+    Claimed --> Scored : pm-score
+    Scored --> Merged : verifier merge
+    Scored --> Rejected : verifier reject
+    Merged --> Archived : ledger
+    Rejected --> Archived : ledger
+    Archived --> [*]
+    note right of Issued : inbox/worker-<id>/
+    note right of Claimed : in_progress/
+    note right of Archived : archive/
+```
+
+Two race hot-spots govern correctness. (1) The `inbox` → `in_progress` claim
+is a POSIX rename (`mv`) in `/Users/lyan/.claude/plugins/autopilot-swarm/scripts/run-worker.sh`
+— atomic on the same filesystem, so the losing worker gets a nonzero exit and
+re-polls instead of double-claiming. (2) The PM merge-lock
+(`dispatch.lock.d` mkdir-lock) in `/Users/lyan/.claude/plugins/autopilot-swarm/scripts/run-pm.sh`
+serializes ticket dispatch against the `swarm-ticket` skill and guards the
+cherry-pick of `Merged` results into `main`; if the holder dies mid-write the
+lock is reclaimed after ~30s. Both flows ultimately fall through to `archive`
+so the bus stays drainable.
 
 ## Self-improvement
 

@@ -38,10 +38,11 @@ Schema:
   "id": "T-YYYYMMDD-HHMMSS",
   "topic": "<from topics.json>",
   "milestone": "<roadmap milestone or 'maintenance'>",
-  "title": "<imperative, ≤80 chars>",
+  "axis": "interface | deep-module | file-split | clean-arch | tests | docs | security | bugfix",
+  "title": "<imperative ≤80 chars, used as PR title when gh available>",
   "prompt": "<self-contained instructions; reference absolute paths; mention engine constraints>",
   "knowledge_refs": ["knowledge/...","external:..."],
-  "scope_paths": ["src/foo/","tests/foo/"],
+  "scope_paths": ["src/foo/<file>","tests/foo/<file>"],
   "acceptance": ["<verifiable shell command 1>","<command 2>"],
   "engine_hint": "${ENGINE_HINT}",
   "role": "${ROLE}",
@@ -54,6 +55,10 @@ Schema:
 
 ## Rules
 
-- Prompt must be self-contained (worker has no chat history).
+- Prompt MUST be self-contained (worker has no chat history).
 - Each `acceptance[]` entry must be a runnable bash one-liner whose exit 0 = pass.
+- `scope_paths` max 1–3 concrete files. Never a bare directory (no `src/`).
+- New ticket scope_paths MUST NOT overlap any path in current
+  `inbox/*` or `in_progress/*` tickets — workers branch per-ticket off `main`,
+  so file-level overlap still causes merge churn.
 - Stdout: `dispatched <id> → worker-${WORKER_ID}`.

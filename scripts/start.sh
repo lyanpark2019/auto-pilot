@@ -39,7 +39,13 @@ done
 
 # 1b. schema validation — every value that flows into bash/jq/tmux must be sane
 schema_err() { echo "[start] invalid config: $1" >&2; exit 4; }
-jq -e '.pm.model == "claude-opus-4-7"' "$CONFIG" >/dev/null || schema_err 'pm.model must be "claude-opus-4-7"'
+jq -e '(.pm.engine // "claude") == "claude" or (.pm.engine // "claude") == "codex"' "$CONFIG" >/dev/null \
+  || schema_err 'pm.engine must be "claude" or "codex"'
+jq -e '
+  if (.pm.engine // "claude") == "claude" then (.pm.model // "claude-opus-4-7") == "claude-opus-4-7"
+  else (.pm.model // "gpt-5.5") | test("^(gpt-5|gpt-5\\.5|o3)$") end
+' "$CONFIG" >/dev/null \
+  || schema_err 'pm.model: claude→"claude-opus-4-7" only; codex→gpt-5|gpt-5.5|o3'
 jq -e '(.workers|type=="array") and (.workers|length>=4) and (.workers|length<=10)' "$CONFIG" >/dev/null \
   || schema_err 'workers must be array length 4..10'
 jq -e '[.workers[].id] | (length == (unique|length))' "$CONFIG" >/dev/null \

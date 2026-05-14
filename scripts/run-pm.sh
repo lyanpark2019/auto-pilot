@@ -11,7 +11,8 @@ CONFIG="$ROOT/config.json"
 PROMPTS="$PLUGIN_ROOT/scripts/prompts"
 LOG="$ROOT/logs/pm.log"
 LOCKDIR="$ROOT/ledger/dispatch.lock.d"
-PM_MODEL="$(jq -r '.pm.model // "claude-opus-4-7"' "$CONFIG")"
+PM_ENGINE="$(jq -r '.pm.engine // "claude"' "$CONFIG")"
+PM_MODEL="$(jq -r '.pm.model // (if .pm.engine == "codex" then "gpt-5.5" else "claude-opus-4-7" end)' "$CONFIG")"
 mkdir -p "$ROOT/logs" "$ROOT/knowledge"
 
 acquire_lock() {
@@ -43,8 +44,19 @@ pm_call() {
   done
   local rendered
   rendered="$(env "${envvars[@]}" envsubst < "$PROMPTS/$tpl")"
-  if ! claude --model "$PM_MODEL" -p --dangerously-skip-permissions "$rendered" > "$out" 2>&1; then
-    echo "[pm] $tpl exited nonzero" | tee -a "$LOG"
+  local rc
+  case "$PM_ENGINE" in
+    codex)
+      codex exec --model "$PM_MODEL" -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "$rendered" > "$out" 2>&1
+      rc=$?
+      ;;
+    *)
+      claude --model "$PM_MODEL" -p --dangerously-skip-permissions "$rendered" > "$out" 2>&1
+      rc=$?
+      ;;
+  esac
+  if [ "$rc" -ne 0 ]; then
+    echo "[pm/$PM_ENGINE] $tpl exited nonzero ($rc)" | tee -a "$LOG"
     return 1
   fi
   if [ -n "$require" ] && [ ! -f "$require" ]; then
@@ -55,7 +67,7 @@ pm_call() {
 }
 
 cd "$PROJECT"
-echo "[pm/$PM_MODEL] online project=$PROJECT" | tee -a "$LOG"
+echo "[pm/$PM_ENGINE/$PM_MODEL] online project=$PROJECT" | tee -a "$LOG"
 
 # Phase 0a: explorer (run once per project unless re-bootstrapped)
 # Sentinel touched ONLY if required artifacts exist.
