@@ -28,7 +28,7 @@ run_arm_solo() {
   cd "$wt"
   case "$engine" in
     claude) timeout 600 claude --model "$model" -p --dangerously-skip-permissions "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
-    codex)  timeout 600 codex exec --full-auto --skip-git-repo-check "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
+    codex)  timeout 600 codex exec --model "$model" --full-auto --skip-git-repo-check "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
   esac
   local t1=$(date +%s)
   git -C "$wt" add -A; git -C "$wt" commit -m "bench arm $arm" --allow-empty >/dev/null
@@ -66,9 +66,9 @@ fi
 echo "[bench] arm-b: claude opus 4.7 solo"
 run_arm_solo b claude claude-opus-4-7
 
-# Arm C: codex gpt-5 solo (timeout-bounded)
-echo "[bench] arm-c: codex gpt-5 solo"
-run_arm_solo c codex gpt-5
+# Arm C: codex gpt-5.5 solo (timeout-bounded)
+echo "[bench] arm-c: codex gpt-5.5 solo"
+run_arm_solo c codex gpt-5.5
 
 # Score arms b/c with quality-eval (delegate to claude)
 for arm in b c; do

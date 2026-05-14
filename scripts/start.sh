@@ -45,9 +45,9 @@ jq -e '(.workers|type=="array") and (.workers|length>=4) and (.workers|length<=1
 jq -e '[.workers[].id] | (length == (unique|length))' "$CONFIG" >/dev/null \
   || schema_err 'worker ids must be unique'
 jq -e '.workers[] | (.id|type=="number") and (.engine=="claude" or .engine=="codex")
-  and ((.engine=="claude" and (.model|startswith("claude-"))) or (.engine=="codex" and .model=="gpt-5"))
+  and ((.engine=="claude" and (.model|startswith("claude-"))) or (.engine=="codex" and (.model|test("^(gpt-5|gpt-5\\.5|o3)$"))))
   and ((.role|tostring) | test("^[a-z0-9][a-z0-9-]*$"))' "$CONFIG" >/dev/null \
-  || schema_err 'each worker needs integer id, engine∈{claude,codex}, matching model, lowercase role tag'
+  || schema_err 'each worker needs integer id, engine∈{claude,codex}, matching model (codex: gpt-5|gpt-5.5|o3), lowercase role tag'
 jq -e '(.initial_goal.title|type=="string") and (.initial_goal.title|length>0) and (.initial_goal.title|length<=80)' "$CONFIG" >/dev/null \
   || schema_err 'initial_goal.title 1..80 chars required'
 jq -e '(.initial_goal.success_criteria|type=="array") and (.initial_goal.success_criteria|length>=1)' "$CONFIG" >/dev/null \

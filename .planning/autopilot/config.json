@@ -5,8 +5,8 @@
     {"id": 1, "engine": "claude", "model": "claude-opus-4-7",   "role": "architecture-review"},
     {"id": 2, "engine": "claude", "model": "claude-sonnet-4-6", "role": "verification"},
     {"id": 3, "engine": "claude", "model": "claude-haiku-4-5",  "role": "general"},
-    {"id": 4, "engine": "codex",  "model": "gpt-5",             "role": "codegen"},
-    {"id": 5, "engine": "codex",  "model": "gpt-5",             "role": "security"}
+    {"id": 4, "engine": "codex",  "model": "gpt-5.5",           "role": "codegen"},
+    {"id": 5, "engine": "codex",  "model": "gpt-5.5",           "role": "security"}
   ],
   "initial_goal": {
     "title": "autopilot-swarm plugin: round 3 self-improve until prod-grade",

@@ -78,7 +78,9 @@ Apply BEFORE schema check. Always normalize aliases:
 | `opus`, `claude-opus`, `o4` | `claude-opus-4-7` |
 | `sonnet`, `claude-sonnet` | `claude-sonnet-4-6` |
 | `haiku`, `claude-haiku` | `claude-haiku-4-5` |
-| `codex`, `gpt`, `gpt-5` | engine `codex` + model `gpt-5` |
+| `codex`, `gpt`, `gpt-5.5` | engine `codex` + model `gpt-5.5` (top tier, default) |
+| `gpt-5` (legacy) | engine `codex` + model `gpt-5` |
+| `o3` | engine `codex` + model `o3` |
 | `arch-review`, `architecture`, `architectural-review` | `architecture-review` |
 | `codegen`, `code-generation`, `구현` | `codegen` |
 | `general`, `일반` | `general` |
