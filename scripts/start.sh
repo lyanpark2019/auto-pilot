@@ -108,9 +108,9 @@ else
   CUR_WIN=auto
   CUR_PANES=1            # PM occupies one slot in window 'auto'
   for i in $WORKER_IDS; do
-    ENGINE=$(jq -r ".workers[] | select(.id==$i) | .engine" "$CONFIG")
-    MODEL=$(jq -r  ".workers[] | select(.id==$i) | .model"  "$CONFIG")
-    ROLE=$(jq -r   ".workers[] | select(.id==$i) | .role"   "$CONFIG")
+    ENGINE=$(jq -r --argjson wid "$i" '.workers[] | select(.id==$wid) | .engine' "$CONFIG")
+    MODEL=$(jq -r  --argjson wid "$i" '.workers[] | select(.id==$wid) | .model'  "$CONFIG")
+    ROLE=$(jq -r   --argjson wid "$i" '.workers[] | select(.id==$wid) | .role'   "$CONFIG")
     CMD="PLUGIN_ROOT=$PLUGIN_ROOT bash $PLUGIN_ROOT/scripts/run-worker.sh $i $ENGINE $MODEL $ROLE"
 
     # need to start a 2nd window once first window is full (5 panes)
