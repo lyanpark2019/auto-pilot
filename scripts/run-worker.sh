@@ -45,10 +45,14 @@ Constraints: write only inside this worktree. Do not commit — outer loop commi
         > "$OUTBOX/$TID.md" 2>&1 || echo "[w$ID] claude exit nonzero" | tee -a "$LOG"
       ;;
     codex)
-      # Pass --model so user-requested top-tier (gpt-5.5/o3) isn't silently downgraded.
-      codex exec --model "$MODEL" --full-auto --skip-git-repo-check \
+      # Top-tier model + xhigh reasoning explicit (subscription budget OK).
+      # --sandbox workspace-write replaces deprecated --full-auto.
+      codex exec --model "$MODEL" \
+        -c model_reasoning_effort="xhigh" \
+        --sandbox workspace-write \
+        --skip-git-repo-check \
         "Working dir: $WT
-Worker: $ID  Role: $ROLE  Engine: $ENGINE/$MODEL
+Worker: $ID  Role: $ROLE  Engine: $ENGINE/$MODEL/xhigh
 Ticket: $TID
 
 $PROMPT" \

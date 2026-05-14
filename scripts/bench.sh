@@ -28,7 +28,7 @@ run_arm_solo() {
   cd "$wt"
   case "$engine" in
     claude) timeout 600 claude --model "$model" -p --dangerously-skip-permissions "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
-    codex)  timeout 600 codex exec --model "$model" --full-auto --skip-git-repo-check "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
+    codex)  timeout 600 codex exec --model "$model" -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
   esac
   local t1=$(date +%s)
   git -C "$wt" add -A; git -C "$wt" commit -m "bench arm $arm" --allow-empty >/dev/null
@@ -42,9 +42,13 @@ run_arm_swarm() {
   local id="bench-$TS"
   local target_worker
   target_worker="$(jq -r '.workers[0].id' "$CONFIG")"
-  cat > "$ROOT/inbox/worker-$target_worker/T-$id.json" <<EOF
-{"id":"T-$id","title":"BENCH","prompt":"$TASK","scope_paths":["."],"acceptance":["task addressed"],"issued_at":"$(date -u +%FT%TZ)","issued_by":"bench","worktree":"../$BASE-worker-$target_worker"}
-EOF
+  jq -n \
+    --arg id "T-$id" \
+    --arg prompt "$TASK" \
+    --arg issued_at "$(date -u +%FT%TZ)" \
+    --arg worktree "../$BASE-worker-$target_worker" \
+    '{id:$id,title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:["task addressed"],issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
+    > "$ROOT/inbox/worker-$target_worker/T-$id.json"
   local t0=$(date +%s)
   while [ ! -f "$ROOT/scores/T-$id.json" ]; do sleep 10; done
   local t1=$(date +%s)
