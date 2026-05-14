@@ -20,7 +20,13 @@ while true; do
   if [ -z "${TICKET:-}" ]; then sleep 8; continue; fi
   TID="$(basename "$TICKET" .json)"
   IP="$ROOT/in_progress/$TID.json"
-  mv "$TICKET" "$IP"
+  # Atomic claim: `mv` of a vanished source returns nonzero. Under `set -e`
+  # that would kill the loop; guard with `|| { ... continue; }` so race losers
+  # just go back to polling.
+  if ! mv "$TICKET" "$IP" 2>/dev/null; then
+    echo "[w$ID] race-lost on $TID" | tee -a "$LOG"
+    continue
+  fi
   PROMPT="$(jq -r '.prompt' "$IP")"
   RESULT_DIR="$ROOT/results/$TID"; mkdir -p "$RESULT_DIR"
   echo "[w$ID] claim $TID" | tee -a "$LOG"

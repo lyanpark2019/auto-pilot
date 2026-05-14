@@ -15,7 +15,9 @@ if [ ! -f "$CONFIG" ]; then
   echo "[start] no config at $CONFIG. Run /autopilot-swarm:swarm-init first." >&2
   exit 2
 fi
-if [ ! -d "$PROJECT/.git" ]; then
+# `.git` is a directory in normal repos but a FILE inside worktrees.
+# Use git plumbing instead of testing for the directory.
+if ! git -C "$PROJECT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "[start] $PROJECT is not a git repo. Run \`git init\` first." >&2
   exit 2
 fi
