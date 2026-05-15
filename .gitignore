@@ -1,3 +1,6 @@
+.DS_Store
+*.log
+
 # runtime artifacts — created by PM/workers during execution
 .planning/autopilot/archive/
 .planning/autopilot/done/
