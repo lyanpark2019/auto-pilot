@@ -61,4 +61,9 @@ Schema:
 - New ticket scope_paths MUST NOT overlap any path in current
   `inbox/*` or `in_progress/*` tickets — workers branch per-ticket off `main`,
   so file-level overlap still causes merge churn.
+- **Graphify scope guard** — when `${PROJECT}/graphify-out/` exists and the candidate
+  ticket touches ≥ 2 files, run `graphify path "<file_A>" "<file_B>"` for each pair.
+  If shortest path > 3 hops or crosses community boundaries, SPLIT the ticket into
+  two single-file tickets instead of dispatching the multi-file one.
+  Skip silently if `graphify` CLI unavailable.
 - Stdout: `dispatched <id> → worker-${WORKER_ID}`.

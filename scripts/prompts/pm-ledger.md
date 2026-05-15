@@ -27,7 +27,11 @@ You are the PM (claude-opus-4-7) for ${PROJECT}. Reconcile scores → ledger →
    git cherry-pick <sha> || git cherry-pick --abort
    ```
    On conflict: abort, rewrite the score with `verdict: request-changes` + note `cherry-pick-conflict`.
-3. Write ledger atomically (write to `.tmp`, then rename).
+3. **Graph refresh** — after each successful cherry-pick, if `${PROJECT}/graphify-out/`
+   exists, run `graphify update "${PROJECT}"` (AST-only, no API cost). Best-effort:
+   on failure, log `graphify-update-failed: <code>` and continue. The next bootstrap
+   reads the refreshed graph automatically.
+4. Write ledger atomically (write to `.tmp`, then rename).
 
 ## Output
 
