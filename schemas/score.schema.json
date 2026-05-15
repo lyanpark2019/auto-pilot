@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autopilot-swarm/schemas/score.schema.json",
+  "title": "PMScoreOutput",
+  "description": "PM scorer output for autopilot-swarm tickets",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ticket_id",
+    "worker",
+    "engine",
+    "model",
+    "rubric",
+    "total",
+    "verdict",
+    "acceptance_results",
+    "quality_eval_summary",
+    "incentive",
+    "penalty",
+    "notes"
+  ],
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "pattern": "^T-[0-9]{8}-[0-9]{6}$"
+    },
+    "worker": {
+      "type": "string",
+      "pattern": "^worker-[0-9]+$"
+    },
+    "engine": {
+      "type": "string",
+      "enum": ["claude", "codex"]
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rubric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctness",
+        "scope_discipline",
+        "test_coverage",
+        "code_quality",
+        "alignment_with_acceptance"
+      ],
+      "properties": {
+        "correctness": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "scope_discipline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "test_coverage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "code_quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "alignment_with_acceptance": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        }
+      }
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["merge", "request-changes", "reject"]
+    },
+    "acceptance_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cmd", "exit"],
+        "properties": {
+          "cmd": {
+            "type": "string"
+          },
+          "exit": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "quality_eval_summary": {
+      "type": "string"
+    },
+    "incentive": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "penalty": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "notes": {
+      "type": "string"
+    },
+    "skill_preflight": {
+      "type": "object",
+      "description": "F7 mitigation — record which skills were reachable during scoring",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    }
+  }
+}

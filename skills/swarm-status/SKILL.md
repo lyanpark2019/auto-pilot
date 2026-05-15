@@ -35,6 +35,14 @@ Read-only diagnostics for the swarm in the current project.
    ```
 4. Render as a readable report. Highlight any worker with `weight < 0.7` (struggling) or `weight > 1.3` (top performer).
 
+## Deep diagnostic (F9 — swarm-monitor agent)
+
+If the quick report surfaces ≥ 1 warning (stale in-flight ticket, missing
+PM heartbeat, worker with `weight < 0.7`, runaway disk usage, or any
+`exit nonzero` line in recent logs), spawn the **swarm-monitor** subagent
+via the Task tool for a structured health report. The agent is read-only;
+do NOT modify state from this skill.
+
 ## Notes for Claude
 
 - Read-only. Do not write. Do not modify the ledger.

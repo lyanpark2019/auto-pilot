@@ -45,9 +45,25 @@ open_pr() {
 }
 
 while true; do
-  TICKET="$(ls -t "$INBOX"/*.json 2>/dev/null | head -1 || true)"
+  # I3: STOP sentinel — exit cleanly between tickets if user dropped it.
+  if [ -f "$ROOT/STOP" ]; then
+    echo "[w$ID] STOP sentinel detected — exiting" | tee -a "$LOG"
+    exit 0
+  fi
+  # I7: FIFO (oldest-first). ls -tr sorts by mtime ascending; head -1 = oldest.
+  TICKET="$(ls -tr "$INBOX"/*.json 2>/dev/null | head -1 || true)"
   if [ -z "${TICKET:-}" ]; then sleep 8; continue; fi
   TID="$(basename "$TICKET" .json)"
+
+  # I2: schema validation BEFORE atomic claim. Malformed → archive/<tid>.invalid.json, no engine call.
+  if ! "$(dirname "$0")/validate-ticket.sh" "$TICKET" 2>>"$LOG"; then
+    INVALID="$ROOT/archive/$TID.invalid.json"
+    mkdir -p "$ROOT/archive"
+    mv "$TICKET" "$INVALID" 2>/dev/null || true
+    echo "[w$ID] reject $TID — schema invalid → $INVALID" | tee -a "$LOG"
+    continue
+  fi
+
   IP="$ROOT/in_progress/$TID.json"
   if ! mv "$TICKET" "$IP" 2>/dev/null; then
     echo "[w$ID] race-lost on $TID" | tee -a "$LOG"

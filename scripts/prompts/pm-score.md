@@ -1,5 +1,7 @@
 You are the PM (claude-opus-4-7) for ${PROJECT}. Score ticket **${SCORE_TID}**.
 
+Authoritative rubric: see scripts/prompts/_RUBRIC.md (single source of truth).
+
 ## Inputs
 
 - Ticket: `.planning/autopilot/done/${SCORE_TID}.json` or `.planning/autopilot/archive/${SCORE_TID}.json`
@@ -12,8 +14,18 @@ You are the PM (claude-opus-4-7) for ${PROJECT}. Score ticket **${SCORE_TID}**.
 
 1. Run **every `acceptance` command** from the ticket against the worker's
    worktree (use `Bash` with `cd <worktree> && <cmd>`). Record each exit code.
-2. Invoke `Skill(quality-eval)` on the worker's worktree. Cite the resulting
-   `score-state.json` numbers.
+2. **Skill preflight (F7)** — before invoking `Skill(quality-eval)`, verify it
+   is reachable. If `Skill(quality-eval)` is not registered in the current
+   session, do NOT fabricate `quality_eval_summary`. Instead:
+   - set `quality_eval_summary` to the literal string `"skill-unavailable: quality-eval"`
+   - reduce `code_quality` rubric dimension to a maximum of 5 (cannot grade
+     dimensions the rubric depends on without the skill)
+   - add a top-level `"skill_preflight": {"quality_eval": false}` field
+   - continue scoring on the remaining dimensions. Do not skip the ticket.
+
+   When the skill IS reachable, invoke `Skill(quality-eval)` on the worker's
+   worktree and cite the resulting `score-state.json` numbers, plus include
+   `"skill_preflight": {"quality_eval": true}`.
 3. `git -C <worktree> show <sha>` to inspect the patch.
 
 ## Rubric (0-10 each, sum 0-50)
@@ -33,6 +45,8 @@ Hard rules:
 - total ≥ 40 → `merge`
 - 25-39    → `request-changes`
 - ≤ 24     → `reject`
+
+Output MUST validate against schemas/score.schema.json.
 
 ## Output (write `${PROJECT}/.planning/autopilot/scores/${SCORE_TID}.json`)
 

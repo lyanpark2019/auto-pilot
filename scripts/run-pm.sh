@@ -112,6 +112,11 @@ fi
 SELF_IMPROVE_TARGET="$(jq -r '.policy.self_improve_target // ""' "$CONFIG")"
 
 while true; do
+  # I3: STOP sentinel — exit cleanly between iterations.
+  if [ -f "$ROOT/STOP" ]; then
+    echo "[pm] STOP sentinel detected — exiting loop" | tee -a "$LOG"
+    exit 0
+  fi
   # 1. score newly-done tickets (with optional verifier pass)
   for TF in "$ROOT"/done/*.json; do
     [ -e "$TF" ] || continue
@@ -150,10 +155,10 @@ while true; do
       # Self-improve: every 4th dispatched ticket targets the plugin if a self_improve_target is set.
       USE_SELF_IMPROVE=0
       if [ -n "$SELF_IMPROVE_TARGET" ] && [ -d "$SELF_IMPROVE_TARGET" ]; then
-        DISPATCH_COUNT=$(jq -r '.dispatch_count // 0' "$ROOT/ledger/agent-scores.json")
+        DISPATCH_COUNT=$(jq -r '(.dispatch_count // 0) | tonumber? // 0' "$ROOT/ledger/agent-scores.json")
         DISPATCH_COUNT=$((DISPATCH_COUNT + 1))
         tmp="$ROOT/ledger/agent-scores.json.tmp"
-        jq ".dispatch_count = $DISPATCH_COUNT" "$ROOT/ledger/agent-scores.json" > "$tmp" && mv "$tmp" "$ROOT/ledger/agent-scores.json"
+        jq --argjson n "$DISPATCH_COUNT" '.dispatch_count = $n' "$ROOT/ledger/agent-scores.json" > "$tmp" && mv "$tmp" "$ROOT/ledger/agent-scores.json"
         if [ $((DISPATCH_COUNT % 4)) -eq 0 ]; then USE_SELF_IMPROVE=1; fi
       fi
 

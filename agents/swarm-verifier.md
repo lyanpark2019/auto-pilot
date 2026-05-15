@@ -30,6 +30,14 @@ Adversarial verification agent. You did NOT score the ticket — read fresh.
    ```
    If `passed=false`, also update top-level `verdict`.
 
+## Rubric
+
+Canonical rubric: `scripts/prompts/_RUBRIC.md`. Dim names must match exactly:
+- `correctness` / `scope_discipline` / `test_coverage` / `code_quality` / `alignment_with_acceptance`
+
+Hard rules: acceptance fail → max `alignment_with_acceptance=3`; empty diff → total 0 verdict reject.
+Verdict: merge ≥ 40 / request-changes 25-39 / reject ≤ 24.
+
 ## Discipline
 
 - DO NOT rubber-stamp.
