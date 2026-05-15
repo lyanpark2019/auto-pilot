@@ -102,6 +102,8 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
 else
   # window 1: pane 0 = PM
   tmux new-session -d -s "$SESSION" -n auto -c "$PROJECT"
+  # Keep dead panes visible for postmortem debug.
+  tmux set-option -t "$SESSION":auto -w remain-on-exit on
   PM_PANE="$(tmux list-panes -t "$SESSION":auto -F '#{pane_id}' | head -1)"
   run_in_pane "$PM_PANE" "PLUGIN_ROOT=$PLUGIN_ROOT bash $PLUGIN_ROOT/scripts/run-pm.sh"
 
@@ -116,6 +118,8 @@ else
     # need to start a 2nd window once first window is full (5 panes)
     if [ "$CUR_PANES" -ge 5 ] && [ "$CUR_WIN" = "auto" ]; then
       tmux new-window -t "$SESSION" -n auto2 -c "$PROJECT"
+      # Keep dead panes visible for postmortem debug.
+      tmux set-option -t "$SESSION":auto2 -w remain-on-exit on
       FIRST_PANE="$(tmux list-panes -t "$SESSION":auto2 -F '#{pane_id}' | head -1)"
       run_in_pane "$FIRST_PANE" "$CMD"
       CUR_WIN=auto2

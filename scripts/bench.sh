@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Benchmark: same task on swarm vs claude-solo vs codex-solo.
-# usage: bench.sh "<task>" [--repeats N]
+# usage: bench.sh "<task>" [--repeats N] [--swarm-timeout SEC]
 set -euo pipefail
 TASK="${1:?task required}"; shift
 REPEATS=1
+SWARM_TIMEOUT=1200
 while [ $# -gt 0 ]; do
   case "$1" in
     --repeats) REPEATS="$2"; shift 2;;
+    --swarm-timeout) SWARM_TIMEOUT="$2"; shift 2;;
     *) shift;;
   esac
 done
@@ -32,7 +34,11 @@ run_arm_solo() {
   esac
   local t1=$(date +%s)
   git -C "$wt" add -A; git -C "$wt" commit -m "bench arm $arm" --allow-empty >/dev/null
-  git -C "$wt" diff HEAD~1 HEAD > "$DIR/arm-$arm/diff.patch" 2>/dev/null || true
+  if git -C "$wt" rev-parse HEAD~1 >/dev/null 2>&1; then
+    git -C "$wt" diff HEAD~1 HEAD > "$DIR/arm-$arm/diff.patch" 2>/dev/null || true
+  else
+    git -C "$wt" diff "$(git -C "$wt" hash-object -t tree /dev/null)" HEAD > "$DIR/arm-$arm/diff.patch" 2>/dev/null || true
+  fi
   echo "$((t1-t0))" > "$DIR/arm-$arm/wall_seconds"
   cd "$PROJECT"
 }
@@ -50,7 +56,20 @@ run_arm_swarm() {
     '{id:$id,title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:["task addressed"],issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
     > "$ROOT/inbox/worker-$target_worker/T-$id.json"
   local t0=$(date +%s)
-  while [ ! -f "$ROOT/scores/T-$id.json" ]; do sleep 10; done
+  while [ ! -f "$ROOT/scores/T-$id.json" ]; do
+    local t_now=$(date +%s)
+    local elapsed=$((t_now - t0))
+    if [ $elapsed -ge "$SWARM_TIMEOUT" ]; then
+      echo "timeout" > "$DIR/arm-a/skipped"
+      echo "$elapsed" > "$DIR/arm-a/wall_seconds"
+      return 0
+    fi
+    if [ -f "$ROOT/STOP" ]; then
+      echo "stopped" > "$DIR/arm-a/skipped"
+      return 0
+    fi
+    sleep 10
+  done
   local t1=$(date +%s)
   cp "$ROOT/scores/T-$id.json" "$DIR/arm-a/score.json"
   cp -r "$ROOT/results/T-$id" "$DIR/arm-a/result" 2>/dev/null || true
