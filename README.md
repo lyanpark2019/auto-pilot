@@ -20,13 +20,18 @@ chmod +x ~/Documents/Project/auto-pilot/hooks/*.sh
 ## Usage
 
 ```
-/auto-pilot start                   # use newest docs/specs/*.md
+/auto-pilot start                   # use newest docs/specs/*.md (interactive, one phase per turn)
 /auto-pilot start --spec PATH
 /auto-pilot start --max-workers 6
-/auto-pilot start --time-box 8h
 /auto-pilot status
 /auto-pilot resume
 /auto-pilot stop
+
+# True headless infinite loop (this is the "one-click autonomous" you want):
+/auto-pilot-server                  # spawn Python driver in background
+# or directly:
+python ~/.claude/plugins/auto-pilot/scripts/headless-loop.py --max-iter 100 --sleep 10
+python ~/.claude/plugins/auto-pilot/scripts/headless-loop.py --once   # smoke test
 ```
 
 ## Requirements
@@ -41,15 +46,30 @@ chmod +x ~/Documents/Project/auto-pilot/hooks/*.sh
 
 For each phase in the spec:
 
-1. PM plans N non-overlapping work contracts
-2. Dispatches N Sonnet 4.6 workers in 1 message (parallel) in isolated worktrees
-3. Each worker edits, runs verify, reports diff
-4. Dispatches 2N reviewers in 1 message (parallel): Codex adversarial + cold Claude
-5. Both reviewers must APPROVE — either rejects → loop with finding
-6. Runs project verify checklist (test+lint+typecheck+build)
-7. Commits atomic per worker, pushes
-8. Advances phase counter
-9. Until last phase verify is green → SUCCESS report
+1. **Tech-critic gate** — `tech-critic-lead` rejects scope-creep contracts BEFORE workers touch code ("기능은 비용", from cc-system)
+2. PM plans N non-overlapping work contracts
+3. Dispatches N Sonnet 4.6 workers in 1 message (parallel) in isolated worktrees
+4. Each worker edits, runs verify, reports diff
+5. Dispatches reviewers in 1 message (parallel):
+   - `codex-adversarial` (always)
+   - `claude-reviewer` cold (always)
+   - `tdd-enforcer` if runtime code touched (deletes impl written before tests, from Superpowers)
+   - `security-reviewer` if trust-boundary files touched
+   - Other specialists per `agents/specialist-pool.md`
+6. ALL reviewers must APPROVE — any REJECT → loop with finding
+7. Hard gates inside review: scope-drift (out-of-contract files), scope-reduction (worker loosened test instead of fixing impl)
+8. Runs project verify checklist (test+lint+typecheck+build)
+9. Commits atomic per worker with trailers (`auto-pilot-iter`, `auto-pilot-phase`, `auto-pilot-contract`)
+10. Advances phase counter
+11. Until last phase verify is green → SUCCESS report
+
+### Headless mode (true autonomous)
+
+`/auto-pilot-server` (or `python scripts/headless-loop.py`) runs an outer driver that:
+1. Snapshots HEAD pre-phase
+2. Spawns `claude -p --dangerously-skip-permissions` with `HARNESS_HEADLESS=1` and the auto-pilot skill
+3. On phase exit: success → next iteration; fail → `git reset --hard` to pre-phase HEAD, exit
+4. Repeats until terminal status or `--max-iter`
 
 ## Hard stops
 
@@ -66,6 +86,18 @@ For each phase in the spec:
 - Chained Cloudflare SSL changes — blocked (one at a time)
 - `ruff --fix` on composition roots — blocked
 - Post-deploy: zombie port check, env placeholder leak check
+- Over-scoped contracts — `tech-critic-lead` rejects with reason
+- Implementation without tests — `tdd-enforcer` REJECTs
+- Out-of-scope edits — claude-reviewer + codex-adversarial REJECT on scope drift
+- Phase fail leaves dirty tree — `headless-loop.py` `git reset --hard` to pre-phase HEAD
+
+## Inspired by
+
+- [greatSumini/cc-system](https://github.com/greatSumini/cc-system) — `run-server.py` infinite loop pattern, `tech-critic-lead`, HARNESS_HEADLESS env signal, iter-id commit trailers, rollback on fail
+- [obra/superpowers](https://github.com/obra/superpowers) — 7-phase template, TDD-first hard rule (deletes pre-test code)
+- [everything-claude-code](https://github.com/JonathanRosenberg/everything-claude-code) — specialist agent pool (security/database/tdd-guide/etc.)
+- [LiorCohen/sdd](https://github.com/LiorCohen/sdd) — Spec-driven development phasing
+- Lessons from `/insights` (381 sessions over 14 days) — every friction class is a guard
 
 ## File layout
 

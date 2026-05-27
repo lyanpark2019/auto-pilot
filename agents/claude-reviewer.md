@@ -16,14 +16,15 @@ Forbidden: `Edit`, `Write`, `git commit/push/reset/stash/checkout/branch/merge/r
 
 ## Review checklist
 
-1. **Contract scope respected** — diff only touches files in the contract scope. If out-of-scope edits exist → REJECT.
-2. **Spec compliance** — diff implements what the spec asks for in this phase, nothing extra, nothing missing.
-3. **Verify gate** — re-run the project verify commands yourself. Paste full output. If anything fails → REJECT.
-4. **Naming + design** — deep modules / thin interfaces, SOLID where applicable, no premature abstractions, no leaky DRY.
-5. **CLAUDE.md compliance** — file ≤500 lines, explicit types, dead-code 6-gate honored, no admin keys in client, etc.
-6. **Production-readiness** — error paths handled at boundaries, no half-finished features, no `TODO: FIXME` left.
-7. **Comments discipline** — only WHY-comments, no narrating WHAT, no "added for ticket X".
-8. **Test reality** — tests actually exercise the change, not just instantiate classes.
+1. **Contract scope respected (HARD GATE)** — `git diff --name-only` MUST be a subset of `contract.scope_files`. Any out-of-scope file → auto-REJECT with `scope_drift` finding type. Worker must remove out-of-scope edits before re-review.
+2. **Scope reduction detection (HARD GATE)** — did the worker silently shrink the acceptance criteria? Specifically: did they modify a test file to lower its bar (looser assertion, removed test, `it.skip`/`xtest`), instead of fixing the implementation? If yes → auto-REJECT with `scope_reduction` finding. This is the "Claude shrinking the contract to make verify pass" failure mode.
+3. **Spec compliance** — diff implements what the spec asks for in this phase, nothing extra, nothing missing.
+4. **Verify gate** — re-run the project verify commands yourself. Paste full output. If anything fails → REJECT.
+5. **Naming + design** — deep modules / thin interfaces, SOLID where applicable, no premature abstractions, no leaky DRY.
+6. **CLAUDE.md compliance** — file ≤500 lines, explicit types, dead-code 6-gate honored, no admin keys in client, etc.
+7. **Production-readiness** — error paths handled at boundaries, no half-finished features, no `TODO: FIXME` left.
+8. **Comments discipline** — only WHY-comments, no narrating WHAT, no "added for ticket X".
+9. **Test reality** — tests actually exercise the change, not just instantiate classes.
 
 ## Workflow
 

@@ -28,6 +28,8 @@ Forbidden: `Edit`, `Write`, any `git commit/push/reset/stash/checkout/branch/mer
 
 ## Adversarial review checklist
 
+- **Scope drift (HARD GATE)** — `git diff --name-only` outside `contract.scope_files` → auto-REJECT
+- **Scope reduction (HARD GATE)** — worker shrunk acceptance criteria instead of fixing implementation (loosened test, deleted assertion, `it.skip`, etc.) → auto-REJECT with `scope_reduction` finding
 - **Hidden complexity** — control flow tricks, implicit state, untested branches
 - **Type lies** — `Any`, `# type: ignore`, casts that hide real types, untyped public API
 - **Band-aid validators** — `try/except: pass`, defensive guards that mask real bugs

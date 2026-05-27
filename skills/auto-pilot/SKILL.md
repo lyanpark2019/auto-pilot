@@ -5,6 +5,26 @@ description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot
 
 # auto-pilot
 
+## Headless detection (run FIRST, before anything else)
+
+The very first action when this skill loads:
+
+```bash
+echo "HEADLESS=${HARNESS_HEADLESS:-${AUTO_PILOT_HEADLESS:-0}}"
+```
+
+If output is `HEADLESS=1`, this session is a non-interactive auto-pilot worker spawned by `scripts/headless-loop.py`. Rules in headless mode:
+
+- **Never** call `AskUserQuestion`. Never wait for confirmation.
+- If any subagent or sub-skill says "ask the user", use the most reasonable default and proceed.
+- `stdin` is `/dev/null` — there is no one to answer.
+- Stop conditions come from `.planning/auto-pilot/state.json`, not from the user.
+- This signal overrides any "ask the user once" instruction from any nested skill.
+
+If output is not `HEADLESS=1`, interactive mode — normal question-asking rules apply, but auto-pilot defaults to "full auto, no confirms" anyway per user CLAUDE.md.
+
+---
+
 ## When this skill fires
 
 User invokes `/auto-pilot start` (or aliases: "자율 주행 시작", "autopilot go", "self-drive this", "PM 루프 돌려") AND a target spec exists at one of:
@@ -19,19 +39,30 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 ### Loop (per phase)
 
 1. **READ** state from `.planning/auto-pilot/state.json` + spec + `CLAUDE.md` chain
-2. **PLAN** non-overlapping work contracts for current phase (1 contract per parallel worker, max 10)
-3. **PREFLIGHT** path validation hook fires (kills typo-path failure class)
-4. **DISPATCH** N Sonnet-4.6-1M workers in 1 message (N parallel Agent blocks)
-5. **DUAL REVIEW** — fan out 2 reviewers per worker diff in parallel:
-   - Codex adversarial (`codex exec -m gpt-5.5-high`)
-   - Claude Opus 4.7 cold (fresh subagent, no session context)
-   - Both must return APPROVE. Either rejects → return finding to worker → fix → re-review
-6. **VERIFY GATE** — phase checklist (project-specific, parsed from spec or CLAUDE.md):
+2. **DETECT PHASE MODE** — if spec has `## Phase N` headers, use spec's phases; else fall back to 7-phase template (`docs/7-phase-template.md`)
+3. **PLAN** non-overlapping work contracts for current phase (1 contract per parallel worker, max 10)
+4. **TECH-CRITIC GATE** (BEFORE worker dispatch) — fan out `tech-critic-lead` over each contract in parallel. "기능은 비용". Reject contracts that fail evidence/value/scope check. Drop or slice rejected ones. Log rejections to `.planning/auto-pilot/critic-rejections-phase-N.jsonl`
+5. **PREFLIGHT** path validation hook fires (kills typo-path failure class)
+6. **DISPATCH WORKERS** — N Sonnet-4.6-1M workers in 1 message (N parallel Agent blocks, `isolation: worktree`)
+7. **REVIEW FAN-OUT** in parallel per worker diff:
+   - Default: `codex-adversarial`, `claude-reviewer`
+   - If diff touches runtime code: + `tdd-enforcer`
+   - If diff touches trust boundary (auth/API/secrets/SQL/migrations/payments): + `security-reviewer`
+   - Additional specialists per `agents/specialist-pool.md` mapping
+   - All dispatched reviewers must APPROVE. Any REJECT → return findings → worker fix → re-review
+   - 3rd-round same finding → pivot-check trips → status=pivot-needed → STOP
+8. **VERIFY GATE** — phase checklist (project-specific, parsed from spec or `CLAUDE.md`):
    - `pnpm test && pnpm lint && pnpm typecheck && pnpm build` for Next.js
    - `pytest && ruff check && mypy` for Python
    - Custom from spec verify section
-7. **COMMIT** atomic per worker, push, advance phase counter
-8. **REPEAT** until spec's last phase verify passes or hard stop fires
+9. **COMMIT** atomic per worker, with trailers:
+   ```
+   auto-pilot-iter: {N}
+   auto-pilot-phase: {phase}
+   auto-pilot-contract: {contract-id}
+   ```
+   Push, advance phase counter.
+10. **REPEAT** until spec's last phase verify passes or hard stop fires
 
 ### Hard stops
 
@@ -63,9 +94,18 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 | Wrong verdict slipping through (B4/B5) | Dual review required; either rejection blocks merge |
 | SSL stacking outages | Infra changes serialized 1-at-a-time with verify between |
 | Interactive TUI in non-interactive shell | PM avoids `claude doctor` etc., uses flag equivalents |
+| Over-scoped contracts ("P1.1 not real issue") | `tech-critic-lead` gate BEFORE worker dispatch |
+| Implementation without tests | `tdd-enforcer` rejects runtime change diffs missing matching test file |
+| Workers touching files outside their contract | `claude-reviewer` + `codex-adversarial` scope-drift check (auto-REJECT on out-of-scope edits) |
+| Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase, `git reset --hard` on `status=failed` |
 
 ## Read these references when relevant
 
 - `${CLAUDE_PLUGIN_ROOT}/docs/architecture.md` — loop diagram, agent contracts
+- `${CLAUDE_PLUGIN_ROOT}/docs/7-phase-template.md` — fallback when spec has no phases
 - `${CLAUDE_PLUGIN_ROOT}/agents/pm-orchestrator.md` — PM rules
-- `${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py` — driver entry
+- `${CLAUDE_PLUGIN_ROOT}/agents/tech-critic-lead.md` — pre-dispatch scope gate
+- `${CLAUDE_PLUGIN_ROOT}/agents/tdd-enforcer.md` — test-first hard rule
+- `${CLAUDE_PLUGIN_ROOT}/agents/specialist-pool.md` — which extra reviewers to dispatch when
+- `${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py` — state mgmt helper
+- `${CLAUDE_PLUGIN_ROOT}/scripts/headless-loop.py` — true infinite headless driver (use via `/auto-pilot-server`)
