@@ -8,7 +8,18 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel main-branch runs (commit history would show false-negative
+  # red X for superseded but otherwise-passing runs). Cancel PR/feature
+  # branch runs freely to avoid burning minutes on stale pushes.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Opt into Node 24 runtime for all javascript actions. Node 20 is deprecated
+# (default switch June 2nd 2026, removal Sep 16th 2026 — see
+# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/).
+# Setting this env var silences the deprecation warning today and keeps the
+# pipeline working past the default switch even if any pinned action lags.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   python:
