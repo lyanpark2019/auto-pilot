@@ -1,0 +1,14 @@
+{
+  "_doc": "Structural: the iteration prompt must reference the auto-pilot skill + dual reviewers — these are load-bearing for the loop wiring.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 3, "phase": 5},
+  "expects_substring": [
+    "auto-pilot",
+    "skill",
+    "dispatch workers",
+    "dual reviewers",
+    "verify",
+    "commit with trailers"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

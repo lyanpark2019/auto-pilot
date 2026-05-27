@@ -1,0 +1,17 @@
+{
+  "_comment": "Committed perf regression baseline. Values are 1.5x measured mean on dev hardware (Apple M-series, Python 3.13). Refresh procedure: see docs/perf-budget.md.",
+  "benchmarks": [
+    {
+      "fullname": "tests/test_perf.py::test_status_within_budget",
+      "stats": {"mean": 0.00075}
+    },
+    {
+      "fullname": "tests/test_perf.py::test_phase_start_within_budget",
+      "stats": {"mean": 0.00085}
+    },
+    {
+      "fullname": "tests/test_perf.py::test_phase_end_within_budget",
+      "stats": {"mean": 0.00095}
+    }
+  ]
+}

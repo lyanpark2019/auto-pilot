@@ -1,0 +1,12 @@
+{
+  "_doc": "Stress: 10-digit iter / 6-digit phase — long auto-pilot session would hit these. Verifies no width-based assumption.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 1234567890, "phase": 100000},
+  "expects_substring": [
+    "Iteration 1234567890",
+    "phase 100000",
+    "auto-pilot-iter: 1234567890",
+    "auto-pilot-phase: 100000"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

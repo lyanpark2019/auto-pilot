@@ -1,0 +1,12 @@
+{
+  "_doc": "Edge: negative ints (e.g. sentinel -1) render with the literal minus sign — str.format_map passes them through to __format__.",
+  "prompt": "iteration",
+  "vars": {"iter_n": -1, "phase": -1},
+  "expects_substring": [
+    "Iteration -1",
+    "phase -1",
+    "auto-pilot-iter: -1",
+    "auto-pilot-phase: -1"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

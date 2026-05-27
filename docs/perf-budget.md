@@ -28,6 +28,32 @@ If the assertion fails, either:
   encodes in tight loops).
 - Re-evaluate the budget if the operation is no longer in a hot loop.
 
+## Baseline regression
+
+In addition to the 50 ms ceiling, each `test_*_within_budget` test asserts the
+measured mean is `<=` a committed baseline (`tests/perf_baseline.json`). The
+baseline values are set to **1.5× the measured mean** on dev hardware — wide
+enough to absorb normal noise, tight enough to catch a genuine 50%+ regression
+before it lands on `main`.
+
+Refresh procedure after an intentional perf-affecting change:
+
+```
+python3 -m pytest tests/test_perf.py --benchmark-only --benchmark-json=/tmp/perf-new.json
+python3 -c "
+import json
+data = json.load(open('/tmp/perf-new.json'))
+for b in data['benchmarks']:
+    print(b['fullname'], '->', b['stats']['mean'] * 1.5)
+"
+# manually update tests/perf_baseline.json with the new 1.5x values
+git add tests/perf_baseline.json && git commit -m "perf(baseline): refresh after intentional change"
+```
+
+Note: full pytest-benchmark `--benchmark-compare` would require a maintained
+`.benchmarks/` history directory, which we don't keep in the repo. The
+committed-JSON approach gives us a regression gate without that overhead.
+
 ## Out of scope
 
 - `headless-loop.py` is intentionally bounded by `--timeout-build` (default

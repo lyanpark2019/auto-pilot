@@ -1,0 +1,12 @@
+{
+  "_doc": "Typical mid-loop values.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 42, "phase": 7},
+  "expects_substring": [
+    "Iteration 42",
+    "phase 7",
+    "auto-pilot-iter: 42",
+    "auto-pilot-phase: 7"
+  ],
+  "expects_not": ["{iter_n}", "{phase}", "Iteration 7", "Iteration 421"]
+}

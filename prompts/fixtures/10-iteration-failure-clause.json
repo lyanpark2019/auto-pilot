@@ -1,0 +1,13 @@
+{
+  "_doc": "Structural: failure-handling clause must always be present so the outer loop knows worker self-reports failed state.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 10, "phase": 4},
+  "expects_substring": [
+    "Iteration 10",
+    "phase 4",
+    "On any unrecoverable error",
+    "state.json",
+    "failed"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

@@ -1,0 +1,16 @@
+{
+  "_doc": "Adversarial: extra vars not referenced by the template are silently dropped by str.format_map. Verify + document contract.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 5, "phase": 2, "extra_field": "should_be_ignored", "another": 123},
+  "expects_substring": [
+    "Iteration 5",
+    "phase 2",
+    "auto-pilot-iter: 5",
+    "auto-pilot-phase: 2"
+  ],
+  "expects_not": [
+    "should_be_ignored",
+    "extra_field",
+    "another"
+  ]
+}

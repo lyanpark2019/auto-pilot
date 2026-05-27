@@ -1,0 +1,13 @@
+{
+  "_doc": "Headless prompt takes no vars; must preserve literal HEADLESS markers + AskUserQuestion ban.",
+  "prompt": "headless",
+  "vars": {},
+  "expects_substring": [
+    "HEADLESS MODE",
+    "auto-pilot server",
+    "HARNESS_HEADLESS",
+    "Never call AskUserQuestion",
+    "stdin is /dev/null"
+  ],
+  "expects_not": ["{iter_n}", "{phase}", "auto-pilot-iter:"]
+}

@@ -1,0 +1,13 @@
+{
+  "_doc": "Asymmetric iter/phase ratio (long-running loop, early phase).",
+  "prompt": "iteration",
+  "vars": {"iter_n": 123, "phase": 2},
+  "expects_substring": [
+    "Iteration 123",
+    "phase 2",
+    "auto-pilot-iter: 123",
+    "auto-pilot-phase: 2",
+    "STOP this session"
+  ],
+  "expects_not": ["{iter_n}", "{phase}", "Iteration 2", "Iteration 1232"]
+}

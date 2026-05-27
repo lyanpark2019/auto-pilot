@@ -1,0 +1,12 @@
+{
+  "_doc": "Three-digit values verify no truncation / format-width assumptions.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 999, "phase": 99},
+  "expects_substring": [
+    "Iteration 999",
+    "phase 99",
+    "auto-pilot-iter: 999",
+    "auto-pilot-phase: 99"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

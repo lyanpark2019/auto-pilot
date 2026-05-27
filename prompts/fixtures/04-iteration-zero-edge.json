@@ -1,0 +1,12 @@
+{
+  "_doc": "Edge: zero values must format cleanly (str.format_map does NOT skip 0).",
+  "prompt": "iteration",
+  "vars": {"iter_n": 0, "phase": 0},
+  "expects_substring": [
+    "Iteration 0",
+    "phase 0",
+    "auto-pilot-iter: 0",
+    "auto-pilot-phase: 0"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

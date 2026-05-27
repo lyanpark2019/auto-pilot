@@ -1,0 +1,12 @@
+{
+  "_doc": "Smallest valid iteration: round 1, phase 1.",
+  "prompt": "iteration",
+  "vars": {"iter_n": 1, "phase": 1},
+  "expects_substring": [
+    "Iteration 1",
+    "phase 1",
+    "auto-pilot-iter: 1",
+    "auto-pilot-phase: 1"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}
