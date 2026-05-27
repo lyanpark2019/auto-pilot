@@ -30,58 +30,46 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
+import _config
+import _prompts
 from _log import event
+from _state import State
 
 ROOT = Path.cwd()
+# NB: local STATE_FILE binds to this loop's ROOT snapshot (captured at import
+# time). We do not use _state.STATE_FILE because the hermetic test harness
+# reloads this module per-test with a tmp cwd; _state.STATE_FILE is resolved
+# lazily relative to the *runtime* cwd and would diverge.
 STATE_DIR = ROOT / ".planning" / "auto-pilot"
 STATE_FILE = STATE_DIR / "state.json"
 LOG_DIR = STATE_DIR / "logs"
 
-CLAUDE_BIN = os.environ.get("CLAUDE_BIN") or shutil.which("claude") or "claude"
+CONFIG = _config.load()
+CLAUDE_BIN = CONFIG.claude_bin
+HEADLESS_ENV = CONFIG.headless_env
 
-HEADLESS_ENV = {"HARNESS_HEADLESS": "1", "AUTO_PILOT_HEADLESS": "1"}
-
-HEADLESS_PROMPT_PREAMBLE = """**[HEADLESS MODE — auto-pilot server]**
-
-First action: run `echo "HEADLESS=${HARNESS_HEADLESS:-0}"`.
-
-If `HEADLESS=1` (it will be), this session is a non-interactive auto-pilot worker.
-Rules:
-- Never call AskUserQuestion. Never wait for confirmation.
-- If a skill or subagent says "ask the user", use the most reasonable default and proceed.
-- stdin is /dev/null — there is no one to answer.
-- Stop conditions are state.json driven, not user driven.
-
----
-
-"""
+HEADLESS_PROMPT_PREAMBLE = _prompts.load("headless")
 
 
-def utc_now() -> str:
-    """Return the current UTC time as an ISO-8601 string (seconds precision)."""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def load_state() -> State:
+    """Read this loop's ``STATE_FILE`` into a :class:`State`.
 
-
-def load_state() -> dict[str, Any]:
-    """Read ``STATE_FILE`` into a dict.
+    A local override of :func:`_state.load_state` that uses ``STATE_FILE``
+    bound to this module's ``ROOT`` snapshot (see note on STATE_FILE).
 
     Returns:
-        Parsed state, or an empty dict when the file is missing. The schema is
-        defined in ``orchestrator.State``; we keep it loosely typed here because
-        this script only reads it.
+        Parsed state, or an empty dict when the file is missing.
     """
     if not STATE_FILE.exists():
-        return {}
-    return cast("dict[str, Any]", json.loads(STATE_FILE.read_text()))
+        return cast(State, {})
+    return cast(State, json.loads(STATE_FILE.read_text()))
 
 
 def git_head() -> str:
@@ -203,21 +191,15 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
 
     current_status = state.get("status")
     if current_status in {"success", "stopped", "pivot-needed", "failed"}:
-        return cast(str, current_status)
+        assert current_status is not None  # narrowed by membership check above
+        return current_status
 
     phase = state.get("current_phase", 0)
     pre_head = git_head()
     event("iter.start", n=iter_n, phase=phase, pre_head=pre_head[:8])
 
     log = LOG_DIR / f"iter-{iter_n:04d}-phase-{phase}.log"
-    prompt = (
-        f"You are resuming the auto-pilot loop. Iteration {iter_n}, phase {phase}.\n\n"
-        f"Run the `auto-pilot` skill: read state.json, plan contracts, dispatch workers + dual reviewers,\n"
-        f"verify, commit with trailers `auto-pilot-iter: {iter_n}` and `auto-pilot-phase: {phase}`,\n"
-        f"advance phase. STOP this session after one phase completes (do not loop in-session — the\n"
-        f"outer headless-loop.py drives the next iteration).\n\n"
-        f"On any unrecoverable error, update state.json status to 'failed' before exiting."
-    )
+    prompt = _prompts.render("iteration", iter_n=iter_n, phase=phase)
 
     rc = run_claude_session(prompt, log, args.timeout_build)
 
@@ -227,7 +209,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
         return "failed"
 
     new_state = load_state()
-    status = cast(str, new_state.get("status", "running"))
+    status = new_state.get("status", "running")
 
     if status == "failed":
         event("iter.fail_rollback", pre_head=pre_head[:8])
@@ -248,9 +230,19 @@ def main(argv: list[str] | None = None) -> int:
         file exists.
     """
     p = argparse.ArgumentParser(prog="auto-pilot-headless")
-    p.add_argument("--max-iter", type=int, default=100)
-    p.add_argument("--sleep", type=int, default=10, help="seconds between iterations")
-    p.add_argument("--timeout-build", type=float, default=4 * 3600, help="per-iteration claude session timeout (s)")
+    p.add_argument("--max-iter", type=int, default=CONFIG.default_max_iter)
+    p.add_argument(
+        "--sleep",
+        type=int,
+        default=CONFIG.default_sleep_sec,
+        help="seconds between iterations",
+    )
+    p.add_argument(
+        "--timeout-build",
+        type=float,
+        default=CONFIG.default_timeout_build_sec,
+        help="per-iteration claude session timeout (s)",
+    )
     p.add_argument("--once", action="store_true", help="run one iteration and exit (smoke test)")
     args = p.parse_args(argv)
 

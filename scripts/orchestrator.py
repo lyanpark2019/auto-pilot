@@ -17,72 +17,16 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict, cast
 
 from _log import event
-
-STATE_DIR = Path(".planning/auto-pilot")
-STATE_FILE = STATE_DIR / "state.json"
-
-
-class PhaseEntry(TypedDict):
-    """One element of ``state['phases']`` — a single phase's lifecycle record."""
-
-    phase: int
-    status: str
-    round: int
-    contracts: int
-    approved: int
-    started: str
-    ended: str | None
-    commits: list[str]
-
-
-class State(TypedDict, total=False):
-    """Persisted orchestrator state.
-
-    ``total=False`` so freshly-loaded state may omit late-added fields
-    (e.g. ``stopped_at`` is only present after ``stop``).
-    """
-
-    started_at: str
-    spec_path: str
-    current_phase: int
-    total_phases: int
-    status: str
-    max_workers: int
-    time_box_until: str | None
-    phases: list[PhaseEntry]
-    pivot_detector: dict[str, dict[str, int]]
-    stopped_at: str
-
-
-def utc_now() -> str:
-    """Return the current UTC time as an ISO-8601 string (seconds precision)."""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def load_state() -> State:
-    """Read ``STATE_FILE`` into a :class:`State`.
-
-    Returns:
-        Parsed state dict, or an empty dict when no state file exists.
-    """
-    if not STATE_FILE.exists():
-        return cast(State, {})
-    return cast(State, json.loads(STATE_FILE.read_text()))
-
-
-def save_state(state: State) -> None:
-    """Persist ``state`` to ``STATE_FILE`` (pretty-printed JSON, trailing newline).
-
-    Args:
-        state: state object to serialize. Caller owns the dict.
-    """
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
+from _state import (
+    PhaseEntry,
+    State,
+    load_state,
+    save_state,
+    utc_now,
+)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -124,21 +68,54 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_phase_start(args: argparse.Namespace) -> int:
-    """Begin a new phase, appending a :class:`PhaseEntry` to state.
+    """Begin (or retry) a phase, validating bounds and bumping ``round`` on retry.
+
+    Validation rules:
+      - state must be initialized,
+      - ``--phase`` must be within ``1..total_phases`` inclusive,
+      - if an entry for ``--phase`` is already ``running`` it is refused,
+      - if an entry exists in any other status the entry is reused with
+        ``round`` incremented, ``status`` reset to ``running``, ``ended``
+        cleared, and ``contracts`` overwritten.
 
     Args:
         args: parsed CLI namespace; expects ``phase`` (int) and ``contracts`` (int).
 
     Returns:
-        0 on success, 2 if state has not been initialized.
+        0 on success, 2 on any validation failure.
     """
     state = load_state()
     if not state:
         event("phase_start.no_state")
         return 2
 
+    total = state.get("total_phases", 0)
+    if args.phase < 1 or args.phase > total:
+        event("phase_start.out_of_range", phase=args.phase, total_phases=total)
+        return 2
+
+    phases: list[PhaseEntry] = state.setdefault("phases", [])
+    existing = next((p for p in phases if p["phase"] == args.phase), None)
+    if existing is not None:
+        if existing["status"] == "running":
+            event("phase_start.already_running", phase=args.phase)
+            return 2
+        existing["round"] = existing["round"] + 1
+        existing["status"] = "running"
+        existing["ended"] = None
+        existing["contracts"] = args.contracts
+        state["current_phase"] = args.phase
+        save_state(state)
+        print(
+            json.dumps(
+                {"ok": True, "phase": args.phase, "round": existing["round"]},
+                indent=2,
+            )
+        )
+        return 0
+
     state["current_phase"] = args.phase
-    entry: PhaseEntry = {
+    new_entry: PhaseEntry = {
         "phase": args.phase,
         "status": "running",
         "round": 1,
@@ -148,7 +125,7 @@ def cmd_phase_start(args: argparse.Namespace) -> int:
         "ended": None,
         "commits": [],
     }
-    state.setdefault("phases", []).append(entry)
+    phases.append(new_entry)
     save_state(state)
     print(json.dumps({"ok": True, "phase": args.phase}, indent=2))
     return 0

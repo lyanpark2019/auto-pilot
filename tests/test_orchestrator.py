@@ -129,6 +129,37 @@ class TestPhaseLifecycle:
         _run(["phase-end", "--phase", "2", "--status", "success"])
         assert _state()["status"] == "success"
 
+    def test_phase_start_out_of_range_rejected(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        rc = _run(["phase-start", "--phase", "99", "--contracts", "1"])
+        assert rc == 2
+        assert "event=phase_start.out_of_range" in capsys.readouterr().err
+
+    def test_phase_start_phase_zero_rejected(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        rc = _run(["phase-start", "--phase", "0", "--contracts", "1"])
+        assert rc == 2
+        assert "event=phase_start.out_of_range" in capsys.readouterr().err
+
+    def test_phase_start_duplicate_running_rejected(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "1"])
+        rc = _run(["phase-start", "--phase", "1", "--contracts", "1"])
+        assert rc == 2
+        assert "event=phase_start.already_running" in capsys.readouterr().err
+
+    def test_phase_start_retry_bumps_round(self, in_tmp_cwd, sample_spec):
+        _run(["init", "--spec", str(sample_spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "2"])
+        _run(["phase-end", "--phase", "1", "--status", "failed"])
+        _run(["phase-start", "--phase", "1", "--contracts", "3"])
+        entry = _state()["phases"][-1]
+        assert entry["round"] == 2
+        assert entry["status"] == "running"
+        assert entry["contracts"] == 3
+        # No duplicate entry appended:
+        assert sum(1 for p in _state()["phases"] if p["phase"] == 1) == 1
+
 
 class TestPivotCheck:
     def test_trips_at_third_repeat(self, in_tmp_cwd, sample_spec, capsys):
