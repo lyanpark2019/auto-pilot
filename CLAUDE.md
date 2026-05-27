@@ -2,6 +2,13 @@
 
 This is the auto-pilot plugin source. It is **a Claude Code plugin**, not application code. The plugin ships skills, agents, hooks, and one helper script.
 
+## Publish identity
+
+- **GitHub owner:** `lyanpark2019` (NOT Sewhoan, NOT fyqro)
+- **Remote:** `git@github.com:lyanpark2019/auto-pilot.git`
+- **gh CLI account:** active = `lyanpark2019` (verify with `gh auth status`)
+- All `gh repo create`, `gh pr`, `gh release` operations for this repo must run under the `lyanpark2019` account. If the active gh account is anything else, switch first: `gh auth switch -u lyanpark2019`.
+
 ## Layout
 
 - `.claude-plugin/plugin.json` — manifest
