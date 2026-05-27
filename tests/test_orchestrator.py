@@ -41,6 +41,24 @@ class TestInit:
         _run(["init", "--spec", str(spec)])
         assert _state()["total_phases"] == 1
 
+    def test_init_refuses_to_overwrite_running(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        rc = _run(["init", "--spec", str(sample_spec)])
+        assert rc == 2
+        assert "already running" in capsys.readouterr().err
+
+    def test_init_force_overwrites(self, in_tmp_cwd, sample_spec):
+        _run(["init", "--spec", str(sample_spec)])
+        rc = _run(["init", "--spec", str(sample_spec), "--force", "--max-workers", "2"])
+        assert rc == 0
+        assert _state()["max_workers"] == 2
+
+    def test_init_after_stop_allowed(self, in_tmp_cwd, sample_spec):
+        _run(["init", "--spec", str(sample_spec)])
+        _run(["stop"])
+        rc = _run(["init", "--spec", str(sample_spec)])
+        assert rc == 0
+
 
 class TestPhaseLifecycle:
     def test_phase_start_appends(self, in_tmp_cwd, sample_spec):
@@ -79,11 +97,38 @@ class TestPhaseLifecycle:
         assert rc == 2
         assert "no active phase" in capsys.readouterr().err
 
+    def test_phase_end_mismatched_phase_rejected(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "2"])
+        rc = _run(["phase-end", "--phase", "2", "--status", "success"])
+        assert rc == 2
+        assert "does not match active phase" in capsys.readouterr().err
+        assert _state()["phases"][-1]["status"] == "running"
+
     def test_phase_end_success_midway_keeps_running(self, in_tmp_cwd, sample_spec):
         _run(["init", "--spec", str(sample_spec)])
         _run(["phase-start", "--phase", "1", "--contracts", "1"])
         _run(["phase-end", "--phase", "1", "--status", "success"])
         assert _state()["status"] == "running"
+
+    def test_two_phase_spec_phase1_keeps_running(self, in_tmp_cwd, tmp_path):
+        """Regression: phase 1 of 2 must not mark status=success."""
+        spec = tmp_path / "two.md"
+        spec.write_text("## Phase 1\n## Phase 2\n")
+        _run(["init", "--spec", str(spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "1"])
+        _run(["phase-end", "--phase", "1", "--status", "success"])
+        assert _state()["status"] == "running"
+
+    def test_two_phase_spec_phase2_marks_success(self, in_tmp_cwd, tmp_path):
+        spec = tmp_path / "two.md"
+        spec.write_text("## Phase 1\n## Phase 2\n")
+        _run(["init", "--spec", str(spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "1"])
+        _run(["phase-end", "--phase", "1", "--status", "success"])
+        _run(["phase-start", "--phase", "2", "--contracts", "1"])
+        _run(["phase-end", "--phase", "2", "--status", "success"])
+        assert _state()["status"] == "success"
 
 
 class TestPivotCheck:

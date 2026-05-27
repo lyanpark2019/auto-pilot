@@ -46,6 +46,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"ERROR: spec not found: {spec_path}", file=sys.stderr)
         return 2
 
+    existing = load_state()
+    if existing.get("status") == "running" and not args.force:
+        print(
+            "ERROR: state.json already running — pass --force to wipe, or `stop` first",
+            file=sys.stderr,
+        )
+        return 2
+
     total_phases = _count_phases(spec_path)
 
     state = {
@@ -93,11 +101,17 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
         return 2
 
     current = state["phases"][-1]
+    if current["phase"] != args.phase:
+        print(
+            f"ERROR: --phase {args.phase} does not match active phase {current['phase']}",
+            file=sys.stderr,
+        )
+        return 2
     current["status"] = args.status
     current["ended"] = utc_now()
     current["commits"] = args.commits.split(",") if args.commits else []
 
-    if args.status == "success" and state["current_phase"] + 1 >= state["total_phases"]:
+    if args.status == "success" and state["current_phase"] >= state["total_phases"]:
         state["status"] = "success"
     elif args.status in ("failed", "pivot-needed"):
         state["status"] = args.status
@@ -166,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     p_init.add_argument("--spec", required=True)
     p_init.add_argument("--max-workers", type=int, default=10)
     p_init.add_argument("--time-box-until", default=None)
+    p_init.add_argument("--force", action="store_true")
     p_init.set_defaults(func=cmd_init)
 
     p_ps = sub.add_parser("phase-start")
