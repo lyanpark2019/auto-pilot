@@ -1,0 +1,17 @@
+{
+  "name": "auto-pilot-marketplace",
+  "owner": {
+    "name": "lyan",
+    "email": "art5@fyqro.com"
+  },
+  "plugins": [
+    {
+      "name": "auto-pilot",
+      "source": ".",
+      "description": "Self-driving development loop: Opus PM + Sonnet 1M workers + Codex/Claude dual review + phase gates",
+      "version": "0.1.0",
+      "category": "automation",
+      "tags": ["autonomous", "multi-agent", "adversarial-review"]
+    }
+  ]
+}
