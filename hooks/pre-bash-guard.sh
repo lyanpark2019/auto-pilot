@@ -13,10 +13,11 @@ cmd=$(echo "$input" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
-    print(d.get("tool_input", {}).get("command", ""))
-except Exception:
-    print("")
-' 2>/dev/null)
+except json.JSONDecodeError:
+    sys.stderr.write("auto-pilot: WARNING malformed tool_input json — hook skipped\n")
+    sys.exit(0)
+print(d.get("tool_input", {}).get("command", ""))
+')
 
 [[ -z "$cmd" ]] && exit 0
 

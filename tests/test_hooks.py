@@ -136,6 +136,18 @@ class TestPreEditCompositionRoot:
         assert r.returncode == 0
         assert "WARNING" in r.stderr
 
+    def test_malformed_json_warns_not_blocks(self, hooks_dir, in_tmp_cwd):
+        r = subprocess.run(
+            [str(hooks_dir / "pre-edit-composition-root.sh")],
+            input="this is not json {{{",
+            capture_output=True,
+            text=True,
+            cwd=str(in_tmp_cwd),
+            timeout=15,
+        )
+        assert r.returncode == 0
+        assert "malformed tool_input json" in r.stderr
+
 
 class TestPreBashGuard:
     def test_blocks_claude_doctor(self, hooks_dir, in_tmp_cwd, clean_env):
@@ -204,6 +216,18 @@ class TestPreBashGuard:
         )
         assert r.returncode == 0
 
+    def test_malformed_json_warns_not_blocks(self, hooks_dir, in_tmp_cwd):
+        r = subprocess.run(
+            [str(hooks_dir / "pre-bash-guard.sh")],
+            input="this is not json {{{",
+            capture_output=True,
+            text=True,
+            cwd=str(in_tmp_cwd),
+            timeout=15,
+        )
+        assert r.returncode == 0
+        assert "malformed tool_input json" in r.stderr
+
 
 class TestPostDeployVerify:
     def test_non_deploy_is_noop(self, hooks_dir, in_tmp_cwd):
@@ -241,3 +265,15 @@ class TestPostDeployVerify:
             cwd=in_tmp_cwd,
         )
         assert r.returncode == 0
+
+    def test_malformed_json_warns_not_blocks(self, hooks_dir, in_tmp_cwd):
+        r = subprocess.run(
+            [str(hooks_dir / "post-deploy-verify.sh")],
+            input="this is not json {{{",
+            capture_output=True,
+            text=True,
+            cwd=str(in_tmp_cwd),
+            timeout=15,
+        )
+        assert r.returncode == 0
+        assert "malformed tool_input json" in r.stderr
