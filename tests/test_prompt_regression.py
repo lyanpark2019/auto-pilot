@@ -1,10 +1,13 @@
 """Regression suite for prompts/ — fixture-driven, >=10 cases covering iteration + headless prompts.
 
 Each fixture under prompts/fixtures/*.json declares:
-  - prompt: name passed to _prompts.render()
-  - vars:  kwargs (may be empty)
-  - expects_substring: list of literal substrings the render MUST contain
-  - expects_not:        list of literal substrings the render MUST NOT contain
+  - prompt: name passed to _prompts.load() or _prompts.render()
+  - call:  "load" or "render" (default "render"); pick "load" for static
+           prompts that contain literal `${...}` shell syntax that would
+           confuse `str.format_map`
+  - vars:  kwargs for render (ignored when call == "load")
+  - expects_substring: list of literal substrings the output MUST contain
+  - expects_not:        list of literal substrings the output MUST NOT contain
                         (catches un-resolved {placeholder} leaks, ignored extras)
 
 No full-text snapshotting — too brittle to whitespace tweaks. Substring asserts
@@ -39,7 +42,13 @@ def test_fixture_render_matches_expectations(fixture_path: Path) -> None:
     case = json.loads(fixture_path.read_text())
     prompt = case["prompt"]
     vars_ = case.get("vars", {})
-    rendered = _prompts.render(prompt, **vars_)
+    call = case.get("call", "render")
+    if call == "load":
+        rendered = _prompts.load(prompt)
+    elif call == "render":
+        rendered = _prompts.render(prompt, **vars_)
+    else:
+        raise ValueError(f"{fixture_path.name}: unknown call {call!r}")
     for sub in case.get("expects_substring", []):
         assert sub in rendered, (
             f"{fixture_path.name}: expected substring not found: {sub!r}\n"
@@ -66,8 +75,10 @@ def test_extra_vars_do_not_crash_render() -> None:
     assert "ignore_me" not in out
 
 
-def test_headless_render_no_vars_equals_load() -> None:
-    """Idempotency: headless contains literal `${...}` shell syntax, so the
-    no-vars short-circuit in _prompts.render must return the raw file untouched.
+def test_headless_render_raises_keyerror() -> None:
+    """Headless contains literal `${HARNESS_HEADLESS:-0}` shell syntax.
+    `str.format_map` parses `{HARNESS_HEADLESS:-0}` as a Python field and
+    raises KeyError — callers must use `_prompts.load("headless")`.
     """
-    assert _prompts.render("headless") == _prompts.load("headless")
+    with pytest.raises(KeyError):
+        _prompts.render("headless")

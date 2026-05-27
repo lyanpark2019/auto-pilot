@@ -23,5 +23,20 @@ def test_render_iteration_resolves_placeholders():
     assert "{phase}" not in rendered
 
 
-def test_render_headless_with_no_vars_is_load():
-    assert _prompts.render("headless") == _prompts.load("headless")
+def test_render_iteration_without_vars_raises():
+    """Safety contract: if caller forgets vars, fail loud — do not silently
+    return a template with `{iter_n}`/`{phase}` leaking to the LLM."""
+    import pytest
+
+    with pytest.raises(KeyError):
+        _prompts.render("iteration")
+
+
+def test_render_headless_must_use_load():
+    """The headless preamble contains literal `${HARNESS_HEADLESS:-0}`
+    which `format_map` parses as a Python field and raises KeyError.
+    Callers must use `load("headless")`, not `render`."""
+    import pytest
+
+    with pytest.raises(KeyError):
+        _prompts.render("headless")

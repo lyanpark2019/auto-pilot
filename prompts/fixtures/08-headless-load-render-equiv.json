@@ -1,9 +1,0 @@
-{
-  "_doc": "Headless contains literal ${...} shell expansion — must round-trip without format_map being invoked. The render-with-no-vars path is the only safe loader.",
-  "prompt": "headless",
-  "vars": {},
-  "expects_substring": [
-    "${HARNESS_HEADLESS:-0}"
-  ],
-  "expects_not": []
-}

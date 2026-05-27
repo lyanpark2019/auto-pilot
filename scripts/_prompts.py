@@ -12,11 +12,15 @@ def load(name: str) -> str:
 def render(name: str, **vars: Any) -> str:
     """Load prompt and resolve `{key}` placeholders with `vars`.
 
-    When no vars are passed, returns the raw text unchanged so prompts
-    containing literal `{...}` (e.g. shell `${VAR:-default}` expansions)
-    can be loaded via `render()` without triggering `format_map`.
+    Always invokes `str.format_map`. Raises `KeyError` if the prompt
+    contains a placeholder the caller didn't supply — this is the
+    intended safety contract: silent template leaks (raw `{key}` reaching
+    the LLM) are far worse than a loud crash.
+
+    For prompts that are pure static content (e.g. the `headless`
+    preamble, which contains literal shell `${VAR:-default}` expansions),
+    use `load(name)` instead. `render()` of such a prompt will KeyError
+    because `format_map` cannot distinguish a shell `${...}` literal from
+    a Python `{...}` field.
     """
-    text = load(name)
-    if not vars:
-        return text
-    return text.format_map(vars)
+    return load(name).format_map(vars)
