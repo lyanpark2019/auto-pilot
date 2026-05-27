@@ -19,6 +19,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict, cast
 
 from _log import event
 
@@ -26,22 +27,74 @@ STATE_DIR = Path(".planning/auto-pilot")
 STATE_FILE = STATE_DIR / "state.json"
 
 
+class PhaseEntry(TypedDict):
+    """One element of ``state['phases']`` — a single phase's lifecycle record."""
+
+    phase: int
+    status: str
+    round: int
+    contracts: int
+    approved: int
+    started: str
+    ended: str | None
+    commits: list[str]
+
+
+class State(TypedDict, total=False):
+    """Persisted orchestrator state.
+
+    ``total=False`` so freshly-loaded state may omit late-added fields
+    (e.g. ``stopped_at`` is only present after ``stop``).
+    """
+
+    started_at: str
+    spec_path: str
+    current_phase: int
+    total_phases: int
+    status: str
+    max_workers: int
+    time_box_until: str | None
+    phases: list[PhaseEntry]
+    pivot_detector: dict[str, dict[str, int]]
+    stopped_at: str
+
+
 def utc_now() -> str:
+    """Return the current UTC time as an ISO-8601 string (seconds precision)."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def load_state() -> dict:
+def load_state() -> State:
+    """Read ``STATE_FILE`` into a :class:`State`.
+
+    Returns:
+        Parsed state dict, or an empty dict when no state file exists.
+    """
     if not STATE_FILE.exists():
-        return {}
-    return json.loads(STATE_FILE.read_text())
+        return cast(State, {})
+    return cast(State, json.loads(STATE_FILE.read_text()))
 
 
-def save_state(state: dict) -> None:
+def save_state(state: State) -> None:
+    """Persist ``state`` to ``STATE_FILE`` (pretty-printed JSON, trailing newline).
+
+    Args:
+        state: state object to serialize. Caller owns the dict.
+    """
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
 
 
 def cmd_init(args: argparse.Namespace) -> int:
+    """Initialize a new auto-pilot run by writing a fresh state file.
+
+    Args:
+        args: parsed CLI namespace; expects ``spec``, ``max_workers``,
+            ``time_box_until`` and ``force``.
+
+    Returns:
+        0 on success, 2 if the spec is missing or a run is already active.
+    """
     spec_path = Path(args.spec)
     if not spec_path.exists():
         event("init.spec_missing", path=spec_path)
@@ -54,7 +107,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     total_phases = _count_phases(spec_path)
 
-    state = {
+    state: State = {
         "started_at": utc_now(),
         "spec_path": str(spec_path),
         "current_phase": 0,
@@ -71,13 +124,21 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_phase_start(args: argparse.Namespace) -> int:
+    """Begin a new phase, appending a :class:`PhaseEntry` to state.
+
+    Args:
+        args: parsed CLI namespace; expects ``phase`` (int) and ``contracts`` (int).
+
+    Returns:
+        0 on success, 2 if state has not been initialized.
+    """
     state = load_state()
     if not state:
         event("phase_start.no_state")
         return 2
 
     state["current_phase"] = args.phase
-    state["phases"].append({
+    entry: PhaseEntry = {
         "phase": args.phase,
         "status": "running",
         "round": 1,
@@ -86,19 +147,34 @@ def cmd_phase_start(args: argparse.Namespace) -> int:
         "started": utc_now(),
         "ended": None,
         "commits": [],
-    })
+    }
+    state.setdefault("phases", []).append(entry)
     save_state(state)
     print(json.dumps({"ok": True, "phase": args.phase}, indent=2))
     return 0
 
 
 def cmd_phase_end(args: argparse.Namespace) -> int:
+    """Close out the active phase with a final status and commit list.
+
+    Promotes the run's top-level ``status`` to ``success`` only when the last
+    spec phase has just ended successfully; otherwise propagates ``failed`` /
+    ``pivot-needed`` as-is.
+
+    Args:
+        args: parsed CLI namespace; expects ``phase``, ``status``, ``commits``.
+
+    Returns:
+        0 on success, 2 if no phase is active or the requested phase does not
+        match the currently-running one.
+    """
     state = load_state()
     if not state or not state.get("phases"):
         event("phase_end.no_active_phase")
         return 2
 
-    current = state["phases"][-1]
+    phases = state["phases"]
+    current = phases[-1]
     if current["phase"] != args.phase:
         event(
             "phase_end.phase_mismatch",
@@ -110,7 +186,10 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
     current["ended"] = utc_now()
     current["commits"] = args.commits.split(",") if args.commits else []
 
-    if args.status == "success" and state["current_phase"] >= state["total_phases"]:
+    if (
+        args.status == "success"
+        and state.get("current_phase", 0) >= state.get("total_phases", 0)
+    ):
         state["status"] = "success"
     elif args.status in ("failed", "pivot-needed"):
         state["status"] = args.status
@@ -121,7 +200,15 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
 
 
 def cmd_pivot_check(args: argparse.Namespace) -> int:
-    """Returns nonzero exit when finding has repeated 3+ times — PM should stop."""
+    """Bump the repeat counter for ``finding_hash`` within a phase bucket.
+
+    Args:
+        args: parsed CLI namespace; expects ``phase`` (int) and ``finding_hash``.
+
+    Returns:
+        0 normally, 1 once a finding has been observed three or more times
+        (PM should pivot). Also flips state status to ``pivot-needed`` then.
+    """
     state = load_state()
     if not state:
         return 0
@@ -141,6 +228,11 @@ def cmd_pivot_check(args: argparse.Namespace) -> int:
 
 
 def cmd_status(_: argparse.Namespace) -> int:
+    """Print the current state as JSON, or a hint if no run is initialized.
+
+    Returns:
+        Always 0 — status queries do not fail.
+    """
     state = load_state()
     if not state:
         print("auto-pilot: not initialized")
@@ -150,6 +242,11 @@ def cmd_status(_: argparse.Namespace) -> int:
 
 
 def cmd_stop(_: argparse.Namespace) -> int:
+    """Mark the run as stopped (terminal), recording ``stopped_at``.
+
+    Returns:
+        Always 0; a missing state file is treated as a no-op success.
+    """
     state = load_state()
     if not state:
         print("auto-pilot: nothing to stop")
@@ -162,6 +259,14 @@ def cmd_stop(_: argparse.Namespace) -> int:
 
 
 def _count_phases(spec_path: Path) -> int:
+    """Count ``## Phase`` / ``# Phase`` headings in a spec markdown file.
+
+    Args:
+        spec_path: path to the spec file.
+
+    Returns:
+        Number of phase headings; floors at 1 so the loop always has work.
+    """
     text = spec_path.read_text()
     count = 0
     for line in text.splitlines():
@@ -172,6 +277,14 @@ def _count_phases(spec_path: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point — parse ``argv`` and dispatch to the chosen subcommand.
+
+    Args:
+        argv: optional argv list (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        Process exit code from the dispatched subcommand handler.
+    """
     parser = argparse.ArgumentParser(prog="auto-pilot")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -202,7 +315,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("stop").set_defaults(func=cmd_stop)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    rc: int = args.func(args)
+    return rc
 
 
 if __name__ == "__main__":

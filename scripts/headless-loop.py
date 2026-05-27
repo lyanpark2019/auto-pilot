@@ -37,6 +37,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from _log import event
 
@@ -66,28 +67,69 @@ Rules:
 
 
 def utc_now() -> str:
+    """Return the current UTC time as an ISO-8601 string (seconds precision)."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def load_state() -> dict:
+def load_state() -> dict[str, Any]:
+    """Read ``STATE_FILE`` into a dict.
+
+    Returns:
+        Parsed state, or an empty dict when the file is missing. The schema is
+        defined in ``orchestrator.State``; we keep it loosely typed here because
+        this script only reads it.
+    """
     if not STATE_FILE.exists():
         return {}
-    return json.loads(STATE_FILE.read_text())
+    return cast("dict[str, Any]", json.loads(STATE_FILE.read_text()))
 
 
 def git_head() -> str:
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True).strip()
+    """Return the current ``HEAD`` SHA of the repo at ``ROOT``.
+
+    Raises:
+        subprocess.CalledProcessError: when ``git rev-parse`` fails (e.g. not a
+            git repo, detached state with no commits).
+    """
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True
+    ).strip()
 
 
 def git_reset_hard(sha: str) -> None:
+    """Hard-reset the working tree at ``ROOT`` to ``sha``.
+
+    Args:
+        sha: target commit. Caller is responsible for ensuring it exists.
+    """
     subprocess.run(["git", "reset", "--hard", sha], cwd=str(ROOT), check=True)
 
 
 def commit_trailer(iter_n: int, phase: int) -> str:
+    """Build the git trailer block embedding iteration + phase numbers.
+
+    Args:
+        iter_n: outer-loop iteration index.
+        phase: current phase number.
+
+    Returns:
+        Trailer string suitable for appending to a commit message body.
+    """
     return f"\n\nauto-pilot-iter: {iter_n}\nauto-pilot-phase: {phase}\n"
 
 
 def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
+    """Spawn a headless ``claude -p`` session and stream its output to a log.
+
+    Args:
+        prompt: user prompt body; the ``HEADLESS_PROMPT_PREAMBLE`` is prepended.
+        log_path: where to tee stdout+stderr. Parent dirs are created.
+        timeout_sec: kill the subprocess if it runs longer than this.
+
+    Returns:
+        The subprocess return code on normal exit, or ``124`` when the timer
+        fired (mirroring coreutils ``timeout``).
+    """
     full_prompt = HEADLESS_PROMPT_PREAMBLE + prompt
     cmd = [CLAUDE_BIN, "-p", "--dangerously-skip-permissions", full_prompt]
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,7 +159,8 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
+                # proc may already be dead or PID reused; nothing to recover.
                 pass
 
         timer = threading.Timer(timeout_sec, _on_timeout)
@@ -140,14 +183,27 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
 
 
 def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
-    """Run one PM cycle. Return final state.status for this iteration."""
+    """Run one PM cycle and return the final ``state.status`` for it.
+
+    On timeout (return code 124) or post-run ``status == "failed"``, hard-resets
+    the working tree to the pre-iteration HEAD so failed phases leave no trace.
+
+    Args:
+        iter_n: 1-based outer-loop iteration index.
+        args: parsed CLI namespace; expects ``timeout_build``.
+
+    Returns:
+        Final status string (``"running"``, ``"success"``, ``"failed"``,
+        ``"stopped"``, or ``"pivot-needed"``).
+    """
     state = load_state()
     if not state:
         event("loop.state_missing")
         return "failed"
 
-    if state.get("status") in {"success", "stopped", "pivot-needed", "failed"}:
-        return state["status"]
+    current_status = state.get("status")
+    if current_status in {"success", "stopped", "pivot-needed", "failed"}:
+        return cast(str, current_status)
 
     phase = state.get("current_phase", 0)
     pre_head = git_head()
@@ -171,7 +227,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
         return "failed"
 
     new_state = load_state()
-    status = new_state.get("status", "running")
+    status = cast(str, new_state.get("status", "running"))
 
     if status == "failed":
         event("iter.fail_rollback", pre_head=pre_head[:8])
@@ -181,6 +237,16 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point for the headless driver loop.
+
+    Args:
+        argv: optional argv list (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        ``0`` for normal completion (success or max-iter exhausted), ``1`` when
+        the loop ends in a non-success terminal status, ``2`` when no state
+        file exists.
+    """
     p = argparse.ArgumentParser(prog="auto-pilot-headless")
     p.add_argument("--max-iter", type=int, default=100)
     p.add_argument("--sleep", type=int, default=10, help="seconds between iterations")
