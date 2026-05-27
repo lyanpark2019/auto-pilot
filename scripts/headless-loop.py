@@ -28,27 +28,24 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import cast
 
 import _config
 import _prompts
 from _log import event
-from _state import State
+from _state import STATE_DIR, STATE_FILE, load_state
 
+# ROOT captured at import time; used only for subprocess cwd (git ops + claude
+# session). State + log paths come from _state and resolve lazily relative to
+# cwd at call time — the C6 hermetic test fixture monkeypatch.chdir's into
+# tmp_path before invoking loop_iteration, so every state/log read+write lands
+# under tmp_path as intended.
 ROOT = Path.cwd()
-# NB: local STATE_FILE binds to this loop's ROOT snapshot (captured at import
-# time). We do not use _state.STATE_FILE because the hermetic test harness
-# reloads this module per-test with a tmp cwd; _state.STATE_FILE is resolved
-# lazily relative to the *runtime* cwd and would diverge.
-STATE_DIR = ROOT / ".planning" / "auto-pilot"
-STATE_FILE = STATE_DIR / "state.json"
 LOG_DIR = STATE_DIR / "logs"
 
 CONFIG = _config.load()
@@ -56,20 +53,6 @@ CLAUDE_BIN = CONFIG.claude_bin
 HEADLESS_ENV = CONFIG.headless_env
 
 HEADLESS_PROMPT_PREAMBLE = _prompts.load("headless")
-
-
-def load_state() -> State:
-    """Read this loop's ``STATE_FILE`` into a :class:`State`.
-
-    A local override of :func:`_state.load_state` that uses ``STATE_FILE``
-    bound to this module's ``ROOT`` snapshot (see note on STATE_FILE).
-
-    Returns:
-        Parsed state, or an empty dict when the file is missing.
-    """
-    if not STATE_FILE.exists():
-        return cast(State, {})
-    return cast(State, json.loads(STATE_FILE.read_text()))
 
 
 def git_head() -> str:
