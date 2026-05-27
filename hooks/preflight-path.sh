@@ -10,7 +10,7 @@ warnings=()
 
 # Rule 1: never in /tmp for a real project
 case "$cwd" in
-  /tmp/*|/var/folders/*|/private/var/folders/*)
+  /tmp|/tmp/*|/var/folders/*|/private/var/folders/*|/private/tmp|/private/tmp/*)
     warnings+=("auto-pilot: CWD is in $cwd — vault/spec ops will fail. cd to a real project root first.")
     ;;
 esac
@@ -31,6 +31,8 @@ if [[ -d ./Valut ]] || [[ -d ./Volt ]]; then
   warnings+=("auto-pilot: found typo'd vault dir (Valut/Volt) — canonical path is Obsidian/AI-Vault/")
 fi
 
-for w in "${warnings[@]}"; do echo "$w" >&2; done
+if [[ ${#warnings[@]} -gt 0 ]]; then
+  for w in "${warnings[@]}"; do echo "$w" >&2; done
+fi
 
 exit 0
