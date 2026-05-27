@@ -38,6 +38,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from _log import event
+
 ROOT = Path.cwd()
 STATE_DIR = ROOT / ".planning" / "auto-pilot"
 STATE_FILE = STATE_DIR / "state.json"
@@ -106,7 +108,7 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
 
         def _on_timeout() -> None:
             hit_timeout["v"] = True
-            sys.stderr.write(f"\n[TIMEOUT] killing claude session after {timeout_sec:.0f}s\n")
+            event("session.timeout", timeout_s=int(timeout_sec))
             lf.write(f"\n[TIMEOUT] killed after {timeout_sec:.0f}s\n")
             lf.flush()
             try:
@@ -141,7 +143,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     """Run one PM cycle. Return final state.status for this iteration."""
     state = load_state()
     if not state:
-        sys.stderr.write("ERROR: state.json missing — run `/auto-pilot start` first to init.\n")
+        event("loop.state_missing")
         return "failed"
 
     if state.get("status") in {"success", "stopped", "pivot-needed", "failed"}:
@@ -149,7 +151,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
 
     phase = state.get("current_phase", 0)
     pre_head = git_head()
-    sys.stderr.write(f"\n=== iter {iter_n} | phase {phase} | pre-HEAD {pre_head[:8]} ===\n")
+    event("iter.start", n=iter_n, phase=phase, pre_head=pre_head[:8])
 
     log = LOG_DIR / f"iter-{iter_n:04d}-phase-{phase}.log"
     prompt = (
@@ -164,7 +166,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     rc = run_claude_session(prompt, log, args.timeout_build)
 
     if rc == 124:
-        sys.stderr.write(f"[TIMEOUT] rolling back to {pre_head[:8]}\n")
+        event("iter.timeout_rollback", pre_head=pre_head[:8])
         git_reset_hard(pre_head)
         return "failed"
 
@@ -172,7 +174,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     status = new_state.get("status", "running")
 
     if status == "failed":
-        sys.stderr.write(f"[FAIL] rolling back to {pre_head[:8]}\n")
+        event("iter.fail_rollback", pre_head=pre_head[:8])
         git_reset_hard(pre_head)
 
     return status
@@ -187,26 +189,26 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     if not STATE_FILE.exists():
-        sys.stderr.write("auto-pilot: no state.json — run `/auto-pilot start` first to initialize.\n")
+        event("loop.no_state_file")
         return 2
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     for n in range(1, args.max_iter + 1):
         status = loop_iteration(n, args)
-        sys.stderr.write(f"--- iter {n} ended with status={status} ---\n")
+        event("iter.end", n=n, status=status)
 
         if status in {"success", "stopped", "pivot-needed", "failed"}:
-            sys.stderr.write(f"auto-pilot: terminal status '{status}' — exiting loop\n")
+            event("loop.terminal", status=status)
             return 0 if status == "success" else 1
 
         if args.once:
-            sys.stderr.write("--once: exit after first iteration\n")
+            event("loop.once_exit")
             return 0
 
         time.sleep(args.sleep)
 
-    sys.stderr.write(f"auto-pilot: max-iter {args.max_iter} reached, exiting\n")
+    event("loop.max_iter_reached", max_iter=args.max_iter)
     return 0
 
 

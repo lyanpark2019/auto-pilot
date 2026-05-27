@@ -33,7 +33,7 @@ class TestInit:
         rc = _run(["init", "--spec", "nope.md"])
         assert rc == 2
         err = capsys.readouterr().err
-        assert "spec not found" in err
+        assert "event=init.spec_missing" in err
 
     def test_phase_count_falls_back_to_one(self, in_tmp_cwd, tmp_path):
         spec = tmp_path / "empty.md"
@@ -45,7 +45,7 @@ class TestInit:
         _run(["init", "--spec", str(sample_spec)])
         rc = _run(["init", "--spec", str(sample_spec)])
         assert rc == 2
-        assert "already running" in capsys.readouterr().err
+        assert "event=init.already_running" in capsys.readouterr().err
 
     def test_init_force_overwrites(self, in_tmp_cwd, sample_spec):
         _run(["init", "--spec", str(sample_spec)])
@@ -72,7 +72,7 @@ class TestPhaseLifecycle:
     def test_phase_start_without_init_fails(self, in_tmp_cwd, capsys):
         rc = _run(["phase-start", "--phase", "1", "--contracts", "1"])
         assert rc == 2
-        assert "run init first" in capsys.readouterr().err
+        assert "event=phase_start.no_state" in capsys.readouterr().err
 
     def test_phase_end_success_marks_done_on_last(self, in_tmp_cwd, tmp_path):
         spec = tmp_path / "single.md"
@@ -95,14 +95,14 @@ class TestPhaseLifecycle:
         _run(["init", "--spec", str(sample_spec)])
         rc = _run(["phase-end", "--phase", "1", "--status", "success"])
         assert rc == 2
-        assert "no active phase" in capsys.readouterr().err
+        assert "event=phase_end.no_active_phase" in capsys.readouterr().err
 
     def test_phase_end_mismatched_phase_rejected(self, in_tmp_cwd, sample_spec, capsys):
         _run(["init", "--spec", str(sample_spec)])
         _run(["phase-start", "--phase", "1", "--contracts", "2"])
         rc = _run(["phase-end", "--phase", "2", "--status", "success"])
         assert rc == 2
-        assert "does not match active phase" in capsys.readouterr().err
+        assert "event=phase_end.phase_mismatch" in capsys.readouterr().err
         assert _state()["phases"][-1]["status"] == "running"
 
     def test_phase_end_success_midway_keeps_running(self, in_tmp_cwd, sample_spec):
@@ -139,7 +139,7 @@ class TestPivotCheck:
         rc = _run(["pivot-check", "--phase", "1", "--finding-hash", "h1"])
         assert rc == 1
         assert _state()["status"] == "pivot-needed"
-        assert "PIVOT NEEDED" in capsys.readouterr().err
+        assert "event=pivot.needed" in capsys.readouterr().err
 
     def test_different_findings_dont_trip(self, in_tmp_cwd, sample_spec):
         _run(["init", "--spec", str(sample_spec)])

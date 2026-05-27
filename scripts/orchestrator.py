@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from _log import event
 
 STATE_DIR = Path(".planning/auto-pilot")
 STATE_FILE = STATE_DIR / "state.json"
@@ -43,15 +44,12 @@ def save_state(state: dict) -> None:
 def cmd_init(args: argparse.Namespace) -> int:
     spec_path = Path(args.spec)
     if not spec_path.exists():
-        print(f"ERROR: spec not found: {spec_path}", file=sys.stderr)
+        event("init.spec_missing", path=spec_path)
         return 2
 
     existing = load_state()
     if existing.get("status") == "running" and not args.force:
-        print(
-            "ERROR: state.json already running — pass --force to wipe, or `stop` first",
-            file=sys.stderr,
-        )
+        event("init.already_running", hint="pass --force to wipe or run stop first")
         return 2
 
     total_phases = _count_phases(spec_path)
@@ -75,7 +73,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_phase_start(args: argparse.Namespace) -> int:
     state = load_state()
     if not state:
-        print("ERROR: no state — run init first", file=sys.stderr)
+        event("phase_start.no_state")
         return 2
 
     state["current_phase"] = args.phase
@@ -97,14 +95,15 @@ def cmd_phase_start(args: argparse.Namespace) -> int:
 def cmd_phase_end(args: argparse.Namespace) -> int:
     state = load_state()
     if not state or not state.get("phases"):
-        print("ERROR: no active phase", file=sys.stderr)
+        event("phase_end.no_active_phase")
         return 2
 
     current = state["phases"][-1]
     if current["phase"] != args.phase:
-        print(
-            f"ERROR: --phase {args.phase} does not match active phase {current['phase']}",
-            file=sys.stderr,
+        event(
+            "phase_end.phase_mismatch",
+            requested=args.phase,
+            active=current["phase"],
         )
         return 2
     current["status"] = args.status
@@ -134,7 +133,7 @@ def cmd_pivot_check(args: argparse.Namespace) -> int:
     count = bucket[args.finding_hash]
     print(json.dumps({"finding_hash": args.finding_hash, "count": count}))
     if count >= 3:
-        print("PIVOT NEEDED: same finding 3 rounds — strategy change required", file=sys.stderr)
+        event("pivot.needed", reason="finding_repeated_3_rounds")
         state["status"] = "pivot-needed"
         save_state(state)
         return 1
