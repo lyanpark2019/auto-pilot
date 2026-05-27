@@ -35,14 +35,18 @@ measured mean is `<=` a committed baseline (`tests/perf_baseline.json`). The
 absolute budget (`<50 ms`) is the primary gate; this baseline assertion is the
 secondary smoke catching catastrophic regressions.
 
-Baseline values are sized to work in two environments at once:
+Baseline values are sized to tolerate shared-runner variance:
 - Local M-series Mac, Python 3.13: ~500 µs measured mean per command.
-- GitHub Actions `ubuntu-latest`, Python 3.13: ~900–1150 µs measured mean.
+- GitHub Actions `ubuntu-latest`, Python 3.13: 0.5–11 ms observed range
+  across runs (CI hardware is a noisy neighbour environment; 10× spread is
+  not unusual).
 
-Each baseline is set at ~5× the slower (CI) measurement, so the gate triggers
-on a genuine ≥5× slowdown — wide enough to absorb CI-runner noise, tight enough
-that a real regression (e.g., O(n²) state walk added to `cmd_status`) gets
-caught before hitting `main`.
+Each baseline is set at **25 ms**, well below the 50 ms absolute budget but
+loose enough to never flake on a slow CI runner. The gate triggers on a
+genuine ≥25× slowdown vs local — caught regressions are catastrophic, not
+incremental. For finer-grained regression tracking, switch to
+`pytest-benchmark --benchmark-compare-fail` with a maintained `.benchmarks/`
+history (deliberately out of scope for this plugin).
 
 Refresh procedure after an intentional perf-affecting change:
 
@@ -52,9 +56,9 @@ python3 -c "
 import json
 data = json.load(open('/tmp/perf-new.json'))
 for b in data['benchmarks']:
-    print(b['fullname'], '->', b['stats']['mean'] * 5)
+    print(b['fullname'], '->', b['stats']['mean'] * 25)
 "
-# update tests/perf_baseline.json with the new 5x values (round up)
+# update tests/perf_baseline.json with the new 25x values (round up)
 git add tests/perf_baseline.json && git commit -m "perf(baseline): refresh after intentional change"
 ```
 
