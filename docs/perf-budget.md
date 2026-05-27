@@ -32,9 +32,17 @@ If the assertion fails, either:
 
 In addition to the 50 ms ceiling, each `test_*_within_budget` test asserts the
 measured mean is `<=` a committed baseline (`tests/perf_baseline.json`). The
-baseline values are set to **1.5× the measured mean** on dev hardware — wide
-enough to absorb normal noise, tight enough to catch a genuine 50%+ regression
-before it lands on `main`.
+absolute budget (`<50 ms`) is the primary gate; this baseline assertion is the
+secondary smoke catching catastrophic regressions.
+
+Baseline values are sized to work in two environments at once:
+- Local M-series Mac, Python 3.13: ~500 µs measured mean per command.
+- GitHub Actions `ubuntu-latest`, Python 3.13: ~900–1150 µs measured mean.
+
+Each baseline is set at ~5× the slower (CI) measurement, so the gate triggers
+on a genuine ≥5× slowdown — wide enough to absorb CI-runner noise, tight enough
+that a real regression (e.g., O(n²) state walk added to `cmd_status`) gets
+caught before hitting `main`.
 
 Refresh procedure after an intentional perf-affecting change:
 
@@ -44,9 +52,9 @@ python3 -c "
 import json
 data = json.load(open('/tmp/perf-new.json'))
 for b in data['benchmarks']:
-    print(b['fullname'], '->', b['stats']['mean'] * 1.5)
+    print(b['fullname'], '->', b['stats']['mean'] * 5)
 "
-# manually update tests/perf_baseline.json with the new 1.5x values
+# update tests/perf_baseline.json with the new 5x values (round up)
 git add tests/perf_baseline.json && git commit -m "perf(baseline): refresh after intentional change"
 ```
 

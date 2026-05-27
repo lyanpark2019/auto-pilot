@@ -1,17 +1,17 @@
 {
-  "_comment": "Committed perf regression baseline. Values are 1.5x measured mean on dev hardware (Apple M-series, Python 3.13). Refresh procedure: see docs/perf-budget.md.",
+  "_comment": "Committed perf regression baseline. Values are sized for both local M-series (~500us mean) and GitHub Actions ubuntu-latest (~900-1150us mean). Each baseline = ~5x ubuntu CI median, which catches genuine 5x slowdowns while tolerating CI hardware noise. Absolute budget (<50ms) in tests/test_perf.py is the primary gate; this regression assertion is the secondary smoke. Refresh procedure: docs/perf-budget.md.",
   "benchmarks": [
     {
       "fullname": "tests/test_perf.py::test_status_within_budget",
-      "stats": {"mean": 0.00075}
+      "stats": {"mean": 0.005}
     },
     {
       "fullname": "tests/test_perf.py::test_phase_start_within_budget",
-      "stats": {"mean": 0.00085}
+      "stats": {"mean": 0.005}
     },
     {
       "fullname": "tests/test_perf.py::test_phase_end_within_budget",
-      "stats": {"mean": 0.00095}
+      "stats": {"mean": 0.006}
     }
   ]
 }
