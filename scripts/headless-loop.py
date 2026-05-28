@@ -29,18 +29,17 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
-import shutil
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+import _budget
 import _config
 import _prompts
 from _log import event
-from _state import State, STATE_DIR, STATE_FILE, load_state, save_state
+from _state import STATE_DIR, STATE_FILE, load_state, save_state
 
 # ROOT captured at import time; used only for subprocess cwd (git ops + claude
 # session). State + log paths come from _state and resolve lazily relative to
@@ -67,19 +66,6 @@ def git_head() -> str:
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True
     ).strip()
-
-
-def git_reset_hard(sha: str) -> None:
-    """Hard-reset the working tree at ``ROOT`` to ``sha``.
-
-    Retained for backward compatibility but no longer called by ``loop_iteration``.
-    PR2 replaced root-reset with per-worktree cleanup; the iter-abandon path now
-    uses :func:`stash_if_dirty` for any residual main-tree edits.
-
-    Args:
-        sha: target commit. Caller is responsible for ensuring it exists.
-    """
-    subprocess.run(["git", "reset", "--hard", sha], cwd=str(ROOT), check=True)
 
 
 def stash_if_dirty(reason: str) -> str | None:
@@ -112,87 +98,6 @@ def stash_if_dirty(reason: str) -> str | None:
         return None
     event("stash.created", reason=reason, msg=msg)
     return msg
-
-
-_COST_LINE = re.compile(r"(?:total\s*cost|cost)\D*\$?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
-_TOKEN_LINE = re.compile(r"(?:total\s*tokens?|tokens?\s*used)\D*(\d+)", re.IGNORECASE)
-
-
-def parse_session_usage(log_path: Path) -> tuple[float, int]:
-    """Best-effort scan of a claude session log for cost + token totals.
-
-    Returns ``(cost_usd, tokens)``. When the log does not surface either value,
-    returns ``(0.0, 0)`` and the caller falls back to a per-iter estimate.
-    The parser is intentionally permissive — claude CLI output format is not
-    a stable contract; this just keeps the cost cap from running away.
-
-    Args:
-        log_path: path to the per-iter session log written by ``run_claude_session``.
-    """
-    if not log_path.exists():
-        return 0.0, 0
-    try:
-        text = log_path.read_text(errors="replace")
-    except OSError:
-        return 0.0, 0
-    cost = 0.0
-    tokens = 0
-    for match in _COST_LINE.finditer(text):
-        try:
-            cost = max(cost, float(match.group(1)))
-        except ValueError:
-            continue
-    for match in _TOKEN_LINE.finditer(text):
-        try:
-            tokens = max(tokens, int(match.group(1)))
-        except ValueError:
-            continue
-    return cost, tokens
-
-
-def count_claude_pids() -> int:
-    """Return the number of running ``claude`` processes via ``pgrep -x claude``.
-
-    Returns 0 when ``pgrep`` is missing or errors out — caller treats absence
-    as "no signal" rather than "fork-bomb".
-    """
-    if shutil.which("pgrep") is None:
-        return 0
-    try:
-        res = subprocess.run(
-            ["pgrep", "-x", "claude"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return 0
-    if res.returncode == 0:
-        return len([line for line in res.stdout.splitlines() if line.strip()])
-    return 0
-
-
-def check_caps(args: argparse.Namespace, state: State) -> str | None:
-    """Return a terminal-status string when a budget cap is exceeded, else ``None``.
-
-    Checks (in order):
-      - cost_usd accumulator vs ``--max-cost-usd``
-      - tokens accumulator vs ``--max-tokens``
-      - live ``claude`` pid count vs ``--max-concurrent-claude``
-    """
-    cost = float(state.get("cost_usd", 0.0))
-    tokens = int(state.get("tokens", 0))
-    if cost > args.max_cost_usd:
-        event("cap.cost_exceeded", cost_usd=cost, cap=args.max_cost_usd)
-        return "cost-cap"
-    if tokens > args.max_tokens:
-        event("cap.tokens_exceeded", tokens=tokens, cap=args.max_tokens)
-        return "cost-cap"
-    pids = count_claude_pids()
-    if pids >= args.max_concurrent_claude:
-        event("cap.pid_count_exceeded", pids=pids, cap=args.max_concurrent_claude)
-        return "cost-cap"
-    return None
 
 
 def commit_trailer(iter_n: int, phase: int) -> str:
@@ -296,7 +201,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
         assert current_status is not None  # narrowed by membership check above
         return current_status
 
-    cap_hit = check_caps(args, state)
+    cap_hit = _budget.check_caps(args, state)
     if cap_hit is not None:
         state["status"] = cap_hit
         save_state(state)
@@ -312,7 +217,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     rc = run_claude_session(prompt, log, args.timeout_build)
 
     # Accumulate cost + tokens regardless of exit code (best-effort)
-    log_cost, log_tokens = parse_session_usage(log)
+    log_cost, log_tokens = _budget.parse_session_usage(log)
     if log_cost <= 0.0:
         log_cost = args.per_iter_cost_estimate
     state_after = load_state() or state
