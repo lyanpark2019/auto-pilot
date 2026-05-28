@@ -71,7 +71,7 @@ def write_contract(c: dict[str, Any], path: Path) -> Path:
     """
     validate(c)
     path.parent.mkdir(parents=True, exist_ok=True)
-    return _atomic_write_text(path, json.dumps(c, indent=2, sort_keys=True) + "\n")
+    return atomic_write_text(path, json.dumps(c, indent=2, sort_keys=True) + "\n")
 
 
 def read_contract(path: Path) -> dict[str, Any]:
@@ -81,7 +81,13 @@ def read_contract(path: Path) -> dict[str, Any]:
     return cast(dict[str, Any], data)
 
 
-def _atomic_write_text(path: Path, text: str) -> Path:
+def atomic_write_text(path: Path, text: str) -> Path:
+    """Cross-platform atomic file write — tempfile + fsync + rename + dir fsync.
+
+    Same-mount tempfile placed alongside target so ``os.replace`` is atomic
+    on POSIX. ``F_FULLFSYNC`` used on Darwin (APFS); ``os.fsync`` elsewhere.
+    Exposed for other private modules in this package (e.g. ``_state``).
+    """
     # Same-fs tempfile in target dir
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
@@ -242,7 +248,7 @@ def write_pm_signature(contract_dir: Path, run_id: str) -> Path:
         "run_id":       run_id,
     }
     sig_path = contract_dir / "PM-SIGNATURE"
-    return _atomic_write_text(sig_path, json.dumps(sig, indent=2, sort_keys=True) + "\n")
+    return atomic_write_text(sig_path, json.dumps(sig, indent=2, sort_keys=True) + "\n")
 
 
 def verify_pm_signature(contract_dir: Path) -> None:

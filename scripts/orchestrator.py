@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from _log import event
@@ -239,20 +240,40 @@ def cmd_stop(_: argparse.Namespace) -> int:
     return 0
 
 
+_PHASE_HEADING = re.compile(r"^#{1,3}\s+Phase\b")
+
+
 def _count_phases(spec_path: Path) -> int:
-    """Count ``## Phase`` / ``# Phase`` headings in a spec markdown file.
+    """Count ``# Phase``, ``## Phase``, ``### Phase`` headings outside code fences.
+
+    Skips lines inside ```` ``` ```` or ``~~~`` fenced blocks so example markdown
+    embedded in the spec does not inflate the count. Floors at 1 so the loop
+    always has work.
 
     Args:
         spec_path: path to the spec file.
 
     Returns:
-        Number of phase headings; floors at 1 so the loop always has work.
+        Number of phase headings (>= 1).
     """
     text = spec_path.read_text()
     count = 0
+    in_fence = False
+    fence_marker: str | None = None
     for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("## Phase ") or stripped.startswith("# Phase "):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            marker = stripped[:3]
+            if not in_fence:
+                in_fence = True
+                fence_marker = marker
+            elif marker == fence_marker:
+                in_fence = False
+                fence_marker = None
+            continue
+        if in_fence:
+            continue
+        if _PHASE_HEADING.match(stripped):
             count += 1
     return max(count, 1)
 
