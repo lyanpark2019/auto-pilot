@@ -91,3 +91,49 @@ def test_write_lock_serializes_writers(tmp_path):
     elapsed = time.time() - t0
     assert elapsed >= 0.5, f"writers ran concurrently (elapsed={elapsed:.2f}s)"
     assert p1.exitcode == 0 and p2.exitcode == 0
+
+
+def test_snapshot_context_copies_files_and_returns_shas(tmp_path):
+    import _contract
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\nphase 1: do thing\n")
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text("# rules\nfile ≤500 lines\n")
+    dest_dir = tmp_path / "contract" / "round-1"
+    dest_dir.mkdir(parents=True)
+
+    shas = _contract.snapshot_context(dest_dir, spec, [claude_md])
+
+    bundle = dest_dir / "context-bundle"
+    assert (bundle / "spec.md").exists()
+    assert (bundle / "CLAUDE.md").exists()
+    assert (bundle / "MANIFEST.txt").exists()
+    assert len(shas.spec) == 64
+    assert len(shas.claude_md_chain) == 1
+    assert shas.claude_md_chain[0] == _sha256_of((bundle / "CLAUDE.md").read_bytes())
+
+
+def _sha256_of(b: bytes) -> str:
+    import hashlib
+    return hashlib.sha256(b).hexdigest()
+
+
+def test_verify_snapshots_detects_tamper(tmp_path):
+    import _contract
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\n")
+    dest_dir = tmp_path / "contract" / "round-1"
+    dest_dir.mkdir(parents=True)
+    shas = _contract.snapshot_context(dest_dir, spec, [])
+    contract = json.loads(FIXTURE.read_text())
+    contract["snapshot_shas"]["spec"] = shas.spec
+    contract["snapshot_shas"]["claude_md_chain"] = shas.claude_md_chain
+    contract["context_bundle_path"] = str(dest_dir / "context-bundle")
+    _contract.write_contract(contract, dest_dir / "contract.json")
+
+    # Clean: should pass
+    _contract.verify_snapshots(dest_dir)
+    # Tamper:
+    (dest_dir / "context-bundle" / "spec.md").write_text("TAMPERED")
+    with pytest.raises(_contract.SnapshotMismatchError):
+        _contract.verify_snapshots(dest_dir)

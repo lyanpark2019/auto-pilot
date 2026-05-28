@@ -160,3 +160,75 @@ def read_lock(dir_path: Path) -> Iterator[None]:
             fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
         finally:
             fd.close()
+
+
+import hashlib
+import shutil
+from dataclasses import dataclass
+
+
+class SnapshotMismatchError(Exception):
+    """Raised when context-bundle file SHAs do not match contract.snapshot_shas."""
+
+
+@dataclass(frozen=True)
+class SnapshotShas:
+    spec: str
+    claude_md_chain: list[str]
+
+
+def snapshot_context(dest_dir: Path, spec_path: Path,
+                     claude_md_chain: list[Path]) -> SnapshotShas:
+    """Copy spec + CLAUDE chain into <dest_dir>/context-bundle/, write MANIFEST,
+    return sha256s of the copied bytes."""
+    bundle = dest_dir / "context-bundle"
+    bundle.mkdir(parents=True, exist_ok=True)
+
+    spec_dest = bundle / "spec.md"
+    shutil.copy2(spec_path, spec_dest)
+    spec_sha = _sha256(spec_dest.read_bytes())
+
+    chain_shas: list[str] = []
+    manifest_lines = [f"{spec_sha}  spec.md"]
+    for src in claude_md_chain:
+        # Preserve folder-level naming: root CLAUDE.md vs CLAUDE-<sub>.md
+        name = "CLAUDE.md" if src.name == "CLAUDE.md" and not chain_shas else f"CLAUDE-{src.parent.name}.md"
+        if not chain_shas and src.name == "CLAUDE.md":
+            name = "CLAUDE.md"
+        dest = bundle / name
+        shutil.copy2(src, dest)
+        sha = _sha256(dest.read_bytes())
+        chain_shas.append(sha)
+        manifest_lines.append(f"{sha}  {name}")
+
+    (bundle / "MANIFEST.txt").write_text("\n".join(manifest_lines) + "\n")
+    return SnapshotShas(spec=spec_sha, claude_md_chain=chain_shas)
+
+
+def verify_snapshots(contract_dir: Path) -> None:
+    """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas.
+
+    Raises SnapshotMismatchError on any mismatch.
+    """
+    contract = read_contract(contract_dir / "contract.json")
+    bundle = Path(contract["context_bundle_path"])
+    expected_spec = contract["snapshot_shas"]["spec"]
+    actual_spec = _sha256((bundle / "spec.md").read_bytes())
+    if actual_spec != expected_spec:
+        raise SnapshotMismatchError(f"spec.md sha mismatch: {actual_spec!r} != {expected_spec!r}")
+
+    expected_chain = contract["snapshot_shas"]["claude_md_chain"]
+    # Discover bundle CLAUDE files in stable order: CLAUDE.md first, then CLAUDE-*.md sorted
+    chain_files: list[Path] = []
+    if (bundle / "CLAUDE.md").exists():
+        chain_files.append(bundle / "CLAUDE.md")
+    chain_files.extend(sorted(bundle.glob("CLAUDE-*.md")))
+    actual_chain = [_sha256(p.read_bytes()) for p in chain_files]
+    if actual_chain != expected_chain:
+        raise SnapshotMismatchError(
+            f"claude_md_chain sha mismatch: {actual_chain!r} != {expected_chain!r}"
+        )
+
+
+def _sha256(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
