@@ -93,3 +93,74 @@ def test_create_rejects_invalid_branch_name_with_lock_suffix(tmp_path):
     mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
     with pytest.raises(_worktree.InvalidBranchNameError):
         mgr.create(contract, contract_dir=contract_dir)
+
+
+def _commit_one(repo, name, content):
+    (repo / name).write_text(content)
+    subprocess.run(["git", "-C", str(repo), "add", name], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", f"add {name}"], check=True)
+
+
+def test_collect_patches_returns_noop_on_empty_diff(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    # No commits in worktree → no diff
+    result = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(result, _worktree.NoOp)
+
+
+def test_collect_patches_returns_patch_series_on_single_commit(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "second\n")
+    result = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(result, _worktree.PatchSeries)
+    assert result.mbox.exists()
+    assert result.mbox.read_bytes().startswith(b"From ")
+
+
+def test_collect_patches_rejects_multiple_commits(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "1\n")
+    _commit_one(handle.path, "c.txt", "2\n")
+    result = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(result, _worktree.RejectMultipleCommits)
+    assert result.count == 2
+
+
+def test_collect_patches_returns_needs_rebase_when_not_ancestor(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    # Reset worktree HEAD to a different commit not descending from base
+    _commit_one(repo, "z.txt", "z\n")  # advance main
+    subprocess.run(["git", "-C", str(handle.path), "reset", "--hard", "main"], check=True)
+    # Now HEAD does descend, force divergence:
+    subprocess.run(["git", "-C", str(handle.path), "checkout", "--orphan", "orphan-branch"], check=True)
+    _commit_one(handle.path, "o.txt", "o\n")
+    result = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(result, _worktree.NeedsRebase)
