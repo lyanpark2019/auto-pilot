@@ -137,3 +137,17 @@ def test_hook_allows_read_only_bash():
          "tool_input": {"command": "git diff HEAD~1"}},
     )
     assert result.returncode == 0
+
+
+def test_pre_reviewer_write_registered():
+    data = json.loads((ROOT / "hooks" / "hooks.json").read_text())
+    pre_tool_use = data["hooks"]["PreToolUse"]
+    entry = next(
+        (e for e in pre_tool_use
+         if any("pre-reviewer-write.sh" in h["command"] for h in e["hooks"])),
+        None
+    )
+    assert entry is not None, "pre-reviewer-write.sh not registered"
+    matcher = entry["matcher"]
+    for tool in ("Edit", "Write", "MultiEdit", "Bash"):
+        assert tool in matcher.split("|"), f"matcher {matcher!r} missing {tool}"
