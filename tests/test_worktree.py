@@ -1,8 +1,11 @@
 """Tests for scripts/_worktree.py."""
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -31,3 +34,62 @@ def test_patch_result_variants():
     assert isinstance(_worktree.RejectMultipleCommits(count=3), _worktree.PatchResult)
     p = Path("/tmp/series.mbox")
     assert isinstance(_worktree.PatchSeries(mbox=p), _worktree.PatchResult)
+
+
+def _init_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "T"], check=True)
+    (repo / "a.txt").write_text("hello\n")
+    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "init"], check=True)
+    return repo
+
+
+def _fake_contract(repo_root, contract_dir):
+    return {
+        "id": "iter-1/phase-1/contract-1/round-1",
+        "snapshot_shas": {
+            "base_sha": subprocess.check_output(
+                ["git", "-C", str(repo_root), "rev-parse", "HEAD"], text=True
+            ).strip(),
+            "spec": "0" * 64,
+            "claude_md_chain": [],
+        },
+    }
+
+
+def test_create_makes_worktree_with_canonical_branch(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+
+    assert handle.branch == "auto-pilot/iter-1/phase-1/contract-1/round-1"
+    assert handle.path.exists()
+    sentinel = handle.path / ".auto-pilot-worktree"
+    assert sentinel.exists()
+    assert sentinel.read_text().strip() == contract["id"]
+    persisted = contract_dir / "worktree-handle.json"
+    assert persisted.exists()
+
+
+def test_create_rejects_invalid_branch_name_with_lock_suffix(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    contract["id"] = "iter-1/phase-1/contract-1/round-1.lock"  # invalid
+
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    with pytest.raises(_worktree.InvalidBranchNameError):
+        mgr.create(contract, contract_dir=contract_dir)
