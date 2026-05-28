@@ -137,3 +137,35 @@ def test_verify_snapshots_detects_tamper(tmp_path):
     (dest_dir / "context-bundle" / "spec.md").write_text("TAMPERED")
     with pytest.raises(_contract.SnapshotMismatchError):
         _contract.verify_snapshots(dest_dir)
+
+
+def test_pm_signature_roundtrip(tmp_path):
+    import _contract
+    contract = json.loads(FIXTURE.read_text())
+    dest_dir = tmp_path / "contract"
+    dest_dir.mkdir()
+    bundle = dest_dir / "context-bundle"
+    bundle.mkdir()
+    (bundle / "spec.md").write_text("# spec\n")
+    (bundle / "MANIFEST.txt").write_text(_contract._sha256(b"# spec\n") + "  spec.md\n")
+    _contract.write_contract(contract, dest_dir / "contract.json")
+
+    _contract.write_pm_signature(dest_dir, run_id="run-abc123")
+    _contract.verify_pm_signature(dest_dir)  # raises on mismatch
+
+
+def test_pm_signature_detects_manifest_tamper(tmp_path):
+    import _contract
+    contract = json.loads(FIXTURE.read_text())
+    dest_dir = tmp_path / "contract"
+    dest_dir.mkdir()
+    bundle = dest_dir / "context-bundle"
+    bundle.mkdir()
+    (bundle / "spec.md").write_text("# spec\n")
+    (bundle / "MANIFEST.txt").write_text("original\n")
+    _contract.write_contract(contract, dest_dir / "contract.json")
+    _contract.write_pm_signature(dest_dir, run_id="run-abc123")
+
+    (bundle / "MANIFEST.txt").write_text("TAMPERED\n")
+    with pytest.raises(_contract.PMSignatureMismatchError):
+        _contract.verify_pm_signature(dest_dir)

@@ -232,3 +232,36 @@ def verify_snapshots(contract_dir: Path) -> None:
 
 def _sha256(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
+
+
+class PMSignatureMismatchError(Exception):
+    """Raised when PM-SIGNATURE fails to match recomputed manifest/contract shas."""
+
+
+def write_pm_signature(contract_dir: Path, run_id: str) -> Path:
+    """Write <contract_dir>/PM-SIGNATURE binding the MANIFEST + contract.json shas to run_id."""
+    from datetime import datetime, timezone
+    manifest = contract_dir / "context-bundle" / "MANIFEST.txt"
+    contract = contract_dir / "contract.json"
+    sig = {
+        "manifest_sha": _sha256(manifest.read_bytes()),
+        "contract_sha": _sha256(contract.read_bytes()),
+        "signed_at":    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_id":       run_id,
+    }
+    sig_path = contract_dir / "PM-SIGNATURE"
+    return _atomic_write_text(sig_path, json.dumps(sig, indent=2, sort_keys=True) + "\n")
+
+
+def verify_pm_signature(contract_dir: Path) -> None:
+    """Recompute MANIFEST + contract shas, compare to PM-SIGNATURE. Raise on mismatch."""
+    sig_path = contract_dir / "PM-SIGNATURE"
+    sig = json.loads(sig_path.read_text())
+    manifest = contract_dir / "context-bundle" / "MANIFEST.txt"
+    contract = contract_dir / "contract.json"
+    actual_manifest = _sha256(manifest.read_bytes())
+    actual_contract = _sha256(contract.read_bytes())
+    if actual_manifest != sig["manifest_sha"]:
+        raise PMSignatureMismatchError(f"manifest tampered: {actual_manifest} != {sig['manifest_sha']}")
+    if actual_contract != sig["contract_sha"]:
+        raise PMSignatureMismatchError(f"contract tampered: {actual_contract} != {sig['contract_sha']}")
