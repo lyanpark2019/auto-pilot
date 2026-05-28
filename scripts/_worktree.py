@@ -115,3 +115,44 @@ class WorktreeManager:
         )
         handle.write(contract_dir / "worktree-handle.json")
         return handle
+
+    def collect_patches(self, handle: WorktreeHandle, *, contract_dir: Path) -> PatchResult:
+        """Inspect worker's worktree HEAD vs base_sha; return one of NoOp,
+        NeedsRebase, RejectMultipleCommits, PatchSeries."""
+        ancestry = subprocess.run(
+            ["git", "-C", str(handle.path), "merge-base", "--is-ancestor",
+             handle.base_sha, "HEAD"],
+            capture_output=True, text=True,
+        )
+        if ancestry.returncode != 0:
+            try:
+                cb = subprocess.check_output(
+                    ["git", "-C", str(handle.path), "merge-base",
+                     handle.base_sha, "HEAD"],
+                    text=True,
+                ).strip()
+            except subprocess.CalledProcessError:
+                cb = ""
+            return NeedsRebase(reason="HEAD does not descend from base_sha",
+                                current_base=cb)
+
+        count_out = subprocess.check_output(
+            ["git", "-C", str(handle.path), "rev-list", "--count",
+             f"{handle.base_sha}..HEAD"],
+            text=True,
+        ).strip()
+        n = int(count_out)
+        if n == 0:
+            return NoOp()
+        if n != 1:
+            return RejectMultipleCommits(count=n)
+
+        patches_dir = contract_dir / "patches"
+        patches_dir.mkdir(parents=True, exist_ok=True)
+        mbox = patches_dir / "series.mbox"
+        diff_bytes = subprocess.check_output(
+            ["git", "-C", str(handle.path), "format-patch",
+             f"{handle.base_sha}..HEAD", "--stdout", "--binary"],
+        )
+        mbox.write_bytes(diff_bytes)
+        return PatchSeries(mbox=mbox)
