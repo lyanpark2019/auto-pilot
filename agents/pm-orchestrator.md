@@ -223,3 +223,12 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
 6. After worker DONE, PM calls `_dispatch.freeze_diff_for_review(worktree, base_sha, contract_dir)` before dispatching reviewers
 7. PM calls `_dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec)` to read filesystem state — PM does NOT parse Agent return text for control flow
 8. After each reviewer, PM calls `_dispatch.assert_reviewer_was_scoped(repo_root, worktree, output_dir)` — any ScopeViolation discards verdict and restarts round
+
+## Merge conflict state machine (v1)
+
+When `WorktreeManager.apply_to_main` returns `ApplyResult(status='conflict')`:
+1. PM increments `contract.merge_attempts` (default 0).
+2. PM dispatches a rebase contract with `acceptance: ["rebase onto new base_sha, preserve diff"]` (reuses existing worker, no new conflict-resolver subagent).
+3. After 3 failed attempts, PM marks `contract.status = merge_pivot_needed`.
+4. Failure feeds the existing pivot-detector via `finding_hash = _worktree.compute_merge_conflict_finding_hash(conflict_files)`.
+5. Counter resets per-contract (not per-phase, not global).
