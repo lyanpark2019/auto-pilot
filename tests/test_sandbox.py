@@ -1,11 +1,25 @@
 """Tests for PR3 reviewer sandbox: agents, hook, wrapper."""
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+
+HOOK = ROOT / "hooks" / "pre-reviewer-write.sh"
+
+
+def _run_hook(env_extras: dict[str, str], tool_input: dict) -> subprocess.CompletedProcess:
+    env = {**os.environ, **env_extras}
+    return subprocess.run(
+        ["bash", str(HOOK)],
+        input=json.dumps(tool_input),
+        capture_output=True, text=True, env=env,
+    )
 
 
 def _parse_frontmatter(md_path: Path) -> dict:
@@ -45,3 +59,81 @@ def test_codex_reviewer_template_mandates_sandbox_read_only():
     body = md.read_text()
     assert "--sandbox read-only" in body, \
         "codex reviewer template must include --sandbox read-only literal"
+
+
+def test_hook_is_noop_when_role_unset():
+    result = _run_hook({}, {"tool_name": "Edit", "tool_input": {"file_path": "/etc/passwd"}})
+    assert result.returncode == 0
+
+
+def test_hook_blocks_edit_outside_output_dir(tmp_path):
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "claude-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": str(tmp_path / "allowed")},
+        {"tool_name": "Edit", "tool_input": {"file_path": "/etc/passwd"}},
+    )
+    assert result.returncode == 2
+    assert "BLOCKED" in result.stderr
+
+
+def test_hook_allows_write_inside_output_dir(tmp_path):
+    out = tmp_path / "allowed"
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "claude-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": str(out)},
+        {"tool_name": "Write",
+         "tool_input": {"file_path": str(out / "review.json")}},
+    )
+    assert result.returncode == 0
+
+
+def test_hook_blocks_multiedit_outside():
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "claude-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": "/tmp/allowed"},
+        {"tool_name": "MultiEdit",
+         "tool_input": {"file_path": "/tmp/other/file.py",
+                        "edits": [{"old_string": "a", "new_string": "b"}]}},
+    )
+    assert result.returncode == 2
+
+
+def test_hook_blocks_bash_git_commit():
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "claude-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": "/tmp/allowed"},
+        {"tool_name": "Bash",
+         "tool_input": {"command": "git commit -am 'sneaky'"}},
+    )
+    assert result.returncode == 2
+
+
+def test_hook_blocks_codex_without_sandbox():
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "codex-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": "/tmp/allowed"},
+        {"tool_name": "Bash",
+         "tool_input": {"command": "codex exec --json --prompt 'review this'"}},
+    )
+    assert result.returncode == 2
+    assert "--sandbox read-only" in result.stderr
+
+
+def test_hook_allows_codex_with_sandbox():
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "codex-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": "/tmp/allowed"},
+        {"tool_name": "Bash",
+         "tool_input": {"command": "codex exec --sandbox read-only --json"}},
+    )
+    assert result.returncode == 0
+
+
+def test_hook_allows_read_only_bash():
+    result = _run_hook(
+        {"AUTO_PILOT_SUBAGENT_ROLE": "claude-reviewer",
+         "AUTO_PILOT_OUTPUT_DIR": "/tmp/allowed"},
+        {"tool_name": "Bash",
+         "tool_input": {"command": "git diff HEAD~1"}},
+    )
+    assert result.returncode == 0
