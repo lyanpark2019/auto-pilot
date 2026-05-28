@@ -9,7 +9,9 @@ All mutations of $ROOT (not worktrees) MUST go through WorktreeManager.apply_to_
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -63,3 +65,53 @@ class RejectMultipleCommits(PatchResult):
 class PatchSeries(PatchResult):
     """Worker produced exactly one commit; mbox ready for am."""
     mbox: Path
+
+
+class InvalidBranchNameError(Exception):
+    """Branch name fails `git check-ref-format`."""
+
+
+class WorktreeManager:
+    """Owns the lifecycle of git worktrees for auto-pilot workers."""
+
+    def __init__(self, *, repo_root: Path, worktree_base: Path) -> None:
+        self.repo_root = repo_root
+        self.worktree_base = worktree_base
+
+    def create(self, contract: dict[str, Any], *, contract_dir: Path) -> WorktreeHandle:
+        """Create a worktree on the canonical branch derived from contract.id.
+
+        1. Validate branch name via `git check-ref-format`.
+        2. `git -C $ROOT worktree add <wt_path> -b <branch> <base_sha>`.
+        3. Write `.auto-pilot-worktree` sentinel containing contract.id inside wt.
+        4. Persist WorktreeHandle to `<contract_dir>/worktree-handle.json`.
+        """
+        contract_id = contract["id"]
+        branch = f"auto-pilot/{contract_id}"
+        refcheck = subprocess.run(
+            ["git", "check-ref-format", f"refs/heads/{branch}"],
+            capture_output=True, text=True,
+        )
+        if refcheck.returncode != 0:
+            raise InvalidBranchNameError(f"{branch!r}: {refcheck.stderr.strip()}")
+
+        wt_path = self.worktree_base / contract_id
+        wt_path.parent.mkdir(parents=True, exist_ok=True)
+
+        base_sha = contract["snapshot_shas"]["base_sha"]
+        subprocess.run(
+            ["git", "-C", str(self.repo_root), "worktree", "add",
+             str(wt_path), "-b", branch, base_sha],
+            check=True, capture_output=True,
+        )
+        (wt_path / ".auto-pilot-worktree").write_text(contract_id + "\n")
+
+        handle = WorktreeHandle(
+            path=wt_path,
+            branch=branch,
+            base_sha=base_sha,
+            contract_id=contract_id,
+            created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        handle.write(contract_dir / "worktree-handle.json")
+        return handle
