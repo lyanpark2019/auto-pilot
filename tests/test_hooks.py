@@ -148,6 +148,23 @@ class TestPreEditCompositionRoot:
         assert r.returncode == 0
         assert "malformed tool_input json" in r.stderr
 
+    def test_handles_multiedit_input_shape(self, hooks_dir, in_tmp_cwd, clean_env):
+        """When invoked via the matcher, script must extract file_path from MultiEdit input."""
+        r = _run_hook(
+            hooks_dir / "pre-edit-composition-root.sh",
+            {
+                "tool_name": "MultiEdit",
+                "tool_input": {
+                    "file_path": "/tmp/some/pkg/__init__.py",
+                    "edits": [{"old_string": "x", "new_string": "y"}],
+                },
+            },
+            cwd=in_tmp_cwd,
+            env=_strip_bypass(),
+        )
+        assert r.returncode == 2
+        assert "BLOCKED" in r.stderr
+
 
 class TestPreBashGuard:
     def test_blocks_claude_doctor(self, hooks_dir, in_tmp_cwd, clean_env):
@@ -277,3 +294,17 @@ class TestPostDeployVerify:
         )
         assert r.returncode == 0
         assert "malformed tool_input json" in r.stderr
+
+
+def test_hooks_json_matcher_includes_multiedit():
+    """hooks.json PreToolUse matcher for composition-root hook must cover MultiEdit."""
+    hooks_json = Path(__file__).parent.parent / "hooks" / "hooks.json"
+    data = json.loads(hooks_json.read_text())
+    pre_tool_use = data["hooks"]["PreToolUse"]
+    composition_root_entry = next(
+        e for e in pre_tool_use
+        if any("pre-edit-composition-root.sh" in h["command"] for h in e["hooks"])
+    )
+    matcher = composition_root_entry["matcher"]
+    for tool in ("Edit", "Write", "MultiEdit"):
+        assert tool in matcher.split("|"), f"matcher {matcher!r} missing {tool}"
