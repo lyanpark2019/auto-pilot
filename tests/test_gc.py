@@ -23,7 +23,8 @@ def test_reject_oversized_bundle(tmp_path):
 
 
 def test_sweep_orphan_tickets_removes_no_marker(tmp_path):
-    import _gc, time
+    import _gc
+    import time
     state_dir = tmp_path / ".planning" / "auto-pilot"
     contract_dir = state_dir / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1"
     tickets = contract_dir / "tickets"

@@ -201,7 +201,8 @@ class TestStatusStop:
 
 
 def test_phase_start_allocates_run_id_if_missing(monkeypatch, tmp_path):
-    import sys, importlib
+    import sys
+    import importlib
     monkeypatch.chdir(tmp_path)
     sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
     import _state

@@ -16,10 +16,19 @@ Platform-specific durability:
 """
 from __future__ import annotations
 
+import errno
+import fcntl
+import hashlib
 import json
+import os
+import shutil
 import sys
+import tempfile
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator, cast
 
 import jsonschema
 
@@ -69,12 +78,10 @@ def read_contract(path: Path) -> dict[str, Any]:
     """Read + validate a contract from ``path``."""
     data = json.loads(path.read_text())
     validate(data)
-    return data
+    return cast(dict[str, Any], data)
 
 
 def _atomic_write_text(path: Path, text: str) -> Path:
-    import os
-    import tempfile
     # Same-fs tempfile in target dir
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
     try:
@@ -94,9 +101,6 @@ def _atomic_write_text(path: Path, text: str) -> Path:
 
 
 def _fsync_file(fd: int) -> None:
-    import errno
-    import fcntl
-    import os
     if sys.platform == "darwin":
         for _ in range(5):
             try:
@@ -115,17 +119,11 @@ def _fsync_file(fd: int) -> None:
 
 
 def _fsync_dir(dir_path: Path) -> None:
-    import os
     fd = os.open(str(dir_path), os.O_RDONLY)
     try:
         _fsync_file(fd)
     finally:
         os.close(fd)
-
-
-import fcntl
-from contextlib import contextmanager
-from typing import Iterator
 
 
 @contextmanager
@@ -160,11 +158,6 @@ def read_lock(dir_path: Path) -> Iterator[None]:
             fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
         finally:
             fd.close()
-
-
-import hashlib
-import shutil
-from dataclasses import dataclass
 
 
 class SnapshotMismatchError(Exception):
@@ -240,7 +233,6 @@ class PMSignatureMismatchError(Exception):
 
 def write_pm_signature(contract_dir: Path, run_id: str) -> Path:
     """Write <contract_dir>/PM-SIGNATURE binding the MANIFEST + contract.json shas to run_id."""
-    from datetime import datetime, timezone
     manifest = contract_dir / "context-bundle" / "MANIFEST.txt"
     contract = contract_dir / "contract.json"
     sig = {

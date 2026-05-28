@@ -8,8 +8,9 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import _contract
 import _dispatch
 
 
@@ -26,7 +27,7 @@ def read_ticket(ticket_path: Path) -> dict[str, Any]:
             f"ticket_sha mismatch: {data.get('ticket_sha')!r} != {recomputed!r}"
         )
     _dispatch._validator().validate(data)
-    return data
+    return cast(dict[str, Any], data)
 
 
 def assert_not_canceled(contract_dir: Path) -> None:
@@ -45,9 +46,6 @@ def compute_finding_hash(file: str, line: int | None, issue: str) -> str:
     canonical = " ".join(issue.lower().strip().split()[:8])
     payload = f"{file}:{line if line is not None else '?'}:{canonical}"
     return hashlib.sha256(payload.encode()).hexdigest()
-
-
-import _contract
 
 
 def atomic_write_output(role_output_dir: Path, name: str, data: dict[str, Any]) -> Path:

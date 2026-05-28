@@ -1,11 +1,19 @@
 """Tests for scripts/_contract.py and schemas/contract.schema.json."""
 from __future__ import annotations
+
 import json
+import multiprocessing
+import sys
+import time
 from pathlib import Path
+
 import pytest
 
 ROOT = Path(__file__).parent.parent
 SCHEMA_PATH = ROOT / "schemas" / "contract.schema.json"
+sys.path.insert(0, str(ROOT / "scripts"))
+
+FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "sample_contract.json"
 
 
 def test_contract_schema_is_valid_jsonschema():
@@ -15,18 +23,11 @@ def test_contract_schema_is_valid_jsonschema():
     jsonschema.Draft202012Validator.check_schema(schema)
 
 
-FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "sample_contract.json"
-
-
 def test_sample_fixture_validates_against_schema():
     import jsonschema
     schema = json.loads(SCHEMA_PATH.read_text())
     data = json.loads(FIXTURE.read_text())
     jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(data)
-
-
-import sys
-sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def test_validate_accepts_sample_fixture():
@@ -60,10 +61,6 @@ def test_write_then_read_roundtrip(tmp_path):
     assert reloaded == data
 
 
-import multiprocessing
-import time
-
-
 def _writer_proc(path_str: str, sleep_sec: float, payload: dict) -> None:
     import sys
     sys.path.insert(0, str(Path(path_str).parent.parent.parent.parent / "scripts"))
@@ -76,7 +73,6 @@ def _writer_proc(path_str: str, sleep_sec: float, payload: dict) -> None:
 
 def test_write_lock_serializes_writers(tmp_path):
     """Two concurrent write_lock holders must serialize (one waits)."""
-    import _contract
     target = tmp_path / "contract.json"
     data = json.loads(FIXTURE.read_text())
 

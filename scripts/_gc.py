@@ -5,7 +5,6 @@ follow-up spec. Only ticket sweep + bundle-size enforcement ship in PR1.
 """
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 

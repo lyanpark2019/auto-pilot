@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import time as _time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import jsonschema
 
@@ -90,9 +93,6 @@ def _compute_ticket_sha(body_without_sha: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-import subprocess
-
-
 def freeze_diff_for_review(worktree: Path, base_sha: str, contract_dir: Path) -> Path:
     """PM-side: capture worker HEAD diff against base_sha, write to review-input/ with sha."""
     review_input = contract_dir / "review-input"
@@ -105,10 +105,6 @@ def freeze_diff_for_review(worktree: Path, base_sha: str, contract_dir: Path) ->
     sha_path = review_input / "frozen.diff.sha256"
     sha_path.write_text(_contract._sha256(diff_bytes) + "\n")
     return diff_path
-
-
-import time as _time
-from dataclasses import dataclass
 
 
 REVIEW_SCHEMA_PATH = SCHEMAS_DIR / "review.schema.json"
@@ -141,7 +137,7 @@ def read_review(path: Path) -> dict[str, Any]:
         raise MalformedReviewError(
             "; ".join(f"{list(e.absolute_path)}: {e.message}" for e in errors)
         )
-    return data
+    return cast(dict[str, Any], data)
 
 
 @dataclass

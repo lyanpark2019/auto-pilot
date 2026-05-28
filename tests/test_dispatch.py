@@ -1,8 +1,12 @@
 """Tests for scripts/_dispatch.py and schemas/ticket.schema.json."""
 from __future__ import annotations
+
 import json
+import json as _json
+import subprocess
 import sys
 from pathlib import Path
+
 import pytest
 
 ROOT = Path(__file__).parent.parent
@@ -14,10 +18,6 @@ def test_ticket_schema_is_valid_jsonschema():
     import jsonschema
     schema = json.loads(TICKET_SCHEMA_PATH.read_text())
     jsonschema.Draft202012Validator.check_schema(schema)
-
-
-import hashlib
-import json as _json
 
 
 def _make_contract_dir(tmp_path):
@@ -70,9 +70,6 @@ def test_prepare_ticket_rejects_invalid_role(tmp_path):
         )
 
 
-import subprocess
-
-
 def test_freeze_diff_writes_diff_and_sha(tmp_path):
     import _dispatch
     # Create a real git worktree with one commit
@@ -110,7 +107,6 @@ def test_review_schema_is_valid_jsonschema():
     jsonschema.Draft202012Validator.check_schema(schema)
 
 
-import time
 
 
 def _write_review(out_dir, verdict="APPROVE"):
