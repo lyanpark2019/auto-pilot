@@ -277,3 +277,15 @@ class TestPostDeployVerify:
         )
         assert r.returncode == 0
         assert "malformed tool_input json" in r.stderr
+
+
+def test_git_version_preflight_accepts_232():
+    out = subprocess.check_output(
+        ["bash", "-c",
+         'v=$(git --version | awk "{print \\$3}"); '
+         'IFS=. read -r maj min _ <<< "$v"; '
+         '[ "$maj" -gt 2 ] || { [ "$maj" -eq 2 ] && [ "$min" -ge 32 ]; } && echo OK || echo FAIL'],
+        text=True,
+    ).strip()
+    # On any modern CI the installed git is >= 2.32; expect OK
+    assert out == "OK"
