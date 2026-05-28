@@ -210,3 +210,27 @@ def collect_round_outcome(contract_dir: Path, timeout_per_agent_sec: int) -> Rou
         claude_review=claude_review,
         specialists=specialists,
     )
+
+
+class ScopeViolation(Exception):
+    """Raised when reviewer left repo/worktree in dirty state."""
+
+
+def assert_reviewer_was_scoped(repo_root: Path, worktree: Path,
+                                allowed_output_dir: Path) -> None:
+    """Verify that repo_root and worktree are both clean (git status --porcelain empty).
+
+    Reviewer is only allowed to write inside allowed_output_dir. Any other write
+    surfaces as a dirty file in repo_root or worktree.
+    """
+    for path in (repo_root, worktree):
+        if not (path / ".git").exists() and path.exists() and not (path.is_dir()):
+            continue
+        result = subprocess.run(
+            ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
+            capture_output=True, text=True, check=True,
+        )
+        if result.stdout.strip():
+            raise ScopeViolation(
+                f"reviewer left {path} dirty (allowed_output_dir={allowed_output_dir}): {result.stdout}"
+            )

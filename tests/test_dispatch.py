@@ -170,3 +170,35 @@ def test_read_review_rejects_malformed(tmp_path):
     bad.write_text(_json.dumps({"schema_version": 1}))  # missing many required
     with pytest.raises(_dispatch.MalformedReviewError):
         _dispatch.read_review(bad)
+
+
+def test_assert_reviewer_was_scoped_passes_on_clean(tmp_path):
+    import _dispatch
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "a").write_text("a")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "x"], check=True)
+    wt = repo  # for test simplicity
+    allowed = tmp_path / "outputs"
+    allowed.mkdir()
+    _dispatch.assert_reviewer_was_scoped(repo, wt, allowed)  # no exception
+
+
+def test_assert_reviewer_was_scoped_raises_on_dirty(tmp_path):
+    import _dispatch
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "a").write_text("a")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "x"], check=True)
+    (repo / "stray.txt").write_text("oops")  # dirty: untracked
+
+    with pytest.raises(_dispatch.ScopeViolation):
+        _dispatch.assert_reviewer_was_scoped(repo, repo, tmp_path / "outputs")
