@@ -326,3 +326,46 @@ def test_rehydrate_returns_none_if_no_handle(tmp_path):
     contract_dir = tmp_path / "no-handle-here"
     contract_dir.mkdir()
     assert mgr.rehydrate(contract_dir) is None
+
+
+def test_reap_orphans_removes_terminal_aged_worktrees(tmp_path):
+    import json as _json
+    import os
+    import time
+
+    import _status  # noqa: F401
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    state_dir = tmp_path / ".planning" / "auto-pilot"
+    contracts_root = state_dir / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1"
+    contracts_root.mkdir(parents=True)
+    contract = _fake_contract(repo, contracts_root)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contracts_root)
+    # Worker status terminal + done.marker
+    (contracts_root / "outputs" / "worker").mkdir(parents=True)
+    (contracts_root / "outputs" / "worker" / "status.json").write_text(
+        _json.dumps({"status": _status.WorkerStatus.DONE.value}))
+    (contracts_root / "outputs" / "worker" / "done.marker").touch()
+    # Backdate sentinel to look old
+    old = time.time() - 48 * 3600
+    os.utime(handle.path / ".auto-pilot-worktree", (old, old))
+
+    reaped = mgr.reap_orphans(state_dir=state_dir, max_age_hours=24)
+    assert handle.path in reaped
+
+
+def test_reap_orphans_preserves_in_flight(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    state_dir = tmp_path / ".planning" / "auto-pilot"
+    contracts_root = state_dir / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1"
+    contracts_root.mkdir(parents=True)
+    contract = _fake_contract(repo, contracts_root)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contracts_root)
+    # No status.json, no done.marker → in-flight
+    reaped = mgr.reap_orphans(state_dir=state_dir, max_age_hours=0)
+    assert handle.path not in reaped
