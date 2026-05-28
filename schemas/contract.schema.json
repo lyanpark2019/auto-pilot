@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/contract/v1",
+  "title": "AutoPilotContract",
+  "type": "object",
+  "required": [
+    "schema_version", "id", "idempotency_token",
+    "iter", "phase", "round",
+    "title", "scope_files", "acceptance",
+    "context_bundle_path", "verify_cmds",
+    "snapshot_shas", "deadline_ts", "dispatched_at",
+    "plugin_version", "worker_model", "reviewer_models",
+    "max_diff_loc", "kill_switch_path", "review_outputs"
+  ],
+  "properties": {
+    "schema_version":     { "type": "integer", "minimum": 1, "maximum": 1 },
+    "id":                 { "type": "string", "pattern": "^iter-\\d+/phase-\\d+/contract-\\d+/round-\\d+$" },
+    "idempotency_token":  { "type": "string", "pattern": "^[a-f0-9]{16,32}$" },
+    "parent_contract_id": { "type": ["string", "null"] },
+    "iter":               { "type": "integer", "minimum": 1 },
+    "phase":              { "type": "integer", "minimum": 1 },
+    "round":              { "type": "integer", "minimum": 1 },
+    "title":              { "type": "string", "minLength": 1, "maxLength": 200 },
+    "scope_files":        { "type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1 },
+    "acceptance":         { "type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1 },
+    "test_files":         { "type": "array", "items": {"type": "string", "minLength": 1} },
+    "max_diff_loc":       { "type": "integer", "minimum": 1 },
+    "verify_cmds":        { "type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1 },
+    "context_bundle_path":{ "type": "string", "minLength": 1 },
+    "snapshot_shas": {
+      "type": "object",
+      "required": ["spec", "claude_md_chain", "base_sha"],
+      "properties": {
+        "spec":            { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "claude_md_chain": { "type": "array", "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"} },
+        "base_sha":        { "type": "string", "pattern": "^[a-f0-9]{40}$" }
+      },
+      "additionalProperties": false
+    },
+    "prior_findings_path":{ "type": ["string", "null"] },
+    "dispatched_at":      { "type": "string", "format": "date-time" },
+    "deadline_ts":        { "type": "string", "format": "date-time" },
+    "env_capture": {
+      "type": "object",
+      "required": ["python", "git", "node", "codex_version", "claude_version", "cwd"],
+      "additionalProperties": true
+    },
+    "plugin_version":     { "type": "string", "pattern": "^v?\\d+\\.\\d+\\.\\d+(-[\\w.]+)?$" },
+    "worker_model":       { "type": "string", "minLength": 1 },
+    "reviewer_models":    { "type": "object", "additionalProperties": {"type": "string"} },
+    "kill_switch_path":   { "type": "string", "minLength": 1 },
+    "review_outputs": {
+      "type": "object",
+      "properties": {
+        "codex":       { "type": "string", "minLength": 1 },
+        "claude":      { "type": "string", "minLength": 1 },
+        "specialists": { "type": "object", "additionalProperties": {"type": "string"} }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
