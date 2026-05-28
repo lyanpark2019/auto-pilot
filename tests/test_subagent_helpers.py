@@ -62,3 +62,31 @@ def test_compute_finding_hash_is_deterministic():
     assert h1 == h2
     h3 = h.compute_finding_hash("src/x.py", 43, "Missing null check in parser")
     assert h3 != h1
+
+
+def test_atomic_write_output_and_mark_done_ordering(tmp_path):
+    import _subagent_helpers as h
+    out = tmp_path / "outputs" / "worker"
+    out.mkdir(parents=True)
+
+    h.atomic_write_output(out, "status.json", {"status": "DONE", "files_changed": ["a.py"]})
+    h.write_exit_code(out, 0)
+    h.mark_done(out)
+
+    # All three artifacts present
+    assert (out / "status.json").exists()
+    assert (out / "exit-code.txt").exists()
+    assert (out / "done.marker").exists()
+    # done.marker mtime >= exit-code.txt mtime >= status.json mtime
+    s_m = (out / "status.json").stat().st_mtime
+    e_m = (out / "exit-code.txt").stat().st_mtime
+    d_m = (out / "done.marker").stat().st_mtime
+    assert d_m >= e_m >= s_m
+
+
+def test_write_exit_code_atomic(tmp_path):
+    import _subagent_helpers as h
+    out = tmp_path / "outputs" / "worker"
+    out.mkdir(parents=True)
+    h.write_exit_code(out, 99)
+    assert (out / "exit-code.txt").read_text().strip() == "99"

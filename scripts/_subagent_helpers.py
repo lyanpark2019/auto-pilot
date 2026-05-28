@@ -45,3 +45,32 @@ def compute_finding_hash(file: str, line: int | None, issue: str) -> str:
     canonical = " ".join(issue.lower().strip().split()[:8])
     payload = f"{file}:{line if line is not None else '?'}:{canonical}"
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+import _contract
+
+
+def atomic_write_output(role_output_dir: Path, name: str, data: dict[str, Any]) -> Path:
+    """Atomic JSON write to <role_output_dir>/<name>. Same fsync protocol as ContractIO."""
+    role_output_dir.mkdir(parents=True, exist_ok=True)
+    target = role_output_dir / name
+    return _contract._atomic_write_text(target, json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def write_exit_code(role_output_dir: Path, code: int) -> Path:
+    """Write <role_output_dir>/exit-code.txt atomically.
+
+    MUST be called BEFORE mark_done(). Ordering invariant:
+      status/review JSON → exit-code.txt → done.marker
+    PM reading done.marker is guaranteed to see exit-code.txt + payload.
+    """
+    role_output_dir.mkdir(parents=True, exist_ok=True)
+    return _contract._atomic_write_text(role_output_dir / "exit-code.txt", f"{int(code)}\n")
+
+
+def mark_done(role_output_dir: Path) -> Path:
+    """Touch done.marker. MUST be called LAST after all output + exit-code writes."""
+    role_output_dir.mkdir(parents=True, exist_ok=True)
+    marker = role_output_dir / "done.marker"
+    marker.touch()
+    return marker
