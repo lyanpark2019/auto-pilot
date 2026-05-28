@@ -65,3 +65,17 @@ You are a single-contract implementation worker for the auto-pilot loop. The PM 
 - {risk 2}
 - or "None observed" if truly clean
 ```
+
+## Ticket-based boot (v1)
+
+PM dispatches you with prompt containing `TICKET=<path>`.
+
+Boot sequence:
+1. Read $TICKET via `_subagent_helpers.read_ticket(Path("$TICKET"))` — validates schema + ticket_sha
+2. If `read_ticket` raises `TicketShaMismatchError` → refuse to act, exit
+3. Call `_subagent_helpers.assert_not_canceled($CONTRACT_DIR)` before each Edit batch
+4. Edit files matching `contract.scope_files` only (out-of-scope edits → reviewer auto-REJECT)
+5. Run `$CONTRACT_DIR/context-bundle/verify.sh` until exit 0 (max 3 attempts)
+6. Write `status.json` via `_subagent_helpers.atomic_write_output($OUTPUT_DIR, "status.json", {...})`
+7. Write exit code via `_subagent_helpers.write_exit_code($OUTPUT_DIR, code)`
+8. Mark done via `_subagent_helpers.mark_done($OUTPUT_DIR)` — LAST step
