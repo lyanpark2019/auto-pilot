@@ -169,3 +169,10 @@ def test_pm_signature_detects_manifest_tamper(tmp_path):
     (bundle / "MANIFEST.txt").write_text("TAMPERED\n")
     with pytest.raises(_contract.PMSignatureMismatchError):
         _contract.verify_pm_signature(dest_dir)
+
+
+def test_is_killed_returns_true_after_canceled_touch(tmp_path):
+    import _contract
+    assert _contract.is_killed(tmp_path) is False
+    (tmp_path / "CANCELED").touch()
+    assert _contract.is_killed(tmp_path) is True

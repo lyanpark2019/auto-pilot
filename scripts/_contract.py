@@ -265,3 +265,8 @@ def verify_pm_signature(contract_dir: Path) -> None:
         raise PMSignatureMismatchError(f"manifest tampered: {actual_manifest} != {sig['manifest_sha']}")
     if actual_contract != sig["contract_sha"]:
         raise PMSignatureMismatchError(f"contract tampered: {actual_contract} != {sig['contract_sha']}")
+
+
+def is_killed(contract_dir: Path) -> bool:
+    """True if PM has touched <contract_dir>/CANCELED. Cheap to poll."""
+    return (contract_dir / "CANCELED").exists()
