@@ -11,11 +11,14 @@ from __future__ import annotations
 import fcntl
 import json
 import subprocess
+import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, cast
+
+import _status
 
 
 @dataclass(frozen=True)
@@ -298,3 +301,52 @@ class WorktreeManager:
         if not handle_path.exists():
             return None
         return WorktreeHandle.read(handle_path)
+
+    def reap_orphans(self, *, state_dir: Path, max_age_hours: int = 24) -> list[Path]:
+        """Reap worktrees whose contract has terminal status past age threshold.
+
+        Returns list of reaped worktree paths.
+        """
+        cutoff = time.time() - max_age_hours * 3600
+        reaped: list[Path] = []
+        contracts_root = state_dir / "contracts"
+        if not contracts_root.exists():
+            return reaped
+
+        # Walk all worktrees by sentinel
+        for sentinel in self.worktree_base.rglob(".auto-pilot-worktree"):
+            try:
+                if sentinel.stat().st_mtime > cutoff:
+                    continue
+            except FileNotFoundError:
+                continue
+            contract_id = sentinel.read_text().strip()
+            contract_dir = contracts_root / contract_id
+            status_json = contract_dir / "outputs" / "worker" / "status.json"
+            done_marker = contract_dir / "outputs" / "worker" / "done.marker"
+            if not done_marker.exists():
+                continue  # in-flight or zombie; keep
+            if not status_json.exists():
+                continue
+            data = json.loads(status_json.read_text())
+            status_val = data.get("status")
+            try:
+                status_enum = _status.WorkerStatus(status_val)
+            except ValueError:
+                continue
+            if status_enum not in _status.TERMINAL:
+                continue
+            wt_path = sentinel.parent
+            handle_path = contract_dir / "worktree-handle.json"
+            if handle_path.exists():
+                handle = WorktreeHandle.read(handle_path)
+                self.cleanup(handle, prune_branch=True)
+            else:
+                # Fallback: remove worktree without handle (best-effort)
+                subprocess.run(
+                    ["git", "-C", str(self.repo_root), "worktree", "remove",
+                     "--force", str(wt_path)],
+                    capture_output=True, check=False,
+                )
+            reaped.append(wt_path)
+        return reaped
