@@ -125,20 +125,40 @@ def assert_no_sandbox_violations(state_dir: Path) -> list[str]:
     return []
 
 
+def _role_output_dirs(outputs: Path) -> list[Path]:
+    """Enumerate one-level role dirs plus per-specialist subdirs.
+
+    Layout (per PR1 spec):
+      outputs/worker/
+      outputs/codex-reviewer/
+      outputs/claude-reviewer/
+      outputs/specialists/<name>/        # nested one extra level
+    """
+    out: list[Path] = []
+    if not outputs.exists():
+        return out
+    for role_dir in outputs.iterdir():
+        if not role_dir.is_dir():
+            continue
+        if role_dir.name == "specialists":
+            for spec_dir in role_dir.iterdir():
+                if spec_dir.is_dir():
+                    out.append(spec_dir)
+            continue
+        out.append(role_dir)
+    return out
+
+
 def assert_reviewer_outputs_present(contracts_root: Path) -> list[str]:
-    """For each round, every role under outputs/ must have done.marker + exit-code.txt
-    + (review.json | status.json)."""
+    """For each round, every role dir (including each specialist) must have
+    done.marker + exit-code.txt + (review.json | status.json)."""
     failures: list[str] = []
     for round_dir in _find_contract_dirs(contracts_root):
         outputs = round_dir / "outputs"
         if not outputs.exists():
             failures.append(f"missing outputs/ at {round_dir}")
             continue
-        for role_dir in outputs.iterdir():
-            if not role_dir.is_dir():
-                continue
-            if role_dir.name == "specialists":
-                continue
+        for role_dir in _role_output_dirs(outputs):
             done = role_dir / "done.marker"
             ec = role_dir / "exit-code.txt"
             if not done.exists():

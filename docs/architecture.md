@@ -64,7 +64,8 @@ auto-pilot/
 │   ├── _worktree.py                         # PR2: WorktreeManager (create/apply/cleanup/reap)
 │   ├── _status.py                           # PR2: WorkerStatus enum + TERMINAL set
 │   ├── _reviewer_wrapper.py                 # PR3: parallel reviewer dispatch (isolated env)
-│   └── _dogfood_gate.py                     # PR4: Tier 1/2 assertions + CLI
+│   ├── _dogfood_gate.py                     # PR4: Tier 1/2 assertions + CLI
+│   └── _budget.py                           # PR5: cost / token / pid caps (extracted)
 ├── scripts/dogfood_tier1.sh                 # PR4: PR1+PR2 acceptance runner
 ├── scripts/dogfood_tier2.sh                 # PR4: full PR3 sandbox runner
 ├── docs/

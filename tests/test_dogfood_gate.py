@@ -84,10 +84,17 @@ def _build_contract_dir(repo: Path, phase: int, base_sha: str) -> Path:
     return round_dir
 
 
-def _populate_outputs(round_dir: Path, roles: list[str]) -> None:
-    """Drop done.marker + exit-code.txt + review.json under outputs/<role>/."""
+def _populate_outputs(round_dir: Path, roles: list[str], specialists: list[str] | None = None) -> None:
+    """Drop done.marker + exit-code.txt + review.json under outputs/<role>/
+    and outputs/specialists/<name>/ for each specialist passed."""
     for role in roles:
         d = round_dir / "outputs" / role
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "review.json").write_text(json.dumps({"verdict": "APPROVE"}))
+        (d / "exit-code.txt").write_text("0\n")
+        (d / "done.marker").touch()
+    for spec in (specialists or []):
+        d = round_dir / "outputs" / "specialists" / spec
         d.mkdir(parents=True, exist_ok=True)
         (d / "review.json").write_text(json.dumps({"verdict": "APPROVE"}))
         (d / "exit-code.txt").write_text("0\n")
@@ -198,6 +205,25 @@ class TestTier2:
         report = gate.run_tier2(good_repo, expected_phases=2)
         assert not report.passed
         assert any("done.marker" in f for f in report.failures)
+
+    def test_specialist_role_checked(self, good_repo):
+        """Regression: outputs/specialists/<name>/ must be traversed and checked."""
+        for phase in (1, 2):
+            round_dir = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / f"phase-{phase}" / "contract-1" / "round-1"
+            _populate_outputs(
+                round_dir,
+                ["worker", "codex-reviewer", "claude-reviewer"],
+                specialists=["security-reviewer"],
+            )
+        # Sanity: passes when specialist artifacts are present
+        report = gate.run_tier2(good_repo, expected_phases=2)
+        assert report.passed, report.failures
+        # Now break the specialist: missing exit-code.txt → failure
+        bad = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1" / "outputs" / "specialists" / "security-reviewer" / "exit-code.txt"
+        bad.unlink()
+        report2 = gate.run_tier2(good_repo, expected_phases=2)
+        assert not report2.passed
+        assert any("exit-code.txt" in f and "security-reviewer" in f for f in report2.failures)
 
 
 class TestCli:

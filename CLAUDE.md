@@ -38,6 +38,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 | `scripts/_status.py` | PR2 | `WorkerStatus` enum + TERMINAL set |
 | `scripts/_reviewer_wrapper.py` | PR3 | parallel reviewer dispatch with isolated env dicts |
 | `scripts/_dogfood_gate.py` | PR4 | Tier 1 / Tier 2 acceptance assertions + CLI |
+| `scripts/_budget.py` | PR5 | cost / token / pid caps for headless driver (extracted from `headless-loop.py`) |
 
 ## Editing this plugin
 
