@@ -22,7 +22,7 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
 3. Confirm `codex` CLI on PATH (for adversarial reviewer)
 4. Confirm `.planning/auto-pilot/` exists (create if missing)
 5. Print initial scorecard: phase, contracts, est. parallel workers
-6. Confirm `git --version` ≥ 2.32 (required for `git commit --trailer` (used in worktree apply_to_main amend step)):
+6. Confirm `git --version` ≥ 2.32 (required for `git commit --trailer` used in worktree apply_to_main amend step):
    ```bash
    v=$(git --version | awk '{print $3}')
    IFS=. read -r maj min _ <<< "$v"
@@ -30,6 +30,35 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
      echo "auto-pilot: git $v < 2.32 — required for commit --trailer" >&2; exit 2
    fi
    ```
+
+7. **Subagent discovery probe** (PR3 fallback gate):
+   ```bash
+   # `claude --list-agents` does not exist; probe via no-op dispatch with sentinel token.
+   if [ "${AUTO_PILOT_DISABLE_NEW_REVIEWERS:-0}" != "1" ]; then
+     probe_result=$(timeout 30 claude -p --max-turns 1 \
+        "@subagent:auto-pilot-claude-reviewer reply with literal token AUTOPILOT_PROBE_OK" 2>&1)
+     if echo "$probe_result" | grep -q AUTOPILOT_PROBE_OK; then
+       export AUTO_PILOT_USE_NEW_REVIEWERS=1
+     else
+       echo "auto-pilot: subagent discovery probe failed; falling back to general-purpose dispatch" >&2
+       export AUTO_PILOT_USE_NEW_REVIEWERS=0
+     fi
+   else
+     export AUTO_PILOT_USE_NEW_REVIEWERS=0
+   fi
+   ```
+
+8. **Codex sandbox probe**:
+   ```bash
+   if codex exec --sandbox read-only --json --prompt "ping" 2>&1 | grep -qi 'unknown\|invalid'; then
+     echo "auto-pilot: codex does not support --sandbox read-only; layer 4 deterrent disabled" >&2
+     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=0
+   else
+     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=1
+   fi
+   ```
+
+In degraded mode (`AUTO_PILOT_USE_NEW_REVIEWERS=0`), PM dispatches via legacy `subagent_type: general-purpose, model: opus`. Hook `pre-reviewer-write.sh` still fires (env-keyed), so layers 2+3 remain active. Layer 1 (frontmatter `tools:` whitelist) disabled.
 
 ## Execution
 
