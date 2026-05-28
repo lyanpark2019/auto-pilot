@@ -187,16 +187,25 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     rc = run_claude_session(prompt, log, args.timeout_build)
 
     if rc == 124:
-        event("iter.timeout_rollback", pre_head=pre_head[:8])
-        git_reset_hard(pre_head)
+        event("iter.timeout_no_root_reset",
+              pre_head=pre_head[:8],
+              note="state.status set to failed; $ROOT untouched")
+        # Mark state failed so next iter sees terminal
+        state2 = load_state()
+        state2["status"] = "failed"
+        from _state import save_state
+        save_state(state2)
         return "failed"
 
     new_state = load_state()
     status = new_state.get("status", "running")
 
     if status == "failed":
-        event("iter.fail_rollback", pre_head=pre_head[:8])
-        git_reset_hard(pre_head)
+        event("iter.fail_no_root_reset",
+              note="per PR2: $ROOT untouched on phase fail; worktree cleanup is the recovery unit")
+        # NOTE: per-contract worktree cleanup happens inside the PM session via
+        # scripts/_worktree.WorktreeManager.cleanup(handle, prune_branch=True).
+        # The outer driver no longer touches $ROOT.
 
     return status
 
