@@ -68,3 +68,34 @@ def test_prepare_ticket_rejects_invalid_role(tmp_path):
             worktree=tmp_path / "wt",
             subagent_role="bogus-role",
         )
+
+
+import subprocess
+
+
+def test_freeze_diff_writes_diff_and_sha(tmp_path):
+    import _dispatch
+    # Create a real git worktree with one commit
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    subprocess.run(["git", "-C", str(wt), "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", str(wt), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(wt), "config", "user.name", "t"], check=True)
+    (wt / "a.txt").write_text("hello\n")
+    subprocess.run(["git", "-C", str(wt), "add", "a.txt"], check=True)
+    subprocess.run(["git", "-C", str(wt), "commit", "-q", "-m", "init"], check=True)
+    base = subprocess.check_output(
+        ["git", "-C", str(wt), "rev-parse", "HEAD"], text=True
+    ).strip()
+    (wt / "a.txt").write_text("hello\nworld\n")
+    subprocess.run(["git", "-C", str(wt), "commit", "-q", "-am", "edit"], check=True)
+
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+
+    diff_path = _dispatch.freeze_diff_for_review(wt, base, contract_dir)
+    assert diff_path.exists()
+    sha_path = diff_path.with_suffix(".diff.sha256")
+    assert sha_path.exists()
+    expected = _dispatch._contract._sha256(diff_path.read_bytes())
+    assert sha_path.read_text().strip() == expected

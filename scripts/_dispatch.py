@@ -88,3 +88,20 @@ def _compute_ticket_sha(body_without_sha: dict[str, Any]) -> str:
     """Deterministic sha256 of canonicalized ticket body sans the ticket_sha field."""
     canonical = json.dumps(body_without_sha, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+import subprocess
+
+
+def freeze_diff_for_review(worktree: Path, base_sha: str, contract_dir: Path) -> Path:
+    """PM-side: capture worker HEAD diff against base_sha, write to review-input/ with sha."""
+    review_input = contract_dir / "review-input"
+    review_input.mkdir(parents=True, exist_ok=True)
+    diff_bytes = subprocess.check_output(
+        ["git", "-C", str(worktree), "diff", base_sha, "HEAD"]
+    )
+    diff_path = review_input / "frozen.diff"
+    diff_path.write_bytes(diff_bytes)
+    sha_path = review_input / "frozen.diff.sha256"
+    sha_path.write_text(_contract._sha256(diff_bytes) + "\n")
+    return diff_path
