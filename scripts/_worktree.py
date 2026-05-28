@@ -273,3 +273,28 @@ class WorktreeManager:
                                    pre_apply_head=pre)
             return ApplyResult(status="applied", main_sha=self._head_sha(),
                                pre_apply_head=pre)
+
+    def cleanup(self, handle: WorktreeHandle, *, prune_branch: bool) -> None:
+        """Idempotent: tolerate missing worktree, branch, sentinel."""
+        subprocess.run(
+            ["git", "-C", str(self.repo_root), "worktree", "remove", "--force",
+             str(handle.path)],
+            capture_output=True, check=False,
+        )
+        # Force-prune metadata in case worktree dir was already removed manually
+        subprocess.run(
+            ["git", "-C", str(self.repo_root), "worktree", "prune"],
+            capture_output=True, check=False,
+        )
+        if prune_branch:
+            subprocess.run(
+                ["git", "-C", str(self.repo_root), "branch", "-D", handle.branch],
+                capture_output=True, check=False,
+            )
+
+    def rehydrate(self, contract_dir: Path) -> WorktreeHandle | None:
+        """Reconstruct WorktreeHandle from <contract_dir>/worktree-handle.json after PM restart."""
+        handle_path = contract_dir / "worktree-handle.json"
+        if not handle_path.exists():
+            return None
+        return WorktreeHandle.read(handle_path)

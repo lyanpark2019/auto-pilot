@@ -271,3 +271,58 @@ def test_apply_to_main_refuses_dirty_main(tmp_path):
     assert isinstance(series, _worktree.PatchSeries)
     with pytest.raises(_worktree.MainTreeDirtyError):
         mgr.apply_to_main(series.mbox, contract)
+
+
+def test_cleanup_removes_worktree_and_branch(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    assert handle.path.exists()
+
+    mgr.cleanup(handle, prune_branch=True)
+    assert not handle.path.exists()
+    branches = subprocess.check_output(
+        ["git", "-C", str(repo), "branch", "-a"], text=True
+    )
+    assert handle.branch not in branches
+
+
+def test_cleanup_idempotent(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    mgr.cleanup(handle, prune_branch=True)
+    # Second call must not raise
+    mgr.cleanup(handle, prune_branch=True)
+
+
+def test_rehydrate_reads_persisted_handle(tmp_path):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    original = mgr.create(contract, contract_dir=contract_dir)
+
+    # Simulate PM restart: rehydrate from disk
+    rehydrated = mgr.rehydrate(contract_dir)
+    assert rehydrated == original
+
+
+def test_rehydrate_returns_none_if_no_handle(tmp_path):
+    mgr = _worktree.WorktreeManager(repo_root=tmp_path, worktree_base=tmp_path / "wt")
+    contract_dir = tmp_path / "no-handle-here"
+    contract_dir.mkdir()
+    assert mgr.rehydrate(contract_dir) is None
