@@ -797,18 +797,26 @@ If preflight fails (plugin subagents not discoverable in current Claude Code ver
 
 ## Out of scope (deferred follow-up specs)
 
-| Deferred | Why |
-|---|---|
-| Headless `--max-tokens` / `--max-cost-usd` cost cap | Different surface (orchestrator config + pricing); ship in follow-up |
-| `--dangerously-skip-permissions` fork-bomb guard | Same surface as cost cap |
-| `git reset --hard` blast-radius replacement with `git stash` first | Headless safety; one PR with cost cap |
-| `_count_phases` brittle regex | Spec-parser concern |
-| state.json no file lock | Single-writer assumption mostly holds; revisit if pain materializes |
-| CLAUDE.md "SessionStart re-reads" false claim | Trivial docs fix |
-| Tier 2 specialist agents (database/infra/prompt/test-quality) | Ship when first triggered |
-| Composition-root env-var self-bypass | Trust-model concern |
-| `pre-bash-guard.sh` SSL regex over-eager | Hook tuning |
-| `post-deploy-verify` per-Bash latency | Hook matcher tuning |
+Status updated 2026-05-29 after PR4 (`docs/superpowers/plans/2026-05-29-deferred-cleanup.md`, merged via PR #7).
+
+| Deferred | Status | Notes |
+|---|---|---|
+| Headless `--max-tokens` / `--max-cost-usd` cost cap | **SHIPPED in PR4** | `headless-loop.py --max-cost-usd / --max-tokens`; accumulator in `state.json.cost_usd/tokens`; terminal status `cost-cap` |
+| `--dangerously-skip-permissions` fork-bomb guard | **SHIPPED in PR4** | `headless-loop.py --max-concurrent-claude` via `pgrep -x claude` |
+| `git reset --hard` blast-radius replacement | **SHIPPED in PR4** | `stash_if_dirty(reason)` on timeout / failed; entries recoverable via `git stash list \| grep auto-pilot-iter-N-{timeout,failed}` |
+| `_count_phases` brittle regex | **SHIPPED in PR4** | Fenced code blocks tracked; `# / ## / ###` accepted via regex |
+| state.json no file lock | **SHIPPED in PR4** | `flock(LOCK_EX/LOCK_SH)` on `state.lock` + atomic temp+rename; cross-platform fsync |
+| CLAUDE.md "SessionStart re-reads" false claim | **N/A** | docs already say what it actually does (fresh session per iter); no fix needed |
+| Tier 2 specialist agents (database/infra/prompt/test-quality) | Deferred | Ship when first triggered |
+| Composition-root env-var self-bypass | Deferred | Trust-model concern |
+| `pre-bash-guard.sh` SSL regex over-eager | Deferred | Hook tuning |
+| `post-deploy-verify` per-Bash latency | Deferred | Hook matcher tuning |
+
+The dogfood gate referenced in § Dogfooding (Tier 1 / Tier 2) is implemented:
+
+- `docs/specs/2026-05-28-dogfood-smoke.md` — 2-phase smoke spec.
+- `scripts/_dogfood_gate.py` — pure-Python assertions (`run_tier1`, `run_tier2`) + CLI.
+- `scripts/dogfood_tier1.sh`, `scripts/dogfood_tier2.sh` — end-to-end runners (`--check` mode skips loop, runs assertions only).
 
 ---
 
