@@ -22,12 +22,12 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
 3. Confirm `codex` CLI on PATH (for adversarial reviewer)
 4. Confirm `.planning/auto-pilot/` exists (create if missing)
 5. Print initial scorecard: phase, contracts, est. parallel workers
-6. Confirm `git --version` ≥ 2.32 (required for `git am --trailer`):
+6. Confirm `git --version` ≥ 2.32 (required for `git commit --trailer` (used in worktree apply_to_main amend step)):
    ```bash
    v=$(git --version | awk '{print $3}')
    IFS=. read -r maj min _ <<< "$v"
    if ! { [ "$maj" -gt 2 ] || { [ "$maj" -eq 2 ] && [ "$min" -ge 32 ]; }; }; then
-     echo "auto-pilot: git $v < 2.32 — required for am --trailer" >&2; exit 2
+     echo "auto-pilot: git $v < 2.32 — required for commit --trailer" >&2; exit 2
    fi
    ```
 

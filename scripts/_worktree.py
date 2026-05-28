@@ -8,12 +8,14 @@ All mutations of $ROOT (not worktrees) MUST go through WorktreeManager.apply_to_
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import subprocess
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Iterator, cast
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,22 @@ class PatchSeries(PatchResult):
 
 class InvalidBranchNameError(Exception):
     """Branch name fails `git check-ref-format`."""
+
+
+class MainTreeDirtyError(Exception):
+    """git status --porcelain not empty on $ROOT when apply_to_main acquired lock."""
+
+
+class StaleAmStateError(Exception):
+    """`.git/rebase-apply` still exists after auto-abort attempt; human intervention required."""
+
+
+@dataclass(frozen=True)
+class ApplyResult:
+    status: str  # "applied" | "conflict"
+    main_sha: str | None = None
+    pre_apply_head: str | None = None
+    conflict_files: tuple[str, ...] = ()
 
 
 class WorktreeManager:
@@ -156,3 +174,102 @@ class WorktreeManager:
         )
         mbox.write_bytes(diff_bytes)
         return PatchSeries(mbox=mbox)
+
+    @contextmanager
+    def _main_apply_lock(self) -> Iterator[None]:
+        lock_dir = self.repo_root / ".planning" / "auto-pilot"
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = lock_dir / "main-apply.lock"
+        lock_path.touch(exist_ok=True)
+        fd = lock_path.open("r+")
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+            finally:
+                fd.close()
+
+    def _is_dirty(self) -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(self.repo_root), "status", "--porcelain", "--untracked-files=all"],
+            text=True,
+        )
+
+    def _head_sha(self) -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(self.repo_root), "rev-parse", "HEAD"], text=True
+        ).strip()
+
+    def apply_to_main(self, mbox: Path, contract: dict[str, Any]) -> ApplyResult:
+        """Apply worker's patch series to main repo with trailers, under lock.
+
+        Sequence:
+          1. Acquire main-apply.lock.
+          2. Preflight: stale .git/rebase-apply → abort, raise if not recoverable.
+          3. Post-acquire: dirty main → MainTreeDirtyError.
+          4. git am --3way --keep-cr <mbox>.
+          5. Conflict → abort, return ApplyResult(status='conflict').
+          6. Success → amend HEAD to inject trailers, return ApplyResult(status='applied').
+
+        Note: `git am` has no --trailer flag. We apply the patch first, then
+        `git commit --amend --no-edit --trailer ...` mutates only HEAD, which IS
+        the just-applied commit (one-commit invariant enforced by collect_patches).
+        """
+        with self._main_apply_lock():
+            rebase_apply = self.repo_root / ".git" / "rebase-apply"
+            if rebase_apply.exists():
+                subprocess.run(
+                    ["git", "-C", str(self.repo_root), "am", "--abort"],
+                    capture_output=True, check=False,
+                )
+                if rebase_apply.exists():
+                    raise StaleAmStateError(f"could not clear {rebase_apply}")
+
+            dirty = self._is_dirty()
+            if dirty.strip():
+                raise MainTreeDirtyError(dirty)
+
+            pre = self._head_sha()
+            # am has no --trailer; amend HEAD to inject after successful apply
+            am = subprocess.run(
+                ["git", "-C", str(self.repo_root), "am", "--3way", "--keep-cr",
+                 str(mbox)],
+                capture_output=True, text=True,
+            )
+            if am.returncode != 0:
+                conflict_files: tuple[str, ...] = ()
+                if rebase_apply.exists():
+                    pf = rebase_apply / "patch"
+                    if pf.exists():
+                        files = [
+                            line[len("diff --git a/"):].split(" b/")[0]
+                            for line in pf.read_text(errors="replace").splitlines()
+                            if line.startswith("diff --git a/")
+                        ]
+                        conflict_files = tuple(sorted(set(files)))
+                subprocess.run(
+                    ["git", "-C", str(self.repo_root), "am", "--abort"],
+                    capture_output=True, check=False,
+                )
+                return ApplyResult(status="conflict", pre_apply_head=pre,
+                                   conflict_files=conflict_files)
+
+            trailers = [
+                "--trailer", f"auto-pilot-iter: {contract['iter']}",
+                "--trailer", f"auto-pilot-phase: {contract['phase']}",
+                "--trailer", f"auto-pilot-contract: {contract['id']}",
+                "--trailer", f"auto-pilot-idempotency: {contract['idempotency_token']}",
+            ]
+            amend = subprocess.run(
+                ["git", "-C", str(self.repo_root), "commit", "--amend", "--no-edit",
+                 *trailers],
+                capture_output=True, text=True,
+            )
+            if amend.returncode != 0:
+                # Best-effort: leave applied commit as-is (no trailer chain)
+                return ApplyResult(status="applied", main_sha=self._head_sha(),
+                                   pre_apply_head=pre)
+            return ApplyResult(status="applied", main_sha=self._head_sha(),
+                               pre_apply_head=pre)
