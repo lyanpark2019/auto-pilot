@@ -83,7 +83,7 @@ def prepare_subagent_ticket(
     tickets_dir = contract_dir / "tickets"
     tickets_dir.mkdir(parents=True, exist_ok=True)
     ticket_path = tickets_dir / f"{subagent_role}.json"
-    _contract._atomic_write_text(ticket_path, json.dumps(body, indent=2, sort_keys=True) + "\n")
+    _contract.atomic_write_text(ticket_path, json.dumps(body, indent=2, sort_keys=True) + "\n")
     return ticket_path
 
 

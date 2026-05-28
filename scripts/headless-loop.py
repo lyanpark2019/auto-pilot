@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -38,7 +40,7 @@ from pathlib import Path
 import _config
 import _prompts
 from _log import event
-from _state import STATE_DIR, STATE_FILE, load_state
+from _state import State, STATE_DIR, STATE_FILE, load_state, save_state
 
 # ROOT captured at import time; used only for subprocess cwd (git ops + claude
 # session). State + log paths come from _state and resolve lazily relative to
@@ -70,10 +72,127 @@ def git_head() -> str:
 def git_reset_hard(sha: str) -> None:
     """Hard-reset the working tree at ``ROOT`` to ``sha``.
 
+    Retained for backward compatibility but no longer called by ``loop_iteration``.
+    PR2 replaced root-reset with per-worktree cleanup; the iter-abandon path now
+    uses :func:`stash_if_dirty` for any residual main-tree edits.
+
     Args:
         sha: target commit. Caller is responsible for ensuring it exists.
     """
     subprocess.run(["git", "reset", "--hard", sha], cwd=str(ROOT), check=True)
+
+
+def stash_if_dirty(reason: str) -> str | None:
+    """If ``$ROOT`` has uncommitted changes, stash them with a recoverable label.
+
+    Returns the stash message on success, ``None`` when the tree was clean (or
+    when ``git stash`` exits non-zero). Non-destructive — caller can recover
+    via ``git stash list | grep <reason>``.
+
+    Args:
+        reason: short tag embedded in the stash message.
+    """
+    porcelain = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if not porcelain.stdout.strip():
+        return None
+    msg = f"auto-pilot-{reason}"
+    res = subprocess.run(
+        ["git", "stash", "push", "-u", "-m", msg],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        event("stash.failed", reason=reason, stderr=res.stderr.strip()[:200])
+        return None
+    event("stash.created", reason=reason, msg=msg)
+    return msg
+
+
+_COST_LINE = re.compile(r"(?:total\s*cost|cost)\D*\$?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+_TOKEN_LINE = re.compile(r"(?:total\s*tokens?|tokens?\s*used)\D*(\d+)", re.IGNORECASE)
+
+
+def parse_session_usage(log_path: Path) -> tuple[float, int]:
+    """Best-effort scan of a claude session log for cost + token totals.
+
+    Returns ``(cost_usd, tokens)``. When the log does not surface either value,
+    returns ``(0.0, 0)`` and the caller falls back to a per-iter estimate.
+    The parser is intentionally permissive — claude CLI output format is not
+    a stable contract; this just keeps the cost cap from running away.
+
+    Args:
+        log_path: path to the per-iter session log written by ``run_claude_session``.
+    """
+    if not log_path.exists():
+        return 0.0, 0
+    try:
+        text = log_path.read_text(errors="replace")
+    except OSError:
+        return 0.0, 0
+    cost = 0.0
+    tokens = 0
+    for match in _COST_LINE.finditer(text):
+        try:
+            cost = max(cost, float(match.group(1)))
+        except ValueError:
+            continue
+    for match in _TOKEN_LINE.finditer(text):
+        try:
+            tokens = max(tokens, int(match.group(1)))
+        except ValueError:
+            continue
+    return cost, tokens
+
+
+def count_claude_pids() -> int:
+    """Return the number of running ``claude`` processes via ``pgrep -x claude``.
+
+    Returns 0 when ``pgrep`` is missing or errors out — caller treats absence
+    as "no signal" rather than "fork-bomb".
+    """
+    if shutil.which("pgrep") is None:
+        return 0
+    try:
+        res = subprocess.run(
+            ["pgrep", "-x", "claude"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return 0
+    if res.returncode == 0:
+        return len([line for line in res.stdout.splitlines() if line.strip()])
+    return 0
+
+
+def check_caps(args: argparse.Namespace, state: State) -> str | None:
+    """Return a terminal-status string when a budget cap is exceeded, else ``None``.
+
+    Checks (in order):
+      - cost_usd accumulator vs ``--max-cost-usd``
+      - tokens accumulator vs ``--max-tokens``
+      - live ``claude`` pid count vs ``--max-concurrent-claude``
+    """
+    cost = float(state.get("cost_usd", 0.0))
+    tokens = int(state.get("tokens", 0))
+    if cost > args.max_cost_usd:
+        event("cap.cost_exceeded", cost_usd=cost, cap=args.max_cost_usd)
+        return "cost-cap"
+    if tokens > args.max_tokens:
+        event("cap.tokens_exceeded", tokens=tokens, cap=args.max_tokens)
+        return "cost-cap"
+    pids = count_claude_pids()
+    if pids >= args.max_concurrent_claude:
+        event("cap.pid_count_exceeded", pids=pids, cap=args.max_concurrent_claude)
+        return "cost-cap"
+    return None
 
 
 def commit_trailer(iter_n: int, phase: int) -> str:
@@ -173,9 +292,15 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
         return "failed"
 
     current_status = state.get("status")
-    if current_status in {"success", "stopped", "pivot-needed", "failed"}:
+    if current_status in {"success", "stopped", "pivot-needed", "failed", "cost-cap"}:
         assert current_status is not None  # narrowed by membership check above
         return current_status
+
+    cap_hit = check_caps(args, state)
+    if cap_hit is not None:
+        state["status"] = cap_hit
+        save_state(state)
+        return cap_hit
 
     phase = state.get("current_phase", 0)
     pre_head = git_head()
@@ -186,14 +311,22 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
 
     rc = run_claude_session(prompt, log, args.timeout_build)
 
+    # Accumulate cost + tokens regardless of exit code (best-effort)
+    log_cost, log_tokens = parse_session_usage(log)
+    if log_cost <= 0.0:
+        log_cost = args.per_iter_cost_estimate
+    state_after = load_state() or state
+    state_after["cost_usd"] = float(state_after.get("cost_usd", 0.0)) + log_cost
+    state_after["tokens"] = int(state_after.get("tokens", 0)) + log_tokens
+    save_state(state_after)
+
     if rc == 124:
         event("iter.timeout_no_root_reset",
               pre_head=pre_head[:8],
               note="state.status set to failed; $ROOT untouched")
-        # Mark state failed so next iter sees terminal
+        stash_if_dirty(reason=f"iter-{iter_n}-timeout")
         state2 = load_state()
         state2["status"] = "failed"
-        from _state import save_state
         save_state(state2)
         return "failed"
 
@@ -203,9 +336,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     if status == "failed":
         event("iter.fail_no_root_reset",
               note="per PR2: $ROOT untouched on phase fail; worktree cleanup is the recovery unit")
-        # NOTE: per-contract worktree cleanup happens inside the PM session via
-        # scripts/_worktree.WorktreeManager.cleanup(handle, prune_branch=True).
-        # The outer driver no longer touches $ROOT.
+        stash_if_dirty(reason=f"iter-{iter_n}-failed")
 
     return status
 
@@ -235,6 +366,30 @@ def main(argv: list[str] | None = None) -> int:
         default=CONFIG.default_timeout_build_sec,
         help="per-iteration claude session timeout (s)",
     )
+    p.add_argument(
+        "--max-cost-usd",
+        type=float,
+        default=CONFIG.default_max_cost_usd,
+        help="abort run when accumulated cost exceeds this (USD)",
+    )
+    p.add_argument(
+        "--max-tokens",
+        type=int,
+        default=CONFIG.default_max_tokens,
+        help="abort run when accumulated tokens exceed this",
+    )
+    p.add_argument(
+        "--per-iter-cost-estimate",
+        type=float,
+        default=CONFIG.default_per_iter_cost_estimate_usd,
+        help="fallback per-iter cost (USD) used when claude log lacks a total",
+    )
+    p.add_argument(
+        "--max-concurrent-claude",
+        type=int,
+        default=CONFIG.default_max_concurrent_claude,
+        help="abort spawn when this many claude processes are already running",
+    )
     p.add_argument("--once", action="store_true", help="run one iteration and exit (smoke test)")
     args = p.parse_args(argv)
 
@@ -248,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
         status = loop_iteration(n, args)
         event("iter.end", n=n, status=status)
 
-        if status in {"success", "stopped", "pivot-needed", "failed"}:
+        if status in {"success", "stopped", "pivot-needed", "failed", "cost-cap"}:
             event("loop.terminal", status=status)
             return 0 if status == "success" else 1
 

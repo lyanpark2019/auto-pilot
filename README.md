@@ -30,8 +30,15 @@ chmod +x ~/Documents/Project/auto-pilot/hooks/*.sh
 # True headless infinite loop (this is the "one-click autonomous" you want):
 /auto-pilot-server                  # spawn Python driver in background
 # or directly:
-python ~/.claude/plugins/auto-pilot/scripts/headless-loop.py --max-iter 100 --sleep 10
-python ~/.claude/plugins/auto-pilot/scripts/headless-loop.py --once   # smoke test
+python3 ~/.claude/plugins/auto-pilot/scripts/headless-loop.py \
+  --max-iter 100 --sleep 10 \
+  --max-cost-usd 50 --max-tokens 50000000 --max-concurrent-claude 4
+python3 ~/.claude/plugins/auto-pilot/scripts/headless-loop.py --once   # smoke test
+
+# Dogfood smoke harness (PR4) — runs the 2-phase smoke spec end-to-end:
+./scripts/dogfood_tier1.sh          # PR1+PR2 surface only (reviewers fall back)
+./scripts/dogfood_tier2.sh          # full PR3 reviewer sandbox
+./scripts/dogfood_tier1.sh --check  # gate assertions only, no loop spawn
 ```
 
 ## Requirements
@@ -65,11 +72,15 @@ For each phase in the spec:
 
 ### Headless mode (true autonomous)
 
-`/auto-pilot-server` (or `python scripts/headless-loop.py`) runs an outer driver that:
+`/auto-pilot-server` (or `python3 scripts/headless-loop.py`) runs an outer driver that:
 1. Snapshots HEAD pre-phase
-2. Spawns `claude -p --dangerously-skip-permissions` with `HARNESS_HEADLESS=1` and the auto-pilot skill
-3. On phase exit: success → next iteration; fail → `git reset --hard` to pre-phase HEAD, exit
-4. Repeats until terminal status or `--max-iter`
+2. Checks budget caps (`--max-cost-usd`, `--max-tokens`, `--max-concurrent-claude` via `pgrep`) — abort with status `cost-cap` if exceeded
+3. Spawns `claude -p --dangerously-skip-permissions` with `HARNESS_HEADLESS=1` and the auto-pilot skill
+4. On phase exit:
+   - success → next iteration
+   - timeout / fail → `git stash` any dirty $ROOT edits under `auto-pilot-iter-N-{timeout,failed}` (recoverable, not destructive); per-worktree cleanup handles in-flight work
+5. Accumulates parsed cost + token totals into `state.json` for cap enforcement
+6. Repeats until terminal status (`success`, `failed`, `pivot-needed`, `stopped`, `cost-cap`) or `--max-iter`
 
 ## Hard stops
 
@@ -89,7 +100,11 @@ For each phase in the spec:
 - Over-scoped contracts — `tech-critic-lead` rejects with reason
 - Implementation without tests — `tdd-enforcer` REJECTs
 - Out-of-scope edits — claude-reviewer + codex-adversarial REJECT on scope drift
-- Phase fail leaves dirty tree — `headless-loop.py` `git reset --hard` to pre-phase HEAD
+- Reviewer writes outside `outputs/<role>/` — `hooks/pre-reviewer-write.sh` blocks (PR3)
+- Phase fail leaves dirty tree — `headless-loop.py` `stash_if_dirty` (PR4 replaces destructive reset)
+- Run-away cost or fork-bomb — `--max-cost-usd` / `--max-tokens` / `--max-concurrent-claude` (PR4)
+- `state.json` concurrent writes — flock + atomic temp+rename (PR4)
+- Spec parser `## Phase` inside code fences — ignored by `_count_phases` (PR4)
 
 ## Inspired by
 

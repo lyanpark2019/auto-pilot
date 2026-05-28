@@ -52,7 +52,7 @@ def atomic_write_output(role_output_dir: Path, name: str, data: dict[str, Any]) 
     """Atomic JSON write to <role_output_dir>/<name>. Same fsync protocol as ContractIO."""
     role_output_dir.mkdir(parents=True, exist_ok=True)
     target = role_output_dir / name
-    return _contract._atomic_write_text(target, json.dumps(data, indent=2, sort_keys=True) + "\n")
+    return _contract.atomic_write_text(target, json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def write_exit_code(role_output_dir: Path, code: int) -> Path:
@@ -63,7 +63,7 @@ def write_exit_code(role_output_dir: Path, code: int) -> Path:
     PM reading done.marker is guaranteed to see exit-code.txt + payload.
     """
     role_output_dir.mkdir(parents=True, exist_ok=True)
-    return _contract._atomic_write_text(role_output_dir / "exit-code.txt", f"{int(code)}\n")
+    return _contract.atomic_write_text(role_output_dir / "exit-code.txt", f"{int(code)}\n")
 
 
 def mark_done(role_output_dir: Path) -> Path:

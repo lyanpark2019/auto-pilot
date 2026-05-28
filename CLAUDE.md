@@ -1,6 +1,6 @@
 # auto-pilot — repo guide
 
-This is the auto-pilot plugin source. It is **a Claude Code plugin**, not application code. The plugin ships skills, agents, hooks, and one helper script.
+This is the auto-pilot plugin source. It is **a Claude Code plugin**, not application code. The plugin ships skills, agents, hooks, schemas, and a Python helper layer that the PM (Opus 4.7 main session) calls into.
 
 ## Publish identity
 
@@ -11,29 +11,57 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 ## Layout
 
-- `.claude-plugin/plugin.json` — manifest
-- `skills/auto-pilot/SKILL.md` — entry skill
+- `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace
+- `skills/auto-pilot/SKILL.md` — entry skill (fires on `/auto-pilot`)
 - `commands/auto-pilot.md` — `/auto-pilot` slash command
-- `agents/*.md` — PM, worker, codex-adversarial, claude-reviewer
-- `hooks/*.sh` — preflight, composition-root guard, bash guard, post-deploy
-- `hooks/hooks.json` — hook registration
-- `scripts/orchestrator.py` — state mgmt helper
-- `docs/architecture.md` — loop + design
+- `agents/` — PM, worker, codex-adversarial / claude-reviewer (legacy), `auto-pilot-{codex,claude}-reviewer.md` (PR3), tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool
+- `hooks/*.sh` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3)
+- `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12)
+- `scripts/` — `orchestrator.py`, `headless-loop.py`, plus PR1/PR2/PR3/PR4 modules listed below
+- `docs/architecture.md` — loop + design (canonical)
+- `docs/specs/` — PR-input specs (e.g. `2026-05-28-dogfood-smoke.md`)
+- `docs/superpowers/{specs,plans}/` — design specs + implementation plans
+
+## Python helper modules
+
+| Module | Owner PR | Purpose |
+|---|---|---|
+| `scripts/_state.py` | PR4 | state.json TypedDict, `flock` lock, atomic temp+rename write |
+| `scripts/_config.py` | base | `AutoPilotConfig` dataclass, env-driven defaults |
+| `scripts/_log.py` | base | structured `event()` logger |
+| `scripts/_prompts.py` | base | `prompts/*.md` loader |
+| `scripts/_contract.py` | PR1 | schema validate, atomic write, flock, snapshot SHAs, PM-SIGNATURE |
+| `scripts/_dispatch.py` | PR1 | ticket prep, diff freeze, `collect_round_outcome`, scope assert |
+| `scripts/_subagent_helpers.py` | PR1 | ticket read, exit-code, done.marker, finding-hash |
+| `scripts/_gc.py` | PR1 | bundle size cap, orphan ticket sweep |
+| `scripts/_worktree.py` | PR2 | `WorktreeManager` (create / apply_to_main / cleanup / reap) |
+| `scripts/_status.py` | PR2 | `WorkerStatus` enum + TERMINAL set |
+| `scripts/_reviewer_wrapper.py` | PR3 | parallel reviewer dispatch with isolated env dicts |
+| `scripts/_dogfood_gate.py` | PR4 | Tier 1 / Tier 2 acceptance assertions + CLI |
 
 ## Editing this plugin
 
 When changing agent contracts or hooks:
 1. Edit the markdown / shell file
-2. Restart any Claude Code session that has this plugin loaded (SessionStart hook re-reads)
+2. Re-run any active session (plugin discovery cache may persist for plugin subagents)
 3. For hooks, `chmod +x` after creation
 
 ## Testing
 
 ```bash
+# Full suite (199 tests, mypy + ruff clean)
+python3 -m pytest tests/ -q
+python3 -m mypy scripts/
+python3 -m ruff check scripts/ tests/
+
 # Smoke: orchestrator helper
-python scripts/orchestrator.py init --spec docs/architecture.md --max-workers 4
-python scripts/orchestrator.py status
-python scripts/orchestrator.py stop
+python3 scripts/orchestrator.py init --spec docs/architecture.md --max-workers 4
+python3 scripts/orchestrator.py status
+python3 scripts/orchestrator.py stop
+
+# Dogfood gate (no live claude session — assertions only)
+./scripts/dogfood_tier1.sh --check
+python3 scripts/_dogfood_gate.py --tier 1 --repo-root . --phases 2
 
 # Hooks: feed sample JSON to stdin
 echo '{"tool_input":{"file_path":"foo/__init__.py"}}' | hooks/pre-edit-composition-root.sh
@@ -41,12 +69,20 @@ echo '{"tool_input":{"file_path":"foo/__init__.py"}}' | hooks/pre-edit-compositi
 
 echo '{"tool_input":{"command":"claude doctor"}}' | hooks/pre-bash-guard.sh
 # should exit 2 and print "BLOCKED"
+
+# PR3 reviewer-write guard (requires AUTO_PILOT_SUBAGENT_ROLE + AUTO_PILOT_OUTPUT_DIR)
+AUTO_PILOT_SUBAGENT_ROLE=codex-reviewer AUTO_PILOT_OUTPUT_DIR=/tmp/ok \
+  echo '{"tool_name":"Edit","tool_input":{"file_path":"/etc/passwd"}}' | hooks/pre-reviewer-write.sh
+# should exit 2 and print "BLOCKED"
 ```
 
 ## Rules for this plugin's own development
 
-- Files ≤500 lines.
-- No code comments narrating WHAT (the markdown agent contracts explain WHY).
-- Hooks must be non-blocking by default (exit 0) unless they're explicit guards (exit 2 to deny).
+- Files ≤500 lines (`scripts/quality/module_size_budget.txt` for documented exceptions).
+- Type hints required; docstrings on public API only.
+- No code comments narrating WHAT — agent markdown explains WHY.
+- Hooks are non-blocking by default (exit 0). Explicit guards exit 2 with `BLOCKED` message on stderr.
 - All hook scripts must read tool input from stdin as JSON.
 - Skill/command markdown must specify `${CLAUDE_PLUGIN_ROOT}` for any plugin-internal path.
+- `state.json` writes must go through `_state.save_state` (lock + atomic); never write the file directly.
+- `$ROOT` mutations must go through `WorktreeManager.apply_to_main` (PR2 invariant) — outside of that path, only `stash_if_dirty` is allowed to touch the main tree.
