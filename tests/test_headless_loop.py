@@ -96,8 +96,8 @@ def test_success_path_returns_running(loop_module, state_dir):
     reset.assert_not_called()
 
 
-def test_timeout_triggers_rollback(loop_module, state_dir):
-    """When run_claude_session returns 124, loop_iteration resets HEAD and returns 'failed'."""
+def test_timeout_marks_failed_without_rollback(loop_module, state_dir):
+    """After PR2, rc=124 marks state failed and returns 'failed' WITHOUT git-resetting $ROOT."""
     _write_state(state_dir, status="running")
     args = MagicMock(timeout_build=10.0)
     with patch.object(loop_module, "run_claude_session", return_value=124), \
@@ -105,11 +105,11 @@ def test_timeout_triggers_rollback(loop_module, state_dir):
          patch.object(loop_module, "git_reset_hard") as reset:
         result = loop_module.loop_iteration(1, args)
     assert result == "failed"
-    reset.assert_called_once_with("cafef00d")
+    reset.assert_not_called()
 
 
-def test_failed_status_triggers_rollback(loop_module, state_dir):
-    """When session returns 0 but mutates state.status='failed', loop_iteration rolls back."""
+def test_failed_status_does_not_rollback(loop_module, state_dir):
+    """After PR2, session-reported status=failed returns 'failed' WITHOUT git-resetting $ROOT."""
     _write_state(state_dir, status="running")
     args = MagicMock(timeout_build=10.0)
 
@@ -129,7 +129,7 @@ def test_failed_status_triggers_rollback(loop_module, state_dir):
          patch.object(loop_module, "git_reset_hard") as reset:
         result = loop_module.loop_iteration(1, args)
     assert result == "failed"
-    reset.assert_called_once_with("abc123")
+    reset.assert_not_called()
 
 
 def test_session_success_status_no_rollback(loop_module, state_dir):
@@ -153,3 +153,43 @@ def test_session_success_status_no_rollback(loop_module, state_dir):
         result = loop_module.loop_iteration(1, args)
     assert result == "success"
     reset.assert_not_called()
+
+
+def test_loop_iteration_does_not_call_git_reset_hard_on_root(loop_module, state_dir):
+    """After PR2, failed phase must NOT git-reset --hard ROOT (blast radius).
+    Worktree cleanup is the recovery unit."""
+    _write_state(state_dir, status="running")
+    args = MagicMock(timeout_build=10.0)
+
+    def _session(prompt, log_path, timeout_sec):
+        (state_dir / "state.json").write_text(
+            json.dumps({
+                "status": "failed",
+                "current_phase": 1,
+                "total_phases": 3,
+            })
+        )
+        return 0
+
+    with patch.object(loop_module, "run_claude_session", side_effect=_session), \
+         patch.object(loop_module, "git_head", return_value="abc123"), \
+         patch.object(loop_module, "git_reset_hard") as reset:
+        result = loop_module.loop_iteration(1, args)
+    assert result == "failed"
+    reset.assert_not_called(), \
+        "headless-loop must not call git_reset_hard on $ROOT after PR2"
+
+
+def test_loop_iteration_timeout_marks_failed_without_reset(loop_module, state_dir):
+    """After PR2, rc=124 timeout marks state failed but does NOT git-reset $ROOT."""
+    _write_state(state_dir, status="running")
+    args = MagicMock(timeout_build=10.0)
+    with patch.object(loop_module, "run_claude_session", return_value=124), \
+         patch.object(loop_module, "git_head", return_value="cafef00d"), \
+         patch.object(loop_module, "git_reset_hard") as reset:
+        result = loop_module.loop_iteration(1, args)
+    assert result == "failed"
+    reset.assert_not_called()
+    # state.status flipped to failed so the outer driver sees terminal next iter
+    final_state = json.loads((state_dir / "state.json").read_text())
+    assert final_state["status"] == "failed"
