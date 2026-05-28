@@ -223,3 +223,55 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
 6. After worker DONE, PM calls `_dispatch.freeze_diff_for_review(worktree, base_sha, contract_dir)` before dispatching reviewers
 7. PM calls `_dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec)` to read filesystem state — PM does NOT parse Agent return text for control flow
 8. After each reviewer, PM calls `_dispatch.assert_reviewer_was_scoped(repo_root, worktree, output_dir)` — any ScopeViolation discards verdict and restarts round
+
+## Reviewer dispatch (v1, PR3)
+
+### Serial path (single reviewer)
+```python
+ticket = _dispatch.prepare_subagent_ticket(
+    contract_dir=contract_dir, worktree=worktree,
+    subagent_role="codex-reviewer", diff_path=frozen_diff,
+)
+prior = (os.environ.get("AUTO_PILOT_SUBAGENT_ROLE"),
+         os.environ.get("AUTO_PILOT_OUTPUT_DIR"))
+os.environ["AUTO_PILOT_SUBAGENT_ROLE"] = "codex-reviewer"
+os.environ["AUTO_PILOT_OUTPUT_DIR"]    = str(contract_dir / "outputs/codex-reviewer")
+try:
+    subagent_type = ("auto-pilot-codex-reviewer"
+                     if os.environ.get("AUTO_PILOT_USE_NEW_REVIEWERS") == "1"
+                     else "general-purpose")
+    Agent(subagent_type=subagent_type,
+          prompt=f"TICKET={ticket}\nRead ticket. Refuse if ticket_sha mismatch.")
+finally:
+    for k, v in zip(("AUTO_PILOT_SUBAGENT_ROLE", "AUTO_PILOT_OUTPUT_DIR"), prior):
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+
+_dispatch.assert_reviewer_was_scoped(repo_root, worktree,
+                                      contract_dir / "outputs/codex-reviewer")
+outcome = _dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec=1800)
+```
+
+### Parallel path (codex + claude + specialists simultaneously)
+PM env-injection is process-global → use `scripts/_reviewer_wrapper.py` which spawns each reviewer as `claude -p` subprocess with isolated env:
+
+```python
+import _reviewer_wrapper
+handles = [
+    _reviewer_wrapper.spawn(role=r, ticket=tickets[r],
+                             output_dir=out_dirs[r],
+                             allowed_tools="Read,Grep,Glob,Bash,Write",
+                             disallowed_tools="WebFetch,WebSearch")
+    for r in ("codex-reviewer", "claude-reviewer", *specialist_roles)
+]
+_reviewer_wrapper.wait_all(handles, timeout_sec=1800)
+for r in handles:
+    _dispatch.assert_reviewer_was_scoped(repo_root, worktree, r.output_dir)
+outcome = _dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec=1800)
+```
+
+### Violation handling
+Any `ScopeViolation` from `assert_reviewer_was_scoped` →
+1. Discard that reviewer's verdict
+2. Append to `.planning/auto-pilot/sandbox-violations.jsonl` with `{contract_id, reviewer, dirty, timestamp}`
+3. Restart round
