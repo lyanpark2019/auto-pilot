@@ -198,3 +198,30 @@ class TestStatusStop:
         rc = _run(["stop"])
         assert rc == 0
         assert "nothing to stop" in capsys.readouterr().out
+
+
+def test_phase_start_allocates_run_id_if_missing(monkeypatch, tmp_path):
+    import sys
+    import importlib
+    monkeypatch.chdir(tmp_path)
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    import _state
+    importlib.reload(_state)
+    import orchestrator
+    importlib.reload(orchestrator)
+
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\n## Phase 1\n## Phase 2\n")
+    args = type("A", (), {"spec": str(spec), "max_workers": 4, "time_box_until": None, "force": False})
+    orchestrator.cmd_init(args)
+
+    # State has no run_id yet
+    state = _state.load_state()
+    assert "run_id" not in state or state.get("run_id") is None
+
+    args_ps = type("A", (), {"phase": 1, "contracts": 3})
+    orchestrator.cmd_phase_start(args_ps)
+
+    state2 = _state.load_state()
+    assert isinstance(state2.get("run_id"), str)
+    assert len(state2["run_id"]) >= 8

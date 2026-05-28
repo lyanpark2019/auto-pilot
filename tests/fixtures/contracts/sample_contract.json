@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "iter-1/phase-1/contract-1/round-1",
+  "idempotency_token": "a0f1c3d4e5b6a78901234567",
+  "parent_contract_id": null,
+  "iter": 1,
+  "phase": 1,
+  "round": 1,
+  "title": "Add user-id validation to login handler",
+  "scope_files": ["src/auth/login.py", "tests/auth/test_login.py"],
+  "acceptance": ["login rejects empty user_id with HTTP 400"],
+  "test_files": ["tests/auth/test_login.py"],
+  "max_diff_loc": 80,
+  "verify_cmds": ["pytest tests/auth/test_login.py -q"],
+  "context_bundle_path": ".planning/auto-pilot/contracts/iter-1/phase-1/contract-1/round-1/context-bundle",
+  "snapshot_shas": {
+    "spec":            "0000000000000000000000000000000000000000000000000000000000000000",
+    "claude_md_chain": ["1111111111111111111111111111111111111111111111111111111111111111"],
+    "base_sha":        "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "prior_findings_path": null,
+  "dispatched_at": "2026-05-28T10:00:00+00:00",
+  "deadline_ts":   "2026-05-28T11:00:00+00:00",
+  "env_capture": {
+    "python": "3.12.4",
+    "git": "2.45.0",
+    "node": "24.0.0",
+    "codex_version": "1.0.1",
+    "claude_version": "0.7.0",
+    "cwd": "/workspace/repo"
+  },
+  "plugin_version": "0.4.0",
+  "worker_model": "sonnet",
+  "reviewer_models": {"codex": "gpt-5.5-high", "claude": "opus"},
+  "kill_switch_path": ".planning/auto-pilot/contracts/iter-1/phase-1/contract-1/round-1/CANCELED",
+  "review_outputs": {
+    "codex":  ".planning/auto-pilot/contracts/iter-1/phase-1/contract-1/round-1/outputs/codex-reviewer/review.json",
+    "claude": ".planning/auto-pilot/contracts/iter-1/phase-1/contract-1/round-1/outputs/claude-reviewer/review.json",
+    "specialists": {}
+  }
+}

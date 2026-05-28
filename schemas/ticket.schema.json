@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/ticket/v1",
+  "type": "object",
+  "required": ["schema_version", "contract_id", "base_sha", "contract_dir",
+               "worktree", "subagent_role", "output_dir", "helper_abspath",
+               "boot_ok_at", "ticket_sha"],
+  "properties": {
+    "schema_version":  { "const": 1 },
+    "contract_id":     { "type": "string" },
+    "base_sha":        { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "contract_dir":    { "type": "string" },
+    "worktree":        { "type": "string" },
+    "subagent_role":   { "enum": ["worker", "codex-reviewer", "claude-reviewer",
+                                   "tdd-enforcer", "security-reviewer", "tech-critic-lead"] },
+    "output_dir":      { "type": "string" },
+    "helper_abspath":  { "type": "string" },
+    "diff_path":       { "type": ["string", "null"] },
+    "diff_sha256":     { "type": ["string", "null"] },
+    "boot_ok_at":      { "type": "string", "format": "date-time" },
+    "ticket_sha":      { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

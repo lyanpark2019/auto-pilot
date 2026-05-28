@@ -52,6 +52,7 @@ class State(TypedDict, total=False):
     phases: list[PhaseEntry]
     pivot_detector: dict[str, dict[str, int]]
     stopped_at: str
+    run_id: str
 
 
 def utc_now() -> str:
