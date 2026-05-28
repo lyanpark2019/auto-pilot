@@ -9,6 +9,7 @@ All mutations of $ROOT (not worktrees) MUST go through WorktreeManager.apply_to_
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import subprocess
 import time
@@ -350,3 +351,12 @@ class WorktreeManager:
                 )
             reaped.append(wt_path)
         return reaped
+
+
+MAX_MERGE_ATTEMPTS = 3
+
+
+def compute_merge_conflict_finding_hash(conflict_files: list[str]) -> str:
+    """Deterministic hash for pivot-detector keyed on sorted conflict file set."""
+    payload = "merge_conflict:" + ",".join(sorted(set(conflict_files)))
+    return hashlib.sha256(payload.encode()).hexdigest()

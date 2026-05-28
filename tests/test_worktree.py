@@ -369,3 +369,11 @@ def test_reap_orphans_preserves_in_flight(tmp_path):
     # No status.json, no done.marker → in-flight
     reaped = mgr.reap_orphans(state_dir=state_dir, max_age_hours=0)
     assert handle.path not in reaped
+
+
+def test_compute_merge_conflict_finding_hash():
+    h1 = _worktree.compute_merge_conflict_finding_hash(["src/a.py", "src/b.py"])
+    h2 = _worktree.compute_merge_conflict_finding_hash(["src/b.py", "src/a.py"])  # order-insensitive
+    assert h1 == h2
+    h3 = _worktree.compute_merge_conflict_finding_hash(["src/a.py"])
+    assert h1 != h3
