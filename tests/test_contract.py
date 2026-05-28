@@ -58,3 +58,36 @@ def test_write_then_read_roundtrip(tmp_path):
     _contract.write_contract(data, target)
     reloaded = _contract.read_contract(target)
     assert reloaded == data
+
+
+import multiprocessing
+import time
+
+
+def _writer_proc(path_str: str, sleep_sec: float, payload: dict) -> None:
+    import sys
+    sys.path.insert(0, str(Path(path_str).parent.parent.parent.parent / "scripts"))
+    import _contract
+    target = Path(path_str)
+    with _contract.write_lock(target.parent):
+        time.sleep(sleep_sec)
+        _contract.write_contract(payload, target)
+
+
+def test_write_lock_serializes_writers(tmp_path):
+    """Two concurrent write_lock holders must serialize (one waits)."""
+    import _contract
+    target = tmp_path / "contract.json"
+    data = json.loads(FIXTURE.read_text())
+
+    p1 = multiprocessing.Process(target=_writer_proc, args=(str(target), 0.5, data))
+    p2 = multiprocessing.Process(target=_writer_proc, args=(str(target), 0.0, data))
+    t0 = time.time()
+    p1.start()
+    time.sleep(0.05)
+    p2.start()
+    p1.join()
+    p2.join()
+    elapsed = time.time() - t0
+    assert elapsed >= 0.5, f"writers ran concurrently (elapsed={elapsed:.2f}s)"
+    assert p1.exitcode == 0 and p2.exitcode == 0

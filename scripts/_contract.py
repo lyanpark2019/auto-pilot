@@ -121,3 +121,42 @@ def _fsync_dir(dir_path: Path) -> None:
         _fsync_file(fd)
     finally:
         os.close(fd)
+
+
+import fcntl
+from contextlib import contextmanager
+from typing import Iterator
+
+
+@contextmanager
+def write_lock(dir_path: Path) -> Iterator[None]:
+    """Exclusive lock on `<dir_path>/.lock`. Blocks until acquired."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    lock_path = dir_path / ".lock"
+    lock_path.touch(exist_ok=True)
+    fd = lock_path.open("r+")
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        finally:
+            fd.close()
+
+
+@contextmanager
+def read_lock(dir_path: Path) -> Iterator[None]:
+    """Shared lock on `<dir_path>/.lock`. Blocks until acquired."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    lock_path = dir_path / ".lock"
+    lock_path.touch(exist_ok=True)
+    fd = lock_path.open("r")
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_SH)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        finally:
+            fd.close()
