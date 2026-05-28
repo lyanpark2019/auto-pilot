@@ -89,6 +89,10 @@ def cmd_phase_start(args: argparse.Namespace) -> int:
         event("phase_start.no_state")
         return 2
 
+    if "run_id" not in state or not state.get("run_id"):
+        import uuid
+        state["run_id"] = uuid.uuid4().hex
+
     total = state.get("total_phases", 0)
     if args.phase < 1 or args.phase > total:
         event("phase_start.out_of_range", phase=args.phase, total_phases=total)
