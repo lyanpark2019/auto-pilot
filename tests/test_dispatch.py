@@ -99,3 +99,74 @@ def test_freeze_diff_writes_diff_and_sha(tmp_path):
     assert sha_path.exists()
     expected = _dispatch._contract._sha256(diff_path.read_bytes())
     assert sha_path.read_text().strip() == expected
+
+
+REVIEW_SCHEMA_PATH = ROOT / "schemas" / "review.schema.json"
+
+
+def test_review_schema_is_valid_jsonschema():
+    import jsonschema
+    schema = _json.loads(REVIEW_SCHEMA_PATH.read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
+
+
+import time
+
+
+def _write_review(out_dir, verdict="APPROVE"):
+    review = {
+        "schema_version": 1,
+        "reviewer": "auto-pilot-codex-reviewer",
+        "contract_id": "iter-1/phase-1/contract-1/round-1",
+        "verdict": verdict,
+        "scope_check": "PASS",
+        "scope_drift_files": [],
+        "scope_reduction_detected": False,
+        "findings": [],
+        "verify_rerun": {"cmd": "pytest -q", "exit_code": 0},
+        "reviewer_meta": {"model": "gpt-5.5-high",
+                          "started_at": "2026-05-28T10:00:00+00:00",
+                          "ended_at":   "2026-05-28T10:01:00+00:00"}
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "review.json").write_text(_json.dumps(review))
+    (out_dir / "exit-code.txt").write_text("0\n")
+    (out_dir / "done.marker").touch()
+
+
+def test_collect_round_outcome_reads_all_outputs(tmp_path):
+    import _dispatch
+    contract_dir = tmp_path / "c"
+    contract_dir.mkdir()
+    _write_review(contract_dir / "outputs" / "worker", verdict="APPROVE")  # worker uses status, but for fixture reuse
+    # Actually worker writes status.json not review.json; use proper shapes:
+    worker_out = contract_dir / "outputs" / "worker"
+    (worker_out).mkdir(parents=True, exist_ok=True)
+    (worker_out / "status.json").write_text(_json.dumps({"status": "DONE", "diff_loc": 12}))
+    (worker_out / "exit-code.txt").write_text("0\n")
+    (worker_out / "done.marker").touch()
+    _write_review(contract_dir / "outputs" / "codex-reviewer", verdict="APPROVE")
+    _write_review(contract_dir / "outputs" / "claude-reviewer", verdict="REJECT")
+
+    outcome = _dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec=2)
+    assert outcome.worker_exit_code == 0
+    assert outcome.codex_verdict == "APPROVE"
+    assert outcome.claude_verdict == "REJECT"
+
+
+def test_collect_round_outcome_times_out_if_done_marker_missing(tmp_path):
+    import _dispatch
+    contract_dir = tmp_path / "c"
+    contract_dir.mkdir()
+    (contract_dir / "outputs" / "worker").mkdir(parents=True)
+    # No done.marker
+    with pytest.raises(_dispatch.RoundCollectTimeout):
+        _dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec=1)
+
+
+def test_read_review_rejects_malformed(tmp_path):
+    import _dispatch
+    bad = tmp_path / "review.json"
+    bad.write_text(_json.dumps({"schema_version": 1}))  # missing many required
+    with pytest.raises(_dispatch.MalformedReviewError):
+        _dispatch.read_review(bad)
