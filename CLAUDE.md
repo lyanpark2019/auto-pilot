@@ -83,7 +83,7 @@ AUTO_PILOT_SUBAGENT_ROLE=codex-reviewer AUTO_PILOT_OUTPUT_DIR=/tmp/ok \
 
 ## Rules for this plugin's own development
 
-- Files ≤500 lines (`scripts/quality/module_size_budget.txt` for documented exceptions).
+- Files ≤500 lines — enforced in CI by `scripts/quality/check-module-size.sh`; documented exceptions in `scripts/quality/module_size_budget.txt` (`<path>|<max_lines>`, reason in a comment). Scope: tracked `*.py`/`*.sh` (excl `docs/`) + every `SKILL.md`.
 - Type hints required; docstrings on public API only.
 - No code comments narrating WHAT — agent markdown explains WHY.
 - Hooks are non-blocking by default (exit 0). Explicit guards exit 2 with `BLOCKED` message on stderr.
