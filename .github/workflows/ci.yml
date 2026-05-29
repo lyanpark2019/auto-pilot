@@ -66,6 +66,20 @@ jobs:
       - name: shellcheck
         run: shellcheck hooks/*.sh
 
+  bats:
+    name: bats gates (adversarial-review-loop helpers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: bats (ARL orchestration + helpers)
+        working-directory: skills/adversarial-review-loop
+        run: bats tests/
+
   manifest:
     name: plugin manifest sanity
     runs-on: ubuntu-latest
