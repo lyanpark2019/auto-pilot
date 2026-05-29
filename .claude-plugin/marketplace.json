@@ -11,7 +11,7 @@
       "name": "auto-pilot",
       "source": "./",
       "description": "auto-pilot dev loop + bundled personal toolkit (quality/review, doc-drift, debugging skills, setup-harness bootstrapper + safety hooks).",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "category": "automation",
       "tags": [
         "autonomous",

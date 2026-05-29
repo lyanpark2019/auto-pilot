@@ -68,10 +68,13 @@ jobs:
           sudo install -m755 shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
           shellcheck --version | grep version
 
-      - name: shellcheck (hooks + bundled skill scripts)
+      - name: shellcheck (hooks + bundled skill + helper scripts)
         run: |
           shellcheck hooks/*.sh
-          find skills -name '*.sh' -print0 | xargs -0 -r shellcheck -S warning
+          git ls-files '*.sh' | grep -vE '^hooks/' | xargs -r shellcheck -S warning
+
+      - name: module size (≤500 lines, exceptions in module_size_budget.txt)
+        run: bash scripts/quality/check-module-size.sh
 
   bats:
     name: bats gates (adversarial-review-loop helpers)

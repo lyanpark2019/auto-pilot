@@ -1,0 +1,11 @@
+# Module size budget — documented exceptions to the ≤500-line rule.
+# Format: <path>|<max_lines>   (lines starting with # ignored)
+# Enforced by scripts/quality/check-module-size.sh (wired into CI).
+# Add an entry ONLY with a justified reason in the comment above it.
+#
+# SKILL.md files are prose interface specs read by the agent in one pass;
+# splitting them across files would break the single-load contract and the
+# relative scripts/references refs. These three are the long-form skills.
+skills/quality-eval/SKILL.md|620
+skills/setup-harness/SKILL.md|560
+skills/adversarial-review-loop/SKILL.md|540
