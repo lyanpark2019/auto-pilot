@@ -2,6 +2,8 @@
 
 This is the auto-pilot plugin source. It is **a Claude Code plugin**, not application code. The plugin ships skills, agents, hooks, schemas, and a Python helper layer that the PM (Opus 4.7 main session) calls into.
 
+> **Read first for full context:** [`docs/master-plan.md`](docs/master-plan.md) — purpose (brownfield skill-integration loop), skill-integration map, progress, roadmap. Loop design detail: [`docs/architecture.md`](docs/architecture.md).
+
 ## Publish identity
 
 - **GitHub owner:** `lyanpark2019` (NOT Sewhoan, NOT fyqro)
@@ -52,8 +54,9 @@ When changing agent contracts or hooks:
 ```bash
 # Full suite (199 tests, mypy + ruff clean)
 python3 -m pytest tests/ -q
-python3 -m mypy scripts/
-python3 -m ruff check scripts/ tests/
+python3 -m mypy scripts/ hooks/
+python3 -m ruff check scripts/ tests/ hooks/
+python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py  # bundled hook self-tests (script-style, not pytest)
 
 # Smoke: orchestrator helper
 python3 scripts/orchestrator.py init --spec docs/architecture.md --max-workers 4
