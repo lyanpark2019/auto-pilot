@@ -2,6 +2,8 @@
 
 This is the auto-pilot plugin source. It is **a Claude Code plugin**, not application code. The plugin ships skills, agents, hooks, schemas, and a Python helper layer that the PM (Opus 4.7 main session) calls into.
 
+> **Read first for full context:** [`docs/master-plan.md`](docs/master-plan.md) — purpose (brownfield skill-integration loop), skill-integration map, progress, roadmap. Loop design detail: [`docs/architecture.md`](docs/architecture.md).
+
 ## Publish identity
 
 - **GitHub owner:** `lyanpark2019` (NOT Sewhoan, NOT fyqro)

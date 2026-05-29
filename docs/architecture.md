@@ -4,6 +4,16 @@
 
 Opus 4.7 PM (main session) dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
+## Purpose (locked 2026-05-29)
+
+auto-pilot autonomously drives **spec-based feature / refactor / bugfix work on an EXISTING codebase to merged**. Target = brownfield. Examples: "add OAuth to auth", "refactor payments", "fix these P1 bugs".
+
+It is **NOT** a greenfield project generator and **NOT** a quality-eval loop.
+
+Why brownfield: every friction guard presupposes existing code — composition-root breakage (`__init__.py` must already exist), SSL cascade, source-first debug (Naver private-bug class), scope-drift REJECT (`scope_files` constrains edits inside an existing tree), worktree + atomic merge to `$ROOT`. Born from 381-session `/insights` friction, all existing-project maintenance accidents.
+
+**Known gap (required fix):** context ingestion (`_contract.snapshot_context`) currently bundles only `spec.md` + `CLAUDE.md`. A brownfield PM/worker also needs a curated map of the existing code (module map, architecture, git log, test layout, public API) snapshotted into the context-bundle before PLAN. Until that lands, the loop is only verified for greenfield-shaped specs.
+
 ## Why this shape
 
 Built directly from `/insights` friction analysis on 381 sessions:
