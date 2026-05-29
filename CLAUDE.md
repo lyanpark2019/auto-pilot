@@ -15,9 +15,10 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 - `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace
 - `skills/auto-pilot/SKILL.md` — entry skill (fires on `/auto-pilot`)
-- `commands/auto-pilot.md` — `/auto-pilot` slash command
-- `agents/` — PM, worker, codex-adversarial / claude-reviewer (legacy), `auto-pilot-{codex,claude}-reviewer.md` (PR3), tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool
-- `hooks/*.sh` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3)
+- `skills/` — bundled toolkit skills: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, codebase-perfection-loop, doc-drift-audit, llm-wiki-architect, improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
+- `commands/auto-pilot.md` — `/auto-pilot` slash command; `commands/harness-*.md` (8) — setup-harness commands
+- `agents/` — PM, worker, codex-adversarial / claude-reviewer (legacy), `auto-pilot-{codex,claude}-reviewer.md` (PR3), tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool, `harness-{planner,generator,evaluator}.md` (setup-harness)
+- `hooks/*.sh` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard (toolkit)
 - `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12)
 - `scripts/` — `orchestrator.py`, `headless-loop.py`, plus PR1/PR2/PR3/PR4 modules listed below
 - `docs/architecture.md` — loop + design (canonical)

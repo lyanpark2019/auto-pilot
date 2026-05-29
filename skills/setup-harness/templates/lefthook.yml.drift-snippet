@@ -1,0 +1,5 @@
+    # doc-drift detector — flags stale file:line citations in docs.
+    # Generic, language-agnostic. Set DRIFT_FALLBACK_PREFIX env if your docs
+    # cite module-relative paths (e.g. `cli/x.py` meaning `src/myproj/cli/x.py`).
+    drift:
+      run: bash scripts/quality/check_doc_drift.sh

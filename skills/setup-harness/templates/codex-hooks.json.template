@@ -1,0 +1,78 @@
+{
+  "_comment": "Codex hooks config — Bash-only Pre/PostToolUse coverage (Codex performs file ops via Bash, so coverage is equivalent to Claude Code's Write|Edit|MultiEdit). Enable via `[features] codex_hooks = true` in ~/.codex/config.toml.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/session-start.sh",
+            "statusMessage": "Loading session context"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/guard-bash.sh",
+            "statusMessage": "Validating Bash command"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/kill-switch.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/post-edit-lint.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/injection-defender.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/telemetry.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/scan-secrets.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/stop-quality-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${CODEX_PROJECT_DIR:-.}/.claude/scripts/commit-on-stop.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

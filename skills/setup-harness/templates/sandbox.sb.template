@@ -1,0 +1,53 @@
+;; macOS Seatbelt profile for Claude Code session.
+;; Activate via /sandbox in Claude Code. Restricts filesystem and network at OS level.
+;; Bash commands cannot bypass deny rules in settings.json once this is active.
+
+(version 1)
+(deny default)
+
+;; Always allow process basics
+(allow process-fork)
+(allow process-exec)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow ipc-posix-shm)
+
+;; Filesystem reads — broad (codebase intelligence)
+(allow file-read*
+  (subpath (param "PROJECT_DIR"))
+  (subpath "/usr")
+  (subpath "/System")
+  (subpath "/Library")
+  (subpath "/private/etc")
+  (subpath "/private/var/folders")
+  (subpath "/opt/homebrew")
+  (subpath "/Applications"))
+
+;; Filesystem writes — restricted to working tree + harness temp
+(allow file-write*
+  (subpath (param "PROJECT_DIR"))
+  (subpath "/private/tmp")
+  (subpath "/private/var/folders"))
+
+;; Deny writes to credential paths even inside PROJECT_DIR
+(deny file-write*
+  (regex #"\.env$")
+  (regex #"\.env\..*")
+  (regex #"\.ssh/")
+  (regex #"\.aws/credentials")
+  (regex #"\.netrc$"))
+
+;; Network — allow loopback + DNS + HTTPS to allowlisted hosts
+(allow network*
+  (local ip "localhost:*")
+  (local ip "127.0.0.1:*")
+  (remote tcp "*:443")
+  (remote tcp "*:80")
+  (remote udp "*:53"))
+
+;; Deny network to internal IPs (typical SSRF protection)
+(deny network*
+  (remote ip "10.0.0.0/8:*")
+  (remote ip "172.16.0.0/12:*")
+  (remote ip "192.168.0.0/16:*"))

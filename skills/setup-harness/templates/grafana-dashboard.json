@@ -1,0 +1,82 @@
+{
+  "dashboard": {
+    "title": "Claude Code Harness — Telemetry",
+    "tags": ["claude-code", "harness"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Hook trigger rate (events/min)",
+        "type": "timeseries",
+        "datasource": "Loki",
+        "targets": [{
+          "expr": "sum by(hook_event_name) (rate({service_name=\"claude-code\"} | json | hook_event_name != \"\" [1m]))"
+        }],
+        "alert": {
+          "name": "AnthropicAgentLoop",
+          "conditions": [{
+            "evaluator": {"params": [60], "type": "gt"},
+            "query": {"params": ["A", "5m", "now"]},
+            "reducer": {"type": "avg"}
+          }],
+          "message": "Agent loop suspected — sustained >60 hook events/min over 5min"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Tool calls by name (last 24h)",
+        "type": "barchart",
+        "datasource": "Loki",
+        "targets": [{
+          "expr": "sum by(tool_name) (count_over_time({service_name=\"claude-code\"} | json | tool_name != \"\" [24h]))"
+        }]
+      },
+      {
+        "id": 3,
+        "title": "PostToolUse violations (blocked by hooks)",
+        "type": "stat",
+        "datasource": "Loki",
+        "targets": [{
+          "expr": "sum(count_over_time({service_name=\"claude-code\"} | json | message =~ \"BLOCKED:.*\" [24h]))"
+        }]
+      },
+      {
+        "id": 4,
+        "title": "Daily token cost (USD)",
+        "type": "timeseries",
+        "datasource": "Anthropic Admin API",
+        "targets": [{
+          "expr": "anthropic_daily_cost_usd"
+        }],
+        "alert": {
+          "name": "AnthropicDailyCostSpike",
+          "conditions": [{
+            "evaluator": {"params": [50, 0.5], "type": "gt"},
+            "type": "absoluteRelativeDay"
+          }],
+          "message": "Daily Claude Code spend up >50% vs prior day"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Sessions/day",
+        "type": "timeseries",
+        "datasource": "Loki",
+        "targets": [{
+          "expr": "count(count by(session_id) ({service_name=\"claude-code\"} | json [1d]))"
+        }]
+      },
+      {
+        "id": 6,
+        "title": "Same-file thrash (Edit/Write > 3x in session)",
+        "type": "table",
+        "datasource": "Loki",
+        "targets": [{
+          "expr": "topk(10, count by(session_id, file_path) ({service_name=\"claude-code\"} | json | tool_name =~ \"Edit|Write\" [24h]))"
+        }]
+      }
+    ],
+    "refresh": "1m",
+    "time": {"from": "now-7d", "to": "now"}
+  }
+}
