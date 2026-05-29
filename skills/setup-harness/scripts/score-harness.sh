@@ -5,7 +5,7 @@
 set -uo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$ROOT/.claude/score.json"
 mkdir -p "$ROOT/.claude"

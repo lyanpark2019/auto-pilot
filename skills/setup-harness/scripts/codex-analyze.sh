@@ -48,7 +48,7 @@ cmd_init() {
     exit 1
   fi
 
-  for sub in inbox outbox done refs pm-draft; do
+  for sub in inbox outbox "done" refs pm-draft; do
     for i in $(seq 1 "$n_workers"); do
       [[ "$sub" == "pm-draft" ]] && break
       mkdir -p "${planning}/${sub}/worker-${i}"
@@ -166,7 +166,8 @@ cmd_verify() {
     wikilinks=$(grep -oE '\[\[[^]]+\]\]' "$f" | wc -l | tr -d ' ')
     head -1 "$f" | grep -q '^---$' && frontmatter=OK || frontmatter=MISS
 
-    local row="$(basename "$f") size=${size} citations=${citations} wikilinks=${wikilinks} frontmatter=${frontmatter}"
+    local row
+    row="$(basename "$f") size=${size} citations=${citations} wikilinks=${wikilinks} frontmatter=${frontmatter}"
     if [[ "$frontmatter" == "MISS" || "$size" -lt 30 || "$citations" -lt 5 ]]; then
       echo "FAIL ${row}"
       fail=1

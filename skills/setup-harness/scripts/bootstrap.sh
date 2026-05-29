@@ -37,7 +37,7 @@ STACK_PY=0; STACK_NODE=0; STACK_GO=0; STACK_RUST=0; STACK_SWIFT=0; STACK_KOTLIN=
 [ -f "$ROOT/Package.swift" ] && STACK_SWIFT=1
 [ -f "$ROOT/build.gradle.kts" ] || [ -f "$ROOT/build.gradle" ] && STACK_KOTLIN=1
 [ -f "$ROOT/Gemfile" ] && STACK_RUBY=1
-ls "$ROOT"/*.csproj 2>/dev/null | grep -q . && STACK_DOTNET=1
+for _f in "$ROOT"/*.csproj; do [ -e "$_f" ] && STACK_DOTNET=1 && break; done
 
 # Browser app: a Playwright dependency in package.json → wire the E2E smoke Stop hook.
 STACK_BROWSER=0

@@ -91,3 +91,12 @@ AUTO_PILOT_SUBAGENT_ROLE=codex-reviewer AUTO_PILOT_OUTPUT_DIR=/tmp/ok \
 - Skill/command markdown must specify `${CLAUDE_PLUGIN_ROOT}` for any plugin-internal path.
 - `state.json` writes must go through `_state.save_state` (lock + atomic); never write the file directly.
 - `$ROOT` mutations must go through `WorktreeManager.apply_to_main` (PR2 invariant) — outside of that path, only `stash_if_dirty` is allowed to touch the main tree.
+
+## Shell & environment (host = macOS, zsh login shell)
+
+These bit real sessions — encode them, don't relearn them:
+
+- **Bundled `.sh` are shellchecked in CI** (`shellcheck hooks/*.sh` + `find skills -name '*.sh' | shellcheck -S warning`, pinned 0.11.0). Keep new scripts at 0 warnings: `cd X || exit`, quote vars, `find -print0 | xargs -0` (not `find | xargs`), no `ls | grep`, split `local x; x=$(...)`.
+- **zsh does NOT word-split unquoted `$VAR`** — `for s in $LIST` iterates ONCE with the whole string. In any ad-hoc loop over a space-separated list, wrap in `bash <<'EOF' … EOF` or use an explicit array. (This silently no-op'd a multi-dir delete in a prior session.)
+- **macOS = bash 3.2 + BSD tools.** No `mapfile`/`readarray`; `sed -i` needs `sed -i ''`; BSD `sed`/`grep` differ from GNU. Prefer a Python one-liner over a clever `sed` for cross-platform edits.
+- **Non-interactive Codex/CLI subagents must consume stdin** — feed a prompt (`--prompt-file - < file` / heredoc / inline arg) or redirect `< /dev/null`. A bare `codex exec` inherits the TTY and hangs. (auto-pilot's reviewers already do this; applies to any new codex call.)
