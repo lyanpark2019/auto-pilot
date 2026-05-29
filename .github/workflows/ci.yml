@@ -76,6 +76,15 @@ jobs:
       - name: install bats
         run: sudo apt-get update && sudo apt-get install -y bats
 
+      # Pin shellcheck to the dev version. The runner's preinstalled shellcheck
+      # drifts from local, so the in-test `shellcheck -S style` gate is otherwise
+      # non-reproducible (passes on dev 0.11.0, fails on the runner's older build).
+      - name: install shellcheck 0.11.0 (pinned)
+        run: |
+          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz | tar -xJ
+          sudo install -m755 shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
+          shellcheck --version | grep version
+
       - name: bats (ARL orchestration + helpers)
         working-directory: skills/adversarial-review-loop
         run: bats tests/
