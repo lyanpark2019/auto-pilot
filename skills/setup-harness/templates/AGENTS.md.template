@@ -1,0 +1,50 @@
+# AGENTS.md
+
+> AAIF-standard agent instructions. Read by Codex, Cursor, Devin, GitHub Copilot, Gemini CLI.
+> Companion to `CLAUDE.md` (Claude Code-specific). Keep both in sync — see "Sync rules" below.
+
+{ONE-LINE PROJECT DESCRIPTION}
+
+## Commands
+```bash
+{BUILD_CMD}
+{TEST_CMD}
+{LINT_CMD}
+```
+
+## Routing
+- ADRs: `docs/adr/`
+- Linter rules: `{CONFIG_FILE}`
+- Progress (resume here): `.claude/PROGRESS.json` (shared with Claude Code)
+
+## 절대 금지 (Prohibitions)
+| 금지 | 이유 (ADR/PR/incident) |
+|------|------------------------|
+| `git commit --no-verify` | bypasses pre-commit linter |
+| `--dangerously-skip-permissions` | disables safety hooks |
+| `git add -A` / `git add .` | risk committing secrets — explicit filenames only |
+| Edit `.env` / SSH keys / `*.pem` | secret exposure |
+| Edit linter/type config to silence error | fix the code, not the rule |
+| Source files > 300 lines | SRP violation — split |
+
+## Codex-specific notes
+- Hooks: `.codex/hooks.json` (covers SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop — Bash-only)
+- Sandbox: each task runs in an isolated cloud container; `enableAllProjectMcpServers: false` not applicable (Codex is closed-room by design)
+- Async parallel: use `codex cloud exec` for multi-task throughput
+
+## Sync rules
+
+`CLAUDE.md` (Claude Code) and `AGENTS.md` (everyone else) MUST agree on:
+- Commands (build/test/lint)
+- Prohibitions table (left column)
+- ADR location
+- Project description
+
+They MAY differ on:
+- Tool-specific hook config (Claude Code: `.claude/settings.local.json`; Codex: `.codex/hooks.json`)
+- Plan Mode references (Claude Code only)
+- MCP server lists (each tool has its own format)
+
+When updating one, update the other. Run `.claude/scripts/drift-scan.sh` to catch divergence.
+
+> Target: ≤50 lines each. If you can derive it from `package.json` / `pyproject.toml` / git log, delete the line.

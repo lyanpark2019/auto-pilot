@@ -1,0 +1,55 @@
+# Lefthook config — fast Go-based pre-commit runner.
+# Humans can skip with `git commit --no-verify`. Agents cannot — blocked by guard-bash.sh.
+# Deliberate dual standard: flexible for humans, strict for agents.
+
+pre-commit:
+  parallel: true
+  commands:
+    # TypeScript / JavaScript
+    biome-format:
+      glob: "*.{ts,tsx,js,jsx,json,css}"
+      run: npx --no biome format --write {staged_files} && git add {staged_files}
+    oxlint:
+      glob: "*.{ts,tsx,js,jsx}"
+      run: npx --no oxlint {staged_files}
+    tsc:
+      glob: "*.{ts,tsx}"
+      run: npx tsc --noEmit
+      stage_fixed: true
+
+    # Python
+    ruff:
+      glob: "*.py"
+      run: ruff check --fix {staged_files} && ruff format {staged_files} && git add {staged_files}
+    mypy:
+      glob: "*.py"
+      run: mypy {staged_files}
+
+    # Go
+    gofumpt:
+      glob: "*.go"
+      run: gofumpt -w {staged_files} && git add {staged_files}
+    golangci:
+      glob: "*.go"
+      run: golangci-lint run --fast --new-from-rev=HEAD~1
+
+    # Rust
+    rustfmt:
+      glob: "*.rs"
+      run: rustfmt --edition 2021 {staged_files} && git add {staged_files}
+    clippy:
+      glob: "*.rs"
+      run: cargo clippy --quiet -- -D warnings
+
+    # Secrets sweep
+    gitleaks:
+      run: gitleaks protect --staged --no-banner
+
+pre-push:
+  commands:
+    full-test:
+      run: |
+        if [ -f package.json ]; then npm test --silent; fi
+        if [ -f pyproject.toml ]; then pytest -x -q; fi
+        if [ -f go.mod ]; then go test ./...; fi
+        if [ -f Cargo.toml ]; then cargo test --quiet; fi

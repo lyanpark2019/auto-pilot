@@ -1,0 +1,108 @@
+{
+  "skill_name": "setup-harness",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "이 프로젝트에 Claude Code 하네스를 세팅해줘. 기존 CLAUDE.md가 있으니까 거기에 맞춰서 보강해줘. 특히 hook이랑 drift detection 위주로.",
+      "expected_output": "Merge mode: existing CLAUDE.md enhanced (not overwritten), hooks added to settings.local.json without conflicting existing hooks, drift detection actually run via scripts/drift-scan.sh, .mcp.json checked against existing one",
+      "project_dir": "/Users/lyan/Documents/Project/sportic365-API",
+      "expectations": [
+        "Detected existing CLAUDE.md and switched to merge mode (enhance, not overwrite)",
+        "Did NOT overwrite or remove existing prohibitions in root CLAUDE.md",
+        "Proposed additions only — new prohibitions or missing hooks",
+        "Read existing .claude/settings.local.json and merged hooks via (event, matcher, command) tuple dedupe without duplicating existing entries",
+        "Proposed hook scripts ship from skills/setup-harness/scripts/ with valid shebang and chmod +x via bootstrap.sh",
+        "PostToolUse hook returns docs-compliant JSON with hookSpecificOutput.additionalContext (not plain stdout)",
+        "Actually executed grep/scan commands against the codebase via drift-scan.sh (not just designed future automation)",
+        "Checked existing .mcp.json and only proposed additions for missing MCP servers, with MCP-tax warning if Playwright MCP proposed for self-test loop",
+        "Presented a verification summary at the end with pass/fail per component"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "set up claude code harness for this project. it's a Next.js app with Supabase and Tailwind. we've had issues with people pushing to main directly and forgetting to run ESLint.",
+      "expected_output": "Fresh harness: root CLAUDE.md pointer-style ≤50 lines with Next.js/Supabase prohibitions, PostToolUse Biome+Oxlint hook (not ESLint due to speed), PreToolUse guard-bash.sh blocking force-push to main, .mcp.json with supabase only (no Playwright MCP — recommend CLI), folder-level CLAUDE.md for app/api or similar",
+      "project_dir": "/Users/lyan/Documents/Project/sportic365-web",
+      "expectations": [
+        "Detected Next.js + Supabase + Tailwind from package.json",
+        "Root CLAUDE.md created/merged ≤50 lines, pointer-style (Commands, Routing, Prohibitions, folder table)",
+        "Included prohibition about direct push to main with reason linking to incident or ADR",
+        "Recommended Biome + Oxlint (not ESLint) for PostToolUse based on 50-100x speed advantage",
+        "PostToolUse hook emits hookSpecificOutput.additionalContext JSON, not plain stdout",
+        "Created .mcp.json with supabase MCP server entry; if browser testing needed, recommends Playwright CLI not MCP (cited 4x token efficiency)",
+        "guard-bash.sh installed: blocks force-push to main/master/prod, blocks --no-verify, blocks git add -A",
+        "protect-lint-config.sh installed: blocks edits to .eslintrc/biome.json/tsconfig.json (prevents agent silencing lint)",
+        "Created at least one folder-level CLAUDE.md for app/api/ or similar high-traffic dir",
+        "Ran bash .claude/scripts/drift-scan.sh at the end and reported findings"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "이 빈 프로젝트에 Claude Code 하네스 구성해줘. Python/FastAPI 프로젝트인데 아직 시작 단계야. 기본적인 금지사항이랑 hook 세팅해줘.",
+      "expected_output": "Fresh harness for empty project: root CLAUDE.md with sensible defaults proportional to size, Ruff PostToolUse + Stop quality gate hooks, no excessive folder-level CLAUDE.md (project is empty), minimal .mcp.json, recommends MVH Week 1 only (not full Month 3+ stack)",
+      "project_dir": "/tmp/test-project",
+      "expectations": [
+        "Detected Python + FastAPI from pyproject.toml",
+        "Created root CLAUDE.md ≤50 lines, pointer-style",
+        "Prohibition table has at least 2 entries with reasons (not empty placeholders)",
+        "PostToolUse Ruff hook + Stop quality gate hook (ruff + mypy + pytest), with hookSpecificOutput.additionalContext format",
+        "guard-bash.sh installed for git safety (block destructive operations, --no-verify, git add -A)",
+        "Did NOT create excessive folder-level CLAUDE.md files (project is nearly empty)",
+        "Did NOT hallucinate incident history or prohibitions from non-existent git log",
+        "Prohibitions are proportional to project complexity (not prescribing 4-layer architecture or 10+ rules for a single-file project)",
+        "Recommended MVH Week 1 only — did not push Plankton pattern, multi-agent GAN, or full 6-layer security on empty project",
+        "Presented final verification summary"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Audit my existing harness — find gaps vs March 2026 best practices.",
+      "expected_output": "Comprehensive audit: 8-step verification, compares against nyosegawa/Anthropic/dwarvesf research. Specifically checks for: hookSpecificOutput.additionalContext JSON format (not stdout), config protection hook, --no-verify block, fast linters vs ESLint, 6-layer security, CLAUDE.md ≤50 lines, pointer-style.",
+      "project_dir": "any-existing",
+      "expectations": [
+        "Read existing CLAUDE.md and reports if >50 lines with specific lines that could be removed (inferable from code)",
+        "Checks if PostToolUse hook emits hookSpecificOutput.additionalContext JSON (vs plain stdout — common v1 mistake)",
+        "Checks if protect-lint-config.sh or equivalent is installed (prevents agent silencing lint via config edit)",
+        "Checks if guard-bash.sh blocks both --no-verify and --dangerously-skip-permissions",
+        "Checks if linter is Rust-based (Oxlint/Biome/Ruff) — flags ESLint+Prettier in PostToolUse as too slow",
+        "Checks for 6-layer security: deny rules / PreToolUse / sandbox usage / scan-secrets / injection-defender / CLAUDE.md prose",
+        "Checks if .gitignore covers .claude/.qg-last-run, .claude/logs/, .claude/PROGRESS.json",
+        "Checks if docs/adr/ exists and ADRs follow archgate pattern (immutable, paired with rule)",
+        "Reports MCP tax score: warns if Playwright MCP is used for self-test loops (recommend CLI)",
+        "Outputs concrete pass/fail per check with fix command for each fail"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "내 프로젝트에 GAN harness 패턴 (Planner/Generator/Evaluator) 적용해줘. 멀티 시간 자동 코딩 가능하게.",
+      "expected_output": "Multi-agent harness setup based on Anthropic March 2026 paper: Planner expands prompt to spec, Generator builds feature-by-feature, Evaluator uses Playwright CLI for QA. Sprint contracts between agents. Includes cost guardrails ($200/6hr baseline).",
+      "project_dir": "any",
+      "expectations": [
+        "References Anthropic's Mar 2026 harness-design post (Prithvi Rajasekaran)",
+        "Sets up 3 subagents: planner, generator, evaluator with file-based handoff",
+        "Sprint contract negotiation step between Planner and Generator before code",
+        "Evaluator uses Playwright CLI (NOT MCP — cites token cost) for E2E verification",
+        "Cost guardrail: HARNESS_DAILY_BUDGET_USD env var or budget-guard hook",
+        "Warns that this is justified only when task sits at model's capability boundary (Opus 4.6+ may not need multi-agent for tasks under solo capability)",
+        "Provides decision rubric: strip the evaluator when next-gen model handles task solo",
+        "Sets up context reset OR compaction strategy based on Sonnet vs Opus context-anxiety differences"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "We're shipping a public-facing API. Harden the harness for security.",
+      "expected_output": "6-layer security setup: permissions.deny global, guard-bash.sh, /sandbox profile, scan-secrets.sh UserPromptSubmit, injection-defender.sh PostToolUse, CLAUDE.md security section. Plus secret rotation runbook + audit log.",
+      "project_dir": "any-api",
+      "expectations": [
+        "Installs all 6 security layers (deny rules, PreToolUse Bash, sandbox, UserPromptSubmit, PostToolUse, CLAUDE.md)",
+        "Generates sandbox.sb profile for macOS or bubblewrap script for Linux based on OS detection",
+        "Sets enableAllProjectMcpServers: false in user-global settings",
+        "Installs scan-secrets.sh covering AWS/GH/Anthropic/OpenAI/Stripe/Slack/PEM/BIP39 patterns",
+        "Provides secret rotation runbook in references/sandbox-and-security.md",
+        "Adds .claude/logs/ to .gitignore and sets up audit log rotation",
+        "Mentions EU AI Act (Aug 2, 2026) compliance requirements if relevant scope",
+        "Does NOT recommend disabling any layer for convenience — each layer has documented bypass paths"
+      ]
+    }
+  ]
+}

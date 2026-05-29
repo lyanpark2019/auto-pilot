@@ -1,0 +1,43 @@
+# CLAUDE.md
+
+{ONE-LINE PROJECT DESCRIPTION}
+
+@AGENTS.md
+
+## Commands
+```bash
+# build/test/lint — 3 lines max
+{BUILD_CMD}
+{TEST_CMD}
+{LINT_CMD}
+```
+
+## Routing
+- ADRs: `docs/adr/`
+- Linter rules: `{CONFIG_FILE}`
+- Skills: `.claude/skills/`
+- Hooks: `.claude/scripts/`, registered in `.claude/settings.local.json`
+- Progress (resume here): `.claude/PROGRESS.json`
+
+## 절대 금지 (Prohibitions)
+| 금지 | 이유 (ADR/PR/incident) |
+|------|------------------------|
+| `git commit --no-verify` | bypasses pre-commit linter — see `.claude/scripts/guard-bash.sh` |
+| `--dangerously-skip-permissions` | disables safety hooks |
+| `git add -A` / `git add .` | risk committing secrets — use explicit filenames |
+| Edit `.env` / SSH keys / `*.pem` | secret exposure |
+| Edit linter/type config to silence error | fix the code, not the rule |
+| Source files > 300 lines | SRP violation — split |
+
+## 폴더별 상세
+
+(none yet — add folder-level CLAUDE.md files only when a folder is incident-heavy or owns a distinct layer)
+
+## Session start checklist
+1. `pwd` — verify dir
+2. `git log --oneline -20` — what happened last session
+3. `cat .claude/PROGRESS.json` — current task state
+4. Run sanity check on dev server
+
+> This file is a **pointer**, not documentation. Code, tests, and ADRs are the source of truth.
+> Target: ≤50 lines. If you can derive it from `package.json` / `pyproject.toml` / git log, delete the line.
