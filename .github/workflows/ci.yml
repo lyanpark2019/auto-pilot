@@ -77,14 +77,14 @@ jobs:
         run: bash scripts/quality/check-module-size.sh
 
   bats:
-    name: bats gates (adversarial-review-loop helpers)
+    name: bats gates (adversarial-review-loop + setup-harness)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
 
-      - name: install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
+      - name: install bats + jq
+        run: sudo apt-get update && sudo apt-get install -y bats jq
 
       # Pin shellcheck to the dev version. The runner's preinstalled shellcheck
       # drifts from local, so the in-test `shellcheck -S style` gate is otherwise
@@ -97,6 +97,10 @@ jobs:
 
       - name: bats (ARL orchestration + helpers)
         working-directory: skills/adversarial-review-loop
+        run: bats tests/
+
+      - name: bats (setup-harness hooks + CLI)
+        working-directory: skills/setup-harness
         run: bats tests/
 
   manifest:
