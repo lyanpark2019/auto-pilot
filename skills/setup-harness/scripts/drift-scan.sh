@@ -4,7 +4,7 @@
 set -uo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 
 echo "=========================================="
 echo "Drift scan — $(date -Iseconds)"
@@ -89,8 +89,8 @@ fi
 echo ""
 echo "[4/6] Forbidden patterns"
 # git add -A in scripts (exclude .claude/scripts where the pattern is a regex check, not actual usage)
-hits=$(find . -path ./node_modules -prune -o -path ./.git -prune -o -path ./.claude/scripts -prune -o -name '*.sh' -print 2>/dev/null | \
-   xargs grep -lE '^[[:space:]]*git +add +(-A|\.|\-\-all)([^a-zA-Z0-9]|$)' 2>/dev/null | head -5)
+hits=$(find . -path ./node_modules -prune -o -path ./.git -prune -o -path ./.claude/scripts -prune -o -name '*.sh' -print0 2>/dev/null | \
+   xargs -0 grep -lE '^[[:space:]]*git +add +(-A|\.|\-\-all)([^a-zA-Z0-9]|$)' 2>/dev/null | head -5)
 if [ -n "$hits" ]; then
   warn "'git add -A/.' found in: $hits"
 fi
@@ -103,8 +103,8 @@ fi
 
 # Source files >300 lines
 big=$(find . \( -path ./node_modules -o -path ./.git -o -path ./.venv -o -path ./dist -o -path ./build \) -prune -o \
-  \( -name '*.py' -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.go' -o -name '*.rs' \) -print 2>/dev/null | \
-  xargs wc -l 2>/dev/null | awk '$1>300 && $2!="total"{print $2 "("$1")"}' | head -5)
+  \( -name '*.py' -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.go' -o -name '*.rs' \) -print0 2>/dev/null | \
+  xargs -0 wc -l 2>/dev/null | awk '$1>300 && $2!="total"{print $2 "("$1")"}' | head -5)
 [ -n "$big" ] && warn "files >300 lines: $big"
 
 ok "checked"

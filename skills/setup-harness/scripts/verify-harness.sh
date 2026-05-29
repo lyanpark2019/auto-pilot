@@ -5,7 +5,7 @@
 set -uo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 fails=0
 warns=0
 

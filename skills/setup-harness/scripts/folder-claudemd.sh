@@ -15,7 +15,7 @@
 set -uo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 THRESHOLD="${FOLDER_THRESHOLD:-10}"
 DRY_RUN="${DRY_RUN:-0}"
 

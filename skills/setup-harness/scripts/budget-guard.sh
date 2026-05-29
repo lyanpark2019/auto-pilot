@@ -9,7 +9,7 @@
 # For authoritative Anthropic billing, run `scripts/poll-cost.sh` cron and pipe into spend.json.
 
 set -uo pipefail
-input="$(cat 2>/dev/null || echo '{}')"
+cat >/dev/null 2>&1 || true
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 SPEND="$ROOT/.claude/spend.json"
 
@@ -19,7 +19,6 @@ if [ -f "$HARNESS_BUDGET" ]; then
   max=$(jq -r '.max_usd // 0' "$HARNESS_BUDGET")
   spent=$(jq -r '.spent_usd // 0' "$HARNESS_BUDGET")
   if [ -n "$max" ] && [ "$max" != "0" ]; then
-    ratio=$(awk "BEGIN{print ($spent / $max)}" 2>/dev/null || echo "0")
     over=$(awk "BEGIN{print ($spent > $max)}" 2>/dev/null || echo "0")
     if [ "$over" = "1" ]; then
       echo "BLOCKED: harness budget exceeded ($spent / $max USD). Halt or raise HARNESS_MAX_USD." >&2

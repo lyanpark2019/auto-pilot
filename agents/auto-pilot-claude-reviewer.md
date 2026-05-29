@@ -38,6 +38,14 @@ Per `agents/claude-reviewer.md` legacy checklist:
 7. **Comments discipline** — WHY only
 8. **Test reality**
 
+## Evidence discipline (anti-guess)
+
+Every finding MUST cite an exact `file:line` you confirmed with `Read`/`Grep` this run. Never guess identifiers, symbol names, or paths from memory.
+
+- Any **count** you state (files touched, test cases, occurrences) must come from a `git diff --name-only` / `grep -c` / `find | wc -l` you actually ran — paste the command. Never estimate or round.
+- If you cannot cite a finding to real code, DROP it. An unverifiable finding is a false positive, and false positives cost a whole review round.
+- Prefer fewer, cited findings over many speculative ones.
+
 ## Output (write to `$AUTO_PILOT_OUTPUT_DIR/review.json`)
 
 Use `schemas/review.schema.json` shape. Required fields: `schema_version, reviewer, contract_id, verdict, scope_check, findings, verify_rerun, reviewer_meta`. Compute `finding_hash` via `_subagent_helpers.compute_finding_hash(file, line, issue)`.
