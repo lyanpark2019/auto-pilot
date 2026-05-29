@@ -1,7 +1,7 @@
 {
   "name": "auto-pilot",
-  "version": "0.3.0",
-  "description": "Autonomous PM-Worker-Reviewer development loop. Opus 4.7 PM dispatches Sonnet 4.6 (1M) workers in parallel, gates each ticket through Codex+Claude dual adversarial review, runs phase verify checklists (test/lint/typecheck/build), commits and advances phases until spec is complete. Full auto, no confirms.",
+  "version": "0.4.0",
+  "description": "Autonomous PM-Worker-Reviewer development loop. Opus 4.7 PM dispatches Sonnet 4.6 (1M) workers in parallel, gates each ticket through Codex+Claude dual adversarial review, runs phase verify checklists (test/lint/typecheck/build), commits and advances phases until spec is complete. Full auto, no confirms. Also bundles the author's quality/review, harness-doc, and debugging skills + safety hooks as a personal toolkit.",
   "author": {
     "name": "lyan",
     "email": "art5@fyqro.com"

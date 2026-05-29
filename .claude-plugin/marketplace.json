@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "auto-pilot-marketplace",
-  "description": "lyan's plugins — the auto-pilot autonomous PM-Worker-Reviewer development loop.",
+  "description": "lyan's plugins \u2014 the auto-pilot autonomous PM-Worker-Reviewer development loop.",
   "owner": {
     "name": "lyan",
     "email": "art5@fyqro.com"
@@ -10,10 +10,14 @@
     {
       "name": "auto-pilot",
       "source": "./",
-      "description": "Self-driving development loop: Opus PM + Sonnet 1M workers + Codex/Claude dual review + phase gates",
-      "version": "0.3.0",
+      "description": "auto-pilot dev loop + bundled personal toolkit (quality/review, doc-drift, debugging skills + safety hooks).",
+      "version": "0.4.0",
       "category": "automation",
-      "tags": ["autonomous", "multi-agent", "adversarial-review"]
+      "tags": [
+        "autonomous",
+        "multi-agent",
+        "adversarial-review"
+      ]
     }
   ]
 }
