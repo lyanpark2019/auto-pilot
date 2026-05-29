@@ -23,7 +23,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 | Wrong approach (83) | Source-first debug rule baked into PM contract |
 | Buggy code (71) | Dual reviewer gate (Codex + cold Claude) blocks merge |
 | Path typos (5+) | `preflight-path.sh` SessionStart hook |
-| ruff --fix broke composition root (2+, 276 tests) | `pre-edit-composition-root.sh` blocks edits to `__init__.py`/re-exports |
+| ruff --fix broke composition root (2+, 276 tests) | `pre-edit-composition-root.sh` blocks edits to *existing, populated* `__init__.py`/re-exports (new/empty inits pass) |
 | SSL cascading outages | `pre-bash-guard.sh` blocks chained SSL config commands |
 | Interactive TUI hung shell | `pre-bash-guard.sh` blocks `claude doctor` etc. |
 | Verdict reversal (B4/B5 class) | Both reviewers must independently APPROVE |

@@ -76,8 +76,10 @@ python3 scripts/orchestrator.py stop
 python3 scripts/_dogfood_gate.py --tier 1 --repo-root . --phases 2
 
 # Hooks: feed sample JSON to stdin
-echo '{"tool_input":{"file_path":"foo/__init__.py"}}' | hooks/pre-edit-composition-root.sh
-# should exit 2 and print "BLOCKED"
+# composition-root guard fires only on an EXISTING, non-trivial root (new/empty __init__.py passes)
+mkdir -p /tmp/cr-pkg && printf 'from .x import Y\n' > /tmp/cr-pkg/__init__.py
+echo '{"tool_input":{"file_path":"/tmp/cr-pkg/__init__.py"}}' | hooks/pre-edit-composition-root.sh  # populated → exit 2 "BLOCKED"
+echo '{"tool_input":{"file_path":"foo/__init__.py"}}' | hooks/pre-edit-composition-root.sh           # not-yet-created → exit 0 (no content to corrupt)
 
 echo '{"tool_input":{"command":"claude doctor"}}' | hooks/pre-bash-guard.sh
 # should exit 2 and print "BLOCKED"

@@ -1,10 +1,10 @@
 ---
 name: harness-drift
 description: Run the drift scanner — 6 checks for stale pointers, missing hook scripts, MCP↔deps mismatch, forbidden patterns in code, ADR coverage, security baseline.
-allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/scripts/drift-scan.sh)
+allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/scripts/drift-scan.sh), Bash(bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/drift-scan.sh)
 ---
 
-!`bash ${CLAUDE_PROJECT_DIR}/.claude/scripts/drift-scan.sh`
+!`if [ -x "${CLAUDE_PROJECT_DIR}/.claude/scripts/drift-scan.sh" ]; then bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/drift-scan.sh"; else echo "(no project-local .claude/scripts/drift-scan.sh — using bundled scanner; run /harness-setup to install the project hook)"; bash "${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/drift-scan.sh"; fi`
 
 This is the **executable** version of SKILL.md Step 4. Run it any time — pre-commit, weekly, before a release. Outputs a 6-check report:
 

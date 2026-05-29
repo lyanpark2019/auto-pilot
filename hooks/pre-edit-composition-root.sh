@@ -28,9 +28,16 @@ if [[ "${AUTO_PILOT_FORCE_COMPOSITION_ROOT:-0}" == "1" ]]; then
   exit 0
 fi
 
-# Patterns considered composition roots / re-export modules
+# Patterns considered composition roots / re-export modules.
+# Only guard an EXISTING, non-trivial root: creating a new package __init__.py — or
+# editing an empty one — cannot trigger the bulk-formatter corruption this guards
+# against (no re-export / wiring content yet to break). Mirrors the TS-barrel branch
+# below, which acts only when the file exists AND carries re-export lines.
 case "$file_path" in
   */__init__.py|*/composition_root.py|*/composition.py|*/container.py|*/wiring.py)
+    if [[ ! -f "$file_path" ]] || ! grep -qE '^[[:space:]]*[^#[:space:]]' "$file_path" 2>/dev/null; then
+      exit 0
+    fi
     cat >&2 <<EOF
 auto-pilot: BLOCKED edit to composition root: $file_path
 
