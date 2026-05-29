@@ -73,11 +73,19 @@ class TestPreflightPath:
         assert "typo" in r.stderr
 
 
+def _make_root(cwd: Path, rel: str, body: str = "from .x import Y\n__all__ = ['Y']\n") -> str:
+    f = cwd / rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(body)
+    return rel
+
+
 class TestPreEditCompositionRoot:
     def test_blocks_init_py(self, hooks_dir, in_tmp_cwd, clean_env):
+        rel = _make_root(in_tmp_cwd, "pkg/__init__.py")
         r = _run_hook(
             hooks_dir / "pre-edit-composition-root.sh",
-            {"tool_input": {"file_path": "pkg/__init__.py"}},
+            {"tool_input": {"file_path": rel}},
             cwd=in_tmp_cwd,
             env=_strip_bypass(),
         )
@@ -89,18 +97,41 @@ class TestPreEditCompositionRoot:
         ["app/composition_root.py", "src/container.py", "lib/wiring.py", "x/composition.py"],
     )
     def test_blocks_other_roots(self, hooks_dir, in_tmp_cwd, clean_env, path):
+        rel = _make_root(in_tmp_cwd, path, body="container = wire()\n")
         r = _run_hook(
             hooks_dir / "pre-edit-composition-root.sh",
-            {"tool_input": {"file_path": path}},
+            {"tool_input": {"file_path": rel}},
             cwd=in_tmp_cwd,
             env=_strip_bypass(),
         )
         assert r.returncode == 2
 
-    def test_bypass_env_allows(self, hooks_dir, in_tmp_cwd):
+    def test_new_init_creation_passes(self, hooks_dir, in_tmp_cwd, clean_env):
+        """Creating a new (not-yet-existing) package __init__.py is not bulk-format risk."""
         r = _run_hook(
             hooks_dir / "pre-edit-composition-root.sh",
             {"tool_input": {"file_path": "pkg/__init__.py"}},
+            cwd=in_tmp_cwd,
+            env=_strip_bypass(),
+        )
+        assert r.returncode == 0
+
+    def test_empty_existing_init_passes(self, hooks_dir, in_tmp_cwd, clean_env):
+        """An empty / comment-only __init__.py has no re-exports to corrupt."""
+        rel = _make_root(in_tmp_cwd, "pkg/__init__.py", body="# package marker\n\n")
+        r = _run_hook(
+            hooks_dir / "pre-edit-composition-root.sh",
+            {"tool_input": {"file_path": rel}},
+            cwd=in_tmp_cwd,
+            env=_strip_bypass(),
+        )
+        assert r.returncode == 0
+
+    def test_bypass_env_allows(self, hooks_dir, in_tmp_cwd):
+        rel = _make_root(in_tmp_cwd, "pkg/__init__.py")
+        r = _run_hook(
+            hooks_dir / "pre-edit-composition-root.sh",
+            {"tool_input": {"file_path": rel}},
             cwd=in_tmp_cwd,
             env={"AUTO_PILOT_FORCE_COMPOSITION_ROOT": "1"},
         )
@@ -150,12 +181,15 @@ class TestPreEditCompositionRoot:
 
     def test_handles_multiedit_input_shape(self, hooks_dir, in_tmp_cwd, clean_env):
         """When invoked via the matcher, script must extract file_path from MultiEdit input."""
+        root = in_tmp_cwd / "pkg" / "__init__.py"
+        root.parent.mkdir(parents=True, exist_ok=True)
+        root.write_text("from .x import Y\n")
         r = _run_hook(
             hooks_dir / "pre-edit-composition-root.sh",
             {
                 "tool_name": "MultiEdit",
                 "tool_input": {
-                    "file_path": "/tmp/some/pkg/__init__.py",
+                    "file_path": str(root),
                     "edits": [{"old_string": "x", "new_string": "y"}],
                 },
             },
