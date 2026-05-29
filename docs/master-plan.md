@@ -15,6 +15,8 @@ auto-pilot is an autonomous development loop that drives **spec-based feature / 
 
 Why brownfield: every friction guard presupposes existing code (composition-root breakage, scope-drift REJECT, source-first debug, worktree + atomic merge to `$ROOT`). Born from 381-session `/insights` friction — all existing-project maintenance accidents.
 
+> **Scope note (2026-05-29):** a brief mid-session idea to make auto-pilot a multi-mode "build/review/perfect" platform was **dropped**. The skill/hook → plugin packaging & management concern moved to a **separate new project, `plugin-forge`** (a plugin generator that composes managed plugins from the user's existing hand-made skills/hooks). auto-pilot stays build-only and is simply one of the plugins `plugin-forge` will manage.
+
 ## 2. Skill integration map
 
 Each loop stage routes to a skill/agent. This is the "system that integrates various skills" view.
