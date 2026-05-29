@@ -32,7 +32,7 @@ _init_repo() {
 @test "script passes shellcheck (style+errors)" {
   command -v shellcheck >/dev/null || skip "shellcheck not installed"
   run shellcheck -S style "$HELPERS"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
 
 @test "worktree_path: emits convention path" {
