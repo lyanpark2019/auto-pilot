@@ -54,8 +54,9 @@ When changing agent contracts or hooks:
 ```bash
 # Full suite (199 tests, mypy + ruff clean)
 python3 -m pytest tests/ -q
-python3 -m mypy scripts/
-python3 -m ruff check scripts/ tests/
+python3 -m mypy scripts/ hooks/
+python3 -m ruff check scripts/ tests/ hooks/
+python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py  # bundled hook self-tests (script-style, not pytest)
 
 # Smoke: orchestrator helper
 python3 scripts/orchestrator.py init --spec docs/architecture.md --max-workers 4

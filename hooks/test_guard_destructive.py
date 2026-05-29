@@ -6,6 +6,7 @@ JSON via stdin. Test payloads are constructed in Python (not via shell
 echo) so the bash invocation of THIS runner doesn't itself contain
 destructive patterns that the hook would block.
 """
+import base64
 import json
 import subprocess
 import sys
@@ -19,9 +20,8 @@ HOOK = str(Path(__file__).parent / "guard-destructive.py")
 # substrings appear in this file as plain text — even though the hook
 # only scans Bash tool calls, not file contents, keeping the strings
 # out of plaintext makes future code review of the test file safe.
-import base64
 
-def b(s):
+def b(s: str) -> str:
     return base64.b64decode(s).decode()
 
 CASES = [
@@ -92,9 +92,9 @@ CASES = [
 ]
 
 
-def run_case(label, expect, command):
+def run_case(label: str, expect: str, command: str | None) -> bool:
     if command is None:
-        payload = {"tool_name": "Edit", "tool_input": {"file_path": "/tmp/x"}}
+        payload: dict[str, object] = {"tool_name": "Edit", "tool_input": {"file_path": "/tmp/x"}}
     else:
         payload = {"tool_name": "Bash", "tool_input": {"command": command}}
 
@@ -117,7 +117,7 @@ def run_case(label, expect, command):
     return pass_fail == "PASS"
 
 
-def main():
+def main() -> None:
     results = [run_case(*c) for c in CASES]
     passed = sum(results)
     total = len(results)

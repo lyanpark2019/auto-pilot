@@ -22,6 +22,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 
 HOOK = str(pathlib.Path(__file__).parent / "codex-conductor-guard.py")
 
@@ -45,18 +46,19 @@ def _setup_repo(tmp: str, sub: str = "repo", with_marker: bool = True) -> pathli
     return repo
 
 
-CASES = []
+CaseFn = Callable[[str], tuple[str, str]]
+CASES: list[tuple[str, CaseFn]] = []
 
 
-def case(label):
-    def deco(fn):
+def case(label: str) -> Callable[[CaseFn], CaseFn]:
+    def deco(fn: CaseFn) -> CaseFn:
         CASES.append((label, fn))
         return fn
     return deco
 
 
 @case("A no marker -> ALLOW")
-def _a(tmp):
+def _a(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp, with_marker=False)
     f = repo / "main.py"
     f.touch()
@@ -64,7 +66,7 @@ def _a(tmp):
 
 
 @case("B marker + .py -> DENY")
-def _b(tmp):
+def _b(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp)
     f = repo / "main.py"
     f.touch()
@@ -72,7 +74,7 @@ def _b(tmp):
 
 
 @case("C marker + .md -> ALLOW")
-def _c(tmp):
+def _c(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp)
     f = repo / "README.md"
     f.touch()
@@ -80,13 +82,13 @@ def _c(tmp):
 
 
 @case("D marker + marker file itself -> ALLOW")
-def _d(tmp):
+def _d(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp)
     return _verdict(str(repo / ".codex-conductor")), "ALLOW"
 
 
 @case("E marker + repo plans/main.py -> ALLOW")
-def _e(tmp):
+def _e(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp)
     (repo / "plans").mkdir()
     f = repo / "plans" / "main.py"
@@ -95,7 +97,7 @@ def _e(tmp):
 
 
 @case("F ancestor named 'plans' must NOT bypass -> DENY")
-def _f(tmp):
+def _f(tmp: str) -> tuple[str, str]:
     # Marker INSIDE a path that contains a `plans` ancestor segment.
     # Old buggy logic bypassed via "plans" in parts; correct logic
     # only bypasses when `plans/` is a direct subdir of the marker root.
@@ -108,7 +110,7 @@ def _f(tmp):
 
 
 @case("G marker + .json config (non-code, non-doc) -> ALLOW")
-def _g(tmp):
+def _g(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp)
     f = repo / "config.json"
     f.touch()
@@ -116,7 +118,7 @@ def _g(tmp):
 
 
 @case("H Bash tool (non-targeted) -> ALLOW")
-def _h(tmp):
+def _h(tmp: str) -> tuple[str, str]:
     repo = _setup_repo(tmp)
     f = repo / "main.py"
     f.touch()
