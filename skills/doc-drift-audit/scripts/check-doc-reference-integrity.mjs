@@ -108,28 +108,49 @@ function hasMarkerNearby(lines, idx) {
   return false;
 }
 
+// Split a backtick token into { refPath, suffix }. Handles every anchor style
+// seen in the wild: `path`, `path:NNN`, `path:NNN-MMM`, `path:NNN,MMM,...`
+// (comma lists), `path:symbol` (e.g. `main.py:create_app`). The suffix is
+// everything after the first `:` that follows a known source extension; a
+// non-extension `:` leaves the whole token as the path.
+//
+// Why this matters: the naive `/^(.+?):(\d+)(?:-(\d+))?$/` form only matched a
+// single NNN or NNN-MMM and treated `file.py:33,36,37` as a literal path that
+// "does not exist" — a flood of false positives in repos that cite multi-line
+// anchors. This splitter resolves the path correctly AND line-checks every
+// number in the suffix.
+function splitRef(token) {
+  const cleaned = token.replace(/[),.;]+$/g, ''); // trailing md punctuation (keep `:`)
+  const m = cleaned.match(/^(.+?\.[A-Za-z0-9]+)(?::(.+))?$/);
+  if (m && LINE_SUFFIX_EXT.test(m[1])) {
+    return { refPath: m[1], suffix: m[2] ?? null };
+  }
+  // No recognized extension → a directory / extensionless path; drop any `:tail`.
+  return { refPath: cleaned.replace(/:.*$/, ''), suffix: null };
+}
+
 function checkPathRefs(file, issues) {
   const content = stripFences(fs.readFileSync(path.join(ROOT, file), 'utf8'));
   for (const m of content.matchAll(/`([^`\s]+)`/g)) {
     const token = m[1];
     if (!PATH_PREFIX.test(token) || GLOBBY.test(token)) continue;
-    const lineMatch = token.match(/^(.+?):(\d+)(?:-(\d+))?$/);
-    let refPath = token;
-    let line = null;
-    if (lineMatch && LINE_SUFFIX_EXT.test(lineMatch[1])) {
-      refPath = lineMatch[1];
-      line = Number(lineMatch[3] ?? lineMatch[2]);
-    }
-    refPath = refPath.replace(/[),.;:]+$/g, '');
+    const { refPath, suffix } = splitRef(token);
     const abs = path.join(ROOT, refPath);
     if (!fs.existsSync(abs)) {
       issues.push(`${file}: path reference does not exist: ${refPath}`);
       continue;
     }
-    if (line !== null && fs.statSync(abs).isFile()) {
+    // Line-check only a purely-numeric suffix (NNN, NNN-MMM, NNN,MMM,…); a symbol
+    // suffix like `:create_app` validates the path but cannot be line-checked.
+    if (suffix && /^[\d,\s-]+$/.test(suffix) && fs.statSync(abs).isFile()) {
       const lineCount = fs.readFileSync(abs, 'utf8').split('\n').length;
-      if (line > lineCount) {
-        issues.push(`${file}: line reference past EOF: ${token} (file has ${lineCount} lines)`);
+      for (const nStr of suffix.match(/\d+/g) ?? []) {
+        const n = Number(nStr);
+        if (n > lineCount) {
+          issues.push(
+            `${file}: line reference past EOF: ${refPath}:${suffix} (line ${n} > ${lineCount} lines)`,
+          );
+        }
       }
     }
   }

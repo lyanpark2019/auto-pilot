@@ -104,13 +104,15 @@ Run the project's doc checks + re-grep the retired terms (expect 0 as-current) +
 
 So it can't silently re-drift. Add (or extend) a CI-gated check that fails on the mechanical class:
 1. **Path resolution** — every inline `path/to/file` in contract docs must exist.
-2. **Line range** — `file:NNN` must be ≤ file length (catches refs into a shrunk file).
+2. **Line range** — every line cited in a `file:…` anchor must be ≤ file length (catches refs into a shrunk file). The parser handles all the anchor styles real docs use: `file:NNN`, `file:NNN-MMM`, **`file:NNN,MMM,…` comma lists**, and `file:symbol` (path validated, symbol not line-checked). A naive `:(\d+)` matcher mis-reads `file.py:33,36,37` as a missing path — the bundled guard splits path-from-suffix on the file extension instead and line-checks every number.
 3. **Retired symbols** — a project-supplied list of dead symbols flagged unless an adjacent line (±3) carries a historical marker (removed/retired/legacy/deleted/replaced/consolidated/구/삭제/대체/…).
 4. **Baseline file** — park accepted/conditional refs (e.g. a generated output dir) so the check starts green.
 
 **Bundled implementation:** `scripts/check-doc-reference-integrity.mjs` (in this skill dir) — project-agnostic, no deps, Node built-ins only. Copy it into the target repo's `scripts/` dir, edit the `CONFIG` block at the top (`CONTRACT_DIRS`, `CONTRACT_FILES`, `SOURCE_ROOTS`, `RETIRED_SYMBOLS`, `PATH_PREFIX`, `BASELINE_FILE`) for that repo's layout + language, and wire it into the project's doc-check / CI step. If the repo already has a doc-integrity check, prefer extending its allowlist/patterns over a second file.
 
-Field-tested instance (TS/Next): `sportic365-web/scripts/docs/check-doc-reference-integrity.mjs`, wired into `npm run docs:check` (CI-gated) — useful as a worked example of CONFIG values + a baseline file for conditional refs.
+Field-tested instances:
+- **TS/Next**: `sportic365-web/scripts/docs/check-doc-reference-integrity.mjs`, wired into `npm run docs:check` (CI-gated) — worked example of CONFIG values + a baseline file for conditional refs.
+- **Python/FastAPI**: `clai-api/scripts/docs/check-doc-reference-integrity.mjs`, wired into a `make docs-check` Makefile target + a CI step (ubuntu runners ship Node, so no `setup-node` needed). Its CONFIG sets `SOURCE_EXT = /\.py$/`, scans `src/*/CLAUDE.md` by basename, and adds `.claude/{branding,prompts}` to `CONTRACT_DIRS`. This is where the comma-anchor parser hardening came from (the repo's docs cite `file.py:33,36,37`-style multi-line anchors heavily).
 
 ## Anti-patterns
 
