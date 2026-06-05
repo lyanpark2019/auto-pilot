@@ -43,3 +43,27 @@ def test_write_results_round_trip(tmp_path: Path) -> None:
     data = json.loads(out.read_text())
     assert data["run_id"] == "r1"
     assert data["cases"][0]["case"] == "x"
+
+
+def test_cli_run_smoke_invokes_runner(tmp_path, monkeypatch, capsys):  # type: ignore[no-untyped-def]
+    from evals import cli
+    from evals._types import OracleResult
+
+    # Hermetic: don't depend on the real evals/baseline.json contents.
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps({"cases": {"dogfood-smoke": {"passed": 5, "attempts": 5, "errored": 0}}})
+    )
+    monkeypatch.setattr("evals.cli._BASELINE", baseline)
+    monkeypatch.setattr(
+        "evals.cli.run_case",
+        lambda case_id, **kw: OracleResult("pass", ""),
+    )
+    monkeypatch.setattr("evals.cli.select_cases", lambda d, tier: ["dogfood-smoke"])
+
+    out_path = tmp_path / "r.json"
+    rc = cli.main(["run", "--tier", "smoke", "--repeats", "1", "--out", str(out_path)])
+    assert rc == 0  # cut-1 advisory: always exit 0
+    out = capsys.readouterr().out
+    assert "dogfood-smoke" in out
+    assert out_path.exists()  # results JSON was written
