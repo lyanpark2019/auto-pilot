@@ -1,6 +1,7 @@
 # Design — auto-pilot Evals Harness (SP4)
 
-> Status: DESIGN (v4, adversarially reviewed × 3 rounds). Date: 2026-06-05.
+> Status: DESIGN **APPROVED** (v5, adversarially reviewed × 4 rounds — round 4 = dual
+> APPROVE, 0 new P0/P1). Date: 2026-06-05.
 > Source: brainstorming session. This is sub-project **SP4** of the larger
 > "reliability harness" program (see [Program context](#program-context)).
 > Next step after approval: `writing-plans` → implementation.
@@ -78,7 +79,8 @@ hard gates**, both blocking, neither folded into the other's metric:
 
 - **Gate 1 — Task-success RATE (new, this spec).** Statistical rate over the
   corpus. Each case's oracle asserts the *deliverable* only (producer-agnostic;
-  never reads auto-pilot internals). This is the 97→77 detector.
+  never reads auto-pilot internals). This is the **suite-level** 97→77 detector
+  (per-case-in-isolation drops are advisory-only — see Purpose honesty note).
 - **Gate 2 — Harness-health (existing, kept).** `dogfood_tier1/2` continue as a
   separate binary gate: process invariants (`_dogfood_gate.py`) that passed on
   baseline must still pass. Catches the regression subclass where the deliverable
@@ -151,7 +153,9 @@ interface every `oracle.py` touches — must be concrete, round-3 P1-C):
 @dataclass(frozen=True)
 class RunResult:        # what the runner produces per case attempt
     returncode: int    # headless-loop exit code (0 ok, 2 = no state, 124 = timeout)
-    status: str        # final state.json status: success | failed | running
+    status: str        # final state.json status, full enum (headless-loop.py:200):
+                       #   success | stopped | pivot-needed | failed | cost-cap
+                       #   (non-`success` ⇒ non-pass; oracle reads the deliverable, not status)
     state_path: Path   # the run's .planning/auto-pilot/state.json
     cost_usd: float    # best-effort (_budget.parse_session_usage, may be estimate)
     iters: int         # iterations consumed
@@ -183,13 +187,15 @@ Rules:
   reported **advisory-only** (an optional per-case rate-drop alert, never exit≠0).
   Consequence: the gated baseline rate is ≈1.0 by construction.
 - **Statistic (stdlib `math`, no scipy/numpy — cf. `docs/perf-budget.md`):** compare
-  the new gated-aggregate rate `p_new = Σpass/A` against the baseline gated-aggregate
-  `p_base` using a **two-proportion score (Newcombe/Wilson) interval on the
-  difference** `p_new − p_base` — this accounts for *both* runs' sampling error
-  (round-3: a one-sample Wilson vs a fixed constant discards the baseline's CI).
+  the new gated-aggregate rate `p_new = Σpass/A` (for the gate, `total_attempted = A`)
+  against the baseline gated-aggregate `p_base` using a **two-proportion score
+  (Newcombe/Wilson) interval on the difference** `p_new − p_base` — this accounts for
+  *both* runs' sampling error (round-3: a one-sample Wilson vs a fixed constant
+  discards the baseline's CI).
 - **Regression rule (concrete):** FAIL iff `upper95(p_new − p_base) < −margin`
   (margin default **0.05** absolute). Additionally FAIL if **error-count** rises
-  above baseline error-count + tolerance.
+  above `baseline error-count + tolerance` (**tolerance default 0** — gated baseline
+  error-count is ≈0 on the strict subset).
 - **Arming:** blocking only when `A ≥ 50`; below that the rate gate is **advisory**
   (report, never exit≠0).
 - **Known limit (MDE):** because the gated baseline ≈1.0, at `A=50` the rule only
@@ -226,10 +232,13 @@ otherwise model drift is misattributed as harness regression.
   `scripts/evals/` + a **meta-test** (a known-good case must pass, a deliberately
   broken case must fail) validating the oracle plumbing. Cents, seconds, **no
   agent runs.**
-- **Full eval (expensive, scheduled):** the K×N agent runs. Nightly / pre-release
-  / manual — **not** per-commit. One case ≈ $1–5 and minutes (`dogfood_tier1.sh`
-  caps `--max-cost-usd 5.0`; `_config.py:17` defaults $50/4h). K=5 × N cases =
-  tens of runs ⇒ budget with per-case and total ceilings, **fail-fast on exceed**,
+- **Full eval (expensive, scheduled):** the `K·S` agent runs, where **`S` = all
+  selected cases incl. quarantined** (quarantined cases still run for the advisory
+  track) — `S ≥ C`, so cost is driven by `S`, not the gated subset `C`. Nightly /
+  pre-release / manual — **not** per-commit. One case ≈ $1–5 and minutes
+  (`dogfood_tier1.sh` caps `--max-cost-usd 5.0`; `_config.py:17` defaults $50/4h).
+  `K·S` = tens of runs ⇒ budget with per-case and total ceilings, **fail-fast on
+  exceed**,
   cases parallelized across clones. Cost ceiling granularity is **one iteration**
   (checked at iteration start, accrued at end — `headless-loop.py:204,224`); also
   pass `--max-cost-usd` to inner agent. Cost is best-effort (log-scrape with
@@ -319,6 +328,13 @@ verifying claims against repo file:line.
   two-proportion named but only one-sample Wilson built (→ difference-interval test).
   P2: peak-clone disk cap, `finally` teardown, meta-test fixtures. **Folded → this v4.**
 
-Convergence trend: **P0×3 → P0×0 / structural-P1 → P0×0 / statistics-prose-P1**.
-The architecture stabilized at round 2; round-3 fixes are self-consistency +
-definitional. Remaining items are implementation-grade, captured above.
+- **Round 4 (final gate) → dual APPROVE.** Both reviewers independently re-derived
+  the difference-interval statistics in stdlib (confirmed direction, the 44/50-fires
+  / 45/50-passes MDE boundary, and improvement-immunity) and re-verified every
+  sampled repo claim. **0 new P0/P1.** Only P2 doc-precision nits — all folded → v5
+  (RunResult.status full enum; error `tolerance` default 0; cost symbol `S = C +
+  quarantined`; `total_attempted = A` for the gate; "suite-level" 97→77 label).
+
+Convergence trend: **P0×3 → structural-P1 → statistics-prose-P1 → definitional-P2 →
+APPROVE**. The architecture stabilized at round 2; rounds 3–4 closed self-consistency
++ definitional gaps. Design approved for `writing-plans`.
