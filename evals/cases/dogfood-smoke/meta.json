@@ -1,0 +1,6 @@
+{
+  "tags": ["smoke"],
+  "expected_phases": 2,
+  "added_from": "dogfood",
+  "spec_source": "docs/specs/2026-05-28-dogfood-smoke.md"
+}
