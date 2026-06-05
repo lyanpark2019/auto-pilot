@@ -1,0 +1,8 @@
+{
+  "note": "Cut-1 hand-written baseline. Advisory only (A<50 cannot arm). Replace with a measured baseline (B>=20 per case) in cut 2 before the rate gate becomes blocking.",
+  "model": "TODO-record-at-bless-time",
+  "cli": "TODO-record-at-bless-time",
+  "cases": {
+    "dogfood-smoke": {"passed": 5, "attempts": 5, "errored": 0}
+  }
+}

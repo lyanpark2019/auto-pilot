@@ -6,6 +6,10 @@
 > "reliability harness" program (see [Program context](#program-context)).
 > Next step after approval: `writing-plans` → implementation.
 
+> **Cut 1 landed:** `scripts/evals/` + `evals/cases/dogfood-smoke/` + per-PR unit
+> gate. Advisory only. See `evals/README.md`. Cut 2 (fingerprint/promote/history/
+> blocking gate) not yet started.
+
 ## Purpose
 
 Measure auto-pilot's **suite-level task success rate** over a corpus of tasks with
