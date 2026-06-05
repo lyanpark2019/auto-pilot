@@ -1,21 +1,29 @@
 # Design — auto-pilot Evals Harness (SP4)
 
-> Status: DESIGN (v3, adversarially reviewed). Date: 2026-06-05.
+> Status: DESIGN (v4, adversarially reviewed × 3 rounds). Date: 2026-06-05.
 > Source: brainstorming session. This is sub-project **SP4** of the larger
 > "reliability harness" program (see [Program context](#program-context)).
 > Next step after approval: `writing-plans` → implementation.
 
 ## Purpose
 
-Measure auto-pilot's **task success rate** over a corpus of tasks with
-**deterministic** success oracles, track it over time, and **detect regressions**
-— the "silently dropped from 97% → 77% after a skill/prompt change" class — and
-attribute drops to harness changes.
+Measure auto-pilot's **suite-level task success rate** over a corpus of tasks with
+**deterministic** success oracles, track it over time, and **detect regressions** —
+the "the suite silently dropped from 97% → 77% after a skill/prompt change" class
+— attributing drops to harness changes.
 
 The agent-under-test is **auto-pilot itself**: a harness change (prompt edit, hook
 tweak, dispatch-protocol change, skill add/remove) that makes the PM-loop complete
 spec phases less often must be caught by a number, not by vibes. This is the
 measuring stick for the program's "fix the harness, not the output" principle.
+
+**Scope of the claim (honesty note, round-3):** the *blocking* signal is the
+**aggregate** success rate over the gated (stable) subset of cases — a corpus-wide
+drop. It does **not** reliably flag a *single* case sliding 97%→77% in isolation;
+per-case stochastic cases are quarantined out of the gate (see
+[Regression signal](#regression-signal-concrete-statistics--no-new-dependency)) and
+tracked advisory-only. The detector's minimum detectable effect (MDE) shrinks as
+total attempts grow; at the arming floor it can only see large suite-level drops.
 
 ## Locked decisions (do not relitigate)
 
@@ -133,31 +141,62 @@ commands/
   eval-promote.md  # /auto-pilot eval promote <run_id>              (cut2)
 ```
 
-`oracle_api.py` is a **general** contract — `check(workdir, run) -> OracleResult`
-(`pass|fail|error` + reason). It does **not** wrap `_dogfood_gate.py`; those
-plumbing helpers belong to Gate 2 only, offered as an optional import for
-PM-loop-shaped cases, never as the task-success API.
+`oracle_api.py` is a **general** contract — `check(workdir, run) -> OracleResult`.
+It does **not** wrap `_dogfood_gate.py`; those plumbing helpers belong to Gate 2
+only, offered as an optional import for PM-loop-shaped cases, never as the
+task-success API. The two types the contract hands a case author (the one
+interface every `oracle.py` touches — must be concrete, round-3 P1-C):
+
+```python
+@dataclass(frozen=True)
+class RunResult:        # what the runner produces per case attempt
+    returncode: int    # headless-loop exit code (0 ok, 2 = no state, 124 = timeout)
+    status: str        # final state.json status: success | failed | running
+    state_path: Path   # the run's .planning/auto-pilot/state.json
+    cost_usd: float    # best-effort (_budget.parse_session_usage, may be estimate)
+    iters: int         # iterations consumed
+    log_dir: Path      # claude session logs for this attempt
+    workdir: Path      # the case clone root
+
+@dataclass(frozen=True)
+class OracleResult:
+    outcome: str       # "pass" | "fail" | "error"
+    reason: str        # human-readable; required for fail/error
+```
 
 ### Regression signal (concrete statistics — no new dependency)
 
 LLM runs are stochastic, so a single per-case pass→fail flip is expected noise,
-not a regression. Therefore:
+not a regression. The gate therefore operates on the **aggregate over the stable
+subset**, with these distinct symbols (round-3 P1-B — `N` was overloaded):
 
-- **Repeats:** `--repeats K`, default **K=5** per case.
-- **Baseline:** **N≥20** runs per case captured at bless time.
-- **Unit of test:** the **aggregate** — Σpass over Σ(N·K) attempts, not per-case
-  flips.
-- **Statistic:** hand-rolled in stdlib `math` (repo has no scipy/numpy and
-  deliberately avoids heavy deps — cf. `docs/perf-budget.md`). Use a **Wilson
-  score interval** on the aggregate rate + a two-proportion comparison vs baseline.
-- **Regression rule (concrete):** FAIL if the new run's aggregate-rate **upper
-  Wilson bound (95%)** < baseline aggregate rate − **margin (default 0.05 absolute)**.
-  Additionally FAIL on **error-count** rising above baseline error-count + tolerance.
-- **Arming:** the gate is advisory (non-blocking) until Σ(N·K) ≥ **50** attempts;
-  below that, report only.
-- **Strict set vs quarantine:** a case enters the strict (gated) set only if it
-  passed **K/K on every baseline run** (0 observed flips); any case with observed
-  variance goes to `quarantine.txt`, excluded from the gate but still reported.
+- **`K`** = repeats per case per eval run (`--repeats K`, default **5**).
+- **`B`** = baseline runs per case captured at bless time (default **≥20**).
+- **`C`** = count of **gated** cases (the strict subset, below).
+- **gate attempts `A` = C · K** (this run); **baseline attempts = C · B · K**.
+
+Rules:
+
+- **Strict subset vs quarantine:** a case is **gated** only if it passed **K/K on
+  every one of its B baseline runs** (0 observed flips). Any case with observed
+  baseline variance → `quarantine.txt`: **excluded from the blocking gate**, run +
+  reported **advisory-only** (an optional per-case rate-drop alert, never exit≠0).
+  Consequence: the gated baseline rate is ≈1.0 by construction.
+- **Statistic (stdlib `math`, no scipy/numpy — cf. `docs/perf-budget.md`):** compare
+  the new gated-aggregate rate `p_new = Σpass/A` against the baseline gated-aggregate
+  `p_base` using a **two-proportion score (Newcombe/Wilson) interval on the
+  difference** `p_new − p_base` — this accounts for *both* runs' sampling error
+  (round-3: a one-sample Wilson vs a fixed constant discards the baseline's CI).
+- **Regression rule (concrete):** FAIL iff `upper95(p_new − p_base) < −margin`
+  (margin default **0.05** absolute). Additionally FAIL if **error-count** rises
+  above baseline error-count + tolerance.
+- **Arming:** blocking only when `A ≥ 50`; below that the rate gate is **advisory**
+  (report, never exit≠0).
+- **Known limit (MDE):** because the gated baseline ≈1.0, at `A=50` the rule only
+  catches roughly a **≥10-point** suite drop (e.g. 45/50 = 90% does not fire; ≤44/50
+  does). Smaller drops need larger `A`. State the MDE-vs-`A` curve in the dashboard
+  so a "green" gate is never mistaken for "no regression below 10 points." This is
+  the deliberate cost of deterministic, low-`K` evals — accepted, not hidden.
 
 ### error handling
 
@@ -168,6 +207,10 @@ not a regression. Therefore:
 - Each `oracle.py` runs in its own subprocess with its **own timeout** (separate
   from the build timeout) — it executes agent-produced code and may hang.
 - Case build timeout reuses the existing per-iter `--timeout-build`.
+- **Clone teardown is `finally`/context-manager scoped, not "after the oracle"**
+  (round-3 P2-D): the failure paths (loop crash, timeout-124, cost-cap, infra fault
+  *before* the oracle runs) are the common ones during a real regression, so teardown
+  must fire on every exit path or clones (with their inner git worktrees) leak.
 
 ### Fingerprint (cut2) — content-hash, not environment snapshot
 
@@ -207,18 +250,22 @@ setup-harness cases is **deferred** (not in cut1/cut2).
 
 ## Sequencing (anti-over-build)
 
-- **Cut 1 (prove the signal):** `run.py` + `oracle_api.py` + **one real case**
-  (the dogfood smoke spec with a *task-success* oracle on its `Verify cmd`, NOT
-  `_dogfood_gate`) + `regress.py` vs a hand-written `baseline.json`. Gate 2 =
-  keep existing `dogfood_tier1` as-is. Meta-test wired into the per-PR static gate.
-- **Cut 2 (scale + attribute):** `fingerprint.py`, `promote.py`, `history.jsonl`,
-  more cases, the `/auto-pilot eval promote` command. Only after cut1 shows the
-  rate signal is non-noisy.
+- **Cut 1 (prove the *plumbing*, not the rate):** `run.py` + `oracle_api.py` + **one
+  real case** (the dogfood smoke spec with a *task-success* oracle on its `Verify
+  cmd`, NOT `_dogfood_gate`) + `regress.py` vs a hand-written `baseline.json`. Gate 2
+  = keep existing `dogfood_tier1` as-is. Meta-test wired into the per-PR static gate.
+  **By construction cut1's rate gate is always advisory** (1 case × K=5 = 5 attempts
+  `< 50` arming floor, and a hand-written baseline cannot populate a strict subset) —
+  `regress.py` in cut1 **never exits ≠0**. Cut1 proves clone→init→loop→oracle wiring
+  and the meta-test, nothing statistical.
+- **Cut 2 (arm the blocking rate gate):** measured baseline (B≥20 over enough cases
+  to clear `A≥50`), `fingerprint.py`, `promote.py`, `history.jsonl`, the
+  `/auto-pilot eval promote` command. The rate gate becomes blocking only here.
 
 `regress.py` works in cut1 without `fingerprint.py` (compares a measured rate vs a
 checked-in baseline number, like `docs/perf-budget.md`). **Cut1 precondition:**
-baseline and re-run must be the **same model + CLI**; cut1 regress is advisory
-across env changes until fingerprint lands in cut2.
+baseline and re-run must be the **same model + CLI** (cut1 has no fingerprint to
+detect env drift).
 
 ## Out of scope (YAGNI)
 
@@ -228,8 +275,10 @@ in cut1.
 
 ## Testing
 
-- **Meta-test** (per-PR gate): known-good case passes, deliberately-broken case
-  fails → validates oracle plumbing without agent runs.
+- **Meta-test** (per-PR gate): runs the oracle against **checked-in fixtures**, not
+  live agent runs (round-3 P2-F) — a `evals/_fixtures/{good,broken}/` pair (a
+  recorded `workdir` + a synthetic `RunResult`); the oracle must pass `good` and fail
+  `broken`. No clone, no agent, cents/seconds.
 - **Unit:** `run.py` case selection + aggregation; `regress.py` Wilson/threshold
   math (table-driven, deterministic); `oracle_api` contract.
 - **Dogfood absorption:** the existing dogfood smoke spec becomes the first eval
@@ -242,22 +291,34 @@ in cut1.
 2. `meta.json.expected_phases` must match `_count_phases` regex
    (`^#{1,3}\s+Phase` — `orchestrator.py:243`, floors at 1); assert at promote so
    a loose seed-spec heading style can't silently yield phase-count 1.
-3. Full-eval wall-clock can be hours at larger N; mitigated by clone-parallelism +
-   scheduled-only cadence.
+3. Full-eval wall-clock can be hours at larger corpora; mitigated by clone-
+   parallelism + scheduled-only cadence.
+4. **Peak clones unbounded** (round-3 P2): up to `C·K` concurrent `git clone --local`
+   if all launch together; per-clone teardown bounds *steady-state* not *peak* disk.
+   Cap with `max_parallel_clones` + `max_disk_gb` (fail-fast), clone from a read-only
+   bare mirror, and assert no `git gc`/source mutation during a run (`--local`
+   hardlinks are safe for *new* objects but fragile against concurrent gc).
 
 ## Review provenance
 
-Two adversarial rounds (Codex `codex-adversarial` + cold `claude-reviewer`), each
+Three adversarial rounds (Codex `codex-adversarial` + cold `claude-reviewer`), each
 verifying claims against repo file:line.
 
 - **Round 1 → REJECT/REVISE.** 3 P0 (false `headless-loop --spec`; `_dogfood_gate`
   measures plumbing not task-success; "zero-flip" ignores stochasticity) + P1
-  (fictional `swarm-bench`; cost; fingerprint; error-bucket; isolation). All folded
-  into v2.
+  (fictional `swarm-bench`; cost; fingerprint; error-bucket; isolation). Folded → v2.
 - **Round 2 → REJECT/REVISE.** All 3 P0 confirmed resolved. New P1: harness-health
-  ungated (→ Gate 2); variance under-specified (→ concrete Wilson/K/N/margin);
-  inner branch collision (→ separate clones + run-id namespace); `_dispatch.py`
-  not a fan-out seam (→ N subprocesses). All folded into this v3.
+  ungated (→ Gate 2); variance under-specified (→ concrete stats); inner branch
+  collision (→ separate clones + run-id namespace); `_dispatch.py` not a fan-out
+  seam (→ N subprocesses). Folded → v3.
+- **Round 3 → REJECT/REVISE.** All prior fixes confirmed encoded; **every repo claim
+  re-verified accurate**; architecture declared sound by both. New P1 (all in the
+  statistics narrative): strict-set excludes the per-case 97→77 example (→ honesty
+  note + suite-level reframe); `Σ(N·K)`/`N` overloaded + cut1 can't arm (→ `C/K/B`
+  symbols + cut1-advisory-by-construction); `RunResult` undefined (→ schema);
+  two-proportion named but only one-sample Wilson built (→ difference-interval test).
+  P2: peak-clone disk cap, `finally` teardown, meta-test fixtures. **Folded → this v4.**
 
-Convergence trend: P0×3 → P0×0,P1 → (this) spec-detail. Remaining items are
-implementation-grade, captured above as explicit sections/risks.
+Convergence trend: **P0×3 → P0×0 / structural-P1 → P0×0 / statistics-prose-P1**.
+The architecture stabilized at round 2; round-3 fixes are self-consistency +
+definitional. Remaining items are implementation-grade, captured above.
