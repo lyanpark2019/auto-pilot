@@ -1,9 +1,15 @@
 ---
 name: codebase-perfection-loop
-description: Drive any codebase toward big-tech 95+ quality through a deterministic multi-agent loop. Claude Opus 4.7 acts as PM (planning, code review, verification, final synthesis); Codex 5.5-high acts as adversarial worker (independent second opinion, hidden complexity, type safety reality, band-aid validators). 10 parallel workers dispatched via tmux + background Agent tool — non-overlapping scopes covering size, dead code, docs, architecture, tests, perf, prompts/domain, config, git drift, surface API. After audit: synthesis matrix → user approval gate → Phase A parallel code fixes → Phase B parallel docs rewrite into wiki-tree harness structure (.claude/{rules,architecture,runbooks,branding,prompts}/) — repo self-contained, no external vault dependency. Use this skill whenever the user asks to "perfect the codebase", "improve to 95+", "deep audit", "전체 코드베이스 분석", "코드 완벽하게", "빅테크 수준", "wiki-tree harness", "deep module refactor", "AI-navigable", "rewrite all docs", "ultraclean", "kill duplicates", "dead code purge", "interface-deep-module split", "≤500-line refactor", "하네스 엔지니어링", "10 에이전트 배치", "tmux 멀티에이전트", "claude PM + codex worker", or any request that combines whole-codebase analysis + improvement + documentation rewrite. Also trigger when the user mentions parallel multi-agent (Claude + Codex) review covering 8-10 independent dimensions, interface/deep-module refactor, clean architecture audit, or harness-engineering bootstrap. Language-agnostic (Python, TypeScript, Go, Rust, Java, Kotlin, etc.); methodology applies to any single-developer-to-small-team codebase.
+description: "DEPRECATED (2026-06-05) — superseded by `adversarial-review-loop` (codebase mode: 13-dim rubric + parallel contract fan-out) and `pm-quality-harness-loop` (full quality→ship lifecycle). Retained only for its tmux 10-worker launcher + reference rubrics. Do NOT auto-trigger on generic quality phrases; invoke ONLY on explicit \"/codebase-perfection-loop\" or \"codebase perfection loop\". For codebase quality use adversarial-review-loop; for quality→ship use pm-quality-harness-loop."
 ---
 
 # Codebase Perfection Loop
+
+> **DEPRECATED (2026-06-05).** Superseded by `adversarial-review-loop` (codebase mode —
+> 13-dim rubric + parallel contract fan-out) and `pm-quality-harness-loop` (full
+> quality→ship lifecycle). This skill is kept only for its tmux 10-worker launcher
+> (`scripts/tmux-launcher.sh`) and reference rubrics (`references/`). Prefer the
+> successors for new work; do not trigger this on generic quality phrasing.
 
 Drive a codebase toward big-tech 95+ quality with a repeatable, multi-agent loop. The methodology is the artifact — apply it to any project, any language, any size.
 
