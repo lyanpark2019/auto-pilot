@@ -80,7 +80,11 @@ Skill creation/edit follows `skill-creator` + `plugin-dev:skill-development` met
 
 ## Round 2 — consolidation & perfection loop (scope: workflow #2; round-1 reviewers MUST NOT judge the build against this section)
 
-CEO directive: similar assets truly MERGED, not co-located; iterate the improve/consolidate loop until convergence. Round-1 = correct absorption (this spec above). Round-2 = density:
+CEO directives: (a) similar assets truly MERGED, not co-located; (b) **EVERY asset gets an individual score + verdict**; (c) **the graphify doc-management system is THE CORE** — any skill/agent whose purpose is improving stale docs is judged against it: integrate into a mode or REMOVE. Iterate until convergence.
+
+**Phase 0 — SCORE (before any consolidation execution):** read-only scorer fan-out produces a per-asset scorecard for ALL skills/agents/commands. Dimensions (0–10): core-fit (alignment vs its subsystem SoT — for any doc/stale-improvement asset the SoT is doc-management's 3-layer model), uniqueness (capability nothing else in the plugin provides), evidence (real usage / tests / incident provenance), cost (context+maintenance load, inverted). Verdict per asset: CORE / INTEGRATE(→named target) / KEEP-niche / REMOVE. Hard rule: an asset that duplicates a doc-management mode with no unique capability = REMOVE (not merge). Uncertain → KEEP + flagged for CEO. Full scorecard table is a required deliverable.
+
+**Doc-core supremacy (re-judges round-1 leniency):** vault-builder's repo-doc quality machinery is a stale-doc-improvement system → judged against doc-management: drift trio (drift-fixer/gap-filler/orphan-pruner) duplicate MAINTAIN/AUDIT → expected REMOVE; docs-worker/docs-verifier duplicate REBUILD authoring + dual-review → expected REMOVE; content-fact-checker/adversarial-auditor duplicate AUDIT + dual-review → REMOVE unless scorecard shows unique NotebookLM-vault-only value (usage evidence: PickL 0 runs, ga4 1 run — weak). Export layer (Obsidian/NotebookLM/bases/canvas) = the only non-duplicate — stays. Whatever survives gets the function-group merge below; the 26→~9 table is the CEILING, scorecard may cut deeper:
 
 | Target | Now | After | Method |
 |---|---|---|---|
