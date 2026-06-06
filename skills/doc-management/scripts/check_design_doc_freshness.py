@@ -7,21 +7,40 @@ source paths from the body (backtick path tokens, same style as the L2 guard), r
 doc + changed files). Missing `source_commit` = frontmatter-contract WARN.
 `manual_edit: true` docs are skipped. WARN-only gate: ALWAYS exits 0 (blocking would
 hold every code PR hostage to doc updates). Known limits (doc-management-system.md
-section 9): renames/moves untracked; fenced-code cites ignored (matches L2 guard).
+section 9): renames/moves untracked; fenced-code cites ignored (matches L2 guard);
+cites are collected ONLY under the top-level path-prefix allowlist below (CONFIG /
+`DOC_FRESHNESS_PATH_PREFIXES` env) — paths under any other tree are invisible to
+this check and silently report fresh.
 
 Usage: check_design_doc_freshness.py [DOC_ROOT ...]     default: .claude/design
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 PATH_TOKEN = re.compile(r"`([^`\s]+)`")
-# Like the L2 guard's PATH_PREFIX: a real source ref starts with a top-level dir.
+# ─── CONFIG — EDIT PER PROJECT (mirrors the L2 guard's CONFIG block in
+# check-doc-reference-integrity.mjs). A backtick token counts as a source ref
+# only when it starts with one of these top-level dirs; anything else is NOT
+# collected (false-negative blind spot — keep this list covering every tree
+# your docs cite). Override without editing the file:
+#   DOC_FRESHNESS_PATH_PREFIXES="app,src,vault" (comma-separated) env var.
+_DEFAULT_PREFIXES = (
+    "app", "src", "lib", "libs", "scripts", "hooks", "skills", "agents", "commands",
+    "packages", "cmd", "internal", "services", "core", "api",
+    "vault", "swarm", "deploy", "codex", "dashboard",
+)
+_ENV_PREFIXES = tuple(
+    p.strip().strip("/")
+    for p in os.environ.get("DOC_FRESHNESS_PATH_PREFIXES", "").split(",")
+    if p.strip().strip("/")
+)
 PATH_PREFIX = re.compile(
-    r"^(?:app|src|lib|libs|scripts|hooks|skills|agents|commands|packages|cmd|internal|services|core|api)/"
+    r"^(?:" + "|".join(re.escape(p) for p in (_ENV_PREFIXES or _DEFAULT_PREFIXES)) + r")/"
 )
 SOURCE_EXT = re.compile(
     r"\.(py|pyi|ts|tsx|js|jsx|mjs|cjs|go|rs|java|kt|rb|php|c|h|cc|cpp|hpp|cs|sh|bash|sql|swift|scala|vue|svelte|lua|ex|exs)$"

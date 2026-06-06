@@ -136,7 +136,12 @@ source paths from the body (same path-token style as the L2 guard), runs
 doc + changed files). Missing `source_commit` = frontmatter-contract **WARN**.
 `manual_edit: true` docs are skipped — automation never touches them. **Always exits
 0** — this is a WARN gate; a blocking gate would hold every code PR hostage to doc
-updates. Known limit: renames/moves untracked (path-based diff).
+updates. Known limits: renames/moves untracked (path-based diff); cited paths are
+collected only under the script's top-level path-prefix allowlist (labeled CONFIG
+block, mirroring the L2 guard's; override per repo via
+`DOC_FRESHNESS_PATH_PREFIXES="dir1,dir2"` env) — cites under trees outside the
+allowlist are invisible and silently report fresh, so extend it when a repo grows
+a new source tree.
 
 **Per-doc refresh, for each STALE doc:**
 1. Re-query the graph for the doc's topic (`graphify query`/`explain` against
