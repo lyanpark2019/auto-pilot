@@ -14,7 +14,9 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 > repo's own docs **without** `--fix-repo-docs`, STOP and route them to
 > `doc-management` instead of running Phases 2-4. `/vault-build` is the **export
 > pipeline**: building/updating Obsidian vaults, NotebookLM notebooks, bases,
-> canvas, and graphify output. Canonical mapping: doc-용도 제거, export 잔류.
+> canvas, and graphify output. NotebookLM/knowledge-vault building stays fully
+> functional — every doc-purpose path (drift/fix/rubric on a repo's own docs) is
+> deprecated with this pointer. Canonical mapping: doc-용도 제거, export 잔류.
 
 ## Usage
 
@@ -53,7 +55,7 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
                    (+ optional --auto-graphify: graphify update + global add)
 ```
 
-**Opt-in `--fix-repo-docs` (RETIRED default — kept for legacy/vault-internal use):**
+**Opt-in `--fix-repo-docs` (RETIRED doc-purpose path — kept for legacy/vault-internal use only, never the default):**
 
 ```
 [2/5] Drift        cross-reference code AST ↔ docs → 4 drift types (gap/orphan/claim/symbol)
