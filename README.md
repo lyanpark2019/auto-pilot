@@ -30,7 +30,7 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 
 **Retired / deleted (do not route here):**
 
-- `codebase-perfection-loop` — deprecated, no SKILL.md; `references/` kept as rubric provenance only (its README explains routing) → use `adversarial-review-loop` (codebase mode) or `pm-quality-harness-loop`
+- `codebase-perfection-loop` — deleted (rubric provenance distilled into `quality-eval`; directory removed) → use `adversarial-review-loop` (codebase mode) or `pm-quality-harness-loop`
 - `llm-wiki-architect` — deleted (per-module hand-maintained wiki = rot machine)
 - `doc-drift-audit` + `graphify-doc-rebuild` + interim `doc-sync` — absorbed into `doc-management` (AUDIT / REBUILD / MAINTAIN modes); old trigger phrases preserved in its description
 - claim-ledger pattern — NOT adopted (hand-maintained verification JSON rots like any hand-maintained doc); `doc-management` SHA-freshness + AUDIT replace it

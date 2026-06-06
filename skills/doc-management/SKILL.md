@@ -117,6 +117,8 @@ single source, do not re-derive). Then, from the target repo root:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py [DOC_ROOT ...]
 # default DOC_ROOT: .claude/design — or run the repo's own installed copy
+# For this plugin repo, also pass docs/ explicitly: architecture.md and asset-charter.md live there and are freshness-tracked.
+# Example: check_design_doc_freshness.py .claude/design docs/
 ```
 
 Zero-LLM: per doc, diffs the body's cited source paths against frontmatter

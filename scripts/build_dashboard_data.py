@@ -31,7 +31,7 @@ SUBSYSTEM_RULES: list[tuple[str, str]] = [
     (r"^(vault|nbm)", "docs-vault-export"),
     (r"^(swarm|autopilot-swarm)", "swarm"),
     (r"^(harness|setup-harness|setup-claude-md)", "harness"),
-    (r"^(adversarial-review-loop|quality|pm-quality|residue-audit|code-perfector|codebase-perfection-loop)", "quality"),
+    (r"^(adversarial-review-loop|quality|pm-quality|residue-audit|code-perfector)", "quality"),
     (r"^(auto-pilot|eval-run|worker$|pm-orchestrator$|retro$)", "core-loop"),
     (r"(reviewer|codex-adversarial|tdd-enforcer|security-reviewer|tech-critic|specialist-pool)", "review"),
     (r"^(sha-deploy|deploy)", "deploy"),
@@ -97,7 +97,183 @@ def weighted(s: dict[str, Any]) -> float:
                  + num("evidence") * 0.2 + num("cost") * 0.15, 1)
 
 
+ARCH_HTML_OUT = ROOT / "dashboard" / "architecture.html"
+
+# Pillar definitions (source: docs/architecture.md §System Anatomy)
+PILLARS = [
+    ("P① 자율 코딩 루프", "core-loop",
+     "PM-worker-이중리뷰. Contract-based dispatch, frozen-diff dual adversarial review, fixer convergence.",
+     "#3fb950"),
+    ("P② 문서 신선도", "docs",
+     "doc-management flagship. REBUILD/AUDIT/MAINTAIN 3 modes; stale-doc assets absorbed or REMOVE.",
+     "#d29922"),
+    ("P③ 지식 영속", "knowledge",
+     "vault · retro · memory. Obsidian vault primary context, retro append-only, session handoff.",
+     "#bc8cff"),
+    ("P④ 안전·집행", "safety",
+     "hooks · contracts · gates. Enforcement-not-instruction; mechanical compensation for operator weaknesses.",
+     "#f85149"),
+]
+
+# Subsystem → pillar mapping (best-fit per subsystem)
+SUBSYSTEM_PILLAR: dict[str, str] = {
+    "core-loop": "core-loop",
+    "review": "core-loop",
+    "conductor": "core-loop",
+    "quality": "core-loop",
+    "docs-core": "docs",
+    "docs-vault-export": "docs",
+    "diagnostics": "docs",
+    "knowledge": "knowledge",
+    "swarm": "core-loop",
+    "harness": "safety",
+    "deploy": "safety",
+    "goal": "core-loop",
+    "other": "safety",
+}
+
+BINDING_CONTRACTS = [
+    ("worker contract", "schemas/contract.schema.json",
+     "v2: target_repo · target_layer · hard_constraints · snapshot_shas · additionalProperties:false fail-closed"),
+    ("reviewer contract", "agents/auto-pilot-codex-reviewer.md + auto-pilot-claude-reviewer.md",
+     "read-only sandbox + frozen diff + structured APPROVE/REJECT + round-budget gate"),
+    ("PM contract", "agents/pm-orchestrator.md",
+     "reporting format · prohibited actions · code-edit 0"),
+    ("preflight contract", "schemas/preflight.schema.json",
+     "phase-key · TTL 900s · head_sha — round-2 addition"),
+]
+
+
+def _esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def build_architecture_html(
+    assets: list[dict[str, str]],
+    counts: dict[str, int],
+    head: str,
+    branch: str,
+    generated: str,
+) -> str:
+    # Asset counts per subsystem
+    sub_counts: dict[str, int] = {}
+    for a in assets:
+        sub = subsystem_of(a["name"])
+        sub_counts[sub] = sub_counts.get(sub, 0) + 1
+
+    total = sum(counts.values())
+
+    pillar_cards = ""
+    for label, pillar_id, desc, color in PILLARS:
+        # collect subsystems that map to this pillar
+        subs = [s for s, p in SUBSYSTEM_PILLAR.items() if p == pillar_id]
+        count = sum(sub_counts.get(s, 0) for s in subs)
+        pillar_cards += (
+            f'<div class="card" style="border-top:3px solid {_esc(color)}">'
+            f'<div class="pill" style="background:rgba(0,0,0,.2);border:1px solid {_esc(color)};color:{_esc(color)}">'
+            f"{_esc(label)}</div>"
+            f"<p class=\"desc\">{_esc(desc)}</p>"
+            f'<div class="count-badge">{count} assets</div>'
+            f"</div>\n"
+        )
+
+    asset_rows_html = ""
+    for a in sorted(assets, key=lambda x: (x["type"], x["name"])):
+        sub = subsystem_of(a["name"])
+        pillar_id = SUBSYSTEM_PILLAR.get(sub, "safety")
+        pillar_color = next((c for _, pid, _, c in PILLARS if pid == pillar_id), "#8b949e")
+        asset_rows_html += (
+            f'<tr><td><code>{_esc(a["name"])}</code></td>'
+            f'<td class="dim">{_esc(a["type"])}</td>'
+            f'<td class="dim">{_esc(sub)}</td>'
+            f'<td><span style="color:{_esc(pillar_color)};font-size:10.5px">{_esc(pillar_id)}</span></td></tr>\n'
+        )
+
+    contract_rows = ""
+    for name, file_, desc in BINDING_CONTRACTS:
+        contract_rows += (
+            f"<tr><td><b>{_esc(name)}</b></td>"
+            f"<td><code>{_esc(file_)}</code></td>"
+            f"<td class=\"dim\">{_esc(desc)}</td></tr>\n"
+        )
+
+    count_badges = "".join(
+        f'<div class="cb"><span class="n">{v}</span><span class="t">{k}</span></div>'
+        for k, v in sorted(counts.items())
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>auto-pilot — Architecture</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0d1117;color:#e6edf3;font-family:-apple-system,Pretendard,sans-serif;padding:28px;line-height:1.5}}
+h1{{font-size:20px;margin-bottom:4px}}
+h2{{font-size:14px;margin:24px 0 8px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:4px}}
+.sub{{color:#8b949e;font-size:11.5px;margin-bottom:18px}}
+code{{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:0 5px;font-size:10.5px;color:#56d4dd}}
+.pillars{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}}
+.card{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px}}
+.pill{{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;margin-bottom:6px;font-weight:600}}
+.desc{{font-size:11px;color:#8b949e;margin-top:4px}}
+.count-badge{{margin-top:8px;font-size:11px;color:#8b949e}}
+table{{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}}
+th,td{{border:1px solid #30363d;padding:5px 8px;text-align:left;vertical-align:top}}
+th{{background:#1c2230;font-size:10.5px}}
+.dim{{color:#8b949e}}
+.counts{{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}}
+.cb{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 12px;text-align:center}}
+.cb .n{{display:block;font-size:18px;font-weight:700}}
+.cb .t{{display:block;font-size:9.5px;color:#8b949e}}
+.process{{font-family:monospace;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;font-size:11.5px;white-space:pre;line-height:1.7;color:#e6edf3;margin-top:6px}}
+footer{{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d;padding-top:8px}}
+@media(max-width:900px){{.pillars{{grid-template-columns:repeat(2,1fr)}}}}
+</style>
+</head>
+<body>
+<h1>auto-pilot — Architecture</h1>
+<div class="sub">branch <code>{_esc(branch)}</code> · commit <code>{_esc(head)}</code> · generated {_esc(generated)} · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
+
+<h2>Asset counts</h2>
+<div class="counts">{count_badges}<div class="cb"><span class="n">{total}</span><span class="t">total</span></div></div>
+
+<h2>4-Pillar purpose (모든 자산은 ≥1 pillar 에 역할 정의 의무)</h2>
+<div class="pillars">{pillar_cards}</div>
+
+<h2>Coding-loop process (SoT: agents/pm-orchestrator.md)</h2>
+<div class="process">PM (code-edit 0)
+  → phase plan + tech-critic gate
+  → contract 발행  [⛓ contract.schema.json · snapshot_shas SHA-pin · idempotency_token]
+  → worker dispatch  (Sonnet 1M · worktree isolation)
+  → diff + verify-log  [⛓ SHA-256 mandatory — missing = bounce]
+  → dual review  [⛓ Codex read-only + cold Claude · PM-frozen diff]
+  → fixer commit + re-review
+  → merge (human checkpoint)
+  → retro → memory  [⛓ vault gotchas + .claude/insights.md]</div>
+
+<h2>Binding contracts</h2>
+<table>
+<tr><th>Contract</th><th>File</th><th>Constraint</th></tr>
+{contract_rows}
+</table>
+
+<h2>Asset → pillar mapping (live, from collect_assets())</h2>
+<table>
+<tr><th>Asset</th><th>Type</th><th>Subsystem</th><th>Pillar</th></tr>
+{asset_rows_html}
+</table>
+
+<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD {_esc(head)}. Stale when code changes without re-run.</footer>
+</body>
+</html>
+"""
+
+
 def main() -> None:
+    import datetime
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
     branch = subprocess.run(["git", "-C", str(ROOT), "branch", "--show-current"],
@@ -122,6 +298,13 @@ def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("window.DASHBOARD_DATA = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n")
     print(f"wrote {OUT} — {len(assets)} assets, {len(rounds)} round(s), HEAD {head}")
+
+    # Emit architecture.html
+    generated = datetime.date.today().isoformat()
+    html = build_architecture_html(assets, counts, head, branch, generated)
+    ARCH_HTML_OUT.write_text(html)
+    size = ARCH_HTML_OUT.stat().st_size
+    print(f"wrote {ARCH_HTML_OUT} — {size:,} bytes")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,10 @@
+---
+type: architecture
+topic: unified-coding-system
+source_commit: 494f67ca2f595e0674af78a4aa05a8fd815c8a29
+manual_edit: false
+---
+
 # auto-pilot architecture
 
 ## One-line
@@ -12,7 +19,65 @@ It is **NOT** a greenfield project generator and **NOT** a quality-eval loop.
 
 Why brownfield: every friction guard presupposes existing code — composition-root breakage (`__init__.py` must already exist), SSL cascade, source-first debug (Naver private-bug class), scope-drift REJECT (`scope_files` constrains edits inside an existing tree), worktree + atomic merge to `$ROOT`. Born from 381-session `/insights` friction, all existing-project maintenance accidents.
 
-**Known gap (required fix):** context ingestion (`_contract.snapshot_context`) currently bundles only `spec.md` + `CLAUDE.md`. A brownfield PM/worker also needs a curated map of the existing code (module map, architecture, git log, test layout, public API) snapshotted into the context-bundle before PLAN. Until that lands, the loop is only verified for greenfield-shaped specs.
+## System Anatomy (round-2 §2.5)
+
+### 4-Pillar purpose
+
+| # | Pillar | Serves |
+|---|--------|--------|
+| ① | **자율 코딩 루프** — PM-worker-이중리뷰 | Contract-based dispatch, frozen-diff dual adversarial review, fixer convergence |
+| ② | **문서 신선도** — doc-management flagship | REBUILD/AUDIT/MAINTAIN 3 modes; stale-doc assets absorbed or REMOVE |
+| ③ | **지식 영속** — vault · retro · memory | Obsidian vault primary context, retro append-only, session handoff |
+| ④ | **안전·집행** — hooks · contracts · gates | Enforcement-not-instruction; mechanical compensation for measured operator weaknesses (safety 55 / spec 62) |
+
+Design principle: every asset must declare ≥1 pillar role. Assets without a declared role are REMOVE/merge candidates. Authoritative role table: `docs/asset-charter.md`.
+
+### Coding-loop process (SoT: `agents/pm-orchestrator.md`)
+
+```
+PM (code-edit 0)
+  → phase plan + tech-critic gate
+  → contract 발행  [⛓ contract.schema.json · snapshot_shas SHA-pin · idempotency_token]
+  → worker dispatch  (Sonnet 1M · worktree isolation)
+  → diff + verify-log  [⛓ SHA-256 mandatory — missing = bounce]
+  → dual review  [⛓ Codex read-only + cold Claude · PM-frozen diff]
+  → fixer commit  (re-review after commit — prevents timing artifacts)
+  → merge  (human checkpoint, decision 14)
+  → retro → memory  [⛓ vault gotchas + .claude/insights.md]
+```
+
+⛓ SHA evidence chain: every completion claim carries verifiable evidence — spec/CLAUDE.md SHA-pin fail-closed + tamper tests · verify-log SHA-256 · frozen diff (no tampering) · idempotency token for safe re-dispatch.
+
+### Binding-contracts inventory
+
+Full contract schemas and enforcement contracts: see README "Binding contracts inventory" section (this file cross-links; README is the pointer, `docs/asset-charter.md` holds role definitions).
+
+| Contract | Form | Binds |
+|----------|------|-------|
+| worker | `schemas/contract.schema.json` v2 — target_repo · target_layer · hard_constraints · pattern_refs · snapshot_shas.project_context; `additionalProperties:false` fail-closed | worker scope · evidence · deadline |
+| reviewer | read-only sandbox + frozen diff + structured APPROVE/REJECT (round-2: pre-mortem · liveness triage · 4 heuristics · round-budget gate) | Codex + cold Claude reviewers |
+| PM | `agents/pm-orchestrator.md` — reporting format · prohibited actions · code-edit 0 | PM main session |
+| round-2 additions | `schemas/preflight.schema.json` (phase-key · TTL 900s · head_sha) · dispatch required fields · creation gate (asset_registry_check) · dispatch-manifest gate | all pre-dispatch stages |
+
+### Dual improvement loops
+
+**(a) Product loop** — `skills/adversarial-review-loop/` 3 modes:
+- **branch**: review → fix → re-review; both sides must APPROVE
+- **codebase**: 13-dim score → contract fan-out → re-score to target
+- **multi-agent**: PM-Worker pool with activation gates
+
+**(b) Self-improvement loop** — round-N SCORE → … → dual review (plugin targets itself):
+retro appends round outputs to `vault/insights` → next round input. Converges via same stopping rule as product loop (same finding ≥2 rounds = escalation).
+
+### Memory 3-layer
+
+| Layer | Location | Role |
+|-------|----------|------|
+| 1 | Obsidian vault `~/Documents/Knowledge/wiki/projects/<slug>/` | Primary context, code-only graph |
+| 2 | `repo/.claude/insights.md` | Retro append-only ledger |
+| 3 | Auto-memory session handoff | Cross-session state |
+
+Context resolution 4-step: see `skills/auto-pilot/references/project-context-resolution.md` (do not re-enumerate here).
 
 ## Why this shape
 
@@ -31,153 +96,74 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 14 skills · 1 skill-shell · 23 agents · 11 commands · 17 hooks · 12 codex-skills = 78 assets total.
+
 ```
 auto-pilot/
-├── .claude-plugin/
-│   ├── plugin.json                          # manifest (name, version, author)
-│   └── marketplace.json                     # standalone marketplace
-├── .mcp.json                                # bundled MCP server config (notebooklm vault)
-├── skills/                                  # 19 dirs / 18 active SKILL.md
-│   ├── auto-pilot/                          # entry skill, fires on /auto-pilot (core loop)
-│   ├── adversarial-review-loop/             # dual-track review: branch / codebase / multi-agent modes
-│   ├── quality-eval/                        # 13-dim rubric SoT
-│   ├── pm-quality-harness-loop/             # superset quality-lift + ship orchestrator
-│   ├── residue-audit/                       # semantic dead-code / duplicate audit
-│   ├── doc-management/                      # docs flagship: REBUILD / MAINTAIN / AUDIT (+ L2/L3 guard scripts)
-│   ├── setup-harness/                       # harness bootstrap (+ scripts/ references/ templates/ evals/)
-│   ├── sha-deploy-standard/                 # SHA-pinned deploy standard
-│   ├── codex-orchestra/                     # conductor: Claude plans/reviews, Codex implements
-│   ├── swarm/ (init/start/status/stop/ticket) + swarm-bench/   # parallel execution backend skills
-│   ├── improve-codebase-architecture/, diagnosing-{llm-output-leaks,stale-runtime}/
-│   └── codebase-perfection-loop/            # DEPRECATED shell — references/ kept (rubric provenance)
-├── commands/                                # 16 slash commands: auto-pilot{,-server}, eval-run,
-│                                            #   harness (plan/build/qa), harness-ops (setup/drift/loop/score/verify),
-│                                            #   vault-{build,score,dashboard,selftest},
-│                                            #   setup-claude-md, sha-deploy-init
-│                                            # (harness 8→2; vault 10→4; quality-loop+nbm-to-obsidian+goal-* removed)
-├── agents/                                  # 23 agent contracts (review substance: skills/adversarial-review-loop/references/)
-│   ├── core loop: pm-orchestrator, worker, retro
-│   ├── review: codex-adversarial + claude-reviewer (legacy),
-│   │   auto-pilot-{codex,claude}-reviewer (PR3, hook-sandboxed), tech-critic-lead,
-│   │   tdd-enforcer, security-reviewer, specialist-pool, code-perfector
-│   ├── harness trio: harness-{planner,generator,evaluator}
+├── .claude-plugin/plugin.json + marketplace.json
+├── .mcp.json                          # notebooklm vault MCP
+├── skills/  (19 dirs, 14 active SKILL.md + 1 deprecated shell)
+│   ├── auto-pilot/                    # P①: entry skill / core loop
+│   ├── adversarial-review-loop/       # P①④: branch/codebase/multi-agent review
+│   ├── doc-management/                # P②: REBUILD/MAINTAIN/AUDIT flagship
+│   ├── setup-harness/                 # P④: harness bootstrap + scripts/references/templates/evals
+│   ├── quality-eval/                  # P①: 13-dim rubric SoT
+│   ├── pm-quality-harness-loop/       # P①: quality-lift + ship orchestrator
+│   ├── residue-audit/                 # P②: semantic dead-code/duplicate audit
+│   ├── sha-deploy-standard/           # P④: SHA-pinned deploy standard
+│   ├── codex-orchestra/               # P①: Claude plans/reviews, Codex implements
+│   ├── swarm/{init,start,status,stop,ticket,bench}/   # P①: parallel execution backend
+│   ├── improve-codebase-architecture/, diagnosing-{llm-output-leaks,stale-runtime}/  # diagnostics
+│   └── (codebase-perfection-loop/ deleted — rubric SoT = quality-eval)
+├── agents/  (23 contracts)
+│   ├── core: pm-orchestrator, worker, retro
+│   ├── review (P①④): codex-adversarial, claude-reviewer (legacy),
+│   │         auto-pilot-{codex,claude}-reviewer (PR3), tech-critic-lead,
+│   │         tdd-enforcer, security-reviewer, specialist-pool, code-perfector
+│   ├── harness: harness-{planner,generator,evaluator}
 │   ├── swarm: swarm-{explorer,monitor,verifier}
-│   └── vault set: vault-pm-orchestrator + vault-{edge-curator,graph-enricher,knowledge-author,structure-curator}
-│       (4 merged agents, 2026-06 round-2 — 25 legacy vault workers removed; repo-docs fixing → doc-management)
-│   (goal-{scout,judge,worker} removed from plugin — live in global ~/.claude/agents/)
-├── hooks/
-│   ├── hooks.json                           # SessionStart + PreToolUse + PostToolUse registrations
-│   ├── preflight-path.sh                    # CWD / vault / state sanity
-│   ├── pre-edit-composition-root.sh         # block ruff --fix on __init__.py (PR0: MultiEdit matcher)
-│   ├── pre-bash-guard.sh                    # block TUI / chained SSL / unsafe bulk fix
-│   ├── pre-reviewer-write.sh                # PR3 reviewer sandbox (layer 2)
-│   ├── post-deploy-verify.sh                # zombie port / env placeholder check after deploy
-│   ├── doc-sync-update.sh                   # merged graph-freshness watcher: code graph stale-flag + vault raw/sources .md eager graphify update (feeds doc-management MAINTAIN)
-│   ├── notebooklm_delete_gate.sh            # confirm-gated notebooklm deletes (Bash CLI + MCP shapes)
-│   ├── pm_final_report.sh                   # PM final-report emission
-│   ├── guard-destructive.py, codex-conductor-guard.py   # destructive-command + conductor guards
-│   └── test_{guard_destructive,codex_conductor_guard,notebooklm_delete_gate}.py  # hook self-tests
-├── schemas/                                 # PR1: contract/ticket/review JSON Schema 2020-12
-│                                            #   (swarm's ticket/score/verify/plugin schemas → swarm/schemas/)
-├── scripts/                                 # orchestrator.py, headless-loop.py, PR1-PR5 _*.py helpers
-│                                            #   (_state/_config/_log/_prompts/_contract/_dispatch/
-│                                            #   _subagent_helpers/_gc/_worktree/_status/_reviewer_wrapper/
-│                                            #   _dogfood_gate/_budget), build_dashboard_data.py,
-│                                            #   dogfood_tier{1,2}.sh, quality/ (module-size gate)
-├── prompts/                                 # PM/worker/reviewer prompt templates
-├── vault/                                   # export layer (vault-builder absorbed wholesale):
-│                                            #   pipeline/ sources/ scripts/ rubrics/ templates/
-│                                            #   dashboard/ tests/ (62 pytest)
-├── swarm/                                   # parallel execution backend: scripts/ schemas/ tests/ docs/
-├── codex/                                   # 12 codex skill forks (repo = SoT) + sync-to-codex.sh
-├── deploy/                                  # sha-deploy templates
-├── dashboard/                               # plugin structure + scorecard dashboard (index.html, data.js)
-├── evals/                                   # eval harness: cases/, _fixtures/, baseline.json
-├── docs/
-│   ├── architecture.md                      # this file
-│   ├── master-plan.md                       # purpose, skill-integration map, roadmap
-│   ├── perf-budget.md                       # latency budgets for hot scripts
-│   ├── 7-phase-template.md                  # spec author guide
-│   ├── specs/                               # PR-input specs (incl. 2026-06-06 unified-coding-system)
-│   └── superpowers/{specs,plans}/           # design specs + implementation plans
-└── tests/                                   # 228 tests (pytest); mypy + ruff clean
+│   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
+│       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
+├── hooks/  (17 scripts, P④)
+│   ├── hooks.json + preflight-path.sh + pre-{edit-composition-root,bash-guard,reviewer-write}.sh
+│   ├── post-deploy-verify.sh + doc-sync-update.sh + notebooklm_delete_gate.sh + pm_final_report.sh
+│   └── guard-destructive.py + codex-conductor-guard.py + test_*.py (self-tests)
+├── schemas/                           # PR1: contract/ticket/review/preflight JSON Schema 2020-12
+├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers, build_dashboard_data.py
+├── prompts/ + vault/ + swarm/ + codex/  # PM/worker prompts; vault export; parallel backend; codex forks
+├── deploy/ + dashboard/ + evals/
+└── docs/
+    ├── architecture.md (this file) + master-plan.md + perf-budget.md + 7-phase-template.md
+    ├── asset-charter.md               # pillar→asset mapping SoT
+    ├── history/                       # distilled changelogs
+    └── specs/ + superpowers/{specs,plans}/
 ```
 
-## Loop diagram
-
-```
-         ┌─────────────────────────────────────────────────────┐
-         │  Opus 4.7 main session (PM)                         │
-         │  - reads CLAUDE.md chain, spec, state.json          │
-         │  - plans phase contracts                            │
-         │  - NEVER edits code                                 │
-         └────────────┬────────────────────────────────────────┘
-                      │ Agent({model: sonnet, isolation: worktree}) × N
-                      ▼
-         ┌─────────────────────────────────────────────────────┐
-         │  Sonnet 4.6 1M workers (parallel, 1 msg N blocks)   │
-         │  - edit code in their worktrees                     │
-         │  - run verify                                       │
-         │  - return diff + summary + verify output            │
-         └────────────┬────────────────────────────────────────┘
-                      │ Agent({…codex-rescue…}) + Agent({model: opus, read-only}) × 2N
-                      ▼
-         ┌─────────────────────────────────────────────────────┐
-         │  Dual review (parallel)                             │
-         │  - Codex gpt-5.5-high adversarial                   │
-         │  - Cold Opus 4.7 reviewer                           │
-         │  - both APPROVE → merge worktree                    │
-         │  - any REJECT → return findings, loop               │
-         │  - 3rd-round repeat → pivot-needed, stop            │
-         └────────────┬────────────────────────────────────────┘
-                      │
-                      ▼
-         ┌─────────────────────────────────────────────────────┐
-         │  Verify gate (project test+lint+typecheck+build)    │
-         │  - fail → dispatch fix worker → re-verify           │
-         │  - pass → commit atomic per contract                │
-         └────────────┬────────────────────────────────────────┘
-                      │
-                      ▼
-              advance phase, loop until last
-```
 
 ## State
 
-`.planning/auto-pilot/state.json` is the single source of truth for loop state. Owned by `scripts/_state.py`. Writers hold `flock(LOCK_EX)` on `state.lock`; readers hold `LOCK_SH`. Writes go through `_contract.atomic_write_text` (tempfile + fsync + rename, `F_FULLFSYNC` on Darwin) so even an abrupt kill leaves either the old or new JSON, never a partial file. Safe to resume after crash: PM reads state, sees `current_phase` + `phases[last]`, continues from the next contract.
+`.planning/auto-pilot/state.json` — SoT for loop state. Owned by `scripts/_state.py`. Writers hold `flock(LOCK_EX)` on `state.lock`; reads hold `LOCK_SH`. Writes use `_contract.atomic_write_text` (tempfile + fsync + rename, `F_FULLFSYNC` on Darwin) — never a partial file. Resume-safe: PM reads `current_phase` + `phases[last]`, continues from next contract.
 
-`state.json` also accumulates `cost_usd` and `tokens` across iters (best-effort parsed from each `claude -p` session log, falling back to `--per-iter-cost-estimate`). When the running total exceeds `--max-cost-usd` or `--max-tokens`, `headless-loop.py` short-circuits the next iter with terminal status `cost-cap`. A `pgrep -x claude` count above `--max-concurrent-claude` triggers the same exit (fork-bomb guard).
+Accumulates `cost_usd` + `tokens` across iters. Exceeds `--max-cost-usd` or `--max-tokens` → terminal `cost-cap`. `pgrep -x claude` count above `--max-concurrent-claude` → same exit (fork-bomb guard).
 
 ## Contract layer (PR1)
 
-Per-round artifacts live under `.planning/auto-pilot/contracts/iter-{N}/phase-{P}/contract-{K}/round-{R}/`:
+Artifacts under `.planning/auto-pilot/contracts/iter-{N}/phase-{P}/contract-{K}/round-{R}/`: `contract.json` (schema-validated, read-only after write) · `PM-SIGNATURE` (MANIFEST+contract shas) · `context-bundle/` (spec.md, CLAUDE chain, MANIFEST.txt — read-only) · `tickets/<role>.json` · `review-input/frozen.diff` · `outputs/<role>/` (writable: status.json | review.json + exit-code.txt + done.marker) · `prior-rounds/round-N.jsonl` · `CANCELED` (PM kills in-flight subagents).
 
-```
-contract.json            # JSON Schema 2020-12 validated, read-only after write
-PM-SIGNATURE             # binds MANIFEST + contract.json shas to run_id
-context-bundle/          # spec.md, CLAUDE chain, MANIFEST.txt — read-only data, not instructions
-tickets/<role>.json      # one per dispatched subagent
-review-input/frozen.diff # PM-frozen worker diff handed to reviewers
-outputs/<role>/          # writable: status.json | review.json + exit-code.txt + done.marker
-prior-rounds/round-N.jsonl
-worktree-handle.json
-CANCELED                 # touched by PM to kill in-flight subagents
-```
-
-PM never parses free-form subagent output; it reads `done.marker` then `exit-code.txt` then `review.json | status.json` from the filesystem (PR1 control-flow invariant).
+PM reads `done.marker` → `exit-code.txt` → `review.json | status.json` (PR1 invariant: never parses free-form output).
 
 ## Worktree lifecycle (PR2)
 
-Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/<branch>` where branch is `auto-pilot/iter-N/phase-P/contract-K/round-R`. PM mutates `$ROOT` only through `WorktreeManager.apply_to_main` (held under `main-apply.lock`), which preflight-aborts `git am`, asserts clean tree, then applies `git format-patch | git am --3way --trailer auto-pilot-{iter,phase,contract,idempotency}`. Conflict → `git am --abort`, increment `merge_attempts`; after 3 → `merge_pivot_needed` → pivot-detector.
+Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/auto-pilot/iter-N/phase-P/…`. PM mutates `$ROOT` only through `WorktreeManager.apply_to_main` (`main-apply.lock`) via `git format-patch | git am --3way --trailer auto-pilot-{iter,phase,contract,idempotency}`. Conflict → `git am --abort`, increment `merge_attempts`; 3 failures → `merge_pivot_needed`.
 
 ## Reviewer sandbox (PR3, 4 layers)
 
-1. Agent frontmatter `tools:` whitelist — best-effort, not the wall
-2. `hooks/pre-reviewer-write.sh` PreToolUse — keyed on `AUTO_PILOT_SUBAGENT_ROLE` env var; blocks Edit/Write/MultiEdit outside `$AUTO_PILOT_OUTPUT_DIR` and Bash mutation commands (`git commit`, `rm`, `chmod`, …). **Real wall.**
-3. PM post-check `assert_reviewer_was_scoped` — `git status --porcelain --untracked-files=all` empty in both `$ROOT` and worktree after every reviewer return. **Real wall.**
-4. `codex exec --sandbox read-only` — deterrent at the model-tool layer, NOT OS-level.
+1. Agent frontmatter `tools:` whitelist — best-effort
+2. `hooks/pre-reviewer-write.sh` PreToolUse (`AUTO_PILOT_SUBAGENT_ROLE`) — blocks Edit/Write/MultiEdit outside `$AUTO_PILOT_OUTPUT_DIR` + Bash mutations. **Real wall.**
+3. PM `assert_reviewer_was_scoped` — `git status --porcelain` empty after every reviewer return. **Real wall.**
+4. `codex exec --sandbox read-only` — model-layer deterrent (not OS-level).
 
-Concurrent reviewers go through `scripts/_reviewer_wrapper.py` which spawns each Claude Code subprocess with an isolated env dict so the env-var signal never races between PM and parallel reviewers.
+Parallel reviewers use `scripts/_reviewer_wrapper.py` (isolated env per subprocess — prevents env-var signal race).
 
 ## Why a plugin (not skill alone)
 

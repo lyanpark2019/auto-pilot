@@ -1,9 +1,8 @@
 window.DASHBOARD_DATA = {
  "branch": "feat/unified-coding-system",
- "commit": "6d3c008",
+ "commit": "494f67c",
  "counts": {
   "skill": 14,
-  "skill-shell": 1,
   "agent": 23,
   "command": 11,
   "hook": 17,
@@ -19,11 +18,6 @@ window.DASHBOARD_DATA = {
    "type": "skill",
    "name": "auto-pilot",
    "subsystem": "core-loop"
-  },
-  {
-   "type": "skill-shell",
-   "name": "codebase-perfection-loop",
-   "subsystem": "quality"
   },
   {
    "type": "skill",

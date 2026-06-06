@@ -1,5 +1,7 @@
 # Code-docs rubric — derived from autonomous-docs-loop (sportic365-syndicator R1 71→R3 100 validated pattern).
 # 6 dims, 100pt. Pass = 95.
+# Domain scope: vault/notebook DOCUMENTATION quality (hallucination, accuracy, completeness, cross-links, examples, structure).
+# Code-quality rubric SoT = skills/quality-eval (do not duplicate dims here).
 
 structural:
   total_max: 100

@@ -1,5 +1,7 @@
 # notebooklm-vault-builder externalized rubric
 # Customize thresholds without code changes. Re-load on every score run.
+# Domain scope: NotebookLM vault structural + content quality (graph density, ADRs, wiki articles, etc.).
+# Code-quality rubric SoT = skills/quality-eval (do not duplicate dims here).
 
 structural:
   total_max: 100
