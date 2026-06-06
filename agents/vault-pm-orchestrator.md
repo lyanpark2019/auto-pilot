@@ -19,9 +19,9 @@ The plugin supports multiple operating modes:
 
 | Mode | Trigger | Dispatch pattern | Verifier |
 |---|---|---|---|
-| `drift-fix` | `<project>/.vault-builder/fix-plan.json` exists | Per-drift-type worker (gap-filler / orphan-pruner / drift-fixer); parallel per ticket | `pipeline/verify.py` rubric-driven score + per-ticket drift count re-check |
-| `notebooklm` | `<vault>/meta/score-state.json` exists (legacy nbm flow) | Per-rubric-dim worker (density-booster, concept-populator, ...) | `score_*.py` + adversarial-auditor every 2 rounds |
-| `code-area` (autonomous-docs) | `--source code` with no existing docs | 3-wave (independent / dependent / leaf) | docs-verifier per ticket |
+| `drift-fix` | `<project>/.vault-builder/fix-plan.json` exists | Per-drift-type worker (vault-knowledge-author / vault-structure-curator); parallel per ticket | `pipeline/verify.py` rubric-driven score + per-ticket drift count re-check |
+| `notebooklm` | `<vault>/meta/score-state.json` exists (legacy nbm flow) | Per-rubric-dim worker (vault-graph-enricher, vault-knowledge-author, vault-edge-curator, vault-structure-curator) | `score_*.py` + strict re-score audit every 2 rounds |
+| `code-area` (autonomous-docs) | `--source code` with no existing docs | 3-wave (independent / dependent / leaf) | vault-knowledge-author per ticket |
 
 Detect mode by reading state files. Default → `drift-fix` when invoked from `/vault-build`.
 
@@ -79,11 +79,11 @@ This reads `fix-plan.json` into `dispatch-state.json` (idempotent).
 
 Workers in drift-fix mode are **independent per ticket** (each ticket touches a distinct doc + drift type). Always dispatch all pending tickets in a SINGLE message with multiple Agent tool calls. Do not dispatch serially.
 
-Exception: if a ticket targets the same doc as another pending ticket of different drift_type (e.g. orphan + claim_drift on same doc), serialize those two — orphan-pruner first, then drift-fixer. Other tickets stay parallel.
+Exception: if a ticket targets the same doc as another pending ticket of different drift_type (e.g. orphan + claim_drift on same doc), serialize those two — vault-structure-curator (orphan) first, then vault-knowledge-author (claim_drift). Other tickets stay parallel.
 
 ### Adversarial audit (drift-fix mode)
 
-After every 2 rounds, dispatch `content-fact-checker` agent (haiku, independent) to spot-check that fix workers actually fixed drift (not just modified file). It re-runs scan_docs + drift, reports actual delta.
+After every 2 rounds, re-run `vault/pipeline/drift.py` independently (no board belief) to spot-check that fix workers actually fixed drift. Compare actual delta vs internal board counts.
 
 If auditor's drift count > internal board belief by >5 entries → trust auditor, reject affected tickets, escalate.
 
@@ -110,7 +110,7 @@ If auditor's drift count > internal board belief by >5 entries → trust auditor
 3. Issue tickets via ticket_system:
    from ticket_system import TicketBoard
    board = TicketBoard(Path("<vault>/meta/ticket-state.json"))
-   t1 = board.issue(round_num=N, worker_type="community-labeler", contract={...})
+   t1 = board.issue(round_num=N, worker_type="vault-structure-curator", contract={...})
    
 4. Dispatch workers in parallel (single Agent tool message):
    Agent(subagent_type="general-purpose", description="W: ...",
@@ -127,23 +127,23 @@ If auditor's drift count > internal board belief by >5 entries → trust auditor
 
 ## Worker → Dimension mapping
 
-| Gap dimension | Worker type | Reward |
-|---|---|---|
-| graph_density < 15 | density-booster | 5-15 |
-| confidence_balance < 10 | confidence-rebalancer / extracted-booster | 10 |
-| concept_entity_depth < 10 | concept-populator | 10 |
-| adr_pages < 10 | adr-generator | 10 |
-| cross_vault < 10 | cross-vault-linker | 10 |
-| hot_cache < 10 | hot-cache-filler | 10 |
-| wiki_articles < 10 | wiki-stub-expander / stub-merger | 10 |
-| bases < 5 | bases-creator | 5 |
-| backlinks < 10 | backlinks-enricher | 10 |
-| conflict_dup < 10 | cross-cat-prefixer | 10 |
-| community_labels placeholders | community-labeler | 15 |
-| orphan pages | orphan-linker | 5 |
-| edge_fact (content) | edge-fact-corrector | 30 |
-| concept_accuracy (content) | concept-grounding | 20 |
-| adr_fidelity (content) | adr-audit | 15 |
+| Gap dimension | Worker type | Mode | Reward |
+|---|---|---|---|
+| graph_density < 15 | vault-graph-enricher | graph_density | 5-15 |
+| confidence_balance < 10 | vault-edge-curator | confidence_balance | 10 |
+| concept_entity_depth < 10 | vault-knowledge-author | concept_entity_depth | 10 |
+| adr_pages < 10 | vault-knowledge-author | adr_pages | 10 |
+| cross_vault < 10 | vault-graph-enricher | cross_vault | 10 |
+| hot_cache < 10 | vault-graph-enricher | hot_cache | 10 |
+| wiki_articles < 10 | vault-structure-curator | wiki_articles | 10 |
+| bases < 5 | vault-structure-curator | bases | 5 |
+| backlinks < 10 | vault-graph-enricher | backlinks | 10 |
+| conflict_dup < 10 | vault-structure-curator | conflict_dup | 10 |
+| edge_fact (content) | vault-edge-curator | edge_fact | 30 |
+| concept_accuracy (content) | vault-knowledge-author | concept_accuracy | 20 |
+| adr_fidelity (content) | vault-knowledge-author | adr_fidelity | 15 |
+| gap drift | vault-knowledge-author | gap | 10 |
+| orphan drift | vault-structure-curator | orphan | 5 |
 
 ## Verification rubric per worker
 
@@ -167,16 +167,16 @@ def verifier_fn(t: Ticket) -> tuple[bool, str, float]:
 
 ## Adversarial Audit
 
-After every 2 rounds: dispatch `adversarial-auditor` subagent (independent strict re-score).
-Auditor writes `<vault>/meta/audit-rN.md`. Compare its score vs internal score.
-If diff > 5pts, trust auditor (more pessimistic = honest).
+After every 2 rounds: run `vault/scripts/score_structural.py` in strict re-score mode (independent, no score-state cache) to cross-check internal board belief.
+Auditor report written to `<vault>/meta/audit-rN.md`. Compare its score vs internal score.
+If diff > 5pts, trust auditor output (more pessimistic = honest).
 
 ## Content Loop (after structural ≥100)
 
-Switch to content rubric. Dispatch `content-fact-checker`. For each gap:
-- W24 edge-fact-corrector: remove/AMBIGUOUS-demote ungrounded edges
-- W25 concept-grounding: add source citations or remove unsupported claims
-- W26 adr-audit: rewrite ADR sections that don't trace to source
+Switch to content rubric. Run `vault/scripts/score_content.py` for gap identification. For each gap:
+- W24 vault-edge-curator (edge_fact mode): remove/AMBIGUOUS-demote ungrounded edges
+- W25 vault-knowledge-author (concept_accuracy mode): add source citations or remove unsupported claims
+- W26 vault-knowledge-author (adr_fidelity mode): rewrite ADR sections that don't trace to source
 
 ## Stop criteria
 
@@ -195,7 +195,7 @@ After each round, write `<vault>/meta/pm-round-N.md`:
 - Structural: 96 → 99 (+3)
 - Content: 78 → 87 (+9)
 - Tickets: 6 issued / 5 verified / 1 reissued
-- Top worker reward: edge-fact-corrector (+18 net after reject/retry)
+- Top worker reward: vault-edge-curator (+18 net after reject/retry)
 - Next round plan: focus on adr_fidelity (current 8/15)
 ```
 
@@ -235,7 +235,7 @@ for ticket in failed_tickets:
 Write `<vault>/meta/escalations.md` entry and continue. If all remaining tickets succeed but escalations exist:
 - Re-score at end of round
 - If overall score still meets stop criteria → halt with escalation report (user reviews)
-- If score below threshold → next round dispatches **different worker type** for same dim (e.g. concept-populator failed → try wiki-stub-expander as fallback)
+- If score below threshold → next round dispatches **different worker type** for same dim (e.g. vault-knowledge-author failed on concept_entity_depth → try vault-structure-curator as structural fallback; vault-graph-enricher failed on cross_vault → try vault-edge-curator as fallback)
 
 ### Round-level abort
 

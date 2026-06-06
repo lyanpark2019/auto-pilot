@@ -3,7 +3,7 @@
 
 Scans a code repository under `input_path` (CWD by default), classifies modules
 into areas (top-level dirs, package boundaries), bootstraps vault structure,
-and emits ticket plan for docs-worker dispatch.
+and emits ticket plan for vault-knowledge-author dispatch.
 
 Migrated pattern from ~/.claude/skills/autonomous-docs-loop/.
 """
@@ -103,11 +103,11 @@ class CodeAdapter:
                 ("hot.md", (
                     f"---\ntype: meta\ntitle: \"Hot Cache — {c}\"\nstatus: developing\n---\n\n"
                     f"# Hot Cache — {c}\n\n"
-                    f"## God Nodes\n_Populated by hot-cache-filler worker._\n\n"
-                    f"## Cross-bridges\n_Populated by hot-cache-filler worker._\n\n"
-                    f"## Source Files\n_Populated by hot-cache-filler worker._\n\n"
-                    f"## Quick Questions\n_Populated by hot-cache-filler worker._\n\n"
-                    f"## Cross-vault\n_Populated by cross-vault-linker worker._\n"
+                    f"## God Nodes\n_Populated by vault-graph-enricher worker._\n\n"
+                    f"## Cross-bridges\n_Populated by vault-graph-enricher worker._\n\n"
+                    f"## Source Files\n_Populated by vault-graph-enricher worker._\n\n"
+                    f"## Quick Questions\n_Populated by vault-graph-enricher worker._\n\n"
+                    f"## Cross-vault\n_Populated by vault-graph-enricher worker._\n"
                 )),
                 ("log.md", f"---\ntype: log\ncategory: {c}\n---\n\n# Docs Log — {c}\n\n| date | action | file | note |\n|---|---|---|---|\n"),
             ]:
@@ -141,17 +141,17 @@ class CodeAdapter:
                 stub.write_text(
                     f"---\ntype: module\ncategory: {cat}\nsource_files: [\"{it.id}\"]\n"
                     f"status: stub\ncreated: {date.today().isoformat()}\n---\n\n"
-                    f"# {it.label}\n\n## Purpose\n\n_Pending docs-worker._\n\n"
+                    f"# {it.label}\n\n## Purpose\n\n_Pending vault-knowledge-author._\n\n"
                     f"## Public API\n\n## Examples\n\n## Cross-links\n"
                 )
 
     def plan_tickets(self, vault: Path, round_num: int, score_state: dict, **opts: Any) -> list[TicketPlanEntry]:
-        """One ticket per category for docs-worker to fill stubs."""
+        """One ticket per category for vault-knowledge-author to fill stubs."""
         plan = []
         cats = json.loads((vault / "meta" / "categories.json").read_text())
         for cat in cats:
             plan.append(TicketPlanEntry(
-                worker_type="docs-worker",
+                worker_type="vault-knowledge-author",
                 contract={
                     "goal": f"Fill module stubs in {cat}/ with hallucination-free docs",
                     "target_category": cat,

@@ -37,9 +37,8 @@ def test_fix_plan_groups_by_drift_type(tmp_path: Path) -> None:
     assert plan["drift_summary"]["orphan"] >= 1
     assert plan["drift_summary"]["claim_drift"] >= 1
     workers = {t["worker_type"] for t in plan["tickets"]}
-    assert "gap-filler" in workers
-    assert "orphan-pruner" in workers
-    assert "drift-fixer" in workers
+    assert "vault-knowledge-author" in workers
+    assert "vault-structure-curator" in workers
 
 
 def test_verify_runs_against_code_docs_rubric(tmp_path: Path) -> None:

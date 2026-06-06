@@ -62,10 +62,10 @@ class DriftReport:
         lines.append("## Summary")
         lines.append("| Type | Count | Action |")
         lines.append("|---|---|---|")
-        lines.append(f"| Gap (undocumented) | {len(self.gap)} | gap-filler worker |")
-        lines.append(f"| Orphan (dead ref) | {len(self.orphan)} | orphan-pruner worker |")
-        lines.append(f"| Symbol drift | {len(self.symbol_drift)} | drift-fixer worker |")
-        lines.append(f"| Claim drift (signature) | {len(self.claim_drift)} | drift-fixer worker |")
+        lines.append(f"| Gap (undocumented) | {len(self.gap)} | vault-knowledge-author worker |")
+        lines.append(f"| Orphan (dead ref) | {len(self.orphan)} | vault-structure-curator worker |")
+        lines.append(f"| Symbol drift | {len(self.symbol_drift)} | vault-knowledge-author worker |")
+        lines.append(f"| Claim drift (signature) | {len(self.claim_drift)} | vault-knowledge-author worker |")
         lines.append("")
 
         for title, items, fields in [

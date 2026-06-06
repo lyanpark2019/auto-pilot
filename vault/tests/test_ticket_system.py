@@ -14,7 +14,7 @@ def _board(tmp_path: Path) -> TicketBoard:
 
 def test_issue_creates_pending_ticket(tmp_path: Path) -> None:
     board = _board(tmp_path)
-    t = board.issue(round_num=1, worker_type="community-labeler", contract={"goal": "G", "reward": 10})
+    t = board.issue(round_num=1, worker_type="vault-structure-curator", contract={"goal": "G", "reward": 10})
     assert t.status == TicketStatus.PENDING
     assert t.round_num == 1
     assert t.id in board.tickets

@@ -17,7 +17,7 @@ def test_record_writes_jsonl(tmp_path: Path) -> None:
     tr = CostTracker(vault)
     entry = tr.record(
         round_num=1,
-        worker_type="density-booster",
+        worker_type="vault-graph-enricher",
         usage={"input_tokens": 1_000_000, "output_tokens": 500_000},
         model="sonnet",
     )
@@ -25,7 +25,7 @@ def test_record_writes_jsonl(tmp_path: Path) -> None:
     assert entry["cost_usd"] == pytest.approx(10.5, rel=1e-3)
     assert tr.log_path.exists()
     line = tr.log_path.read_text().strip()
-    assert json.loads(line)["worker"] == "density-booster"
+    assert json.loads(line)["worker"] == "vault-graph-enricher"
 
 
 def test_round_and_total_cost(tmp_path: Path) -> None:

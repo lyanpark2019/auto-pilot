@@ -31,18 +31,11 @@ PLUGIN_ROOT = VAULT_ROOT.parent
 
 # The agent/command files the vault subsystem owns inside the merged plugin.
 VAULT_AGENTS = frozenset({
-    "adr-audit", "adr-generator", "adversarial-auditor", "backlinks-enricher",
-    "bases-creator", "community-labeler", "concept-grounding", "concept-populator",
-    "confidence-rebalancer", "content-fact-checker", "cross-cat-prefixer",
-    "cross-vault-linker", "density-booster", "docs-verifier", "docs-worker",
-    "drift-fixer", "edge-enricher", "edge-fact-corrector", "extracted-booster",
-    "gap-filler", "hot-cache-filler", "orphan-linker", "orphan-pruner",
-    "stub-merger", "vault-pm-orchestrator", "wiki-stub-expander",
+    "vault-edge-curator", "vault-graph-enricher", "vault-knowledge-author",
+    "vault-structure-curator", "vault-pm-orchestrator",
 })
 VAULT_COMMANDS = frozenset({
-    "vault-audit", "vault-build", "vault-content-verify", "vault-dashboard",
-    "vault-drift", "vault-resume", "vault-restructure", "vault-score",
-    "vault-selftest", "nbm-to-obsidian",
+    "vault-build", "vault-score", "vault-dashboard", "vault-selftest",
 })
 
 
@@ -119,8 +112,8 @@ def _check_agents() -> Check:
     missing = VAULT_AGENTS - {f.stem for f in agent_files}
     if missing:
         c.fail(f"vault agents missing from agents/: {sorted(missing)}")
-    if len(agent_files) < 20:
-        c.fail(f"only {len(agent_files)} vault agents found (expected {len(VAULT_AGENTS)}: nbm workers + vault-pm-orchestrator + auditor + content-fact-checker + docs-worker + docs-verifier)")
+    if len(agent_files) < len(VAULT_AGENTS):
+        c.fail(f"only {len(agent_files)} vault agents found (expected {len(VAULT_AGENTS)}: {sorted(VAULT_AGENTS)})")
     fm_pattern = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
     for f in agent_files:
         text = f.read_text()
@@ -331,9 +324,12 @@ def _check_restructure() -> Check:
     loop_script = VAULT_ROOT / "scripts" / "restructure_loop.py"
     if not loop_script.exists():
         c.fail("scripts/restructure_loop.py missing")
-    cmd = PLUGIN_ROOT / "commands" / "vault-restructure.md"
+    # vault-restructure was absorbed into vault-build --restructure (consolidation 2026-06-06)
+    cmd = PLUGIN_ROOT / "commands" / "vault-build.md"
     if not cmd.exists():
-        c.fail("commands/vault-restructure.md missing")
+        c.fail("commands/vault-build.md missing (must contain --restructure mode)")
+    elif "--restructure" not in cmd.read_text():
+        c.fail("commands/vault-build.md missing --restructure mode (absorb from vault-restructure)")
     return c
 
 

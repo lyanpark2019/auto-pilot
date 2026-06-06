@@ -14,8 +14,8 @@ Separate from structural score. 100pt, 7 dims focused on factual correctness:
 
 Usage: python3 score_content.py <vault-path> [--sample-edges N] [--strict]
 
-Note: This script provides a heuristic baseline. Full content audit needs the
-content-fact-checker agent for semantic verification beyond token overlap.
+Note: This script provides a heuristic baseline. Full content audit uses
+vault-pm-orchestrator strict re-score mode for semantic verification beyond token overlap.
 """
 
 import json

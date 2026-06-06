@@ -262,19 +262,19 @@ class NotebookLMAdapter:
         scores = score_state.get("scores", {})
         # Mapping mirrors agents/vault-pm-orchestrator.md Worker → Dimension table
         WORKER_FOR_DIM = {
-            "graph_density": "density-booster",
-            "confidence_balance": "confidence-rebalancer",
-            "concept_entity_depth": "concept-populator",
-            "adr_pages": "adr-generator",
-            "cross_vault": "cross-vault-linker",
-            "hot_cache": "hot-cache-filler",
-            "wiki_articles": "wiki-stub-expander",
-            "bases": "bases-creator",
-            "backlinks": "backlinks-enricher",
-            "conflict_dup": "cross-cat-prefixer",
-            "edge_fact": "edge-fact-corrector",
-            "concept_accuracy": "concept-grounding",
-            "adr_fidelity": "adr-audit",
+            "graph_density": "vault-graph-enricher",
+            "confidence_balance": "vault-edge-curator",
+            "concept_entity_depth": "vault-knowledge-author",
+            "adr_pages": "vault-knowledge-author",
+            "cross_vault": "vault-graph-enricher",
+            "hot_cache": "vault-graph-enricher",
+            "wiki_articles": "vault-structure-curator",
+            "bases": "vault-structure-curator",
+            "backlinks": "vault-graph-enricher",
+            "conflict_dup": "vault-structure-curator",
+            "edge_fact": "vault-edge-curator",
+            "concept_accuracy": "vault-knowledge-author",
+            "adr_fidelity": "vault-knowledge-author",
         }
         for dim, worker in WORKER_FOR_DIM.items():
             current = scores.get(dim)

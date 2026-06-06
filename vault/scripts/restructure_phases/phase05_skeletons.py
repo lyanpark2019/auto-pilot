@@ -29,7 +29,7 @@ Domain vault for **{domain}**.
 - `notebooklm-archive/` — frozen NotebookLM source pages (where applicable)
 - `meta/` — vault-builder state (score-state.json, ticket-state.json, etc.)
 
-Run `/vault-build --source code <vault> --input <repo>` to populate from code.
+Run `/vault-build <repo> --obsidian-path <vault>` to populate from code.
 """
 
 

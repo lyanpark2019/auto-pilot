@@ -13,7 +13,7 @@ def test_snapshot_and_rollback(tmp_path: Path) -> None:
     f = vault / "page.md"
     f.write_text("original")
 
-    bak = WorkerBackup(vault, "edge-fact-corrector", round_num=1, ticket_id="T1")
+    bak = WorkerBackup(vault, "vault-edge-curator", round_num=1, ticket_id="T1")
     bak.snapshot(f)
     f.write_text("modified")
     assert f.read_text() == "modified"

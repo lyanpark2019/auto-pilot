@@ -6,10 +6,10 @@ appropriate worker, emits ticket plan JSON. PM agent reads the plan and
 dispatches workers in parallel.
 
 Drift type → worker:
-- gap          → gap-filler        (create new doc page from public_api scan)
-- orphan       → orphan-pruner     (remove dead refs / mark stale)
-- claim_drift  → drift-fixer       (update signature in doc to match code)
-- symbol_drift → drift-fixer       (replace stale symbol with current)
+- gap          → vault-knowledge-author  (create new doc page from public_api scan)
+- orphan       → vault-structure-curator (remove dead refs / mark stale)
+- claim_drift  → vault-knowledge-author  (update signature in doc to match code)
+- symbol_drift → vault-knowledge-author  (replace stale symbol with current)
 
 This script does NOT call Agent. It produces a plan PM consumes.
 """
@@ -30,10 +30,10 @@ else:
 
 
 WORKER_FOR_DRIFT = {
-    "gap": "gap-filler",
-    "orphan": "orphan-pruner",
-    "claim_drift": "drift-fixer",
-    "symbol_drift": "drift-fixer",
+    "gap": "vault-knowledge-author",
+    "orphan": "vault-structure-curator",
+    "claim_drift": "vault-knowledge-author",
+    "symbol_drift": "vault-knowledge-author",
 }
 
 

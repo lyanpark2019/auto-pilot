@@ -2,7 +2,7 @@
 """Worker backup utility: .bak guarantee + rollback.
 
 Workers should call:
-    bak = WorkerBackup(vault, worker="edge-fact-corrector", round_num=N, ticket_id=T)
+    bak = WorkerBackup(vault, worker="vault-edge-curator", round_num=N, ticket_id=T)
     bak.snapshot(path)              # before destructive edit
     bak.snapshot_many([p1, p2])     # batch
     # ... mutate files ...

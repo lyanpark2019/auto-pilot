@@ -18,9 +18,9 @@ def _seed_plan(project: Path) -> None:
     vb.mkdir(parents=True, exist_ok=True)
     (vb / "fix-plan.json").write_text(json.dumps({
         "tickets": [
-            {"id": "T1", "worker_type": "gap-filler",
+            {"id": "T1", "worker_type": "vault-knowledge-author",
              "contract": {"drift_type": "gap", "items": [{"module": "src/a.py"}, {"module": "src/b.py"}]}},
-            {"id": "T2", "worker_type": "drift-fixer",
+            {"id": "T2", "worker_type": "vault-knowledge-author",
              "contract": {"drift_type": "claim_drift", "items": [{"symbol": "x"}]}},
         ]
     }))

@@ -7,7 +7,7 @@ Ticket/Contract system for PM-Worker orchestration.
 Usage:
     from ticket_system import TicketBoard, Ticket
     board = TicketBoard(state_path)
-    t = board.issue(worker='community-labeler', contract={...})
+    t = board.issue(worker='vault-structure-curator', contract={...})
     # dispatch worker with t.to_prompt_context()
     board.deliver(t.id, outputs_paths)
     verified = board.verify(t.id, verifier_fn)
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     # Demo
     import sys
     board = TicketBoard(Path("/tmp/ticket-demo.json"))
-    t = board.issue(round_num=1, worker_type="community-labeler", contract={
+    t = board.issue(round_num=1, worker_type="vault-structure-curator", contract={
         "goal": "Label 41 communities with real 2-5 word names",
         "inputs": ["graph.json", ".graphify_analysis.json"],
         "outputs": [".graphify_labels.json per cat"],
