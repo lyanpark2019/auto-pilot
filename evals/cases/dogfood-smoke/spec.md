@@ -1,7 +1,7 @@
 # Dogfood Smoke — 2-phase
 
 **Date**: 2026-05-28
-**Status**: gate fixture (referenced by `docs/superpowers/specs/2026-05-28-pm-subagent-contract-hardening-design.md` § Dogfooding)
+**Status**: gate fixture (used as acceptance harness for PR1+PR2 Tier 1 and PR3 Tier 2; spec distilled into `docs/architecture.md` §Contract layer/Worktree lifecycle/Reviewer sandbox)
 **Scope**: Minimal 2-phase spec used as the acceptance harness for PR1+PR2 (Tier 1) and PR3 (Tier 2). Designed to be cheap, deterministic, and stable as the plugin evolves.
 
 ## Why

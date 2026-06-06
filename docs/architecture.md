@@ -137,7 +137,7 @@ auto-pilot/
     ├── architecture.md (this file) + master-plan.md + perf-budget.md + 7-phase-template.md
     ├── asset-charter.md               # pillar→asset mapping SoT
     ├── history/                       # distilled changelogs
-    └── specs/ + superpowers/{specs,plans}/
+    └── specs/
 ```
 
 
@@ -165,6 +165,28 @@ Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/auto-p
 4. `codex exec --sandbox read-only` — model-layer deterrent (not OS-level).
 
 Parallel reviewers use `scripts/_reviewer_wrapper.py` (isolated env per subprocess — prevents env-var signal race).
+
+## Evals harness (cut1 landed, cut2 advisory)
+
+Two independent gates — never conflated:
+
+- **Gate 1 — Task-success rate** (`scripts/evals/`): each case runs in a fresh `git clone --local`, executes `orchestrator.py init → headless-loop.py`, then `oracle.py` asserts the deliverable. Regression signal: Newcombe/Wilson two-proportion difference interval on the gated stable subset (cases with 0 baseline flips). Arming threshold: `A ≥ 50` gate attempts. Below that: advisory only.
+- **Gate 2 — Harness health** (existing `dogfood_tier1/2`): kept separate — catches plumbing regressions that don't move the success rate.
+
+Key constraints locked by adversarial review:
+- Each case uses a **separate clone** (not a linked worktree) — inner `WorktreeManager` would create branch/rebase-apply namespace collisions across a shared gitdir.
+- `_budget.py check_caps` counts ALL system `claude` pids; evals pass `--max-concurrent-claude UNCAPPED` so the fork-bomb guard doesn't trip on ambient sessions.
+- `run_case` returns `CaseAttempt(oracle: OracleResult, run: RunResult)` so per-case cost is surfaced for the total-cost ceiling.
+- Deterministic oracle only (no LLM-judge). `error` outcome counts as non-pass.
+
+## Toolkit consolidation (v0.4.0, decisions locked 2026-05-29)
+
+Authored skills/hooks bundled into this plugin as the canonical home. Key decisions from dual adversarial review:
+- `setup-harness` is a nested plugin (carries its own agents/commands); it does NOT bundle as a skill subtree — that would silently drop 11 components.
+- Only the two decision-guard hooks bundle: `guard-destructive.py` + `codex-conductor-guard.py`. Cleanup hooks excluded (destructive/personal-hardcoded).
+- Plugin must validate (`claude plugin validate .`) and be installed before bundling has any observable effect; the installed plugin loads from a version-bucketed cache snapshot.
+- Path fixups in skill bodies use `$SKILL_DIR` self-location or relative paths — NOT `${CLAUDE_PLUGIN_ROOT}` (that var only expands in `hooks.json` command strings and the manifest).
+- Plugin skills are namespaced `auto-pilot:<skill>`. Cross-references within the plugin must be namespace-aware.
 
 ## Why a plugin (not skill alone)
 

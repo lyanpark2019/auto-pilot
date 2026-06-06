@@ -73,6 +73,20 @@ Return a short markdown report:
 **Not analyzable:** <missing inputs — e.g. no transcripts provided, state.json absent>
 ```
 
+## Artifact disposal (after each retro write)
+
+After appending lessons, classify every spec/plan doc that drove this run:
+- **ACTIVE** — spec still has open phases or is the current SoT for a live feature; leave in place.
+- **SHIPPED** — spec fully implemented and merged; all implementation plan checklists are DONE.
+
+For each **SHIPPED** artifact:
+1. Read the file; extract any durable decisions or constraints not yet captured in `docs/architecture.md`, `docs/master-plan.md`, or git history trailers.
+2. If durable content found, append it to `docs/architecture.md` under the appropriate section.
+3. Verify no live repo file cites the path (`grep -rl <path> . --include='*.md'`); fix any live links.
+4. Delete the SHIPPED spec/plan file and report the deleted paths.
+
+Do NOT edit `CLAUDE.md` or `docs/master-plan.md` — those are PM-owned. Report needed changes there instead.
+
 ## Edge cases
 
 - **No state.json and no logs** — report "nothing to analyze" with the globs you tried; append nothing.
