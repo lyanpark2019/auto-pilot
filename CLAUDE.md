@@ -21,16 +21,19 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 ## Layout
 
-- `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace
+- `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace; `.mcp.json` — bundled MCP server config
 - `skills/auto-pilot/SKILL.md` — entry skill (fires on `/auto-pilot`)
-- `skills/` — bundled toolkit skills: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, codebase-perfection-loop (DEPRECATED — no SKILL.md; `references/` kept as rubric provenance, see its README), doc-management (the docs subsystem — REBUILD/MAINTAIN/AUDIT modes; absorbs the retired graphify-doc-rebuild / doc-drift-audit / doc-sync / llm-wiki-architect skills), improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
-- `commands/auto-pilot.md` — `/auto-pilot` slash command; `commands/harness-*.md` (8) — setup-harness commands
-- `agents/` — PM, worker, codex-adversarial / claude-reviewer (legacy), `auto-pilot-{codex,claude}-reviewer.md` (PR3), tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool, `harness-{planner,generator,evaluator}.md` (setup-harness)
-- `hooks/*.sh` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard (toolkit)
-- `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12)
-- `scripts/` — `orchestrator.py`, `headless-loop.py`, plus PR1/PR2/PR3/PR4 modules listed below
+- `skills/` — 19 dirs / 18 active: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, pm-quality-harness-loop, residue-audit, codex-orchestra, sha-deploy-standard, swarm + swarm-{init,bench,status,stop,ticket}, codebase-perfection-loop (DEPRECATED — no SKILL.md; `references/` kept as rubric provenance, see its README), doc-management (the docs subsystem — REBUILD/MAINTAIN/AUDIT modes; absorbs the retired graphify-doc-rebuild / doc-drift-audit / doc-sync / llm-wiki-architect skills), improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
+- `commands/` — 24 slash commands: `auto-pilot{,-server}`, `eval-run`, `harness-*` (8), `vault-*` (9), `nbm-to-obsidian`, `quality-loop`, `setup-claude-md`, `sha-deploy-init`
+- `agents/` — 47 contracts + shared `references/`: core loop (pm-orchestrator, worker, retro), review (codex-adversarial / claude-reviewer legacy, `auto-pilot-{codex,claude}-reviewer.md` PR3, tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool, code-perfector), `harness-{planner,generator,evaluator}.md`, goal-{scout,judge,worker}, swarm-{explorer,monitor,verifier}, vault set (26 — vault-pm-orchestrator, docs-{worker,verifier}, drift/gap/orphan fixers, fact-checkers, enrichers)
+- `hooks/*.sh|*.py` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard, `graphify_update.sh` / `doc-sync-update.sh` (graph-freshness watchers), `notebooklm_delete_gate.sh` (confirm-gated deletes, Bash + MCP shapes), `pm_final_report.sh`
+- `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12); swarm's ticket/score/verify/plugin schemas live in `swarm/schemas/`
+- `scripts/` — `orchestrator.py`, `headless-loop.py`, PR1-PR5 modules listed below, `build_dashboard_data.py`, `quality/` gates
+- `vault/` — export layer (vault-builder absorbed): `pipeline/`, `sources/`, `scripts/`, `rubrics/`, `templates/`, `dashboard/`, `tests/`
+- `swarm/` — parallel execution backend: `scripts/`, `schemas/`, `tests/`, `docs/`
+- `codex/` — 12 codex skill forks (repo = SoT) + `sync-to-codex.sh`; `deploy/` — sha-deploy templates; `dashboard/` — scorecard dashboard; `evals/` — eval harness
 - `docs/architecture.md` — loop + design (canonical)
-- `docs/specs/` — PR-input specs (e.g. `2026-05-28-dogfood-smoke.md`)
+- `docs/specs/` — PR-input specs (e.g. `2026-06-06-unified-coding-system-design.md`)
 - `docs/superpowers/{specs,plans}/` — design specs + implementation plans
 
 ## Python helper modules
@@ -61,11 +64,14 @@ When changing agent contracts or hooks:
 ## Testing
 
 ```bash
-# Full suite (202 tests, mypy + ruff clean)
+# Full suite (228 tests, mypy + ruff clean)
 python3 -m pytest tests/ -q
 python3 -m mypy scripts/ hooks/
 python3 -m ruff check scripts/ tests/ hooks/
-python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py  # bundled hook self-tests (script-style, not pytest)
+python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py && python3 hooks/test_notebooklm_delete_gate.py  # bundled hook self-tests (script-style, not pytest)
+
+# vault export-layer suite (62 tests)
+( cd vault && python3 -m pytest tests/ -q )
 
 # bats: ARL helpers (40) + setup-harness hooks/CLI (47)
 ( cd skills/adversarial-review-loop && bats tests/ )

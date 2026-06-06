@@ -29,65 +29,79 @@ Built directly from `/insights` friction analysis on 381 sessions:
 | Verdict reversal (B4/B5 class) | Both reviewers must independently APPROVE |
 | Whack-a-mole rounds | `pivot-check` exits when same finding repeats 3 rounds |
 
-## Components
+## Components (merged unified-coding-system layout, 2026-06)
 
 ```
 auto-pilot/
 ├── .claude-plugin/
 │   ├── plugin.json                          # manifest (name, version, author)
 │   └── marketplace.json                     # standalone marketplace
-├── skills/auto-pilot/SKILL.md               # entry skill, fires on /auto-pilot
-├── commands/auto-pilot.md                   # /auto-pilot slash command
-├── agents/
-│   ├── pm-orchestrator.md                   # PM contract (main session reads this)
-│   ├── worker.md                            # Sonnet 4.6 1M worker contract
-│   ├── codex-adversarial.md                 # Codex CLI reviewer (legacy)
-│   ├── claude-reviewer.md                   # cold Opus reviewer (legacy)
-│   ├── auto-pilot-codex-reviewer.md         # PR3 plugin subagent, hook-sandboxed
-│   ├── auto-pilot-claude-reviewer.md        # PR3 plugin subagent, hook-sandboxed
-│   ├── tech-critic-lead.md                  # scope-creep rejector
-│   ├── tdd-enforcer.md                      # impl-before-test rejector
-│   ├── security-reviewer.md                 # trust-boundary specialist
-│   └── specialist-pool.md                   # other specialists (db, infra, prompt)
+├── .mcp.json                                # bundled MCP server config (notebooklm vault)
+├── skills/                                  # 19 dirs / 18 active SKILL.md
+│   ├── auto-pilot/                          # entry skill, fires on /auto-pilot (core loop)
+│   ├── adversarial-review-loop/             # dual-track review: branch / codebase / multi-agent modes
+│   ├── quality-eval/                        # 13-dim rubric SoT
+│   ├── pm-quality-harness-loop/             # superset quality-lift + ship orchestrator
+│   ├── residue-audit/                       # semantic dead-code / duplicate audit
+│   ├── doc-management/                      # docs flagship: REBUILD / MAINTAIN / AUDIT (+ L2/L3 guard scripts)
+│   ├── setup-harness/                       # harness bootstrap (+ scripts/ references/ templates/ evals/)
+│   ├── sha-deploy-standard/                 # SHA-pinned deploy standard
+│   ├── codex-orchestra/                     # conductor: Claude plans/reviews, Codex implements
+│   ├── swarm/ + swarm-{init,bench,status,stop,ticket}/   # parallel execution backend skills
+│   ├── improve-codebase-architecture/, diagnosing-{llm-output-leaks,stale-runtime}/
+│   └── codebase-perfection-loop/            # DEPRECATED shell — references/ kept (rubric provenance)
+├── commands/                                # 24 slash commands: auto-pilot{,-server}, eval-run,
+│                                            #   harness-{plan,build,qa,setup,drift,loop,score,verify},
+│                                            #   vault-{build,drift,score,audit,content-verify,dashboard,
+│                                            #   restructure,resume,selftest}, nbm-to-obsidian,
+│                                            #   quality-loop, setup-claude-md, sha-deploy-init
+├── agents/                                  # 47 agent contracts + references/ (shared checklists)
+│   ├── core loop: pm-orchestrator, worker, retro
+│   ├── review: codex-adversarial + claude-reviewer (legacy),
+│   │   auto-pilot-{codex,claude}-reviewer (PR3, hook-sandboxed), tech-critic-lead,
+│   │   tdd-enforcer, security-reviewer, specialist-pool, code-perfector
+│   ├── harness trio: harness-{planner,generator,evaluator}
+│   ├── goal trio: goal-{scout,judge,worker}
+│   ├── swarm: swarm-{explorer,monitor,verifier}
+│   └── vault set (26): vault-pm-orchestrator, docs-{worker,verifier}, drift-fixer,
+│       gap-filler, orphan-pruner, content-fact-checker, adversarial-auditor,
+│       edge/concept/ADR/stub/link enrichers + curators
 ├── hooks/
-│   ├── hooks.json                           # registers SessionStart + PreToolUse + PostToolUse
+│   ├── hooks.json                           # SessionStart + PreToolUse + PostToolUse registrations
 │   ├── preflight-path.sh                    # CWD / vault / state sanity
 │   ├── pre-edit-composition-root.sh         # block ruff --fix on __init__.py (PR0: MultiEdit matcher)
 │   ├── pre-bash-guard.sh                    # block TUI / chained SSL / unsafe bulk fix
 │   ├── pre-reviewer-write.sh                # PR3 reviewer sandbox (layer 2)
-│   └── post-deploy-verify.sh                # zombie port / env placeholder check after deploy
-├── schemas/                                 # PR1: JSON Schema 2020-12
-│   ├── contract.schema.json
-│   ├── ticket.schema.json
-│   └── review.schema.json
-├── scripts/
-│   ├── orchestrator.py                      # state CLI (init/phase-start/end/pivot/status/stop)
-│   ├── headless-loop.py                     # outer driver, cost cap + stash safety (PR4)
-│   ├── _state.py                            # state.json TypedDict + flock + atomic write (PR4)
-│   ├── _config.py                           # AutoPilotConfig dataclass, env-driven defaults
-│   ├── _log.py                              # structured event() logger
-│   ├── _prompts.py                          # prompts/*.md loader
-│   ├── _contract.py                         # PR1: schema validate, atomic write, locks, snapshots
-│   ├── _dispatch.py                         # PR1: ticket prep, diff freeze, round collect
-│   ├── _subagent_helpers.py                 # PR1: ticket read, exit-code, done.marker
-│   ├── _gc.py                               # PR1: bundle size, orphan ticket sweep
-│   ├── _worktree.py                         # PR2: WorktreeManager (create/apply/cleanup/reap)
-│   ├── _status.py                           # PR2: WorkerStatus enum + TERMINAL set
-│   ├── _reviewer_wrapper.py                 # PR3: parallel reviewer dispatch (isolated env)
-│   ├── _dogfood_gate.py                     # PR4: Tier 1/2 assertions + CLI
-│   └── _budget.py                           # PR5: cost / token / pid caps (extracted)
-├── scripts/dogfood_tier1.sh                 # PR4: PR1+PR2 acceptance runner
-├── scripts/dogfood_tier2.sh                 # PR4: full PR3 sandbox runner
+│   ├── post-deploy-verify.sh                # zombie port / env placeholder check after deploy
+│   ├── graphify_update.sh, doc-sync-update.sh   # graph-freshness watchers (feed doc-management MAINTAIN)
+│   ├── notebooklm_delete_gate.sh            # confirm-gated notebooklm deletes (Bash CLI + MCP shapes)
+│   ├── pm_final_report.sh                   # PM final-report emission
+│   ├── guard-destructive.py, codex-conductor-guard.py   # destructive-command + conductor guards
+│   └── test_{guard_destructive,codex_conductor_guard,notebooklm_delete_gate}.py  # hook self-tests
+├── schemas/                                 # PR1: contract/ticket/review JSON Schema 2020-12
+│                                            #   (swarm's ticket/score/verify/plugin schemas → swarm/schemas/)
+├── scripts/                                 # orchestrator.py, headless-loop.py, PR1-PR5 _*.py helpers
+│                                            #   (_state/_config/_log/_prompts/_contract/_dispatch/
+│                                            #   _subagent_helpers/_gc/_worktree/_status/_reviewer_wrapper/
+│                                            #   _dogfood_gate/_budget), build_dashboard_data.py,
+│                                            #   dogfood_tier{1,2}.sh, quality/ (module-size gate)
+├── prompts/                                 # PM/worker/reviewer prompt templates
+├── vault/                                   # export layer (vault-builder absorbed wholesale):
+│                                            #   pipeline/ sources/ scripts/ rubrics/ templates/
+│                                            #   dashboard/ tests/ (62 pytest)
+├── swarm/                                   # parallel execution backend: scripts/ schemas/ tests/ docs/
+├── codex/                                   # 12 codex skill forks (repo = SoT) + sync-to-codex.sh
+├── deploy/                                  # sha-deploy templates
+├── dashboard/                               # plugin structure + scorecard dashboard (index.html, data.js)
+├── evals/                                   # eval harness: cases/, _fixtures/, baseline.json
 ├── docs/
 │   ├── architecture.md                      # this file
+│   ├── master-plan.md                       # purpose, skill-integration map, roadmap
 │   ├── perf-budget.md                       # latency budgets for hot scripts
 │   ├── 7-phase-template.md                  # spec author guide
-│   ├── specs/2026-05-28-dogfood-smoke.md    # PR4 smoke spec
-│   └── superpowers/
-│       ├── specs/                           # design specs (one per major change)
-│       └── plans/                           # implementation plans (PR0..PR4)
-├── prompts/                                 # PM/worker/reviewer prompt templates
-└── tests/                                   # 199 tests; mypy + ruff clean
+│   ├── specs/                               # PR-input specs (incl. 2026-06-06 unified-coding-system)
+│   └── superpowers/{specs,plans}/           # design specs + implementation plans
+└── tests/                                   # 228 tests (pytest); mypy + ruff clean
 ```
 
 ## Loop diagram
