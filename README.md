@@ -1,8 +1,48 @@
 # auto-pilot
 
-Self-driving development loop for Claude Code. Opus 4.7 PM + Sonnet 4.6 (1M) parallel workers + Codex/Claude dual adversarial review + phase verify gates. Full auto, no confirms.
+Unified automated AI coding system for Claude Code. Core: a self-driving development loop — Opus 4.7 PM + Sonnet 4.6 (1M) parallel workers + Codex/Claude dual adversarial review + phase verify gates, full auto, no confirms. Around it: quality lift, harness bootstrap, graphify-native doc management (flagship), a swarm tmux parallel backend, a SHA-pin deploy standard, codex conductor mode, and a vault export layer.
 
 Built from `/insights` friction analysis on 381 sessions — every recurring failure mode is hardcoded as a guard.
+
+## Routing table — task → ONE entry point
+
+Anti-trigger-competition map. Each job has exactly one owner; satellites are listed with their owner, not as alternatives.
+
+| Task | Entry |
+|---|---|
+| Autonomous spec-driven build (phased, in-session) | `/auto-pilot` — true headless: `/auto-pilot-server` |
+| Long-running parallel execution / tmux multi-worker pool / mixed Claude+Codex worker pools | `swarm` skill (`/auto-pilot:swarm`, launch) — satellites `swarm-init` · `swarm-ticket` · `swarm-status` · `swarm-stop` · `swarm-bench`; swarm assets live under `swarm/`, agents `swarm-{explorer,monitor,verifier}` at top-level `agents/` |
+| PR / branch dual review (Codex + cold Claude, loop until both APPROVE) | `adversarial-review-loop` (branch mode) |
+| Codebase quality score + fix loop | `adversarial-review-loop` (codebase mode) — `/quality-loop` is the thin command alias |
+| Full quality lifecycle: lift → adversarial bug-hunt → harness-doc sync → autonomous merge | `pm-quality-harness-loop` |
+| Dead code / duplicates / residue removal | `residue-audit` |
+| Architecture improvement / module boundaries | `improve-codebase-architecture` |
+| Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`, 8 `harness-*` commands) |
+| Docs rotten / 문서 개판 / rebuild docs from code | `doc-management` (REBUILD mode) |
+| Code changed, docs behind / doc sync / 문서 동기화 | `doc-management` (MAINTAIN mode — `scripts/check_design_doc_freshness.py` STALE feed) |
+| Doc drift / 문서 최신화 / docs audit / claim verification | `doc-management` (AUDIT mode) |
+| Vault export to Obsidian / NotebookLM / bases / canvas / dashboard | `/vault-build` (+ `/vault-score` `/vault-audit` `/vault-resume` `/vault-restructure` `/vault-content-verify` `/vault-dashboard` `/vault-selftest`); `/nbm-to-obsidian` = legacy alias of `/vault-build --source notebooklm`. Vault/Obsidian/NotebookLM export is **NOT** doc-management. |
+| Vault-internal drift (exported vault vs source repo) | `/vault-drift` — repo code↔doc drift belongs to `doc-management` (AUDIT mode) instead |
+| CI/CD setup / SHA-based deploy / rollback standard | `sha-deploy-standard` skill + `/sha-deploy-init` command — templates at `deploy/templates/` |
+| Conductor mode (Codex writes code, Claude plans/reviews/gates) | `codex-orchestra` — opt-in via `.codex-conductor` repo-root marker, enforced by `hooks/codex-conductor-guard.py` (registered in `hooks/hooks.json`) |
+| Goal intake / long-horizon task discovery receipts | `goal-scout` / `goal-judge` / `goal-worker` agents (dispatched by plain name from the external goalbuddy skill) |
+| Post-run retrospective → project memory | `retro` agent — PM may dispatch at phase end; appends evidence-cited lessons to the project's `.claude/insights.md` |
+
+**Retired / deleted (do not route here):**
+
+- `codebase-perfection-loop` — deprecated, no SKILL.md; `references/` kept as rubric provenance only (its README explains routing) → use `adversarial-review-loop` (codebase mode) or `pm-quality-harness-loop`
+- `llm-wiki-architect` — deleted (per-module hand-maintained wiki = rot machine)
+- `doc-drift-audit` + `graphify-doc-rebuild` + interim `doc-sync` — absorbed into `doc-management` (AUDIT / REBUILD / MAINTAIN modes); old trigger phrases preserved in its description
+- claim-ledger pattern — NOT adopted (hand-maintained verification JSON rots like any hand-maintained doc); `doc-management` SHA-freshness + AUDIT replace it
+- `autopilot-swarm` skill name — renamed `swarm` (legacy trigger phrases kept in the skill description)
+
+`doc-management` bundles its L2 mechanical guard (`skills/doc-management/scripts/check-doc-reference-integrity.mjs`) and L3 freshness script (`skills/doc-management/scripts/check_design_doc_freshness.py`) as copy-into-repo assets.
+
+Codex CLI skills (12, versioned under `codex/`): this repo is the source of truth — deploy with `codex/sync-to-codex.sh`, see `codex/README.md`.
+
+## Principles (Nisi 2026-06)
+
+Full statement in `CLAUDE.md`. The three that shape every contract: **evidence over trust** — worker verify reports carry a persisted log path + SHA-256, reviewers recompute the hash and re-run (mismatch = REJECT); **retro agent** — dispatchable at phase end, appends doom-loop/wasted-pattern lessons to `.claude/insights.md`; **skills are Gotchas-first, ≤500 lines** — bulk lives in `references/`.
 
 ## Install
 
@@ -56,7 +96,7 @@ For each phase in the spec:
 1. **Tech-critic gate** — `tech-critic-lead` rejects scope-creep contracts BEFORE workers touch code ("기능은 비용", from cc-system)
 2. PM plans N non-overlapping work contracts
 3. Dispatches N Sonnet 4.6 workers in 1 message (parallel) in isolated worktrees
-4. Each worker edits, runs verify, reports diff
+4. Each worker edits, runs verify tee'd to a persisted log, reports diff + verify-log path + SHA-256 (hash-less reports are bounced before review; reviewers recompute the hash)
 5. Dispatches reviewers in 1 message (parallel):
    - `codex-adversarial` (always)
    - `claude-reviewer` cold (always)

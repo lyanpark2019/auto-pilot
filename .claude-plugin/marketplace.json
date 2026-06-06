@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "auto-pilot-marketplace",
-  "description": "lyan's plugins \u2014 the auto-pilot autonomous PM-Worker-Reviewer development loop.",
+  "description": "lyan's plugins — auto-pilot, the unified automated AI coding system.",
   "owner": {
     "name": "lyan",
     "email": "art5@fyqro.com"
@@ -10,13 +10,16 @@
     {
       "name": "auto-pilot",
       "source": "./",
-      "description": "auto-pilot dev loop + bundled personal toolkit (quality/review, doc-drift, debugging skills, setup-harness bootstrapper + safety hooks).",
-      "version": "0.5.4",
+      "description": "Unified automated AI coding system — autonomous loop, dual adversarial review, quality lift, harness bootstrap, graphify-native doc management, swarm parallel backend, SHA-pin deploy, codex conductor, vault export.",
+      "version": "0.6.0",
       "category": "automation",
       "tags": [
         "autonomous",
         "multi-agent",
-        "adversarial-review"
+        "adversarial-review",
+        "doc-management",
+        "swarm",
+        "sha-deploy"
       ]
     }
   ]
