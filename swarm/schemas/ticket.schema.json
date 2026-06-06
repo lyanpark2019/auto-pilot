@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/swarm/schemas/ticket.schema.json",
+  "title": "AutopilotTicket",
+  "description": "Autopilot swarm worker ticket payload",
+  "type": "object",
+  "required": [
+    "id",
+    "topic",
+    "title",
+    "prompt",
+    "scope_paths",
+    "acceptance",
+    "engine_hint",
+    "role",
+    "difficulty",
+    "issued_at",
+    "issued_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^T-[0-9]{8}-[0-9]{6}$"
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 1
+    },
+    "milestone": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "knowledge_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scope_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "acceptance": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "engine_hint": {
+      "type": "string",
+      "enum": ["claude", "codex", "haiku", "sonnet", "opus"]
+    },
+    "role": {
+      "type": "string",
+      "enum": ["architecture-review", "codegen", "general", "security", "verification"]
+    },
+    "difficulty": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "issued_by": {
+      "type": "string"
+    },
+    "worktree": {
+      "type": "string"
+    }
+  }
+}

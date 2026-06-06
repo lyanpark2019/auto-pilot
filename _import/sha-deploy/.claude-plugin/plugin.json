@@ -1,8 +1,0 @@
-{
-  "name": "sha-deploy",
-  "version": "1.0.0",
-  "description": "SHA-based CI/CD deploy standard for GitHub Actions. Generates ci.yml with SHA targeting, auto .env, audit trail, and rollback support.",
-  "author": {
-    "name": "MoneyPick-KO"
-  }
-}
