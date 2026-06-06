@@ -1,10 +1,10 @@
 window.DASHBOARD_DATA = {
  "branch": "feat/unified-coding-system",
- "commit": "7171bda",
+ "commit": "9f98202",
  "counts": {
-  "skill": 20,
+  "skill": 18,
   "skill-shell": 1,
-  "agent": 46,
+  "agent": 47,
   "command": 24,
   "hook": 11,
   "codex-skill": 12
@@ -19,11 +19,6 @@ window.DASHBOARD_DATA = {
    "type": "skill",
    "name": "auto-pilot",
    "subsystem": "core-loop"
-  },
-  {
-   "type": "skill",
-   "name": "autopilot-swarm",
-   "subsystem": "swarm"
   },
   {
    "type": "skill-shell",
@@ -47,17 +42,7 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "skill",
-   "name": "doc-drift-audit",
-   "subsystem": "docs-core"
-  },
-  {
-   "type": "skill",
-   "name": "doc-sync",
-   "subsystem": "docs-core"
-  },
-  {
-   "type": "skill",
-   "name": "graphify-doc-rebuild",
+   "name": "doc-management",
    "subsystem": "docs-core"
   },
   {
@@ -89,6 +74,11 @@ window.DASHBOARD_DATA = {
    "type": "skill",
    "name": "sha-deploy-standard",
    "subsystem": "deploy"
+  },
+  {
+   "type": "skill",
+   "name": "swarm",
+   "subsystem": "swarm"
   },
   {
    "type": "skill",
@@ -288,6 +278,11 @@ window.DASHBOARD_DATA = {
   {
    "type": "agent",
    "name": "pm-orchestrator",
+   "subsystem": "core-loop"
+  },
+  {
+   "type": "agent",
+   "name": "retro",
    "subsystem": "core-loop"
   },
   {
