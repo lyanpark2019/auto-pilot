@@ -78,7 +78,20 @@ Skill creation/edit follows `skill-creator` + `plugin-dev:skill-development` met
 
 ~/.claude originals of moved assets deleted; guard-destructive.py/codex-conductor-guard.py/code-perfector.md in ~/.claude replaced by symlinks into plugin; ~/.codex moved-skill dups deleted + sync script run; project-local harness copies deleted (clai-api, PickL, sportic365-API — local commits, push gated); old plugin dirs (vault-builder, sha-deploy, autopilot-swarm) removed from ~/.claude/plugins; memory + handoff updated.
 
-## Risks (honest)
+## Round 2 — consolidation & perfection loop (scope: workflow #2; round-1 reviewers MUST NOT judge the build against this section)
+
+CEO directive: similar assets truly MERGED, not co-located; iterate the improve/consolidate loop until convergence. Round-1 = correct absorption (this spec above). Round-2 = density:
+
+| Target | Now | After | Method |
+|---|---|---|---|
+| vault agents | 26 | ~9 | function-group merges: drift trio→`vault-drift-fixer` · edge ×4→`vault-edge-curator` · density/orphan-link/backlinks/cross-vault/hot-cache→`vault-graph-enricher` · concept ×2 + adr ×2→`vault-knowledge-author` · stub ×2 + community-labeler + cross-cat-prefixer + bases-creator→`vault-structure-curator` · keep: vault-pm-orchestrator, docs-worker, docs-verifier, content-fact-checker, adversarial-auditor. Rubric dim→worker maps updated in the same change. |
+| vault commands | 10 | ~4 | vault-build (+resume/restructure flags) · vault-score (+audit/content-verify modes) · vault-dashboard · vault-selftest; delete nbm-to-obsidian (self-described legacy alias) |
+| swarm skills | 6 | 2 | `swarm` (init/start/status/stop/ticket unified) + `swarm-bench`; 3 swarm agents stay (distinct roles) |
+| harness commands | 8 | 2 | `/harness <plan\|build\|qa>` + `/harness-ops <setup\|drift\|loop\|score\|verify>` — thin arg routing |
+| quality-loop command | 1 | 0 | pure alias; skill triggers cover it |
+| goal-{scout,judge,worker} | in plugin | revert to ~/.claude | they serve the EXTERNAL goalbuddy skill by plain-name dispatch — out of coding-system scope |
+
+**Loop contract (체계화):** repeat rounds of [CONSOLIDATE/OPTIMIZE → functional QA (F1–F6: hook stdin cases, discovery, script smokes incl. freshness fixtures + vault selftest + MCP boot, full suites, quality-eval 13-dim honest score, eval smoke) → skill-reviewer pass → dual adversarial review] until BOTH reviewers APPROVE with zero new findings; cap 4 rounds then honest stop-report. Every merge passes a zero-capability-loss diff check (old content coverage mapped into new home). Each round = logical commits. Self-assessment never claims perfection — residual risks always listed.
 
 - vault Python path move: import breakage risk — gated by running vault tests post-move.
 - Reviewer-pair "merge" is checklist extraction, not file fusion — file fusion would break tested dispatch-by-name; this is the deepest safe dedup.
