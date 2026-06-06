@@ -30,6 +30,8 @@ def diff_upper(
     x_new: int, n_new: int, x_base: int, n_base: int, z: float = Z95
 ) -> float:
     """Newcombe method-10 upper bound of ``(p_new - p_base)``."""
+    if n_new == 0 or n_base == 0:
+        return 1.0  # undefined proportion difference => max upper bound, never fires
     p1, p2 = x_new / n_new, x_base / n_base
     _, u1 = _wilson(x_new, n_new, z)
     l2, _ = _wilson(x_base, n_base, z)
@@ -51,5 +53,5 @@ def is_regression(
     is below ``-margin``.
     """
     armed = n_new >= arm_min
-    failed = armed and diff_upper(x_new, n_new, x_base, n_base) < -margin
+    failed = armed and n_base > 0 and diff_upper(x_new, n_new, x_base, n_base) < -margin
     return armed, failed
