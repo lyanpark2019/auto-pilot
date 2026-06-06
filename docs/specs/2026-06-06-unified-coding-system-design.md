@@ -59,7 +59,7 @@ Skill creation/edit follows `skill-creator` + `plugin-dev:skill-development` met
 
 ## Merge invariants (must not be lost — reviewers check these)
 
-4-layer reviewer sandbox · diff SHA256 freeze · schema-valid review.json · scope-drift/scope-reduction HARD reject · tech-critic pre-gate · pivot-check (3-round stop) · atomic commit trailers · composition-root guard · cost/token/fork-bomb caps · POSIX-mv atomic ticket claim · adversarial verifier + worker weights · vault 2-rubric adaptive dispatch + 3-strike escalation + adversarial-auditor cadence · 13-dim rubric + anti-inflation citation rule · claim-ledger update-by-claim_id discipline · guard-destructive 35+ patterns + marker + scrubbing (13 tests) · goalbuddy receipt contracts.
+4-layer reviewer sandbox · diff SHA256 freeze · schema-valid review.json · scope-drift/scope-reduction HARD reject · tech-critic pre-gate · pivot-check (3-round stop) · atomic commit trailers · composition-root guard · cost/token/fork-bomb caps · POSIX-mv atomic ticket claim · adversarial verifier + worker weights · vault 2-rubric adaptive dispatch + 3-strike escalation + adversarial-auditor cadence · 13-dim rubric + anti-inflation citation rule · guard-destructive 35+ patterns + marker + scrubbing (13 tests) · goalbuddy receipt contracts.
 
 ## Structural rules
 
