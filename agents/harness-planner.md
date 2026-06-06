@@ -43,10 +43,10 @@ Take the user's short prompt (1–4 sentences) and expand it into an **ambitious
 
 Order features into 3–10 sprints. Each sprint is independently testable.
 
-| Sprint | Features | Definition of done |
-|--------|----------|-------------------|
-| 1 | F1, F2 | {what the user can do at end of sprint} |
-| ... | ... | ... |
+| Sprint | Features | Goal | Public interface candidate | Invariant candidate | Expected check |
+|--------|----------|------|----------------------------|---------------------|----------------|
+| 1 | F1, F2 | {what the user can do at end of sprint} | {route/component/doc/command contract exposed} | {rule that must stay true} | {observable test/check} |
+| ... | ... | ... | ... | ... | ... |
 
 ## Stack constraints (only if user specified)
 {e.g., "must use React + FastAPI + Postgres" — leave blank otherwise}
@@ -61,8 +61,29 @@ Order features into 3–10 sprints. Each sprint is independently testable.
 2. **Read** `CLAUDE.md` and `docs/adr/` to understand existing constraints.
 3. If `.claude/harness/spec.md` already exists → **merge mode**: enhance, don't overwrite.
 4. **Write** `.claude/harness/spec.md`.
-5. **Echo** the sprint breakdown table in your final reply.
-6. Hand off: tell the user to invoke `@harness-generator` next.
+5. If `.claude/harness/progress.json` does not exist, initialize it with one
+   entry per sprint and status `pending`. Keep existing statuses in merge mode.
+6. **Echo** the sprint breakdown table in your final reply.
+7. Hand off: tell the user to invoke `@harness-generator` next.
+
+## Progress template
+
+```json
+{
+  "version": 1,
+  "updated_at": "YYYY-MM-DDTHH:mm:ssZ",
+  "sprints": [
+    {
+      "id": 1,
+      "title": "Sprint name",
+      "status": "pending",
+      "contract": ".claude/harness/sprints/01-contract.md",
+      "handoff": ".claude/harness/sprints/01-handoff.md",
+      "eval": ".claude/harness/sprints/01-eval.md"
+    }
+  ]
+}
+```
 
 ## Anti-patterns
 
@@ -70,6 +91,7 @@ Order features into 3–10 sprints. Each sprint is independently testable.
 - ❌ Picking specific UI library versions — Generator should research current
 - ❌ Single 50-feature sprint — fail-fast principle requires testable chunks
 - ❌ Skipping AI integration opportunities — defeats the point
+- ❌ Omitting interface / invariant cues — Generator cannot negotiate a safe sprint contract without them
 
 ## Cost cap
 

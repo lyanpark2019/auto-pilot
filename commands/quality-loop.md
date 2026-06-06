@@ -32,7 +32,7 @@ Project config: {cwd}/.quality-loop.json (선택, language/cmd/exclude 오버라
 
 1. **Arguments parse** — flag 추출, state file 존재 시 resume 여부 묻기.
 
-2. **Skill dispatch** — `Skill("adversarial-review-loop", args="mode=codebase target=<N> dimension=<X> parallel=<mode>")` 호출.
+2. **Skill dispatch** — `Skill("auto-pilot:adversarial-review-loop", args="mode=codebase target=<N> dimension=<X> parallel=<mode>")` 호출.
 
 3. **Skill 완료 대기** — codebase mode state machine 이 INIT → ANALYZE → EVALUATE → APPROVE → EXECUTE → RESCORE → CHECK 순회. 사용자 gate (APPROVE) 에서 멈추고 입력 받음.
 
@@ -41,7 +41,7 @@ Project config: {cwd}/.quality-loop.json (선택, language/cmd/exclude 오버라
 </process>
 
 <note>
-이전 standalone /quality-loop 의 전체 state machine 본문은 ~/.claude/skills/adversarial-review-loop/SKILL.md 의 "# codebase mode" 섹션으로 이전됨. 본 command 파일은 thin wrapper.
+이전 standalone /quality-loop 의 전체 state machine 본문은 `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/SKILL.md` 의 "# codebase mode" 섹션으로 이전됨. 본 command 파일은 thin wrapper.
 
 quality-eval skill (13-dim rubric data) 은 codebase mode 가 EVALUATE/RESCORE 단계에서 reference 로 사용. 독립 호출도 가능 (rubric 자체만 보고 싶을 때).
 </note>

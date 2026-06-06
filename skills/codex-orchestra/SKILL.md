@@ -171,9 +171,9 @@ touch <repo-root>/.codex-conductor   # enable: block Claude code/test edits
 rm    <repo-root>/.codex-conductor   # disable
 ```
 
-A global `PreToolUse(Edit|Write|MultiEdit|NotebookEdit)` hook
-(`~/.claude/hooks/codex-conductor-guard.py`, registered in
-`~/.claude/settings.json`) then denies Claude edits to source/test code in that
+A `PreToolUse(Edit|Write|MultiEdit|NotebookEdit)` hook
+(`${CLAUDE_PLUGIN_ROOT}/hooks/codex-conductor-guard.py`, registered in this
+plugin's `hooks/hooks.json`) then denies Claude edits to source/test code in that
 repo and points back to `/codex-orchestra`. Markdown/docs/text and anything under
 `plans/` stay editable so the conductor can still write artifacts. Repos without
 the marker are unaffected (hook fails open).

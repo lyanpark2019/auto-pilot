@@ -64,6 +64,8 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
    Push, advance phase counter.
 10. **REPEAT** until spec's last phase verify passes or hard stop fires
 
+At phase end the PM MAY dispatch the `retro` agent (`agents/retro.md`) — appends evidence-cited doom-loop/wasted-pattern lessons to the project's `.claude/insights.md`; no verdicts, never blocks the loop.
+
 ### Hard stops
 
 - Spec's final phase verify all green → SUCCESS report, exit
@@ -98,6 +100,14 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 | Implementation without tests | `tdd-enforcer` rejects runtime change diffs missing matching test file |
 | Workers touching files outside their contract | `claude-reviewer` + `codex-adversarial` scope-drift check (auto-REJECT on out-of-scope edits) |
 | Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase, `git reset --hard` on `status=failed` |
+
+## Parallel execution backend
+
+The plugin's swarm subsystem is an alternative execution backend: a persistent tmux multi-worker pool (1 PM pane + 4-10 worker panes, each on its own git worktree, file-based ticket bus under `.planning/autopilot/`). Entry points: `/auto-pilot:swarm` (launch), `swarm-init` (config), `swarm-ticket` (inject work), `swarm-status` / `swarm-stop` / `swarm-bench`. Scripts live at `${CLAUDE_PLUGIN_ROOT}/swarm/`.
+
+When to prefer which:
+- **In-session subagents (this skill's default)** — spec-driven phased work in ONE session; PM context carries between phases; review fan-out + verify gates happen inline; ends when the spec ends.
+- **Swarm** — long-running or open-ended goals that should outlive this session, mixed Claude+Codex worker pools, or when you want workers surviving session restarts and observable in tmux. Swarm schedules by ticket scores/ledger, not by spec phases.
 
 ## Read these references when relevant
 

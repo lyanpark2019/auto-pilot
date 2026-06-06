@@ -19,23 +19,42 @@ Triggered when a Sprint contract is freshly written by Generator.
 2. Read `.claude/harness/sprints/{NN}-contract.md`
 3. Verify:
    - Contract scope matches what spec called for in this sprint
-   - "Testable behaviors" are concrete, observable, and exhaustive enough
-   - "Files that will change" is reasonable for the scope
+   - Required sections are present: Goal, Public interface, Deep module / internal location, Invariants, Write set, Tests / checks, Rollback surface, Evaluator gate before merge, Out of scope, Sign-off
+   - Goal includes concrete build steps and cites the stack from the spec
+   - Public interface names the exposed route/component/doc/command contract and compatibility promise
+   - Deep module names the internal owner files/modules that hide the complexity
+   - Invariants are concrete enough to falsify
+   - Tests / checks are concrete, observable, and exhaustive enough
+   - Write set is reasonable for the scope and calls out locked files
+   - Rollback surface explains revert path, data/config cleanup, and user-visible risk
    - "Out of scope" doesn't punt critical work that was actually in the sprint
 4. Reply with either:
    - ✅ **Sign off** — append `Evaluator: approved` to the contract file
    - ❌ **Reject** — append `Evaluator: rejected — {specific reason}` and tell Generator to revise
+
+Reject immediately if a contract lacks `public interface`, `deep module`,
+`invariant`, `write set`, `tests/checks`, or `rollback surface`. Vague checks
+such as "manually inspect" without observable evidence are also rejectable.
 
 ### Mode B: Implementation review (AFTER code is written)
 
 Triggered when Generator writes `{NN}-handoff.md`.
 
 1. Read the contract `{NN}-contract.md`
-2. For **each** testable behavior:
+2. Confirm the actual changed files are a subset of the approved write set:
+   ```bash
+   git diff --name-only
+   git diff --cached --name-only
+   # Generator commits each logical chunk, so also diff the sprint's commit range:
+   git diff --name-only {pre-sprint commit}..HEAD
+   ```
+   FAIL if any path is outside the approved write set unless the contract was
+   revised and re-approved first.
+3. For **each** testable behavior:
    - Exercise the running app via Playwright CLI (`npx playwright test`, or write a one-shot test)
    - For APIs, use `curl` or `hurl`
    - Examine logs, db state, network behavior
-3. Score against these criteria (hard threshold each — fail one → fail sprint):
+4. Score against these criteria (hard threshold each — fail one → fail sprint):
 
 | Criterion | Threshold |
 |-----------|-----------|
@@ -43,9 +62,11 @@ Triggered when Generator writes `{NN}-handoff.md`.
 | Functionality | No broken core UX (button doesn't respond, form silently fails, etc.) |
 | Visual design | No layout breakage, no overflow, no z-index inversion (use Playwright screenshot diff) |
 | Code quality | Linter passes, type check passes, no `any` abuse, no comment floods |
+| Contract/write-set compliance | Final diff is within approved write set and required checks have evidence |
+| Rollback surface | Handoff names revert path and data/config cleanup if applicable |
 | AI integration (if spec called for it) | The AI feature actually works end-to-end, not stubbed |
 
-4. Write report → `.claude/harness/sprints/{NN}-eval.md`:
+5. Write report → `.claude/harness/sprints/{NN}-eval.md`:
 
 ```markdown
 # Sprint {NN} Evaluation
@@ -60,6 +81,8 @@ Triggered when Generator writes `{NN}-handoff.md`.
 ### Functionality: ...
 ### Visual design: ...
 ### Code quality: ...
+### Contract/write-set compliance: ...
+### Rollback surface: ...
 
 ## Bugs found
 | Severity | Location | Issue | Fix suggestion |
@@ -68,7 +91,7 @@ Triggered when Generator writes `{NN}-handoff.md`.
 | ... | ... | ... | ... |
 ```
 
-5. Update `progress.json`:
+6. Update `progress.json`:
    - PASS → mark sprint `completed`
    - FAIL → mark `needs_revision`, Generator picks up the eval report
 

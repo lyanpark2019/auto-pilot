@@ -4,6 +4,14 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 > **Read first for full context:** [`docs/master-plan.md`](docs/master-plan.md) — purpose (brownfield skill-integration loop), skill-integration map, progress, roadmap. Loop design detail: [`docs/architecture.md`](docs/architecture.md).
 
+## Principles (Nisi 2026-06)
+
+- **Enforce with code, not prompts** — invariants live in hooks, schemas, and state machines; prose explains, it does not enforce.
+- **Evidence over trust** — verify claims carry a persisted log + SHA-256 (`shasum -a 256`); reviewers recompute the hash, mismatch = REJECT.
+- **Skills = Gotchas-first, ≤500 lines** — guide around landmines instead of re-teaching coding; bulk goes to `references/`.
+- **Failures are harness bugs** — fix the system (hook, schema, gate, agent contract), not the one bad output.
+- **Measure with evals before believing** — a change "helps" only after the `evals/` harness says so, not because it reads well.
+
 ## Publish identity
 
 - **GitHub owner:** `lyanpark2019` (NOT Sewhoan, NOT fyqro)
@@ -15,7 +23,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 - `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace
 - `skills/auto-pilot/SKILL.md` — entry skill (fires on `/auto-pilot`)
-- `skills/` — bundled toolkit skills: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, codebase-perfection-loop, doc-drift-audit, llm-wiki-architect, improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
+- `skills/` — bundled toolkit skills: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, codebase-perfection-loop (DEPRECATED — no SKILL.md; `references/` kept as rubric provenance, see its README), doc-management (the docs subsystem — REBUILD/MAINTAIN/AUDIT modes; absorbs the retired graphify-doc-rebuild / doc-drift-audit / doc-sync / llm-wiki-architect skills), improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
 - `commands/auto-pilot.md` — `/auto-pilot` slash command; `commands/harness-*.md` (8) — setup-harness commands
 - `agents/` — PM, worker, codex-adversarial / claude-reviewer (legacy), `auto-pilot-{codex,claude}-reviewer.md` (PR3), tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool, `harness-{planner,generator,evaluator}.md` (setup-harness)
 - `hooks/*.sh` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard (toolkit)
