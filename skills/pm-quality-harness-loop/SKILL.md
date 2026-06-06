@@ -36,10 +36,10 @@ prove correctness, sync the harness docs, and ship. Triggers include "big-tech 9
 
 Do NOT reach here for the narrower jobs the sub-skills already own:
 - Only want a score / 13-dim rubric pass → `auto-pilot:quality-eval`.
-- Only want to fan out fixes + re-score (no doc-sync, no merge) → `auto-pilot:adversarial-review-loop` codebase/multi-agent mode directly.
+- Only want to fan out fixes + re-score (no doc-update phase, no merge) → `auto-pilot:adversarial-review-loop` codebase/multi-agent mode directly.
 - Only want a Codex×Claude review of a branch → `adversarial-review-loop` branch mode.
-- Only want doc↔code drift fixed → `auto-pilot:doc-drift-audit`.
-- Only want dead-code/residue removed → `residue-audit`.
+- Only want doc↔code drift fixed → `auto-pilot:doc-management` (AUDIT → MAINTAIN).
+- Only want dead-code/residue removed → `auto-pilot:residue-audit`.
 
 The unique value here is *sequencing* those into one honest, shippable pass.
 
@@ -153,7 +153,7 @@ miss new knobs, or cite removed symbols. Sync them:
   `check_doc_links.py`). If the repo has no such guard, install one and wire it into the
   verify path — mechanical `file:line`-integrity checks are the only thing that keeps
   docs honest at scale. (Semantic drift is a separate, human/skill pass — see
-  `doc-drift-audit`.)
+  `doc-management` AUDIT mode.)
 
 Why this phase exists: a quality lift that leaves the docs lying is a regression in
 the dimension that matters most for the *next* engineer. This is the phase the bare
@@ -208,6 +208,6 @@ conservative-eval rule requires it.
 
 - `auto-pilot:adversarial-review-loop` — the engine (multi-agent dim fan-out + branch-mode bug-hunt). Cited, not duplicated.
 - `auto-pilot:quality-eval` — the 13-dim rubric, weights, hard-fail + anti-inflation rules.
-- `auto-pilot:doc-drift-audit` — semantic doc↔code drift (Phase 3 handles mechanical/known-gate drift; this handles unknown semantic drift).
-- `residue-audit` — dead-code/duplicate removal (a Phase-1 dimension tool).
+- `auto-pilot:doc-management` (AUDIT mode) — semantic doc↔code drift (Phase 3 handles mechanical/known-gate drift; AUDIT handles unknown semantic drift).
+- `auto-pilot:residue-audit` — dead-code/duplicate removal (a Phase-1 dimension tool).
 - `superpowers:verification-before-completion` — evidence-before-assertions discipline behind the honest DoD.

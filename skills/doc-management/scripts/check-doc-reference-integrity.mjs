@@ -2,9 +2,10 @@
 /**
  * Doc Reference Integrity — deterministic doc↔code drift guard (project-agnostic).
  *
- * Bundled by the doc-drift-audit skill as the reusable Step-5 guard. Copy into a
- * project's scripts/ dir, edit the CONFIG block for that repo, and wire into the
- * project's doc-check / CI step. No dependencies (Node built-ins only).
+ * Bundled by the doc-management skill as the reusable L2 guard (installed by
+ * AUDIT mode Step 5 / REBUILD Phase 6). Copy into a project's scripts/ dir, edit
+ * the CONFIG block for that repo, and wire into the project's doc-check / CI
+ * step. No dependencies (Node built-ins only).
  *
  * Catches the MECHANICAL drift class (regex-deterministic, 100% on this class):
  *   1. inline path references in contract docs that no longer resolve
@@ -13,8 +14,8 @@
  *      window so legit "consolidated/replaced/deleted X" notes are NOT flagged
  *
  * Semantic drift (prose that lies about logic) is NOT in scope here — that needs
- * the LLM fan-out audit (the rest of the doc-drift-audit skill). Hook + skill
- * together; neither alone is enough.
+ * the LLM fan-out audit (doc-management AUDIT mode). Guard + audit together;
+ * neither alone is enough.
  *
  * Exit 1 on any non-baselined violation; prints each with a fix hint.
  */

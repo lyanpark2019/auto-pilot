@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Historical note (2026-06-06):** `llm-wiki-architect`, bundled by this plan, was later DELETED by the unified-coding-system merge (per-module wiki = rot machine); its territory routes to `graphify-doc-rebuild` (→ `doc-management`). Mentions below are the 2026-05-29 record, not current state. See `docs/specs/2026-06-06-unified-coding-system-design.md`.
+
 **Goal:** Bundle the user's 8 authored skills + 2 authored hooks + 1 agent into the `auto-pilot` plugin (v0.4.0), with the cross-ref/path/test fixups the dual adversarial review required, so they are managed as one installed plugin.
 
 **Architecture:** Non-destructive COPY of authored components into the plugin tree; repoint absolute `~/.claude` refs to plugin-relative paths; register hooks in `hooks/hooks.json` with `${CLAUDE_PLUGIN_ROOT}` + matchers ported from `settings.json`; wire `hooks/` into the CI gate; bump version; flip the global duplicate skills `off`; reinstall the plugin from its local marketplace and verify it validates + loads. The installed plugin is a **cache snapshot** (`~/.claude/plugins/cache/auto-pilot-marketplace/auto-pilot/<version>`), so changes only take effect after a version bump + reinstall.

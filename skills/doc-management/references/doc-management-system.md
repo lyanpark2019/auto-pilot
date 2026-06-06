@@ -1,7 +1,7 @@
 # Graphify-Native 문서 관리 시스템 — 스펙 v1 (2026-06-06)
 
 > 모든 프로젝트에 적용 가능한 문서 **생성 → 관리 → 업데이트 자동화** 체계. PickL-API 에서 end-to-end 1회 검증 (22937→code-only 그래프, 345p 손-유지 wiki 폐기, design 10 + rules 4 재작성, 이중 적대 리뷰 r1 REJECT→r2 APPROVE, 가드+훅 잠금).
-> 스킬 본체: `~/.claude/skills/graphify-doc-rebuild/SKILL.md` (실행 절차) — 이 문서는 시스템 설계 스펙 (왜 이 구조인가 + 계약 + 자동화 사양).
+> 스킬 본체: 이 플러그인의 `doc-management` 스킬 (`../SKILL.md`, 3-mode: REBUILD/MAINTAIN/AUDIT; REBUILD 실행 절차 = `rebuild-phases.md`) — 이 문서는 시스템 설계 스펙 (왜 이 구조인가 + 계약 + 자동화 사양). (구 `graphify-doc-rebuild` 스킬은 doc-management 로 통합되어 retire.)
 
 ---
 
@@ -43,7 +43,7 @@ Why 층 위치는 프로젝트 선택: vault `intent/`(PickL 방식) 또는 repo
 
 ## 3. 생성 (REBUILD — 신규/전면 재구축)
 
-스킬 SKILL.md 7-phase 가 실행 사양. 요지:
+`rebuild-phases.md` 7-phase 가 실행 사양. 요지:
 
 0. **진단 게이트** — rot 은 가설이지 사실 아님. 병렬 read-only 감사 (모순 스캔/구조 건강/git-lag) → `disciplined` 면 부분 정리로 끝, `patchwork` 만 전면 재구축.
 1. **code-only 그래프**: `graphify update .`(AST-only, 키 불필요) → graph.json 필터: `file_type=="code"` **AND** 언어 확장자 AND tests/scratch 경로 제외 (file_type 단독 불충분 — json/sh/test 도 달림) → canonical 레이아웃 (`<dir>/graphify-out/graph.json`) → `cluster-only` → **도메인 질의로 필터 검증** (fixture 가 나오면 실패).
@@ -78,7 +78,7 @@ Why 층 위치는 프로젝트 선택: vault `intent/`(PickL 방식) 또는 repo
 
 ## 6. 새 프로젝트 적용 절차
 
-1. per-repo discovery (스킬 SKILL.md 표): `<LOCAL_GATE>` · `<REF_GUARD>`(없으면 생성+게이트 wire) · `<DEPLOY_GOVERNANCE>` · `<MEMORY_DIR>` · `<MACHINE_READ_DOCS>`.
+1. per-repo discovery (`rebuild-phases.md` 표): `<LOCAL_GATE>` · `<REF_GUARD>`(없으면 생성+게이트 wire) · `<DEPLOY_GOVERNANCE>` · `<MEMORY_DIR>` · `<MACHINE_READ_DOCS>`.
 2. Phase 0 진단 → 판정에 따라 전면 REBUILD 또는 부분 정리.
 3. REBUILD 시 §3, 이후 §4 계약 + §5 자동화 설치 (가드 wire + graphify hook + freshness 스크립트).
 4. 이후 일상: 코드 변경 → hook 이 그래프 갱신 → freshness WARN → MAINTAIN 배치 → 주기 AUDIT.

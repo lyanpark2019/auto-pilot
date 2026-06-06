@@ -99,6 +99,16 @@
             "description": "Auto-run `graphify update <cat>` when .md changes inside raw/ or sources/"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-update.sh",
+            "description": "Mark graphify code graph stale on code edits (fail-open; eager rebuild only with GRAPHIFY_AUTOSYNC=1) — feeds doc-management MAINTAIN"
+          }
+        ]
       }
     ],
     "Stop": [

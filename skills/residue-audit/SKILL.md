@@ -19,8 +19,8 @@ description: >
   residue from false positives (fixtures, reflection-registered classes,
   dormant flag-gated subsystems, schema example dicts, re-exports). Never
   blind-deletes — any uncertain gate is REPORT-ONLY. Language-agnostic;
-  Python/FastAPI examples. NOT for: doc↔code prose drift (doc-drift-audit),
-  whole-codebase quality scoring (quality-loop / adversarial-review),
+  Python/FastAPI examples. NOT for: doc↔code prose drift (doc-management AUDIT
+  mode), whole-codebase quality scoring (quality-loop / adversarial-review),
   DB-schema / env-config drift, or bootstrapping a harness (setup-harness).
 ---
 

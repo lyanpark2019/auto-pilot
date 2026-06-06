@@ -26,7 +26,7 @@ SCORE_DIR = ROOT / ".planning" / "score"
 OUT = ROOT / "dashboard" / "data.js"
 
 SUBSYSTEM_RULES: list[tuple[str, str]] = [
-    (r"^(doc-management|graphify-doc-rebuild|doc-drift-audit|doc-sync|llm-wiki-architect)$", "docs-core"),
+    (r"^doc-management$", "docs-core"),
     (r"^(vault|nbm)", "docs-vault-export"),
     (r"^(swarm|autopilot-swarm)", "swarm"),
     (r"^(harness|setup-harness|setup-claude-md)", "harness"),
