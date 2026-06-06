@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -94,6 +95,41 @@ def test_export_all_handles_unknown_destination(tmp_path: Path) -> None:
     repo = _mk_project(tmp_path)
     results = export.export_all(repo, ["bogus"])
     assert "error" in results["bogus"]
+    assert results["bogus"]["failed"] is True
+
+
+def test_export_script_mode_bases_canvas(tmp_path: Path) -> None:
+    """Documented invocation (python3 $ROOT/pipeline/export.py) must work for
+    bases/canvas — these use sibling-module imports that broke without the
+    __package__ sys.path guard (silent 'attempted relative import' in report)."""
+    repo = _mk_project(tmp_path)
+    script = PLUGIN_ROOT / "pipeline" / "export.py"
+    proc = subprocess.run(
+        [sys.executable, str(script), str(repo), "--export", "bases,canvas",
+         "--obsidian-path", str(tmp_path / "vaults")],
+        capture_output=True, text=True,
+    )
+    assert "attempted relative import" not in proc.stdout + proc.stderr
+    report = json.loads(proc.stdout)
+    # Fixture has no wikitree/ or graph.json → both skip gracefully, neither fails.
+    assert report["exports"]["bases"].get("skipped") is True
+    assert report["exports"]["canvas"].get("skipped") is True
+    assert proc.returncode == 0
+
+
+def test_export_script_mode_failure_exits_nonzero(tmp_path: Path) -> None:
+    """Per-destination failure must be surfaced: failed flag + non-zero exit
+    (previously swallowed into the JSON report with exit 0)."""
+    repo = _mk_project(tmp_path)
+    script = PLUGIN_ROOT / "pipeline" / "export.py"
+    proc = subprocess.run(
+        [sys.executable, str(script), str(repo), "--export", "bogus"],
+        capture_output=True, text=True,
+    )
+    report = json.loads(proc.stdout)
+    assert report["exports"]["bogus"]["failed"] is True
+    assert proc.returncode == 1
+    assert "EXPORT FAILED" in proc.stderr
 
 
 def test_export_graphify_skips_when_binary_missing(tmp_path: Path, monkeypatch) -> None:

@@ -23,6 +23,9 @@ import sys
 import time
 from pathlib import Path
 
+if __package__ in (None, ""):  # script mode (python3 vault/pipeline/export.py …)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 DEFAULT_OBSIDIAN_ROOT = Path(os.environ.get("VB_OBSIDIAN_ROOT", str(Path.home() / "Documents" / "Obsidian")))
 GRAPHIFY_BIN = os.environ.get("GRAPHIFY_BIN", str(Path.home() / ".local" / "bin" / "graphify"))
 
@@ -242,7 +245,13 @@ def export_graphify(repo: Path, doc_root: Path | None = None) -> dict:
 def export_bases(repo: Path, vault_root: Path | None = None,
                  project_name: str | None = None) -> dict:
     """Emit kepano `.base` dashboards under the Obsidian vault."""
-    from .bases import generate_bases  # local import to keep optional
+    # Local import to keep optional. Dual-mode: relative when imported as a
+    # package, absolute via the __package__ sys.path guard in script mode
+    # (a bare relative import here broke `python3 pipeline/export.py --export bases`).
+    if __package__:
+        from .bases import generate_bases
+    else:
+        from pipeline.bases import generate_bases
 
     repo = repo.expanduser().resolve()
     vault_root = (vault_root or DEFAULT_OBSIDIAN_ROOT).expanduser().resolve()
@@ -262,7 +271,11 @@ def export_bases(repo: Path, vault_root: Path | None = None,
 def export_canvas(repo: Path, vault_root: Path | None = None,
                   project_name: str | None = None) -> dict:
     """Emit graph-hub canvas under the Obsidian vault."""
-    from .canvas import emit_graph_canvas
+    # Dual-mode import — same rationale as export_bases.
+    if __package__:
+        from .canvas import emit_graph_canvas
+    else:
+        from pipeline.canvas import emit_graph_canvas
 
     repo = repo.expanduser().resolve()
     vault_root = (vault_root or DEFAULT_OBSIDIAN_ROOT).expanduser().resolve()
@@ -337,12 +350,12 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
             continue
         fn = DESTINATIONS.get(d)
         if not fn:
-            results[d] = {"error": f"unknown destination: {d}"}
+            results[d] = {"error": f"unknown destination: {d}", "failed": True}
             continue
         try:
             results[d] = fn(repo, **{k: v for k, v in opts.items() if k in fn.__code__.co_varnames})
         except Exception as e:
-            results[d] = {"destination": d, "error": str(e)}
+            results[d] = {"destination": d, "error": str(e), "failed": True}
     return results
 
 
@@ -392,6 +405,15 @@ def main(argv: list[str]) -> int:
         print(f"wrote {args.out}")
     else:
         print(content)
+    # Surface real failures (exceptions / unknown destinations) as a non-zero
+    # exit; graceful skips (missing CLI / inputs, marked "skipped") stay rc=0.
+    failed = sorted(
+        d for d, r in results.items()
+        if isinstance(r, dict) and (r.get("failed") or (r.get("error") and not r.get("skipped")))
+    )
+    if failed:
+        print(f"EXPORT FAILED for destination(s): {', '.join(failed)} — see report above", file=sys.stderr)
+        return 1
     return 0
 
 
