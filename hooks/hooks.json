@@ -224,6 +224,18 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/subagent-deliverable-check.sh",
+            "description": "Advisory: warn if subagent claimed to write a file that does not exist on disk (adapted from oh-my-claudecode)"
+          }
+        ]
+      }
     ]
   }
 }

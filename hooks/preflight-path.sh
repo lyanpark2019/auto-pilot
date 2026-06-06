@@ -78,8 +78,35 @@ def field(name: str) -> str:
     return fmatch.group(1) if fmatch else ""
 
 
-if field("status") != "pending":
-    sys.exit(0)  # consumed (or unknown) -> silent skip
+status = field("status")
+
+# Derive this session's ID.  Claude passes session_id in the hook stdin JSON
+# payload; we read it from the file descriptor the shell already consumed, so
+# instead we fall back to a stable per-process identifier (PPID + path hash).
+# The actual stdin payload is gone by this point (consumed by the bash here-doc
+# redirect), so we synthesise an ID from environment + process context.
+import hashlib
+
+raw_env_sid = os.environ.get("CLAUDE_SESSION_ID", "") or ""
+if raw_env_sid:
+    current_session_id = raw_env_sid
+else:
+    ppid = str(os.getppid())
+    raw = (ppid + "|" + path).encode("utf-8", errors="replace")
+    current_session_id = "ppid-" + hashlib.sha256(raw).hexdigest()[:16]
+
+consumed_by = field("consumed_by_session_id")
+
+# Allow injection when:
+#   a) status is pending (fresh, not yet consumed), OR
+#   b) status is consumed AND consumed_by matches this session (restart replay)
+if status == "consumed":
+    if consumed_by and consumed_by == current_session_id:
+        pass  # this session already consumed — re-inject for restart safety
+    else:
+        sys.exit(0)  # consumed by a different session -> silent skip
+elif status != "pending":
+    sys.exit(0)  # unknown status -> silent skip
 
 raw_ts = field("written_at").strip("\"'")
 try:
@@ -98,18 +125,40 @@ print(json.dumps({
     }
 }))
 
-# Flip pending -> consumed (best-effort; emission already happened, fail-open).
+if status != "pending":
+    # Already consumed by this session; skip the flip (idempotent).
+    sys.exit(0)
+
+# Flip pending -> consumed, recording which session consumed it.
+# The flip is written atomically via rename so a concurrent session
+# cannot observe a half-written file.
+import tempfile
+
 now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 new_fm = re.sub(
     r"^status:[ \t]*pending[ \t]*$",
-    "status: consumed\nconsumed_at: " + now_iso,
+    (
+        "status: consumed\n"
+        "consumed_at: " + now_iso + "\n"
+        "consumed_by_session_id: " + current_session_id
+    ),
     fm,
     count=1,
     flags=re.MULTILINE,
 )
+new_text = "---\n" + new_fm + "\n---\n" + text[m.end():]
 try:
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("---\n" + new_fm + "\n---\n" + text[m.end():])
+    dir_ = os.path.dirname(path) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=dir_, prefix=".handoff-next-tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(new_text)
+        os.rename(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 except Exception:
     pass
 PY

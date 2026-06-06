@@ -1,60 +1,110 @@
 #!/usr/bin/env bash
-# Stop hook: emit final PM report if ticket-state.json present and PM loop was active this session.
-# Detects active PM loop via $CLAUDE_PROJECT_DIR/.pm-active marker (set by /vault-build --source notebooklm) or recent ticket-state mtime.
+# Stop hook: emit final PM report.
+# Prefers vault/meta data when a vault is configured; falls back to the
+# artifact-ledger alone so ledger-only sessions (no vault) still get a report.
+# Detects active PM loop via recent ticket-state mtime (vault mode) or any
+# ledger entry written in the last 24h (ledger-only mode).
+#
+# Stop-hook reentry guard: if Claude sets stop_hook_active in the JSON payload
+# (indicating this hook was triggered by another Stop hook), exit immediately.
 set -euo pipefail
 
-# Vault path comes from explicit env (set by PM loop or user). No hardcoded default.
-vault="${NBM_VAULT_PATH:-${VAULT_BUILDER_VAULT:-}}"
-[[ -z "$vault" ]] && exit 0
-[[ -d "$vault" ]] || exit 0
-
-ts_file="$vault/meta/ticket-state.json"
-[[ -f "$ts_file" ]] || exit 0
-
-# Only emit if ticket-state changed in last 24h (PM session active)
-if [[ $(find "$ts_file" -mtime -1 2>/dev/null | wc -l) -eq 0 ]]; then
+# Reentry guard — read stdin once and check before any other work.
+_payload=$(cat)
+if printf '%s' "$_payload" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d.get("stop_hook_active") else 1)
+' 2>/dev/null; then
   exit 0
 fi
 
-report="$vault/meta/pm-final-report-$(date +%Y%m%d-%H%M%S).md"
+# ── Determine report destination ────────────────────────────────────────────
+proj="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+ledger="$proj/.planning/auto-pilot/session-artifacts.jsonl"
+vault="${NBM_VAULT_PATH:-${VAULT_BUILDER_VAULT:-}}"
+
+vault_active=0
+if [[ -n "$vault" ]] && [[ -d "$vault" ]]; then
+  ts_file="$vault/meta/ticket-state.json"
+  if [[ -f "$ts_file" ]] && [[ $(find "$ts_file" -mtime -1 2>/dev/null | wc -l) -gt 0 ]]; then
+    vault_active=1
+  fi
+fi
+
+# Ledger-only mode: skip if no ledger file or ledger has no recent entries.
+ledger_active=0
+if [[ -f "$ledger" ]] && [[ $(find "$ledger" -mtime -1 2>/dev/null | wc -l) -gt 0 ]]; then
+  ledger_active=1
+fi
+
+# Nothing to report.
+if [[ "$vault_active" -eq 0 ]] && [[ "$ledger_active" -eq 0 ]]; then
+  exit 0
+fi
+
+# Report destination: vault/meta/ when available, otherwise project planning dir.
+if [[ "$vault_active" -eq 1 ]]; then
+  report_dir="$vault/meta"
+else
+  report_dir="$proj/.planning/auto-pilot"
+  mkdir -p "$report_dir"
+fi
+report="$report_dir/pm-final-report-$(date +%Y%m%d-%H%M%S).md"
+
 python3 - <<PY > "$report" 2>/dev/null || exit 0
 import json, datetime, os, sys
 from pathlib import Path
-vault = Path("$vault")
-ts = json.loads((vault/"meta/ticket-state.json").read_text())
-struct = {}
-content = {}
-try:
-    struct = json.loads((vault/"meta/score-state.json").read_text())
-except Exception as e:
-    print(f"pm_final_report: score-state skipped: {e}", file=sys.stderr)
-try:
-    content = json.loads((vault/"meta/score-content-state.json").read_text())
-except Exception as e:
-    print(f"pm_final_report: score-content-state skipped: {e}", file=sys.stderr)
 
-tickets = ts.get("tickets", [])
-issued = len(tickets)
-verified = sum(1 for t in tickets if t.get("status") == "verified")
-rejected = sum(1 for t in tickets if t.get("status") == "rejected")
-escalated = sum(1 for t in tickets if t.get("status") == "escalated")
+vault_path = "${vault_active}" == "1" and "${vault}" or ""
+proj = Path("${proj}")
 
 print(f"# PM Final Report — {datetime.datetime.now().isoformat(timespec='seconds')}")
 print()
-print(f"- Structural: {struct.get('total','?')}/100")
-print(f"- Content: {content.get('total','?')}/100")
-print(f"- Tickets: {issued} issued / {verified} verified / {rejected} rejected / {escalated} escalated")
-print()
-print("## Last 5 tickets")
-for t in tickets[-5:]:
-    print(f"- T-{t.get('id','?')} [{t.get('worker_type','?')}] {t.get('status','?')}: {t.get('summary','')[:80]}")
+
+# ── Vault section (tickets + scores) — only when vault present ───────────────
+if vault_path:
+    vault = Path(vault_path)
+    try:
+        ts = json.loads((vault / "meta" / "ticket-state.json").read_text())
+    except Exception as e:
+        print(f"pm_final_report: ticket-state unavailable: {e}", file=sys.stderr)
+        ts = {}
+    struct = {}
+    content = {}
+    try:
+        struct = json.loads((vault / "meta" / "score-state.json").read_text())
+    except Exception as e:
+        print(f"pm_final_report: score-state skipped: {e}", file=sys.stderr)
+    try:
+        content = json.loads((vault / "meta" / "score-content-state.json").read_text())
+    except Exception as e:
+        print(f"pm_final_report: score-content-state skipped: {e}", file=sys.stderr)
+
+    tickets = ts.get("tickets", [])
+    issued = len(tickets)
+    verified = sum(1 for t in tickets if t.get("status") == "verified")
+    rejected = sum(1 for t in tickets if t.get("status") == "rejected")
+    escalated = sum(1 for t in tickets if t.get("status") == "escalated")
+
+    print(f"- Structural: {struct.get('total', '?')}/100")
+    print(f"- Content: {content.get('total', '?')}/100")
+    print(f"- Tickets: {issued} issued / {verified} verified / {rejected} rejected / {escalated} escalated")
+    print()
+    if tickets:
+        print("## Last 5 tickets")
+        for t in tickets[-5:]:
+            print(f"- T-{t.get('id','?')} [{t.get('worker_type','?')}] {t.get('status','?')}: {t.get('summary','')[:80]}")
+        print()
+else:
+    print("*(ledger-only session — no vault configured)*")
+    print()
 
 # ── Session artifacts (handoff disposition) ─────────────────────────────────
 # Read the session artifact ledger (written by artifact-ledger.sh) if present
 # and append a naive per-path disposition table. Fail-open: any error -> skip
 # section, observable on stderr, never break the report.
 try:
-    proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     ledger = proj / ".planning" / "auto-pilot" / "session-artifacts.jsonl"
     paths = []
     if ledger.is_file():
@@ -70,7 +120,6 @@ try:
             if p and p not in paths:
                 paths.append(p)
     if paths:
-        print()
         print("## Session artifacts")
         for p in paths:
             fp = Path(p) if p.startswith("/") else proj / p
@@ -90,6 +139,8 @@ try:
             else:
                 cls = "확인 필요"
             print(f"- {p} — {state} — {cls}")
+    elif not vault_path:
+        print("*(no artifacts recorded in ledger)*")
 except Exception as e:
     print(f"pm_final_report: session-artifacts skipped: {e}", file=sys.stderr)
 PY
