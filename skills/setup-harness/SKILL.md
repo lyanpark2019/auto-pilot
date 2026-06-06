@@ -32,7 +32,7 @@ Three coordinated scripts implement the closed loop:
 | Script | Role |
 |--------|------|
 | `score-harness.sh` | 15-dimension scorer → `.claude/score.json` |
-| `harness-loop.sh` | score → pick lowest dim → autofix → re-score; resets attempted-list on improvement; bails after stuck detection |
+| `harness-loop.sh` | score → pick lowest dim → autofix → re-score; resets attempted-list on improvement; bails after stuck detection. Scopes the **harness config** (CLAUDE.md / hooks / drift / mcp — the 15 dims below), NOT application code quality. For code-quality scoring + improvement, the loop step delegates to `adversarial-review-loop` codebase mode (13-dim `quality-eval` rubric) — this loop does not re-implement a competing code-quality engine. |
 | `verify-harness.sh` | independent final agent — script integrity, hook registration, **7 functional hook tests** (guard-bash blocks --no-verify, block-env-edit blocks .env, scan-secrets blocks AWS keys, etc.), JSON-format check, CLAUDE.md compliance, drift, score reconciliation |
 
 The 15 dimensions scored: philosophy, claudemd (root only), folder_interfaces, hooks_coverage, hooks_json_format, security, drift_detection, linter, adr, automation, idempotency, evals, gitignore, mcp_hygiene, sandbox. `claudemd` measures the root file alone; `folder_interfaces` separately scores substantive folder-level CLAUDE.md coverage (no candidate folders → 100, so it never penalizes small projects; raise `FOLDER_THRESHOLD` to opt out).

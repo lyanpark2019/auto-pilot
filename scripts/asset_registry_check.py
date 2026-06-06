@@ -85,7 +85,7 @@ def _scan_agents() -> list[Asset]:
 
 
 def _scan_skills() -> list[Asset]:
-    assets = []
+    assets: list[Asset] = []
     skills_dir = REPO_ROOT / "skills"
     if not skills_dir.exists():
         return assets
@@ -101,7 +101,7 @@ def _scan_skills() -> list[Asset]:
 
 
 def _scan_hooks() -> list[Asset]:
-    assets = []
+    assets: list[Asset] = []
     hooks_dir = REPO_ROOT / "hooks"
     if not hooks_dir.exists():
         return assets
@@ -119,7 +119,7 @@ def _scan_hooks() -> list[Asset]:
 
 
 def _scan_commands() -> list[Asset]:
-    assets = []
+    assets: list[Asset] = []
     cmd_dir = REPO_ROOT / "commands"
     if not cmd_dir.exists():
         return assets
@@ -132,7 +132,7 @@ def _scan_commands() -> list[Asset]:
 
 
 def _scan_codex_skills() -> list[Asset]:
-    assets = []
+    assets: list[Asset] = []
     codex_skills_dir = REPO_ROOT / "codex" / "skills"
     if not codex_skills_dir.exists():
         return assets
@@ -167,11 +167,11 @@ def _check_overlap(
     candidate_name: str,
     candidate_desc: str,
     registry: list[Asset],
-) -> list[dict]:
+) -> list[dict[str, str]]:
     """Return list of overlapping assets for a candidate."""
     c_name_tokens = _tokenize(candidate_name)
     c_desc_tokens = _tokenize(candidate_desc)
-    overlaps = []
+    overlaps: list[dict[str, str]] = []
     for asset in registry:
         a_name_tokens = _tokenize(asset.name)
         a_desc_tokens = _tokenize(asset.description)
@@ -220,7 +220,7 @@ def main() -> int:
     registry.extend(_scan_commands())
     registry.extend(_scan_codex_skills())
 
-    overlaps: list[dict] = []
+    overlaps: list[dict[str, str]] = []
     result = "clean"
 
     if args.name or args.description:

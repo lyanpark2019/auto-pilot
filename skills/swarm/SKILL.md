@@ -1,14 +1,14 @@
 ---
 name: swarm
-description: "Auto-pilot multi-agent swarm — subcommand-routed skill: init (config wizard), start (launch tmux PM+workers), status (live diagnostics + ledger), stop (graceful shutdown, --purge worktrees), ticket (manual inbox injection). Use when the user says \"start the swarm\", \"launch swarm\", \"/swarm\", \"start autopilot\", \"deploy multi-agent system\", \"configure swarm\", \"swarm init\", \"set up autopilot\", \"choose workers\", \"swarm status\", \"how is autopilot doing\", \"show swarm\", \"ledger\", \"stop swarm\", \"kill autopilot\", \"shutdown autopilot\", \"tear down swarm\", \"give swarm a task\", \"inject ticket\", \"TODO into swarm\", or legacy \"run autopilot-swarm\" / \"/autopilot-swarm\" / \"/swarm-init\" / \"/swarm-status\" / \"/swarm-stop\" / \"/swarm-ticket\"."
-argument-hint: "<init|start|status|stop|ticket|bench> [subcommand args]  (bench forwards to the standalone swarm-bench skill)"
+description: "Auto-pilot multi-agent swarm — subcommand-routed skill: init (config wizard), start (launch tmux PM+workers), status (live diagnostics + ledger), stop (graceful shutdown, --purge worktrees), ticket (manual inbox injection), bench (3-arm head-to-head benchmark: swarm vs claude-opus-solo vs codex-solo, each scored by quality-eval). Use when the user says \"start the swarm\", \"launch swarm\", \"/swarm\", \"start autopilot\", \"deploy multi-agent system\", \"configure swarm\", \"swarm init\", \"set up autopilot\", \"choose workers\", \"swarm status\", \"how is autopilot doing\", \"show swarm\", \"ledger\", \"stop swarm\", \"kill autopilot\", \"shutdown autopilot\", \"tear down swarm\", \"give swarm a task\", \"inject ticket\", \"TODO into swarm\", \"swarm bench\", \"/swarm-bench\", \"compare swarm\", \"is swarm better than codex\", \"benchmark autopilot\", or legacy \"run autopilot-swarm\" / \"/autopilot-swarm\" / \"/swarm-init\" / \"/swarm-status\" / \"/swarm-stop\" / \"/swarm-ticket\"."
+argument-hint: "<init|start|status|stop|ticket|bench> [subcommand args]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 # swarm — subcommand-routed multi-agent control
 
 This skill manages the autonomous multi-agent swarm in the **current working
-directory**. Five subcommands in one skill:
+directory**. Six subcommands in one skill:
 
 | `$1` | What it does | Old skill |
 |---|---|---|
@@ -17,7 +17,7 @@ directory**. Five subcommands in one skill:
 | `status` | Live diagnostics, queues, ledger | swarm-status |
 | `stop` | Graceful shutdown, optional `--purge` | swarm-stop |
 | `ticket` | Manual inbox injection | swarm-ticket |
-| `bench` | Print pointer → use the standalone `swarm-bench` skill | — |
+| `bench` | 3-arm head-to-head benchmark (swarm vs claude-solo vs codex-solo) | swarm-bench (absorbed 2026-06-07) |
 
 **Default when no subcommand given = `start`**, preserving every legacy `/swarm` invocation.
 
@@ -285,12 +285,75 @@ Write `<cwd>/.planning/autopilot/inbox/worker-<id>/T-manual-<epoch>.json`:
 
 ---
 
-## § bench — pointer to standalone skill
+## § bench — head-to-head comparison
 
-The benchmark (3-arm swarm vs claude-solo vs codex-solo) lives in the
-**`swarm-bench` skill** — kept standalone because its runtime is independent
-of the swarm lifecycle. Invoke it directly:
+> Provenance: absorbed `swarm-bench` 2026-06-07. Full methodology, no forwarding stub.
 
-```
-/auto-pilot:swarm-bench <task description> [--repeats N]
-```
+Empirically measure: does the swarm beat solo `claude opus` or solo `codex`?
+Same task executed three ways, each scored by `quality-eval`, then a comparison
+report. The runtime is independent of the swarm lifecycle — solo arms run even
+when no swarm is up.
+
+### Inputs
+
+- `$ARGUMENTS` after `bench` keyword = task description (everything before flags).
+- `--repeats N` (default 1): run each arm N times for variance.
+- `--swarm-timeout SEC` (default 1200): cap how long arm A waits for the PM verdict.
+
+### Steps
+
+1. **Detect swarm.** Solo arms (B, C) run regardless. Arm A is skipped with a
+   logged warning if `tmux has-session -t "autopilot-$(basename "$PWD")"` returns
+   non-zero (`bench.sh` writes `arm-a/skipped` and still runs B/C).
+2. **Benchmark dir** is created by the script at
+   `<cwd>/.planning/autopilot/bench/<epoch>/` with `arm-a/`, `arm-b/`, `arm-c/`.
+3. **Run the harness**:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/swarm/scripts/bench.sh" "<task>" --repeats $N
+   ```
+   `bench.sh`:
+   - **Arm A (swarm)**: injects a manual `T-bench-<ts>-rN.json` ticket into the
+     first worker's inbox, then polls `scores/T-bench-<ts>-rN.json` until the PM
+     records a verdict (or `--swarm-timeout` elapses, or a `STOP` file appears).
+     Copies the score json + `results/` artifacts into `arm-a/`.
+   - **Arm B (claude opus solo)**: in a throwaway worktree on branch
+     `bench/b/<ts>/rN`, runs
+     `timeout 600 claude --model claude-opus-4-7 -p --dangerously-skip-permissions "<task>"`.
+   - **Arm C (codex solo)**: in a throwaway worktree on branch `bench/c/<ts>/rN`,
+     runs `timeout 600 codex exec --model gpt-5.5 -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "<task>"`.
+   - For each solo arm: commits the result (`--allow-empty`), captures
+     `diff-rN.patch` (vs `HEAD~1`, or empty-tree on first commit), records
+     `wall_seconds_all`.
+   - **Scores arms B/C** by spawning `claude --model claude-opus-4-7 -p` to run
+     `Skill(quality-eval)` on the last-rep worktree, capturing
+     `arm-{b,c}/quality-eval.md` (same rubric as the PM, so arms compare directly).
+   - **Aggregates** per-arm median wall time (`median()` helper — numeric sort,
+     lower-middle for even N), writes `arm-*/wall_seconds`, then emits
+     `<bench-dir>/report.md`.
+4. The generated `report.md` table:
+
+   | Arm | Median Wall (s) | Notes |
+   |---|---|---|
+   | A swarm | <median> | swarm score `.total` from `arm-a/score.json` |
+   | B claude-opus-solo | <median> | see `arm-b/quality-eval.md` |
+   | C codex-gpt5-solo | <median> | see `arm-c/quality-eval.md` |
+
+5. After `bench.sh` returns, read the artifacts and **append a narrative** to
+   `report.md`: which dimensions the swarm won/lost, cost-per-quality ratio,
+   and a recommendation.
+
+### Notes for Claude
+
+- A baseline ticket should fit one bench run (≤30 min total per arm).
+- Solo arms are wrapped in `timeout 600` (10m) to bound runaway agents; arm A is
+  bounded by `--swarm-timeout`.
+- `quality-eval` is invoked per arm — same scoring as the PM rubric, so arms are
+  directly comparable. Report total + per-dimension scores + wall-clock; pull
+  token usage from logs when available.
+- Save raw artifacts (`diff-rN.patch`, `log-rN.md`, `score*.json`, `result-rN/`)
+  per arm under `arm-{a,b,c}/`.
+- `--repeats N` aggregation: report **median** wall time per arm and note stddev
+  when N ≥ 3. With N=1 (default), report single values.
+- Both solo arms use throwaway worktrees (`../<basename>-bench-<arm>-<ts>-rN`) so
+  the user's main repo is never touched. `--dangerously-skip-permissions` is
+  scoped to those throwaway worktrees only.

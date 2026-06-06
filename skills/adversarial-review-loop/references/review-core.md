@@ -68,6 +68,20 @@ When the verdict is produced via Codex CLI, sanity-check every codex finding aga
   - Hardened shells emit `schemas/review.schema.json` findings (`severity`, `file`, `line`, `issue`, `fix`, `finding_hash`).
 - Scope-drift results are surfaced explicitly (out-of-scope file list), scope reduction as a dedicated flag/finding — per each shell's output contract.
 
+## Realist Check + Pre-commitment (adapted from oh-my-claudecode critic.md, MIT — appended 2026-06-07)
+
+**Pre-commitment (before reading the diff):** predict 3-5 problem areas from the
+contract/spec alone, THEN read. Activates deliberate search instead of confirmation
+skimming. Record predictions in the verdict (hit/miss is signal, not score).
+
+**Realist Check (before reporting any P0/P1):** pressure-test each candidate finding:
+1. Realistic worst case — what actually happens in production, not in theory?
+2. Existing mitigations — is the exposed path already defended at another layer?
+3. Detection speed — would this be caught immediately (boot failure, first test run)?
+Inflated severity → DOWNGRADE; survives all three → keep. Round-2 evidence: this
+check killed 2 false P1s in r2 (codex sanity notes) — finding inflation costs a
+whole review round, same as a false positive.
+
 ## Reviewer contract — 4 clauses (ⓗ, appended 2026-06; supersedes nothing above)
 
 **1. Pre-mortem mandatory question**

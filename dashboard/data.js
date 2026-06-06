@@ -1,10 +1,10 @@
 window.DASHBOARD_DATA = {
  "branch": "main",
- "commit": "ebfa01b",
+ "commit": "0d38f87",
  "counts": {
-  "skill": 14,
-  "agent": 20,
-  "command": 11,
+  "skill": 11,
+  "agent": 19,
+  "command": 10,
   "hook": 17,
   "codex-skill": 12
  },
@@ -26,12 +26,7 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "skill",
-   "name": "diagnosing-llm-output-leaks",
-   "subsystem": "diagnostics"
-  },
-  {
-   "type": "skill",
-   "name": "diagnosing-stale-runtime",
+   "name": "diagnosing",
    "subsystem": "diagnostics"
   },
   {
@@ -43,11 +38,6 @@ window.DASHBOARD_DATA = {
    "type": "skill",
    "name": "improve-codebase-architecture",
    "subsystem": "diagnostics"
-  },
-  {
-   "type": "skill",
-   "name": "pm-quality-harness-loop",
-   "subsystem": "quality"
   },
   {
    "type": "skill",
@@ -75,11 +65,6 @@ window.DASHBOARD_DATA = {
    "subsystem": "swarm"
   },
   {
-   "type": "skill",
-   "name": "swarm-bench",
-   "subsystem": "swarm"
-  },
-  {
    "type": "agent",
    "name": "auto-pilot-claude-reviewer",
    "subsystem": "core-loop"
@@ -88,11 +73,6 @@ window.DASHBOARD_DATA = {
    "type": "agent",
    "name": "auto-pilot-codex-reviewer",
    "subsystem": "core-loop"
-  },
-  {
-   "type": "agent",
-   "name": "code-perfector",
-   "subsystem": "quality"
   },
   {
    "type": "agent",
@@ -187,11 +167,6 @@ window.DASHBOARD_DATA = {
   {
    "type": "command",
    "name": "auto-pilot",
-   "subsystem": "core-loop"
-  },
-  {
-   "type": "command",
-   "name": "eval-run",
    "subsystem": "core-loop"
   },
   {

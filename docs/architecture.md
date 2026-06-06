@@ -96,31 +96,31 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 14 skills · 20 agents · 11 commands · 17 hooks · 12 codex-skills = 74 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 19 agents · 10 commands · 17 hooks · 12 codex-skills = 69 assets total.
 
 ```
 auto-pilot/
 ├── .claude-plugin/plugin.json + marketplace.json
 ├── .mcp.json                          # notebooklm vault MCP
-├── skills/  (14 dirs, all active SKILL.md)
+├── skills/  (11 dirs, all active SKILL.md)
 │   ├── auto-pilot/                    # P①: entry skill / core loop
-│   ├── adversarial-review-loop/       # P①④: branch/codebase/multi-agent review
+│   ├── adversarial-review-loop/       # P①④: branch/codebase/multi-agent + --lifecycle review
 │   ├── doc-management/                # P②: REBUILD/MAINTAIN/AUDIT flagship
 │   ├── setup-harness/                 # P④: harness bootstrap + scripts/references/templates/evals
 │   ├── quality-eval/                  # P①: 13-dim rubric SoT
-│   ├── pm-quality-harness-loop/       # P①: quality-lift + ship orchestrator
 │   ├── residue-audit/                 # P②: semantic dead-code/duplicate audit
 │   ├── sha-deploy-standard/           # P④: SHA-pinned deploy standard
 │   ├── codex-orchestra/               # P①: Claude plans/reviews, Codex implements
 │   ├── swarm/{init,start,status,stop,ticket,bench}/   # P①: parallel execution backend
-│   ├── improve-codebase-architecture/, diagnosing-{llm-output-leaks,stale-runtime}/  # diagnostics
-│   └── (codebase-perfection-loop/ deleted — rubric SoT = quality-eval)
-├── agents/  (20 contracts)
+│   ├── improve-codebase-architecture/, diagnosing/  # diagnostics (2 modes, merged 2026-06-07)
+│   └── (deleted: codebase-perfection-loop, pm-quality-harness-loop → ARL --lifecycle,
+│        swarm-bench → swarm bench, diagnosing-* pair → diagnosing; 2026-06-07)
+├── agents/  (19 contracts)
 │   ├── core: pm-orchestrator, worker, retro
 │   ├── review (P①④): auto-pilot-{codex,claude}-reviewer (hardened pair —
 │   │         legacy codex-adversarial/claude-reviewer deleted 2026-06-07),
 │   │         tech-critic-lead, review-gatekeeper (tdd-enforcer + security-reviewer
-│   │         merged 2026-06-07), specialist-pool, code-perfector
+│   │         merged 2026-06-07), specialist-pool (code-perfector retired 2026-06-07)
 │   ├── harness: harness-{planner,generator,evaluator}
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator

@@ -8,7 +8,9 @@ description: >
   (ruff/vulture/jscpd): the classes a hook cannot safely block on. Use when
   asked to "residue audit", "dead code purge", "find dead code", "dedupe
   logic", "잔재 제거", "데드코드 정리", "중복 코드 찾아", "쓸모없는 코드",
-  "안 쓰는 import 정리", "orphan code", "clean up leftovers", or after a big
+  "안 쓰는 import 정리", "orphan code", "clean up leftovers", "코드 완벽하게
+  정리", "dead code + lint + test 한번에", "코드 정리하고 푸시" (inherited
+  from retired code-perfector agent 2026-06-07), or after a big
   refactor/migration/feature removal. Flow: baseline → parallel read-only
   scan → ranked P0/P1/P2 findings (6-gate column) → approval gate → batched
   fixes (one category per PR) → optional mechanical CI guards.

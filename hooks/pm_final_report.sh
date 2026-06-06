@@ -18,16 +18,20 @@ fi
 
 report="$vault/meta/pm-final-report-$(date +%Y%m%d-%H%M%S).md"
 python3 - <<PY > "$report" 2>/dev/null || exit 0
-import json, datetime
+import json, datetime, sys
 from pathlib import Path
 vault = Path("$vault")
 ts = json.loads((vault/"meta/ticket-state.json").read_text())
 struct = {}
 content = {}
-try: struct = json.loads((vault/"meta/score-state.json").read_text())
-except: pass
-try: content = json.loads((vault/"meta/score-content-state.json").read_text())
-except: pass
+try:
+    struct = json.loads((vault/"meta/score-state.json").read_text())
+except Exception as e:
+    print(f"pm_final_report: score-state skipped: {e}", file=sys.stderr)
+try:
+    content = json.loads((vault/"meta/score-content-state.json").read_text())
+except Exception as e:
+    print(f"pm_final_report: score-content-state skipped: {e}", file=sys.stderr)
 
 tickets = ts.get("tickets", [])
 issued = len(tickets)

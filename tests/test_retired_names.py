@@ -23,6 +23,14 @@ RETIRED_NAMES = [
     "/vault-restructure",
     "/vault-resume",
     "/quality-loop",
+    # consolidation-2 (2026-06-07): legacy reviewers + absorbed skills/commands
+    "/eval-run",
+    "pm-quality-harness-loop",
+    "swarm-bench",
+    "diagnosing-llm-output-leaks",
+    "diagnosing-stale-runtime",
+    "code-perfector",
+    "codex-adversarial",
 ]
 
 # A line mentioning a retired name is OK iff it explicitly marks retirement

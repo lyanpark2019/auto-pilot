@@ -1,7 +1,7 @@
 ---
 name: auto-pilot
 description: Self-driving development loop. PM (Opus 4.7) + Sonnet 1M workers + dual Codex/Claude adversarial review + phase verify gates. Full auto.
-argument-hint: "[start|status|resume|stop] [--spec PATH] [--max-workers N] [--time-box DURATION]"
+argument-hint: "[start|status|resume|stop|eval] [--spec PATH] [--max-workers N] [--time-box DURATION]"
 allowed-tools: Bash, Read, Write, Edit, Task, Glob, Grep, TaskCreate, TaskList, TaskUpdate
 ---
 
@@ -15,6 +15,7 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
 - `status` — print `.planning/auto-pilot/state.json` summary
 - `resume` — continue from last checkpoint
 - `stop` — mark state stopped
+- `eval` — run the cut-1 evals harness in advisory mode (see `## eval` below)
 
 ## Pre-flight (run before dispatching anything)
 
@@ -66,6 +67,30 @@ For each phase:
 4. Apply approved fixes, commit atomically, advance state
 
 Stop conditions defined in `SKILL.md`.
+
+## eval
+
+> Folded from the retired `commands/eval-run.md` (2026-06-07). The slash entry is now `/auto-pilot eval ...`; methodology is verbatim — the harness, flags, and paths are unchanged.
+
+Run the cut-1 evals harness (advisory). It clones the repo per case, runs auto-pilot headless on the case spec, asserts the deliverable with a deterministic oracle, and prints an advisory pass-rate vs the blessed baseline. **Never blocks** (cut-1): always exits 0.
+
+Usage: `/auto-pilot eval [--tier smoke|full] [--case ID] [--repeats N]`
+
+Invocation (allowed-tool: `Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/evals/cli.py:*)`):
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/evals/cli.py run --tier smoke --repeats 1
+```
+
+Methodology (`scripts/evals/cli.py` → `scripts/evals/runner.py`):
+
+1. **Select cases** — `--case ID` for one case, else `select_cases(evals/cases, tier)` for the tier (`smoke` default | `full`).
+2. **Per attempt, isolate via a fresh local clone** (`git clone --local`), then run auto-pilot headless inside it: `python3 scripts/orchestrator.py init --spec evals/cases/<ID>/spec.md --force --max-workers 2` then `python3 scripts/headless-loop.py --max-iter 20 --max-cost-usd 5.0 --max-concurrent-claude 10000` (large concurrency cap disables the fork-bomb `pgrep claude` guard for the sequential eval loop; non-zero loop exit is expected — the oracle decides pass/fail). Clone teardown is in a `finally`.
+3. **Oracle** — `load_case_oracle(ID)` asserts the deliverable deterministically; outcome buckets are pass / fail / error.
+4. **Repeat** `--repeats N` (CLI default 5; the slash default above passes 1), `summarize()` per case, and `compare()` vs `evals/baseline.json` (advisory — reports `armed` / `would_fire` / `error_spike`, never blocks). Results written to `evals/results/local.json`.
+5. **Cost ceiling** — `--max-total-cost-usd` (default 50.0); stops before the next case once exceeded.
+
+Paths are repo-root-relative: harness driver `scripts/evals/cli.py`, runner `scripts/evals/runner.py`; cases + baseline live at `evals/cases/` and `evals/baseline.json`.
 
 ## Friction guards (auto-loaded via plugin hooks)
 

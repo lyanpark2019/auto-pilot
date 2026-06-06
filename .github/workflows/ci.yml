@@ -47,8 +47,11 @@ jobs:
       - name: mypy --strict
         run: python -m mypy scripts/
 
-      - name: pytest (suite + prompt regression)
-        run: python -m pytest tests/ -q
+      - name: pytest (suite + prompt regression + coverage gate ≥75%)
+        # Coverage gate ACTIVE (2026-06-07): pytest-cov in requirements-dev.txt;
+        # measured scripts-wide coverage 81.33% at activation. Devs keep running
+        # plain `pytest` locally — the gate is CI-only.
+        run: python -m pytest tests/ -q --cov=scripts --cov-fail-under=75
 
       - name: pytest-benchmark (perf budget + baseline gate)
         run: python -m pytest tests/test_perf.py --benchmark-only -v

@@ -23,6 +23,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from _log import event
 from _state import (
@@ -331,16 +332,17 @@ def cmd_round_budget(args: argparse.Namespace) -> int:
     score_dir = Path(args.score_dir)
     n = args.round
 
-    def _load(r: int) -> dict:
+    def _load(r: int) -> dict[str, Any]:
         p = score_dir / f"findings-round-{r}.json"
         if not p.exists():
             event("round_budget.missing_file", path=str(p))
             return {}
-        return json.loads(p.read_text())
+        parsed: dict[str, Any] = json.loads(p.read_text())
+        return parsed
 
-    def _count(data: dict) -> int:
-        reviewers = data.get("reviewers", {})
-        return sum(v.get("count", 0) for v in reviewers.values())
+    def _count(data: dict[str, Any]) -> int:
+        reviewers: dict[str, Any] = data.get("reviewers", {})
+        return sum(int(v.get("count", 0)) for v in reviewers.values())
 
     if n < 3:
         data_n = _load(n)

@@ -11,10 +11,10 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 | Task | Entry |
 |---|---|
 | Autonomous spec-driven build (phased, in-session) | `/auto-pilot` — true headless: `/auto-pilot-server` |
-| Long-running parallel execution / tmux multi-worker pool / mixed Claude+Codex worker pools | `swarm` skill (`/auto-pilot:swarm <init\|start\|status\|stop\|ticket>`) + `swarm-bench`; swarm assets live under `swarm/`, agents `swarm-{explorer,monitor,verifier}` at top-level `agents/` |
+| Long-running parallel execution / tmux multi-worker pool / mixed Claude+Codex worker pools | `swarm` skill (`/auto-pilot:swarm <init\|start\|status\|stop\|ticket\|bench>` — bench absorbed swarm-bench 2026-06-07); swarm assets live under `swarm/`, agents `swarm-{explorer,monitor,verifier}` at top-level `agents/` |
 | PR / branch dual review (Codex + cold Claude, loop until both APPROVE) | `adversarial-review-loop` (branch mode) |
 | Codebase quality score + fix loop | `adversarial-review-loop` (codebase mode) |
-| Full quality lifecycle: lift → adversarial bug-hunt → harness-doc sync → autonomous merge | `pm-quality-harness-loop` |
+| Full quality lifecycle: lift → adversarial bug-hunt → harness-doc sync → autonomous merge | `adversarial-review-loop --lifecycle` (absorbed pm-quality-harness-loop 2026-06-07) |
 | Dead code / duplicates / residue removal | `residue-audit` |
 | Architecture improvement / module boundaries | `improve-codebase-architecture` |
 | Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`, `/harness` (plan/build/qa), `/harness-ops` (setup/drift/loop/score/verify)) |
@@ -30,7 +30,8 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 
 **Retired / deleted (do not route here):**
 
-- `codebase-perfection-loop` — deleted (rubric provenance distilled into `quality-eval`; directory removed) → use `adversarial-review-loop` (codebase mode) or `pm-quality-harness-loop`
+- `codebase-perfection-loop` — deleted (rubric provenance distilled into `quality-eval`; directory removed) → use `adversarial-review-loop` (codebase or --lifecycle mode)
+- `pm-quality-harness-loop` / `swarm-bench` / `diagnosing-{llm-output-leaks,stale-runtime}` / `code-perfector` / `eval-run` — absorbed/retired 2026-06-07 → `adversarial-review-loop --lifecycle`, `swarm bench`, `diagnosing`, `residue-audit`, `/auto-pilot eval`
 - `llm-wiki-architect` — deleted (per-module hand-maintained wiki = rot machine)
 - `doc-drift-audit` + `graphify-doc-rebuild` + interim `doc-sync` — absorbed into `doc-management` (AUDIT / REBUILD / MAINTAIN modes); old trigger phrases preserved in its description
 - claim-ledger pattern — NOT adopted (hand-maintained verification JSON rots like any hand-maintained doc); `doc-management` SHA-freshness + AUDIT replace it

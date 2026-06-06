@@ -1,11 +1,13 @@
 ---
 name: quality-eval
 description: >
-  Any codebase를 빅테크 13차원 루브릭으로 채점하는 범용 평가 스킬.
-  Python/TypeScript/Go/Rust 자동 감지, 인프라 레이어 자동 제외.
-  .planning/quality/score-state.json에 결과 저장.
-  adversarial-review-loop codebase mode 에서 EVALUATE/RESCORE 단계에 호출됨.
-  독립 호출도 가능: "코드 품질 점수 알려줘", "quality eval", "score this project"
+  빅테크 13차원 코드 품질 루브릭의 SoT (single source of truth) — 차원 정의·가중치·
+  hard-fail·anti-inflation·언어 자동 감지(Python/TypeScript/Go/Rust)·인프라 레이어 제외
+  규칙의 출처. 데이터/레퍼런스이며 entry point 가 아님. adversarial-review-loop 가
+  EVALUATE/RESCORE(codebase·multi-agent·lifecycle mode)에서 이 루브릭을 읽어 채점한다.
+  점수 채점/품질 개선을 원하는 사용자 요청("코드 품질 점수", "score this project", "95점",
+  "빅테크 평가", "quality loop")의 진입점은 adversarial-review-loop **codebase mode** 이다 —
+  이 스킬을 직접 호출하지 말고 ARL 로 라우팅. 결과 상태는 .planning/quality/score-state.json.
 ---
 
 # Quality Evaluator — 13-Dimension BigTech Rubric

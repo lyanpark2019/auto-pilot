@@ -68,7 +68,10 @@ class SpawnHandle:
     ticket: Path
     output_dir: Path
     proc: subprocess.Popen[bytes]
-    _spawn_kwargs: dict = field(default_factory=dict, repr=False)
+    # Spawn inputs retained verbatim so _respawn can reconstruct the exact
+    # call without an untyped **kwargs blob (each kept as its real type).
+    allowed_tools: str = field(default="", repr=False)
+    disallowed_tools: str = field(default="", repr=False)
 
     def poll(self) -> int | None:
         return self.proc.poll()
@@ -100,16 +103,20 @@ def spawn(*, role: str, ticket: Path, output_dir: Path,
         prompt,
     ]
     proc = subprocess.Popen(cmd, env=env)
-    kwargs = dict(role=role, ticket=ticket, output_dir=output_dir,
-                  allowed_tools=allowed_tools, disallowed_tools=disallowed_tools)
     return SpawnHandle(role=role, ticket=ticket, output_dir=output_dir,
-                       proc=proc, _spawn_kwargs=kwargs)
+                       proc=proc, allowed_tools=allowed_tools,
+                       disallowed_tools=disallowed_tools)
 
 
 def _respawn(handle: SpawnHandle) -> SpawnHandle:
     """Re-invoke spawn with the same parameters as the original handle."""
-    kw = handle._spawn_kwargs
-    return spawn(**kw)
+    return spawn(
+        role=handle.role,
+        ticket=handle.ticket,
+        output_dir=handle.output_dir,
+        allowed_tools=handle.allowed_tools,
+        disallowed_tools=handle.disallowed_tools,
+    )
 
 
 def _hard_kill(proc: subprocess.Popen[bytes], role: str) -> None:
@@ -246,9 +253,10 @@ def wait_all(
             # Kill anything still alive before raising — never leave orphans.
             # (getattr: test fakes may expose poll() without a real proc)
             for role in roles:
-                for h in (retrying.get(role), by_role.get(role)):
-                    if h is not None and h.poll() is None:
-                        proc = getattr(h, "proc", None)
+                candidate: SpawnHandle | None
+                for candidate in (retrying.get(role), by_role.get(role)):
+                    if candidate is not None and candidate.poll() is None:
+                        proc = getattr(candidate, "proc", None)
                         if proc is not None:
                             _hard_kill(proc, role)
             raise SpawnTimeoutError(

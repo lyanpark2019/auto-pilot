@@ -20,6 +20,11 @@ from pathlib import Path
 from typing import Any, Iterator, cast
 
 import _status
+from _log import event
+
+# Subprocess timeout budget (seconds). Quick git plumbing vs. tree-touching ops.
+_GIT_QUICK_TIMEOUT = 30  # rev-parse, status, branch, merge-base, rev-list, ref-format, prune
+_GIT_TREE_TIMEOUT = 60  # worktree add/remove, am, format-patch, commit --amend (touch large trees)
 
 
 @dataclass(frozen=True)
@@ -107,12 +112,19 @@ class WorktreeManager:
         2. `git -C $ROOT worktree add <wt_path> -b <branch> <base_sha>`.
         3. Write `.auto-pilot-worktree` sentinel containing contract.id inside wt.
         4. Persist WorktreeHandle to `<contract_dir>/worktree-handle.json`.
+
+        Raises:
+            InvalidBranchNameError: branch name fails `git check-ref-format`.
+            subprocess.CalledProcessError: `git worktree add` exits non-zero.
+            subprocess.TimeoutExpired: a git op stalls past its timeout
+                (30 s for ref-check, 60 s for `worktree add`). One-shot caller;
+                a stalled create is a hard failure, not a degrade case.
         """
         contract_id = contract["id"]
         branch = f"auto-pilot/{contract_id}"
         refcheck = subprocess.run(
             ["git", "check-ref-format", f"refs/heads/{branch}"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
         )
         if refcheck.returncode != 0:
             raise InvalidBranchNameError(f"{branch!r}: {refcheck.stderr.strip()}")
@@ -124,7 +136,7 @@ class WorktreeManager:
         subprocess.run(
             ["git", "-C", str(self.repo_root), "worktree", "add",
              str(wt_path), "-b", branch, base_sha],
-            check=True, capture_output=True,
+            check=True, capture_output=True, timeout=_GIT_TREE_TIMEOUT,
         )
         (wt_path / ".auto-pilot-worktree").write_text(contract_id + "\n")
 
@@ -140,18 +152,25 @@ class WorktreeManager:
 
     def collect_patches(self, handle: WorktreeHandle, *, contract_dir: Path) -> PatchResult:
         """Inspect worker's worktree HEAD vs base_sha; return one of NoOp,
-        NeedsRebase, RejectMultipleCommits, PatchSeries."""
+        NeedsRebase, RejectMultipleCommits, PatchSeries.
+
+        Raises:
+            subprocess.CalledProcessError: `rev-list`/`format-patch` exit non-zero.
+            subprocess.TimeoutExpired: a git op stalls past its timeout (30 s for
+                merge-base/rev-list plumbing, 60 s for `format-patch` which may
+                serialize a large diff). One-shot caller; not a degrade case.
+        """
         ancestry = subprocess.run(
             ["git", "-C", str(handle.path), "merge-base", "--is-ancestor",
              handle.base_sha, "HEAD"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
         )
         if ancestry.returncode != 0:
             try:
                 cb = subprocess.check_output(
                     ["git", "-C", str(handle.path), "merge-base",
                      handle.base_sha, "HEAD"],
-                    text=True,
+                    text=True, timeout=_GIT_QUICK_TIMEOUT,
                 ).strip()
             except subprocess.CalledProcessError:
                 cb = ""
@@ -161,7 +180,7 @@ class WorktreeManager:
         count_out = subprocess.check_output(
             ["git", "-C", str(handle.path), "rev-list", "--count",
              f"{handle.base_sha}..HEAD"],
-            text=True,
+            text=True, timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
         n = int(count_out)
         if n == 0:
@@ -175,6 +194,7 @@ class WorktreeManager:
         diff_bytes = subprocess.check_output(
             ["git", "-C", str(handle.path), "format-patch",
              f"{handle.base_sha}..HEAD", "--stdout", "--binary"],
+            timeout=_GIT_TREE_TIMEOUT,
         )
         mbox.write_bytes(diff_bytes)
         return PatchSeries(mbox=mbox)
@@ -196,14 +216,17 @@ class WorktreeManager:
                 fd.close()
 
     def _is_dirty(self) -> str:
+        """Raises subprocess.TimeoutExpired if `git status` stalls past 30 s."""
         return subprocess.check_output(
             ["git", "-C", str(self.repo_root), "status", "--porcelain", "--untracked-files=all"],
-            text=True,
+            text=True, timeout=_GIT_QUICK_TIMEOUT,
         )
 
     def _head_sha(self) -> str:
+        """Raises subprocess.TimeoutExpired if `git rev-parse` stalls past 30 s."""
         return subprocess.check_output(
-            ["git", "-C", str(self.repo_root), "rev-parse", "HEAD"], text=True
+            ["git", "-C", str(self.repo_root), "rev-parse", "HEAD"], text=True,
+            timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
 
     def apply_to_main(self, mbox: Path, contract: dict[str, Any]) -> ApplyResult:
@@ -220,13 +243,21 @@ class WorktreeManager:
         Note: `git am` has no --trailer flag. We apply the patch first, then
         `git commit --amend --no-edit --trailer ...` mutates only HEAD, which IS
         the just-applied commit (one-commit invariant enforced by collect_patches).
+
+        Raises:
+            MainTreeDirtyError: $ROOT dirty after lock acquired.
+            StaleAmStateError: `.git/rebase-apply` survives auto-abort.
+            subprocess.TimeoutExpired: a git op stalls past 60 s. Propagation is
+                safe — the `_main_apply_lock()` context manager releases the
+                flock in its `finally`, so a stall does not leak the lock; the
+                caller already treats this method as raising.
         """
         with self._main_apply_lock():
             rebase_apply = self.repo_root / ".git" / "rebase-apply"
             if rebase_apply.exists():
                 subprocess.run(
                     ["git", "-C", str(self.repo_root), "am", "--abort"],
-                    capture_output=True, check=False,
+                    capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
                 )
                 if rebase_apply.exists():
                     raise StaleAmStateError(f"could not clear {rebase_apply}")
@@ -240,7 +271,7 @@ class WorktreeManager:
             am = subprocess.run(
                 ["git", "-C", str(self.repo_root), "am", "--3way", "--keep-cr",
                  str(mbox)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, timeout=_GIT_TREE_TIMEOUT,
             )
             if am.returncode != 0:
                 conflict_files: tuple[str, ...] = ()
@@ -255,7 +286,7 @@ class WorktreeManager:
                         conflict_files = tuple(sorted(set(files)))
                 subprocess.run(
                     ["git", "-C", str(self.repo_root), "am", "--abort"],
-                    capture_output=True, check=False,
+                    capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
                 )
                 return ApplyResult(status="conflict", pre_apply_head=pre,
                                    conflict_files=conflict_files)
@@ -269,7 +300,7 @@ class WorktreeManager:
             amend = subprocess.run(
                 ["git", "-C", str(self.repo_root), "commit", "--amend", "--no-edit",
                  *trailers],
-                capture_output=True, text=True,
+                capture_output=True, text=True, timeout=_GIT_TREE_TIMEOUT,
             )
             if amend.returncode != 0:
                 # Best-effort: leave applied commit as-is (no trailer chain)
@@ -279,22 +310,37 @@ class WorktreeManager:
                                pre_apply_head=pre)
 
     def cleanup(self, handle: WorktreeHandle, *, prune_branch: bool) -> None:
-        """Idempotent: tolerate missing worktree, branch, sentinel."""
-        subprocess.run(
-            ["git", "-C", str(self.repo_root), "worktree", "remove", "--force",
-             str(handle.path)],
-            capture_output=True, check=False,
-        )
-        # Force-prune metadata in case worktree dir was already removed manually
-        subprocess.run(
-            ["git", "-C", str(self.repo_root), "worktree", "prune"],
-            capture_output=True, check=False,
-        )
-        if prune_branch:
+        """Idempotent: tolerate missing worktree, branch, sentinel.
+
+        Degrades on stall: each git op is best-effort (`check=False`); a
+        TimeoutExpired is caught and logged rather than raised, so the
+        idempotency contract holds even when called in a reap loop. A stalled
+        cleanup leaves stale worktree/branch metadata that a later `worktree
+        prune` or reap pass can still clear.
+        """
+        try:
             subprocess.run(
-                ["git", "-C", str(self.repo_root), "branch", "-D", handle.branch],
-                capture_output=True, check=False,
+                ["git", "-C", str(self.repo_root), "worktree", "remove", "--force",
+                 str(handle.path)],
+                capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
             )
+            # Force-prune metadata in case worktree dir was already removed manually
+            subprocess.run(
+                ["git", "-C", str(self.repo_root), "worktree", "prune"],
+                capture_output=True, check=False, timeout=_GIT_QUICK_TIMEOUT,
+            )
+            if prune_branch:
+                subprocess.run(
+                    ["git", "-C", str(self.repo_root), "branch", "-D", handle.branch],
+                    capture_output=True, check=False, timeout=_GIT_QUICK_TIMEOUT,
+                )
+        except subprocess.TimeoutExpired as exc:
+            # Best-effort cleanup; a stall must not crash an idempotent op or a
+            # reap loop. Mirror stash_if_dirty: event + graceful degrade.
+            event("worktree.cleanup.timeout",
+                  contract_id=handle.contract_id,
+                  branch=handle.branch,
+                  cmd=" ".join(str(a) for a in (exc.cmd or [])))
 
     def rehydrate(self, contract_dir: Path) -> WorktreeHandle | None:
         """Reconstruct WorktreeHandle from <contract_dir>/worktree-handle.json after PM restart."""
@@ -343,12 +389,20 @@ class WorktreeManager:
                 handle = WorktreeHandle.read(handle_path)
                 self.cleanup(handle, prune_branch=True)
             else:
-                # Fallback: remove worktree without handle (best-effort)
-                subprocess.run(
-                    ["git", "-C", str(self.repo_root), "worktree", "remove",
-                     "--force", str(wt_path)],
-                    capture_output=True, check=False,
-                )
+                # Fallback: remove worktree without handle (best-effort).
+                # Degrade on stall — an uncaught TimeoutExpired would abort the
+                # reap loop and strand the remaining orphans. Skip this one and
+                # continue so the next pass can retry it.
+                try:
+                    subprocess.run(
+                        ["git", "-C", str(self.repo_root), "worktree", "remove",
+                         "--force", str(wt_path)],
+                        capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
+                    )
+                except subprocess.TimeoutExpired:
+                    event("worktree.reap.timeout", contract_id=contract_id,
+                          wt_path=str(wt_path))
+                    continue
             reaped.append(wt_path)
         return reaped
 
