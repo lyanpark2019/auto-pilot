@@ -11,5 +11,5 @@ There is intentionally **no SKILL.md** here — this directory is not a discover
 
 | Job | Use instead |
 |---|---|
-| Codebase quality score + fix loop | `auto-pilot:adversarial-review-loop` (codebase mode; `/quality-loop` command alias) |
+| Codebase quality score + fix loop | `auto-pilot:adversarial-review-loop` (codebase mode) |
 | Full quality → docs-sync → ship lifecycle | `auto-pilot:pm-quality-harness-loop` |

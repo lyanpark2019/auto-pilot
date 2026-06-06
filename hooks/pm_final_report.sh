@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook: emit final PM report if ticket-state.json present and PM loop was active this session.
-# Detects active PM loop via $CLAUDE_PROJECT_DIR/.pm-active marker (set by /nbm-to-obsidian) or recent ticket-state mtime.
+# Detects active PM loop via $CLAUDE_PROJECT_DIR/.pm-active marker (set by /vault-build --source notebooklm) or recent ticket-state mtime.
 set -euo pipefail
 
 # Vault path comes from explicit env (set by PM loop or user). No hardcoded default.

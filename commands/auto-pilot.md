@@ -68,7 +68,9 @@ Read `${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py` for the canonical loop. Dri
 For each phase:
 1. Plan contracts (Read spec + current code)
 2. Dispatch workers (1 message, N parallel `Agent` blocks with `subagent_type: "general-purpose"` and the model override `sonnet` — Sonnet 4.6 1M context)
-3. Dispatch reviewers (1 message, 2 parallel blocks per worker: codex-adversarial + claude-reviewer)
+3. Dispatch reviewers (1 message, 2 parallel blocks per worker). Reviewer pair depends on subagent probe result (step 7 above):
+   - **Hardened loop** (`AUTO_PILOT_USE_NEW_REVIEWERS=1`): `auto-pilot-codex-reviewer` + `auto-pilot-claude-reviewer` (ticket-JSON contract, frozen-diff SHA, sandboxed; defined in `agents/auto-pilot-{codex,claude}-reviewer.md`)
+   - **Legacy / degraded** (`AUTO_PILOT_USE_NEW_REVIEWERS=0`): `codex-adversarial` + `claude-reviewer` (inline-text verdict, general-purpose dispatch; defined in `agents/{codex-adversarial,claude-reviewer}.md`)
 4. Apply approved fixes, commit atomically, advance state
 
 Stop conditions defined in `SKILL.md`.

@@ -13,7 +13,7 @@ Toggled via `/` command menu or `permissionMode: plan` in subagent frontmatter.
 | Harness task | Plan Mode? | Why |
 |--------------|-----------|-----|
 | Audit existing harness | ✅ | Read-only by nature |
-| Score (`harness-score`) | ✅ | Pure read |
+| Score (`/harness-ops score`) | ✅ | Pure read |
 | Drift scan | ✅ | Reads files + greps |
 | Bootstrap new harness | ❌ | Needs writes |
 | Run autonomous loop | ❌ | Loop applies autofixes |
@@ -23,10 +23,10 @@ Toggled via `/` command menu or `permissionMode: plan` in subagent frontmatter.
 
 ```
 1. /plan-mode on
-2. /harness-score        # see current state, read-only
+2. /harness-ops score        # see current state, read-only
 3. Discuss with Claude: which dimensions matter most, what to skip
 4. /plan-mode off
-5. /harness-loop 95 15   # execute the plan
+5. /harness-ops loop 95 15   # execute the plan
 ```
 
 ## Extended Thinking budget

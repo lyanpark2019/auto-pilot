@@ -33,7 +33,7 @@ setup-harness/
 ├── CHANGELOG.md                       ← v1 → v2.0.0 history
 ├── .claude-plugin/plugin.json         ← marketplace manifest
 ├── agents/                            ← 3 subagents (Planner / Generator / Evaluator)
-├── commands/                          ← 8 slash commands (/harness-setup .. /harness-qa)
+├── commands/                          ← 2 routed commands (/harness, /harness-ops)
 ├── scripts/                           ← 28 executable: hooks + installer + orchestrator
 │   ├── bootstrap.sh                   ← one-shot installer (idempotent, DRY_RUN)
 │   ├── score-harness.sh               ← 15-dimension scorer → .claude/score.json

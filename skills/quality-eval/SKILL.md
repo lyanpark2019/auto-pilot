@@ -4,7 +4,7 @@ description: >
   Any codebase를 빅테크 13차원 루브릭으로 채점하는 범용 평가 스킬.
   Python/TypeScript/Go/Rust 자동 감지, 인프라 레이어 자동 제외.
   .planning/quality/score-state.json에 결과 저장.
-  quality-loop 커맨드에서 EVALUATE/RESCORE 단계에 호출됨.
+  adversarial-review-loop codebase mode 에서 EVALUATE/RESCORE 단계에 호출됨.
   독립 호출도 가능: "코드 품질 점수 알려줘", "quality eval", "score this project"
 ---
 

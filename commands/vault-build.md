@@ -1,7 +1,7 @@
 ---
 name: vault-build
-description: "Export pipeline: build/update an Obsidian vault + NotebookLM notebook + graphify output (and optional bases/canvas dashboards) from a project. Upsert semantics — existing vault/notebook updated, missing ones created. Repo-docs drift-fix/scoring is RETIRED here (→ doc-management skill); it runs only with the explicit --fix-repo-docs opt-in."
-argument-hint: "[<project_path>] [--export obsidian,notebooklm,graphify,bases,canvas] [--source <code|notebooklm|api_kb>] [--fix-repo-docs] [--dry-run]"
+description: "Export pipeline: build/update an Obsidian vault + NotebookLM notebook + graphify output (and optional bases/canvas dashboards) from a project. Upsert semantics — existing vault/notebook updated, missing ones created. Repo-docs drift-fix/scoring is RETIRED here (→ doc-management skill); it runs only with the explicit --fix-repo-docs opt-in. Absorbs: /vault-restructure (--restructure flag) + /vault-resume (--resume flag)."
+argument-hint: "[<project_path>] [--export obsidian,notebooklm,graphify,bases,canvas] [--source <code|notebooklm|api_kb>] [--fix-repo-docs] [--dry-run] [--restructure ...] [--resume]"
 allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 ---
 
@@ -32,7 +32,7 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 /vault-build --obsidian-path ~/MyVaults         # override default vault location
 /vault-build --project-name custom-name         # override (default = directory name)
 /vault-build --source notebooklm                # build a knowledge vault FROM NotebookLM sources
-                                                #   (vault-internal flow; alias: /nbm-to-obsidian)
+                                                #   (vault-internal flow; legacy alias /nbm-to-obsidian deleted)
 
 # RETIRED path — explicit opt-in ONLY (otherwise use the doc-management skill):
 /vault-build --fix-repo-docs                    # legacy Phases 2-4: drift → fix → rubric on repo docs/
@@ -59,7 +59,7 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 
 ```
 [2/5] Drift        cross-reference code AST ↔ docs → 4 drift types (gap/orphan/claim/symbol)
-[3/5] Fix          PM dispatches gap-filler / orphan-pruner / drift-fixer in parallel
+[3/5] Fix          PM dispatches vault-knowledge-author / vault-structure-curator in parallel
                    (skip pages with manual_edit: true)
 [4/5] Verify       rubric.yaml acceptance rules → score per dim; <pass_threshold →
                    PM re-dispatches with critique (≤3 retry)
@@ -105,7 +105,7 @@ When `--auto-graphify` is set:
 
 Only with `--fix-repo-docs` (additionally):
 - `.vault-builder/drift-report.{md,json}`, `fix-plan.json`, `verify-report.md`
-- `.vault-builder/{gap-filler,orphan-pruner,drift-fixer}-actions.md` — worker logs
+- `.vault-builder/{vault-knowledge-author,vault-structure-curator}-actions.md` — worker logs
 - Auto-fixed pages in docs/ (frontmatter `last_synced`, `manual_edit: false`) +
   new pages under `docs/modules/` for gap items (see the ⚠️ above)
 
@@ -178,6 +178,85 @@ python3 "$ROOT/pipeline/export.py" "$PROJECT" \
 - `state.json` records `source_sha` (hash of code+docs). With `--fix-repo-docs`,
   unchanged `source_sha` skips Phases 2-4.
 - Manual-edit pages (frontmatter `manual_edit: true`) never touched by fix or export.
+
+---
+
+## `--restructure` mode (absorbed from /vault-restructure)
+
+Single-command autonomous restructure of `~/Documents/Obsidian/` per the project ↔ vault ↔ NotebookLM mapping in `scripts/restructure_phases/_mapping.py`. Idempotent + resume-safe via state file.
+
+```bash
+/vault-build --restructure                  # live run; resumes from last completed phase
+/vault-build --restructure --dry-run        # simulate every phase, no side effects (⚠️ --dry-run here
+                                            #   means restructure dry-run, NOT fix-repo-docs dry-run)
+/vault-build --restructure --phase 3        # re-run specific phase
+/vault-build --restructure --reset          # reset state and start over (does NOT delete vaults)
+/vault-build --restructure --verify-all     # re-verify every phase; mark stale ones pending
+/vault-build --restructure --execute-builds # includes Phase 6 — shells out to claude -p /vault-build
+                                            #   per pending domain. Budget cap: $VAULT_BUILD_BUDGET_USD
+                                            #   (default $5/domain). Total time ~10-30 min per domain.
+```
+
+> **`--dry-run` disambiguation**: within `--restructure`, `--dry-run` simulates the restructure loop
+> (no filesystem changes). Within `--fix-repo-docs`, `--dry-run` produces a drift report only. The
+> flag is interpreted relative to whichever mode is active.
+
+### Phases
+
+1. **backup** — `tar czf` every existing vault to `/tmp/obsidian-backups/`
+2. **rename_simple** — rename vaults to `<project>-Vault` convention
+3. **sportic365_merge** — merge Sportic/SporTic365 into `sportic365-Vault`
+4. **notebooklm_split** — split `NotebookLM-Archive` into per-domain vaults
+5. **new_vault_skeletons** — create skeleton vaults for missing domains
+6. **vault_build_per_domain** — emit `/vault-build` command manifest + score existing vaults
+7. **notebooklm_create** — emit `notebooklm create` command manifest
+
+### State
+
+`~/.claude/state/obsidian-restructure-state.json` — read on every run for resume.
+
+### Execution
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/vault/scripts/restructure_loop.py "$@"
+```
+
+Pass all flags through verbatim after stripping `--restructure` from the argument list.
+
+### Verification
+
+- `~/.claude/state/obsidian-restructure-final-report.md` — phase-by-phase summary
+- `~/.claude/state/obsidian-restructure-build-manifest.json` — Phase 6 manifest
+- `~/.claude/state/obsidian-restructure-notebooklm-manifest.json` — Phase 7 manifest
+
+### Recovery
+
+Phase 1 tarballs in `/tmp/obsidian-backups/` allow full rollback:
+```bash
+cd ~/Documents/Obsidian
+tar xzf /tmp/obsidian-backups/obsidian-backup-<vault>-<date>.tgz
+```
+
+---
+
+## `--resume` mode (absorbed from /vault-resume)
+
+⚠️ `--resume` continues the PM ticket loop from the last `ticket-state.json`. This belongs to the **retired `--fix-repo-docs` PM loop** machinery — it is not part of the default export flow. Only use it after a `--fix-repo-docs` run that was interrupted mid-loop.
+
+```bash
+/vault-build --resume [<vault_path>]   # resume PM loop from last ticket-state.json
+/vault-build --resume                  # uses last vault from ${CLAUDE_PLUGIN_DATA}/last-vault
+```
+
+### Execution
+
+1. Load `ticket-state.json` (from `${CLAUDE_PLUGIN_DATA}` or `$VAULT/meta/`)
+2. Find latest `round_num` + status
+3. If pending tickets exist: dispatch `vault-pm-orchestrator` to continue
+4. If all verified + score < 95: start next round
+5. If score ≥ 95 both axes: print final report, no further action
+
+---
 
 ## Validated
 
