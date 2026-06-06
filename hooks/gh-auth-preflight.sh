@@ -37,11 +37,13 @@ fi
 [[ -z "$cmd" ]] && exit 0
 
 # Only fire when command contains `gh ` as a word
+# shellcheck disable=SC2016 # regex literal — backtick/$( are pattern chars, expansion not wanted
 if ! printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]'; then
   exit 0
 fi
 
 # Skip `gh auth` commands (those are maintenance commands, not repo operations)
+# shellcheck disable=SC2016 # regex literal — backtick/$( are pattern chars, expansion not wanted
 if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]+auth[[:space:]]'; then
   exit 0
 fi
