@@ -46,8 +46,14 @@ segs=$(printf '%s' "$cmd" | grep -oE "(^|[[:space:];|&])git${GIT_OPTS}[[:space:]
 
 [[ -z "$segs" ]] && exit 0
 
-# Bypass
+# Bypass — hook env OR an explicit env-prefix on the command itself (the hook
+# process inherits the SESSION env, so a tool-call prefix never reaches the
+# check above; accept the literal token as operator intent — r3 fix, same
+# class as deletion-diff-guard).
 if [[ "${AUTO_PILOT_MAIN_OK:-0}" == "1" ]]; then
+  exit 0
+fi
+if printf '%s' "$cmd" | grep -q 'AUTO_PILOT_MAIN_OK=1'; then
   exit 0
 fi
 

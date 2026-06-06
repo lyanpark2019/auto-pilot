@@ -86,7 +86,10 @@ cache_file="${TMPDIR:-/tmp}/gh-auth-${owner}.cache"
 active_user=""
 
 if [[ -f "$cache_file" ]]; then
-  cache_age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+  # mtime via python3: GNU stat treats `-f` as filesystem mode (prints mount point,
+  # exit 0) so a BSD-first fallback chain breaks on Linux — CI run 27076577146.
+  cache_mtime=$(python3 -c 'import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))' "$cache_file" 2>/dev/null || echo 0)
+  cache_age=$(( $(date +%s) - cache_mtime ))
   if [[ "$cache_age" -lt 300 ]]; then
     active_user=$(cat "$cache_file" 2>/dev/null || echo "")
   fi

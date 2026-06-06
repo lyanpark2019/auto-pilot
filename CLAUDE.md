@@ -25,17 +25,16 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 - `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace; `.mcp.json` — bundled MCP server config
 - `skills/auto-pilot/SKILL.md` — entry skill (fires on `/auto-pilot`)
 - `skills/` — 11 dirs / 11 active: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`; loop scoring delegates to ARL codebase mode), adversarial-review-loop (branch/codebase/multi-agent + `--lifecycle` mode — absorbed pm-quality-harness-loop 2026-06-07), quality-eval (rubric SoT, data not entry point), residue-audit, codex-orchestra, sha-deploy-standard, swarm (subcommand-routed: init/start/status/stop/ticket/bench — absorbed swarm-bench 2026-06-07), doc-management (the docs subsystem — REBUILD/MAINTAIN/AUDIT modes; absorbs the retired graphify-doc-rebuild / doc-drift-audit / doc-sync / llm-wiki-architect skills), improve-codebase-architecture (Matt Pocock MIT fork, LICENSE-upstream.txt), diagnosing (llm-output-leaks + stale-runtime modes, merged 2026-06-07)
-- `commands/` — 8 slash commands: `auto-pilot{,-server}` (eval-run absorbed as `/auto-pilot eval` 2026-06-07), `vault-{build,score,dashboard,selftest}` (4), `setup-claude-md`, `sha-deploy-init` (harness + harness-ops deleted 2026-06-07)
+- `commands/` — 7 slash commands: `auto-pilot-server`, `vault-{build,score,dashboard,selftest}` (4), `setup-claude-md`, `sha-deploy-init`. `/auto-pilot` routes via the skill — the same-name command file was folded into `skills/auto-pilot/SKILL.md` 2026-06-07 (commands+skills share one registry namespace; the pair double-registered). eval-run absorbed as `/auto-pilot eval`; harness + harness-ops deleted 2026-06-07
 - `agents/` — 16 contracts: core loop (pm-orchestrator, worker, retro), review (`auto-pilot-{codex,claude}-reviewer.md` hardened pair — legacy codex-adversarial/claude-reviewer deleted 2026-06-07, tech-critic-lead, review-gatekeeper (tdd-enforcer + security-reviewer merged 2026-06-07), specialist-pool; code-perfector retired 2026-06-07 → residue-audit/ARL), swarm-{explorer,monitor,verifier}, vault set (vault-pm-orchestrator + vault-{edge-curator,graph-enricher,knowledge-author,structure-curator} — the 4 merged 2026-06 round-2, 25 legacy vault agents removed; harness-{planner,generator,evaluator} deleted 2026-06-07 — 1:1 duplicate of auto-pilot loop); shared review substance lives in `skills/adversarial-review-loop/references/review-core.md`; goal-{scout,judge,worker} live in global `~/.claude/agents/` (not bundled)
-- `hooks/*.sh|*.py` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard, `doc-sync-update.sh` (merged graph-freshness watcher: code graph stale-flag + vault raw/sources .md eager graphify update), `notebooklm_delete_gate.sh` (confirm-gated deletes, Bash + MCP shapes), `pm_final_report.sh`, + 7 round-2 enforcement hooks (`pre-edit-human-only`, `branch-lock`, `deletion-diff-guard`, `gh-auth-preflight`, `ruff-import-integrity`, `dispatch-contract-gate`, `creation-gate`) — full wiring SoT = `hooks/hooks.json` (17 scripts)
+- `hooks/*.sh|*.py` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard, `doc-sync-update.sh` (merged graph-freshness watcher: code graph stale-flag + vault raw/sources .md eager graphify update), `notebooklm_delete_gate.sh` (confirm-gated deletes, Bash + MCP shapes), `pm_final_report.sh`, + 7 round-2 enforcement hooks (`pre-edit-human-only`, `branch-lock`, `deletion-diff-guard`, `gh-auth-preflight`, `ruff-import-integrity`, `dispatch-contract-gate`, `creation-gate`) + round-3 additions (`context-watch`, `artifact-ledger`, `subagent-deliverable-check` — SubagentStop advisory) — full wiring SoT = `hooks/hooks.json` (20 scripts)
 - `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12); swarm's ticket/score/verify/plugin schemas live in `swarm/schemas/`
 - `scripts/` — `orchestrator.py`, `headless-loop.py`, PR1-PR5 modules listed below, `build_dashboard_data.py`, `quality/` gates
 - `vault/` — export layer (vault-builder absorbed): `pipeline/`, `sources/`, `scripts/`, `rubrics/`, `templates/`, `dashboard/`, `tests/`
 - `swarm/` — parallel execution backend: `scripts/`, `schemas/`, `tests/`, `docs/`
 - `codex/` — 12 codex skill forks (repo = SoT) + `sync-to-codex.sh`; `deploy/` — sha-deploy templates; `dashboard/` — scorecard dashboard; `evals/` — eval harness
 - `docs/architecture.md` — loop + design (canonical)
-- `docs/specs/` — PR-input specs (e.g. `2026-06-06-unified-coding-system-design.md`)
-- `docs/superpowers/{specs,plans}/` — design specs + implementation plans
+- `docs/specs/` — PR-input specs (e.g. `2026-06-06-unified-coding-system-design.md`); shipped plan/spec docs get distilled into `docs/architecture.md` then deleted (`docs/superpowers/` retired this way 2026-06-07 — disposal step owned by `agents/retro.md`)
 
 ## Python helper modules
 
@@ -54,6 +53,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 | `scripts/_reviewer_wrapper.py` | PR3 | parallel reviewer dispatch with isolated env dicts |
 | `scripts/_dogfood_gate.py` | PR4 | Tier 1 / Tier 2 acceptance assertions + CLI |
 | `scripts/_budget.py` | PR5 | cost / token / pid caps for headless driver (extracted from `headless-loop.py`) |
+| `scripts/risk_assess.py` | v0.7.1 | diff → risk tier + `review_policy` JSON (advisory gate for review dispatch; SoT for tier/policy tokens) |
 
 ## Editing this plugin
 

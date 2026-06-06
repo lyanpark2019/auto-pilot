@@ -36,16 +36,8 @@ if ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)'
   exit 0  # unparseable → allow
 fi
 
-tool_name=$(printf '%s' "$payload" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get("tool_name") or "")
-except Exception:
-    print("")
-' 2>/dev/null || echo "")
-
 # ── Determine if we should gate ── (python3 for bare→qualified normalization, bash3.2 compat)
+# tool_name is extracted inside the python block below — no bash-side copy (SC2034).
 should_gate=$(printf '%s' "$payload" | python3 -c '
 import sys, json
 

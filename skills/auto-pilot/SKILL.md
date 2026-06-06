@@ -1,6 +1,7 @@
 ---
 name: auto-pilot
 description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (Opus 4.7) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis — bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
+argument-hint: "[start|status|resume|stop|eval|handoff] [--spec PATH] [--max-workers N] [--time-box DURATION]"
 ---
 
 # auto-pilot
@@ -83,7 +84,68 @@ At phase end the PM MAY dispatch the `retro` agent (`agents/retro.md`) — appen
 /auto-pilot status                       # print state.json summary
 /auto-pilot resume                       # continue from last checkpoint
 /auto-pilot stop                         # mark state.json stopped
+/auto-pilot eval [--tier smoke|full] [--case ID] [--repeats N]   # advisory evals harness (see ## eval)
+/auto-pilot handoff                      # write next-session handoff (see ## handoff)
 ```
+
+> The former `commands/auto-pilot.md` router was folded into this skill 2026-06-07 — commands and skills now share one registry namespace, so the same-name pair double-registered. This SKILL.md is the single `/auto-pilot` entry.
+
+## Pre-flight (run before dispatching anything)
+
+1. Confirm repo is git-clean OR `--allow-dirty`
+2. Confirm spec exists (newest `docs/specs/*-*.md` OR `--spec` arg OR `SPEC.md`)
+3. Confirm `codex` CLI on PATH (for adversarial reviewer)
+4. Confirm `.planning/auto-pilot/` exists (create if missing)
+5. Print initial scorecard: phase, contracts, est. parallel workers
+6. Confirm `git --version` ≥ 2.32 (required for `git commit --trailer` used in worktree apply_to_main amend step):
+   ```bash
+   v=$(git --version | awk '{print $3}')
+   IFS=. read -r maj min _ <<< "$v"
+   if ! { [ "$maj" -gt 2 ] || { [ "$maj" -eq 2 ] && [ "$min" -ge 32 ]; }; }; then
+     echo "auto-pilot: git $v < 2.32 — required for commit --trailer" >&2; exit 2
+   fi
+   ```
+7. **Subagent discovery probe** (presence health-check — hardened pair is required):
+   ```bash
+   # `claude --list-agents` does not exist; probe via no-op dispatch with sentinel token.
+   probe_result=$(timeout 30 claude -p --max-turns 1 \
+      "@subagent:auto-pilot-claude-reviewer reply with literal token AUTOPILOT_PROBE_OK" 2>&1)
+   if ! echo "$probe_result" | grep -q AUTOPILOT_PROBE_OK; then
+     echo "auto-pilot: subagent discovery probe failed; hardened reviewer pair unavailable — aborting (no legacy fallback)" >&2
+     exit 3
+   fi
+   ```
+8. **Codex sandbox probe**:
+   ```bash
+   if codex exec --sandbox read-only --json --prompt "ping" 2>&1 | grep -qi 'unknown\|invalid'; then
+     echo "auto-pilot: codex does not support --sandbox read-only; layer 4 deterrent disabled" >&2
+     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=0
+   else
+     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=1
+   fi
+   ```
+
+The hardened pair (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) is the only reviewer dispatch path — there is no legacy `general-purpose` inline-text fallback (legacy pair deleted 2026-06-07). All four sandbox layers stay active: frontmatter `tools:` whitelist (layer 1), the env-keyed `pre-reviewer-write.sh` hook (layers 2+3), and the codex `--sandbox read-only` deterrent (layer 4).
+
+## eval
+
+> Folded from the retired `commands/eval-run.md` (2026-06-07); methodology verbatim — harness, flags, and paths unchanged.
+
+Run the cut-1 evals harness (advisory). It clones the repo per case, runs auto-pilot headless on the case spec, asserts the deliverable with a deterministic oracle, and prints an advisory pass-rate vs the blessed baseline. **Never blocks** (cut-1): always exits 0.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/evals/cli.py run --tier smoke --repeats 1
+```
+
+Methodology (`scripts/evals/cli.py` → `scripts/evals/runner.py`):
+
+1. **Select cases** — `--case ID` for one case, else `select_cases(evals/cases, tier)` for the tier (`smoke` default | `full`).
+2. **Per attempt, isolate via a fresh local clone** (`git clone --local`), then run auto-pilot headless inside it: `python3 scripts/orchestrator.py init --spec evals/cases/<ID>/spec.md --force --max-workers 2` then `python3 scripts/headless-loop.py --max-iter 20 --max-cost-usd 5.0 --max-concurrent-claude 10000` (large concurrency cap disables the fork-bomb `pgrep claude` guard for the sequential eval loop; non-zero loop exit is expected — the oracle decides pass/fail). Clone teardown is in a `finally`.
+3. **Oracle** — `load_case_oracle(ID)` asserts the deliverable deterministically; outcome buckets are pass / fail / error.
+4. **Repeat** `--repeats N` (CLI default 5; the slash default above passes 1), `summarize()` per case, and `compare()` vs `evals/baseline.json` (advisory — reports `armed` / `would_fire` / `error_spike`, never blocks). Results written to `evals/results/local.json`.
+5. **Cost ceiling** — `--max-total-cost-usd` (default 50.0); stops before the next case once exceeded.
+
+Paths are repo-root-relative: harness driver `scripts/evals/cli.py`, runner `scripts/evals/runner.py`; cases + baseline live at `evals/cases/` and `evals/baseline.json`.
 
 ## Built-in friction guards (from /insights analysis)
 

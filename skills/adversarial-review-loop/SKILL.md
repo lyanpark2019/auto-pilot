@@ -7,6 +7,7 @@ description: >
   **multi-agent mode** (opt-in dispatch layer on codebase mode): PM main session + dim-routed Codex/Claude worker pool + cold-Claude reviewer pool; activation-gated by repo size + contract count. Triggers: `mode=multi-agent`, `--multi-agent`, "multi-agent review", "pm-worker loop", "코덱스 워커 풀".
   **lifecycle mode** (superset orchestrator; absorbed pm-quality-harness-loop): whole-lifecycle quality lift then ship — CI-faithfulness gate → dimension fan-out → adversarial bug-hunt → honest re-score → harness-doc sync → autonomous merge. Use when the deliverable is "measurably better AND docs-synced AND merged", not just a score. Triggers: `mode=lifecycle`, `--lifecycle`, "big-tech 95", "quality lift then merge", "harden and ship", "코드 품질 빅테크로 올려줘", "score and fix this codebase then merge".
   Git-baseline hygiene checks (uncommitted/unpushed/stash/conflicts) every round.
+  NOT for: dead-code/duplicate/stale-comment removal without a score target (residue-audit), doc↔code prose drift (doc-management), harness bootstrap (setup-harness), vault export/scoring (vault-build/vault-score) — route "코드 정리"/"clean up" requests to residue-audit unless the user asks for a score or a review verdict.
 ---
 
 # Adversarial Review Loop (Codex × Claude)
