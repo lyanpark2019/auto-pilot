@@ -1,45 +1,50 @@
 ---
 name: vault-build
-description: "Run in any project directory to: scan code + docs, auto-fix drift, verify against rubric, export to Obsidian + NotebookLM + graphify. Single command. Upsert semantics — existing Obsidian vault / NotebookLM notebook updated; missing ones created."
-argument-hint: "--source <code|notebooklm|api_kb> <vault_path> [--input <repo_path>] [--rubric <file>] [--dry-run]"
+description: "Export pipeline: build/update an Obsidian vault + NotebookLM notebook + graphify output (and optional bases/canvas dashboards) from a project. Upsert semantics — existing vault/notebook updated, missing ones created. Repo-docs drift-fix/scoring is RETIRED here (→ doc-management skill); it runs only with the explicit --fix-repo-docs opt-in."
+argument-hint: "[<project_path>] [--export obsidian,notebooklm,graphify,bases,canvas] [--source <code|notebooklm|api_kb>] [--fix-repo-docs] [--dry-run]"
 allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 ---
 
 # /vault-build
 
-> **DEPRECATED for repo-docs doc-purpose use.** Running this pipeline to detect/fix/score a repo's own `docs/` tree (`--source code` drift → fix → rubric as the goal) is RETIRED — that job belongs to the **`doc-management`** skill (REBUILD / MAINTAIN / AUDIT modes). `/vault-build` remains fully supported as the **export pipeline**: building/updating Obsidian vaults, NotebookLM notebooks, bases, canvas, and graphify output from a project. Canonical mapping: doc-용도 제거, export 잔류.
-
-Universal project documentation pipeline. Run in CWD.
+> **Repo-docs doc-purpose path RETIRED.** Detecting/fixing/scoring a repo's own
+> `docs/` tree (`--source code` drift → fix → rubric as the goal) belongs to the
+> **`doc-management`** skill (REBUILD / MAINTAIN / AUDIT modes) — it is NOT part of
+> this command's default flow. If the user asks `/vault-build` to fix or score the
+> repo's own docs **without** `--fix-repo-docs`, STOP and route them to
+> `doc-management` instead of running Phases 2-4. `/vault-build` is the **export
+> pipeline**: building/updating Obsidian vaults, NotebookLM notebooks, bases,
+> canvas, and graphify output. Canonical mapping: doc-용도 제거, export 잔류.
 
 ## Usage
 
 ```
-/vault-build                                    # full pipeline in CWD
+/vault-build                                    # EXPORT-ONLY (default): obsidian,notebooklm,graphify
 /vault-build /path/to/project                   # explicit project path
-/vault-build --dry-run                          # scan + drift report only
-/vault-build --no-fix                           # skip drift fix (read-only)
 /vault-build --export obsidian,notebooklm       # subset of destinations
-/vault-build --export obsidian                  # single destination
 /vault-build --export obsidian,bases,canvas     # kepano dashboards + graph canvas
 /vault-build --auto-graphify                    # post-export: graphify update + global add
 /vault-build --auto-graphify --no-global        # auto-graphify but skip global merge
 /vault-build --global-tag <tag>                 # rename project in global graph
-/vault-build --rubric ./custom.yaml             # override rubric
 /vault-build --doc-root ./alt-docs              # docs live elsewhere
 /vault-build --obsidian-path ~/MyVaults         # override default vault location
 /vault-build --project-name custom-name         # override (default = directory name)
+/vault-build --source notebooklm                # build a knowledge vault FROM NotebookLM sources
+                                                #   (vault-internal flow; alias: /nbm-to-obsidian)
+
+# RETIRED path — explicit opt-in ONLY (otherwise use the doc-management skill):
+/vault-build --fix-repo-docs                    # legacy Phases 2-4: drift → fix → rubric on repo docs/
+/vault-build --fix-repo-docs --dry-run          # drift report only, no mutations
+/vault-build --fix-repo-docs --rubric ./custom.yaml
 ```
 
-## Pipeline (5 phases)
+## Pipeline
+
+**Default (export-only) — 2 phases:**
 
 ```
-[1/5] Scan         code AST + existing markdown → unified state
-[2/5] Drift        cross-reference → 4 drift types (gap / orphan / claim / symbol)
-[3/5] Fix          PM dispatches gap-filler / orphan-pruner / drift-fixer in parallel
-                   (skip if --no-fix; skip pages with manual_edit: true)
-[4/5] Verify       rubric.yaml acceptance rules → score per dim, fail closed
-                   if <pass_threshold, PM re-dispatches with critique (≤3 retry)
-[5/5] Export       Up to 5 destinations (upsert: update existing, create if missing)
+[1/2] Scan         light state refresh (.vault-builder/state.json: source_sha, source_adapter)
+[2/2] Export       up to 5 destinations (upsert: update existing, create if missing)
                    - obsidian   → ~/Documents/Obsidian/<project>/
                    - notebooklm → notebook titled <project>
                    - graphify   → <project>/.vault-builder/graphify-out/
@@ -48,19 +53,28 @@ Universal project documentation pipeline. Run in CWD.
                    (+ optional --auto-graphify: graphify update + global add)
 ```
 
+**Opt-in `--fix-repo-docs` (RETIRED default — kept for legacy/vault-internal use):**
+
+```
+[2/5] Drift        cross-reference code AST ↔ docs → 4 drift types (gap/orphan/claim/symbol)
+[3/5] Fix          PM dispatches gap-filler / orphan-pruner / drift-fixer in parallel
+                   (skip pages with manual_edit: true)
+[4/5] Verify       rubric.yaml acceptance rules → score per dim; <pass_threshold →
+                   PM re-dispatches with critique (≤3 retry)
+```
+
+⚠️ These phases generate/rewrite pages in the target's `docs/` tree (including new
+`docs/modules/` pages for gap items) — the unreviewed per-module generation pattern
+that doc-management forbids for a repo's own docs. Use them only for vault-internal
+content (`--source notebooklm|api_kb`) or when the user explicitly accepts the
+legacy behavior; the supported repo-docs path is the `doc-management` skill.
+
 ## Outputs
 
-In project root:
-- `.vault-builder/drift-report.{md,json}` — Phase 2 output
-- `.vault-builder/fix-plan.json` — Phase 3 ticket plan
-- `.vault-builder/verify-report.md` — Phase 4 rubric score
-- `.vault-builder/export-report.json` — Phase 5 destination summary
-- `.vault-builder/state.json` — unified state across phases (source_sha, last_run_ts)
-- `.vault-builder/gap-filler-actions.md`, `orphan-pruner-actions.md`, `drift-fixer-actions.md` — worker logs
-
-In docs/:
-- Auto-fixed pages (frontmatter `last_synced`, `manual_edit: false`)
-- New pages under `docs/modules/` for gap items
+Default (export-only), in project root `.vault-builder/`:
+- `export-report.json` — per-destination summary (failures exit non-zero; graceful
+  skips, e.g. missing `notebooklm` CLI, stay rc=0 with `"skipped": true`)
+- `state.json` — unified state (source_sha, source_adapter, last_run_ts)
 
 In `~/Documents/Obsidian/<project>/`:
 - Mirror of `docs/` + top-level `README.md`/`CLAUDE.md`/`AGENTS.md`/`ARCHITECTURE.md`
@@ -76,24 +90,49 @@ In graphify-out:
 - (`graphify build` was removed upstream; the current contract is `extract`.)
 
 In `<vault>/meta/bases/` (when `--export` includes `bases`):
-- `sources.base`, `concepts.base`, `entities.base`, `manual-edited.base` — kepano Obsidian Bases dashboards. Multi-source / manual-edit filters built in.
+- `sources.base`, `concepts.base`, `entities.base`, `manual-edited.base` — kepano
+  Obsidian Bases dashboards. Multi-source / manual-edit filters built in.
 
 In `<vault>/meta/graph-hub.canvas` (when `--export` includes `canvas`):
-- JSON Canvas with the top 80 god_nodes laid out in a grid + every edge that connects two top-N nodes.
+- JSON Canvas: top 80 god_nodes in a grid + every edge connecting two top-N nodes.
 
 When `--auto-graphify` is set:
 - Runs `graphify update <repo>` (or `graphify extract --no-cluster` for first run).
-- Then `graphify global add <repo>/graphify-out/graph.json --as <tag>` (skip with `--no-global`).
-- `<tag>` defaults to the repo directory name; override via `--global-tag`.
+- Then `graphify global add <repo>/graphify-out/graph.json --as <tag>` (skip with
+  `--no-global`). `<tag>` defaults to the repo directory name; override `--global-tag`.
+
+Only with `--fix-repo-docs` (additionally):
+- `.vault-builder/drift-report.{md,json}`, `fix-plan.json`, `verify-report.md`
+- `.vault-builder/{gap-filler,orphan-pruner,drift-fixer}-actions.md` — worker logs
+- Auto-fixed pages in docs/ (frontmatter `last_synced`, `manual_edit: false`) +
+  new pages under `docs/modules/` for gap items (see the ⚠️ above)
 
 ## Execution (Claude follows these steps)
 
 ```bash
 PROJECT="${1:-$PWD}"
 ROOT="${CLAUDE_PLUGIN_ROOT}/vault"
+```
 
+**Default flow (no `--fix-repo-docs`) — export only:**
+
+```bash
+python3 "$ROOT/pipeline/export.py" "$PROJECT" \
+    --export "${EXPORTS:-obsidian,notebooklm,graphify}" \
+    --out "$PROJECT/.vault-builder/export-report.json"
+# Non-zero exit = at least one destination FAILED (see report); "skipped" entries are fine.
+```
+
+If the user's actual goal is "fix/refresh the repo's own docs", do NOT proceed —
+invoke the `doc-management` skill (MAINTAIN for targeted refresh, AUDIT for drift
+findings, REBUILD for clean-slate) and stop here.
+
+**Opt-in flow (`--fix-repo-docs` explicitly passed):**
+
+```bash
 # Phase 1-2: scan + drift
 python3 "$ROOT/pipeline/drift.py" "$PROJECT" --out "$PROJECT/.vault-builder/drift-report.md"
+# --dry-run stops here (drift report only)
 
 # Phase 3: prepare ticket plan (read by PM)
 python3 "$ROOT/pipeline/fix.py"   "$PROJECT" --out "$PROJECT/.vault-builder/fix-plan.json"
@@ -131,15 +170,15 @@ python3 "$ROOT/pipeline/export.py" "$PROJECT" \
     --out "$PROJECT/.vault-builder/export-report.json"
 ```
 
-If `--no-fix`: skip Phase 3.5 (PM) entirely; verify + export run on as-is docs.
-If `--dry-run`: stop after Phase 2 (drift report only).
-
 ## Idempotency
 
-- All phases re-runnable.
-- `state.json` records `source_sha` (hash of code+docs). If unchanged, plug skips Phases 2-4.
-- Manual-edit pages (frontmatter `manual_edit: true`) never touched by Phases 3 or 5.
+- All phases re-runnable; export is upsert (update existing, create if missing).
+- `state.json` records `source_sha` (hash of code+docs). With `--fix-repo-docs`,
+  unchanged `source_sha` skips Phases 2-4.
+- Manual-edit pages (frontmatter `manual_edit: true`) never touched by fix or export.
 
 ## Validated
 
-ga4-collector: 103 modules / 23 docs → 8 gap + 24 orphan + 11 claim_drift detected. (Phase 3+ pending PM dispatch wiring.)
+ga4-collector: 103 modules / 23 docs → 8 gap + 24 orphan + 11 claim_drift detected
+(legacy `--fix-repo-docs` path; Phase 3+ pending PM dispatch wiring). Export layer:
+script-mode smoke + upsert covered by `vault/tests/test_fix_verify_export.py`.
