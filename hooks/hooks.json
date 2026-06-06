@@ -70,7 +70,7 @@
         ]
       },
       {
-        "matcher": "mcp__notebooklm__delete.*",
+        "matcher": "mcp__notebooklm__.*delete.*",
         "hooks": [
           {
             "type": "command",

@@ -354,3 +354,79 @@ def test_git_version_preflight_accepts_232():
     ).strip()
     # On any modern CI the installed git is >= 2.32; expect OK
     assert out == "OK"
+
+
+class TestNotebookLMDeleteGate:
+    """Matcher (hooks.json) and script (notebooklm_delete_gate.sh) must block the
+    same MCP tool-name set: any mcp__notebooklm__ tool with 'delete' anywhere in
+    the name (suffix forms like notebook_delete were invisible to the old
+    mcp__notebooklm__delete.* prefix matcher -- fail-open)."""
+
+    MCP_DELETE_NAMES = (
+        "mcp__notebooklm__delete_notebook",   # prefix form (old matcher caught)
+        "mcp__notebooklm__notebook_delete",   # suffix form (old matcher MISSED)
+        "mcp__notebooklm__source_delete",     # suffix form (old matcher MISSED)
+    )
+
+    def _gate(self, hooks_dir: Path) -> Path:
+        return hooks_dir / "notebooklm_delete_gate.sh"
+
+    def _matcher(self) -> str:
+        hooks_json = Path(__file__).parent.parent / "hooks" / "hooks.json"
+        data = json.loads(hooks_json.read_text())
+        entry = next(
+            e for e in data["hooks"]["PreToolUse"]
+            if e["matcher"].startswith("mcp__notebooklm__")
+        )
+        return entry["matcher"]
+
+    def test_matcher_covers_script_intent(self):
+        import re
+        matcher = re.compile(self._matcher())
+        for name in self.MCP_DELETE_NAMES:
+            assert matcher.search(name), f"hooks.json matcher misses {name}"
+
+    @pytest.mark.parametrize("tool_name", MCP_DELETE_NAMES)
+    def test_script_denies_mcp_delete_without_confirm(self, hooks_dir, tmp_path, tool_name):
+        r = _run_hook(
+            self._gate(hooks_dir),
+            {"tool_name": tool_name, "tool_input": {"notebook_id": "x"}},
+            cwd=tmp_path,
+            env={"NBM_DELETE_CONFIRMED": "0"},
+        )
+        assert r.returncode == 0
+        out = json.loads(r.stdout)
+        assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_script_allows_with_confirm_env(self, hooks_dir, tmp_path):
+        r = _run_hook(
+            self._gate(hooks_dir),
+            {"tool_name": "mcp__notebooklm__notebook_delete", "tool_input": {}},
+            cwd=tmp_path,
+            env={"NBM_DELETE_CONFIRMED": "1"},
+        )
+        assert r.returncode == 0
+        assert r.stdout.strip() == ""
+
+    def test_script_passes_non_delete_tool(self, hooks_dir, tmp_path):
+        r = _run_hook(
+            self._gate(hooks_dir),
+            {"tool_name": "mcp__notebooklm__list_notebooks", "tool_input": {}},
+            cwd=tmp_path,
+            env={"NBM_DELETE_CONFIRMED": "0"},
+        )
+        assert r.returncode == 0
+        assert r.stdout.strip() == ""
+
+    def test_script_denies_bash_cli_form(self, hooks_dir, tmp_path):
+        # CLI literal split so this repo's own live gate hook does not fire on the test source.
+        cli = "notebooklm notebook " + "delete abc"
+        r = _run_hook(
+            self._gate(hooks_dir),
+            {"tool_name": "Bash", "tool_input": {"command": cli}},
+            cwd=tmp_path,
+            env={"NBM_DELETE_CONFIRMED": "0"},
+        )
+        assert r.returncode == 0
+        out = json.loads(r.stdout)
+        assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
