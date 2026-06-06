@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>auto-pilot — Architecture</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:-apple-system,Pretendard,sans-serif;padding:28px;line-height:1.5}
+h1{font-size:20px;margin-bottom:4px}
+h2{font-size:14px;margin:24px 0 8px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:4px}
+.sub{color:#8b949e;font-size:11.5px;margin-bottom:18px}
+code{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:0 5px;font-size:10.5px;color:#56d4dd}
+.pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px}
+.pill{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;margin-bottom:6px;font-weight:600}
+.desc{font-size:11px;color:#8b949e;margin-top:4px}
+.count-badge{margin-top:8px;font-size:11px;color:#8b949e}
+table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}
+th,td{border:1px solid #30363d;padding:5px 8px;text-align:left;vertical-align:top}
+th{background:#1c2230;font-size:10.5px}
+.dim{color:#8b949e}
+.counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.cb{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 12px;text-align:center}
+.cb .n{display:block;font-size:18px;font-weight:700}
+.cb .t{display:block;font-size:9.5px;color:#8b949e}
+.process{font-family:monospace;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;font-size:11.5px;white-space:pre;line-height:1.7;color:#e6edf3;margin-top:6px}
+footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d;padding-top:8px}
+@media(max-width:900px){.pillars{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<h1>auto-pilot — Architecture</h1>
+<div class="sub">branch <code>feat/unified-coding-system</code> · commit <code>02d5122</code> · generated 2026-06-07 · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
+
+<h2>Asset counts</h2>
+<div class="counts"><div class="cb"><span class="n">23</span><span class="t">agent</span></div><div class="cb"><span class="n">12</span><span class="t">codex-skill</span></div><div class="cb"><span class="n">11</span><span class="t">command</span></div><div class="cb"><span class="n">17</span><span class="t">hook</span></div><div class="cb"><span class="n">14</span><span class="t">skill</span></div><div class="cb"><span class="n">77</span><span class="t">total</span></div></div>
+
+<h2>4-Pillar purpose (모든 자산은 ≥1 pillar 에 역할 정의 의무)</h2>
+<div class="pillars"><div class="card" style="border-top:3px solid #3fb950"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #3fb950;color:#3fb950">P① 자율 코딩 루프</div><p class="desc">PM-worker-이중리뷰. Contract-based dispatch, frozen-diff dual adversarial review, fixer convergence.</p><div class="count-badge">28 assets</div></div>
+<div class="card" style="border-top:3px solid #d29922"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #d29922;color:#d29922">P② 문서 신선도</div><p class="desc">doc-management flagship. REBUILD/AUDIT/MAINTAIN 3 modes; stale-doc assets absorbed or REMOVE.</p><div class="count-badge">14 assets</div></div>
+<div class="card" style="border-top:3px solid #bc8cff"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #bc8cff;color:#bc8cff">P③ 지식 영속</div><p class="desc">vault · retro · memory. Obsidian vault primary context, retro append-only, session handoff.</p><div class="count-badge">0 assets</div></div>
+<div class="card" style="border-top:3px solid #f85149"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #f85149;color:#f85149">P④ 안전·집행</div><p class="desc">hooks · contracts · gates. Enforcement-not-instruction; mechanical compensation for operator weaknesses.</p><div class="count-badge">35 assets</div></div>
+</div>
+
+<h2>Coding-loop process (SoT: agents/pm-orchestrator.md)</h2>
+<div class="process">PM (code-edit 0)
+  → phase plan + tech-critic gate
+  → contract 발행  [⛓ contract.schema.json · snapshot_shas SHA-pin · idempotency_token]
+  → worker dispatch  (Sonnet 1M · worktree isolation)
+  → diff + verify-log  [⛓ SHA-256 mandatory — missing = bounce]
+  → dual review  [⛓ Codex read-only + cold Claude · PM-frozen diff]
+  → fixer commit + re-review
+  → merge (human checkpoint)
+  → retro → memory  [⛓ vault gotchas + .claude/insights.md]</div>
+
+<h2>Binding contracts</h2>
+<table>
+<tr><th>Contract</th><th>File</th><th>Constraint</th></tr>
+<tr><td><b>worker contract</b></td><td><code>schemas/contract.schema.json</code></td><td class="dim">v2: target_repo · target_layer · hard_constraints · snapshot_shas · additionalProperties:false fail-closed</td></tr>
+<tr><td><b>reviewer contract</b></td><td><code>agents/auto-pilot-codex-reviewer.md + auto-pilot-claude-reviewer.md</code></td><td class="dim">read-only sandbox + frozen diff + structured APPROVE/REJECT + round-budget gate</td></tr>
+<tr><td><b>PM contract</b></td><td><code>agents/pm-orchestrator.md</code></td><td class="dim">reporting format · prohibited actions · code-edit 0</td></tr>
+<tr><td><b>preflight contract</b></td><td><code>schemas/preflight.schema.json</code></td><td class="dim">phase-key · TTL 900s · head_sha — round-2 addition</td></tr>
+
+</table>
+
+<h2>Asset → pillar mapping (live, from collect_assets())</h2>
+<table>
+<tr><th>Asset</th><th>Type</th><th>Subsystem</th><th>Pillar</th></tr>
+<tr><td><code>auto-pilot-claude-reviewer</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>auto-pilot-codex-reviewer</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>claude-reviewer</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>code-perfector</code></td><td class="dim">agent</td><td class="dim">quality</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>codex-adversarial</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>harness-evaluator</code></td><td class="dim">agent</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>harness-generator</code></td><td class="dim">agent</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>harness-planner</code></td><td class="dim">agent</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>pm-orchestrator</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>retro</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>security-reviewer</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>specialist-pool</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>swarm-explorer</code></td><td class="dim">agent</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>swarm-monitor</code></td><td class="dim">agent</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>swarm-verifier</code></td><td class="dim">agent</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>tdd-enforcer</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>tech-critic-lead</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>vault-edge-curator</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-graph-enricher</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-knowledge-author</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-pm-orchestrator</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-structure-curator</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>worker</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>codex-orchestra</code></td><td class="dim">codex-skill</td><td class="dim">conductor</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>diagnose</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>grill-with-docs</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>handoff</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>improve-codebase-architecture</code></td><td class="dim">codex-skill</td><td class="dim">diagnostics</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>migrate-to-codex</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>prototype</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>tdd</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>to-issues</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>to-prd</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>triage</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>zoom-out</code></td><td class="dim">codex-skill</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>auto-pilot</code></td><td class="dim">command</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>auto-pilot-server</code></td><td class="dim">command</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>eval-run</code></td><td class="dim">command</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>harness</code></td><td class="dim">command</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>harness-ops</code></td><td class="dim">command</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>setup-claude-md</code></td><td class="dim">command</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>sha-deploy-init</code></td><td class="dim">command</td><td class="dim">deploy</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>vault-build</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-dashboard</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-score</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>vault-selftest</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>branch-lock.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>codex-conductor-guard.py</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>creation-gate.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>deletion-diff-guard.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>dispatch-contract-gate.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>doc-sync-update.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>gh-auth-preflight.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>guard-destructive.py</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>notebooklm_delete_gate.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>pm_final_report.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>post-deploy-verify.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>pre-bash-guard.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>pre-edit-composition-root.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>pre-edit-human-only.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>pre-reviewer-write.sh</code></td><td class="dim">hook</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>preflight-path.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>ruff-import-integrity.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>adversarial-review-loop</code></td><td class="dim">skill</td><td class="dim">quality</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>auto-pilot</code></td><td class="dim">skill</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>codex-orchestra</code></td><td class="dim">skill</td><td class="dim">conductor</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>diagnosing-llm-output-leaks</code></td><td class="dim">skill</td><td class="dim">diagnostics</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>diagnosing-stale-runtime</code></td><td class="dim">skill</td><td class="dim">diagnostics</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>doc-management</code></td><td class="dim">skill</td><td class="dim">docs-core</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>improve-codebase-architecture</code></td><td class="dim">skill</td><td class="dim">diagnostics</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>pm-quality-harness-loop</code></td><td class="dim">skill</td><td class="dim">quality</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>quality-eval</code></td><td class="dim">skill</td><td class="dim">quality</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>residue-audit</code></td><td class="dim">skill</td><td class="dim">quality</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>setup-harness</code></td><td class="dim">skill</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>sha-deploy-standard</code></td><td class="dim">skill</td><td class="dim">deploy</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>swarm</code></td><td class="dim">skill</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>swarm-bench</code></td><td class="dim">skill</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+
+</table>
+
+<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD 02d5122. Stale when code changes without re-run.</footer>
+</body>
+</html>

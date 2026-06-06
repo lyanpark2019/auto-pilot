@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>NotebookLM Vault Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --fg: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --good: #3fb950; --warn: #d29922; --bad: #f85149; --card: #161b22; --border: #30363d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", monospace; background: var(--bg); color: var(--fg); padding: 24px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .score { font-size: 42px; font-weight: 600; line-height: 1; }
+  .score.good { color: var(--good); } .score.warn { color: var(--warn); } .score.bad { color: var(--bad); }
+  .score-max { font-size: 16px; color: var(--muted); }
+  .dim-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .dim-row:last-child { border-bottom: none; }
+  .dim-name { color: var(--muted); }
+  .dim-bar { background: var(--bg); height: 6px; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .dim-bar > div { height: 100%; background: var(--accent); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+  .badge.verified { background: rgba(63,185,80,0.2); color: var(--good); }
+  .badge.rejected { background: rgba(248,81,73,0.2); color: var(--bad); }
+  .badge.escalated { background: rgba(210,153,34,0.2); color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  pre { background: var(--bg); padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 11px; }
+  .empty { color: var(--muted); font-style: italic; padding: 12px 0; }
+</style>
+</head>
+<body>
+<h1 id="title">Vault Dashboard</h1>
+<div class="meta" id="meta">loading…</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Structural Score</h2>
+    <div><span class="score" id="struct-score">—</span><span class="score-max">/100</span></div>
+    <div id="struct-dims" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h2>Content Score</h2>
+    <div><span class="score" id="content-score">—</span><span class="score-max">/100</span></div>
+    <div id="content-dims" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h2>Tickets</h2>
+    <div id="ticket-summary"></div>
+  </div>
+  <div class="card">
+    <h2>Cost</h2>
+    <div id="cost-summary"></div>
+  </div>
+  <div class="card" style="grid-column: 1 / -1">
+    <h2>Audit Trail</h2>
+    <table>
+      <thead><tr><th>Type</th><th>File</th><th>Size</th><th>Modified</th></tr></thead>
+      <tbody id="audit-rows"></tbody>
+    </table>
+  </div>
+  <div class="card" style="grid-column: 1 / -1">
+    <h2>PM Rounds</h2>
+    <table>
+      <thead><tr><th>Round</th><th>Modified</th></tr></thead>
+      <tbody id="round-rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(async function() {
+  const resp = await fetch('data.json');
+  if (!resp.ok) {
+    document.getElementById('meta').textContent = 'data.json not found — run: python3 scripts/dashboard_data.py <vault>';
+    return;
+  }
+  const data = await resp.json();
+  document.getElementById('title').textContent = `Vault: ${data.vault_name || 'unknown'}`;
+  document.getElementById('meta').textContent = `Source: ${data.vault} · Generated: ${new Date().toLocaleString()}`;
+
+  function scoreClass(v, max) {
+    if (v == null) return '';
+    const ratio = v / max;
+    if (ratio >= 0.95) return 'good';
+    if (ratio >= 0.7) return 'warn';
+    return 'bad';
+  }
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    return new Date(ts * 1000).toISOString().slice(0, 16).replace('T', ' ');
+  }
+  function fmtSize(n) { return n < 1024 ? `${n}B` : `${(n/1024).toFixed(1)}KB`; }
+
+  // Structural
+  if (data.structural) {
+    const s = data.structural;
+    const el = document.getElementById('struct-score');
+    el.textContent = s.total;
+    el.classList.add(scoreClass(s.total, 100));
+    const dims = document.getElementById('struct-dims');
+    for (const [k, v] of Object.entries(s.scores || {})) {
+      const row = document.createElement('div');
+      row.className = 'dim-row';
+      row.innerHTML = `<span><span class="dim-name">${k}</span></span><span>${v}</span>`;
+      dims.appendChild(row);
+    }
+  }
+
+  // Content
+  if (data.content) {
+    const s = data.content;
+    const el = document.getElementById('content-score');
+    el.textContent = s.total;
+    el.classList.add(scoreClass(s.total, 100));
+    const dims = document.getElementById('content-dims');
+    for (const [k, v] of Object.entries(s.scores || {})) {
+      const row = document.createElement('div');
+      row.className = 'dim-row';
+      row.innerHTML = `<span><span class="dim-name">${k}</span></span><span>${v}</span>`;
+      dims.appendChild(row);
+    }
+  }
+
+  // Tickets
+  const tsum = document.getElementById('ticket-summary');
+  if (data.tickets && data.tickets.tickets) {
+    const all = data.tickets.tickets;
+    const counts = { verified: 0, rejected: 0, escalated: 0, other: 0 };
+    for (const t of all) counts[t.status] = (counts[t.status] || 0) + 1;
+    tsum.innerHTML = `
+      <div style="font-size:32px; font-weight:600">${all.length}</div>
+      <div style="color:var(--muted); font-size:12px; margin-bottom:8px">total tickets</div>
+      <div>
+        <span class="badge verified">✓ ${counts.verified || 0}</span>
+        <span class="badge rejected">✗ ${counts.rejected || 0}</span>
+        <span class="badge escalated">⚠ ${counts.escalated || 0}</span>
+      </div>
+    `;
+  } else {
+    tsum.innerHTML = '<div class="empty">no ticket data</div>';
+  }
+
+  // Cost
+  const csum = document.getElementById('cost-summary');
+  if (data.cost_log && data.cost_log.length) {
+    const total = data.cost_log.reduce((s, e) => s + (e.cost_usd || 0), 0);
+    const perWorker = {};
+    for (const e of data.cost_log) perWorker[e.worker] = (perWorker[e.worker] || 0) + (e.cost_usd || 0);
+    let html = `<div style="font-size:32px; font-weight:600">$${total.toFixed(2)}</div>
+                <div style="color:var(--muted); font-size:12px; margin-bottom:8px">total spend</div>`;
+    for (const [w, v] of Object.entries(perWorker).sort((a,b) => b[1]-a[1]).slice(0,5)) {
+      html += `<div class="dim-row"><span class="dim-name">${w}</span><span>$${v.toFixed(3)}</span></div>`;
+    }
+    csum.innerHTML = html;
+  } else {
+    csum.innerHTML = '<div class="empty">no cost data yet</div>';
+  }
+
+  // Audit trail
+  const arows = document.getElementById('audit-rows');
+  const audits = [
+    ...(data.structural_audits || []).map(a => ({...a, type: 'structural'})),
+    ...(data.content_audits || []).map(a => ({...a, type: 'content'})),
+  ].sort((a,b) => b.mtime - a.mtime);
+  if (audits.length) {
+    for (const a of audits) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${a.type}</td><td>${a.file}</td><td>${fmtSize(a.size)}</td><td>${fmtDate(a.mtime)}</td>`;
+      arows.appendChild(tr);
+    }
+  } else {
+    arows.innerHTML = '<tr><td colspan="4" class="empty">no audit files</td></tr>';
+  }
+
+  // PM rounds
+  const rrows = document.getElementById('round-rows');
+  if (data.pm_rounds && data.pm_rounds.length) {
+    for (const r of data.pm_rounds) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.file}</td><td>${fmtDate(r.mtime)}</td>`;
+      rrows.appendChild(tr);
+    }
+  } else {
+    rrows.innerHTML = '<tr><td colspan="2" class="empty">no PM rounds yet</td></tr>';
+  }
+})();
+</script>
+</body>
+</html>

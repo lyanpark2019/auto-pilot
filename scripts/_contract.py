@@ -174,12 +174,19 @@ class SnapshotMismatchError(Exception):
 class SnapshotShas:
     spec: str
     claude_md_chain: list[str]
+    project_context: str | None = None
 
 
 def snapshot_context(dest_dir: Path, spec_path: Path,
-                     claude_md_chain: list[Path]) -> SnapshotShas:
-    """Copy spec + CLAUDE chain into <dest_dir>/context-bundle/, write MANIFEST,
-    return sha256s of the copied bytes."""
+                     claude_md_chain: list[Path],
+                     project_context_path: Path | None = None) -> SnapshotShas:
+    """Copy spec + CLAUDE chain (+ optional project_context) into
+    <dest_dir>/context-bundle/, write MANIFEST, return sha256s of the copied bytes.
+
+    If ``project_context_path`` is provided its bytes are copied as
+    ``project-context.md`` and its sha is recorded in the returned
+    :class:`SnapshotShas`.  Absent → ``project_context=None`` (context-blind run).
+    """
     bundle = dest_dir / "context-bundle"
     bundle.mkdir(parents=True, exist_ok=True)
 
@@ -200,15 +207,30 @@ def snapshot_context(dest_dir: Path, spec_path: Path,
         chain_shas.append(sha)
         manifest_lines.append(f"{sha}  {name}")
 
+    context_sha: str | None = None
+    if project_context_path is not None:
+        ctx_dest = bundle / "project-context.md"
+        shutil.copy2(project_context_path, ctx_dest)
+        context_sha = _sha256(ctx_dest.read_bytes())
+        manifest_lines.append(f"{context_sha}  project-context.md")
+
     (bundle / "MANIFEST.txt").write_text("\n".join(manifest_lines) + "\n")
-    return SnapshotShas(spec=spec_sha, claude_md_chain=chain_shas)
+    return SnapshotShas(spec=spec_sha, claude_md_chain=chain_shas,
+                        project_context=context_sha)
 
 
 def verify_snapshots(contract_dir: Path) -> None:
     """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas.
 
+    For ``project_context``:
+      - Declared sha → bundle file ``project-context.md`` must exist + match
+        (fail-closed: raises :class:`SnapshotMismatchError` on any mismatch).
+      - Absent key → logs "ran context-blind" to stderr and continues (Step-1
+        semantics: context-free runs are allowed but explicitly surfaced).
+
     Raises SnapshotMismatchError on any mismatch.
     """
+    import sys as _sys
     contract = read_contract(contract_dir / "contract.json")
     bundle = Path(contract["context_bundle_path"])
     expected_spec = contract["snapshot_shas"]["spec"]
@@ -227,6 +249,22 @@ def verify_snapshots(contract_dir: Path) -> None:
         raise SnapshotMismatchError(
             f"claude_md_chain sha mismatch: {actual_chain!r} != {expected_chain!r}"
         )
+
+    expected_ctx = contract["snapshot_shas"].get("project_context")
+    if expected_ctx is None:
+        print("verify_snapshots: ran context-blind (no project_context sha declared)",
+              file=_sys.stderr)
+    else:
+        ctx_file = bundle / "project-context.md"
+        if not ctx_file.exists():
+            raise SnapshotMismatchError(
+                f"project-context.md declared in snapshot_shas but absent from bundle"
+            )
+        actual_ctx = _sha256(ctx_file.read_bytes())
+        if actual_ctx != expected_ctx:
+            raise SnapshotMismatchError(
+                f"project-context.md sha mismatch: {actual_ctx!r} != {expected_ctx!r}"
+            )
 
 
 def _sha256(b: bytes) -> str:

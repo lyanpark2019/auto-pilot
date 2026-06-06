@@ -1,0 +1,109 @@
+# notebooklm-vault-builder externalized rubric
+# Customize thresholds without code changes. Re-load on every score run.
+
+structural:
+  total_max: 100
+  pass_threshold: 95
+  dimensions:
+    graph_density:
+      max: 15
+      acceptance:
+        overall_edges_per_node: 1.5
+        all_cats_have_hyperedge: true
+    confidence_balance:
+      max: 10
+      acceptance:
+        extracted_pct_min: 0.10
+        inferred_pct_range: [0.40, 0.80]
+        ambiguous_pct_range: [0.00, 0.15]
+    concept_entity_depth:
+      max: 10
+      acceptance:
+        min_concepts_per_cat: 3
+        min_entities_per_cat: 3
+    adr_pages:
+      max: 10
+      acceptance:
+        min_cats_with_2_adrs: 3
+    cross_vault:
+      max: 10
+      acceptance:
+        min_real_links: 10
+        verified_pct: 0.9
+    hot_cache:
+      max: 10
+      acceptance:
+        required_sections: ["God Nodes", "Cross-bridges", "Source Files", "Quick Questions"]
+    wiki_articles:
+      max: 10
+      acceptance:
+        article_pass_pct: 0.90
+        per_article:
+          min_sources: 3
+          require_relationships: true
+    bases:
+      max: 5
+      acceptance:
+        min_base_files: 5
+    backlinks:
+      max: 10
+      acceptance:
+        sources_with_2plus_inbound_pct: 0.90
+    conflict_dup:
+      max: 10
+      acceptance:
+        spurious_dups_max: 0
+
+content:
+  total_max: 100
+  pass_threshold: 95
+  dimensions:
+    edge_fact:
+      max: 30
+      sample_size: 30
+      acceptance:
+        grounded_pct_min: 0.95
+    concept_accuracy:
+      max: 20
+      sample_size: 14
+      acceptance:
+        grounded_pct_min: 0.90
+    adr_fidelity:
+      max: 15
+      acceptance:
+        grounded_pct_min: 0.90
+    label_fit:
+      max: 10
+      acceptance:
+        fit_pct_min: 0.90
+    cross_vault_relevance:
+      max: 10
+      acceptance:
+        real_targets_exist_pct: 1.0
+    hot_citation:
+      max: 5
+      acceptance:
+        cats_with_real_gods_pct: 0.85
+    non_hallucinated:
+      max: 10
+      acceptance:
+        pages_with_source_link_pct: 0.95
+
+safety:
+  retry_cap: 3                 # 3-strike escalation
+  delta_watchdog:
+    min_delta: 1.0             # if score delta < 1.0 over N rounds, abort
+    consecutive_rounds: 2
+  cost_alert:
+    tokens_per_round_warn: 500000
+    tokens_per_round_abort: 2000000
+  max_rounds: 8
+  audit_every_n_rounds: 2
+
+cost:
+  mode: subscription           # subscription | api
+                               #   subscription: Claude Code Pro/Max quota (no $) — over_budget always returns False
+                               #   api: meter against per-1M token prices; abort PM loop when exceeded
+  max_total_usd: 50.0          # api mode only — plugin-wide cap
+  max_round_usd: 10.0          # api mode only — per-round cap
+  warn_round_usd: 5.0          # api mode only — advisory threshold

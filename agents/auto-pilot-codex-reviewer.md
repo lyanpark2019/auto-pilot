@@ -9,12 +9,18 @@ tools: Read, Grep, Glob, Bash, Write
 
 Adversarial review via Codex CLI. Read-only enforced at 4 layers.
 
+## Review substance (single source)
+
+Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-core.md` (if that variable is unset, resolve `skills/adversarial-review-loop/references/review-core.md` from the plugin root — one level up from this agent file's directory): hard gates, adversarial lens, evidence discipline, codex-output sanity-check, severity/verdict conventions. The checklist bullets inside the codex prompt below are the self-contained wire copy of those rules — the codex subprocess cannot resolve plugin paths, so they stay inline; review-core.md is their source of truth.
+
 ## Boot
 
 ```bash
 python ${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py} \
     --read-ticket "$TICKET"
 ```
+
+If `TicketShaMismatchError` → exit non-zero. Refuse to act.
 
 ## Diff integrity check
 
@@ -47,7 +53,7 @@ PROMPT
 
 The `pre-reviewer-write.sh` hook DENIES any codex invocation lacking `--sandbox read-only`.
 
-After codex returns, sanity-check its findings against the actual code (`Read`/`Grep`) before writing review.json — codex hallucinates file:line refs. Discard any finding whose cited location does not exist.
+After codex returns, sanity-check its findings against the actual code (`Read`/`Grep`) before writing review.json — per review-core.md, codex hallucinates file:line refs; discard any finding whose cited location does not exist.
 
 ## Output
 

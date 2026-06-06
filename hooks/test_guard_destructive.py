@@ -5,11 +5,18 @@ Each test case is invoked via subprocess to mimic the harness handing
 JSON via stdin. Test payloads are constructed in Python (not via shell
 echo) so the bash invocation of THIS runner doesn't itself contain
 destructive patterns that the hook would block.
+
+TMPDIR isolation: every subprocess call overrides TMPDIR to an isolated
+temp dir so live approval markers on the dev machine cannot bleed in and
+flip expected DENY → allow. Without this, batch markers accumulated in the
+real TMPDIR (e.g. from prior sessions) would silently override the guard.
 """
 import base64
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HOOK = str(Path(__file__).parent / "guard-destructive.py")
@@ -98,12 +105,21 @@ def run_case(label: str, expect: str, command: str | None) -> bool:
     else:
         payload = {"tool_name": "Bash", "tool_input": {"command": command}}
 
-    result = subprocess.run(
-        ["python3", HOOK],
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-    )
+    # Isolate TMPDIR so live approval markers on the dev machine cannot
+    # bleed in and flip DENY → allow.  Each run_case call gets a fresh
+    # private tmpdir; no marker files are pre-created there, so the guard
+    # must evaluate every pattern from scratch.
+    with tempfile.TemporaryDirectory() as isolated_tmp:
+        env = os.environ.copy()
+        env["TMPDIR"] = isolated_tmp
+
+        result = subprocess.run(
+            ["python3", HOOK],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
 
     stdout = result.stdout.strip()
     actual = "DENY" if (stdout and "deny" in stdout) else "ALLOW"

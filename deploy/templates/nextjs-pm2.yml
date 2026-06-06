@@ -1,0 +1,120 @@
+# Template: Next.js + PM2 (git-based deploy, build on EC2)
+# Projects: fyqro-llm
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Deploy commit SHA (leave empty for branch HEAD)"
+        required: false
+        default: ""
+
+concurrency:
+  group: __PROJECT_NAME__-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEPLOY_SHA: ${{ github.event.inputs.target_sha || github.sha }}
+
+jobs:
+  ci:
+    name: Lint and Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - name: Build
+        # __BUILD_ENV__: add env: block with NEXT_PUBLIC_* secrets
+        run: npm run build
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: ci
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.1.0
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TARGET_SHA: ${{ env.DEPLOY_SHA }}
+          REPO_PATH: ${{ github.repository }}
+          # __ENV_SECRETS__
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          timeout: 180s
+          envs: GH_TOKEN,TARGET_SHA,REPO_PATH
+          script: |
+            set -euo pipefail
+
+            APP_DIR="$HOME/__APP_DIR_NAME__"
+            REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${REPO_PATH}.git"
+            CLEAN_REPO_URL="https://github.com/${REPO_PATH}.git"
+
+            cleanup_remote() {
+              if [ -d "$APP_DIR/.git" ]; then
+                git -C "$APP_DIR" remote set-url origin "$CLEAN_REPO_URL" || true
+              fi
+            }
+            trap 'cleanup_remote' EXIT
+
+            git config --global init.defaultBranch main
+            git config --global advice.detachedHead false
+
+            if [ -d "$APP_DIR/.git" ]; then
+              cd "$APP_DIR"
+              git remote set-url origin "$REPO_URL"
+              git fetch origin main
+            else
+              git clone --branch main --single-branch "$REPO_URL" "$APP_DIR"
+              cd "$APP_DIR"
+            fi
+
+            git checkout -B main origin/main
+            git checkout "$TARGET_SHA"
+
+            # __ENV_FILE__: replace with .env heredoc + sed -i 's/^[[:space:]]*//' .env
+
+            npm ci
+            npm run build
+
+            PM2_APP="__PM2_APP_NAME__"
+            if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+              pm2 restart "$PM2_APP" --update-env
+            else
+              pm2 start ecosystem.config.js
+            fi
+            pm2 save
+
+            DEPLOY_DIR="$APP_DIR/.deploy"
+            mkdir -p "$DEPLOY_DIR"
+            echo "$TARGET_SHA" > "$DEPLOY_DIR/last_good_commit"
+            echo "$(date -u +%Y-%m-%dT%H:%M:%S%z) | ci | ${TARGET_SHA:0:7} | prod | main | SUCCESS" >> "$DEPLOY_DIR/deploy.log"
+
+            pm2 status
+            echo "Deployment complete!"

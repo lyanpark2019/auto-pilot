@@ -1,6 +1,6 @@
 ---
 name: setup-harness
-description: "Bootstrap or audit a complete Claude Code harness for any project — CLAUDE.md (root + folder-level), hooks, .mcp.json, subagents, commands, sandbox, and code↔doc drift detection. Includes autonomous score+loop+verify orchestrator. Implements harness-engineering best practices (Anthropic March 2026, Mitchell Hashimoto, OpenAI, nyosegawa 2026-03, dwarvesf 6-layer security). Use this skill whenever the user wants to set up, bootstrap, configure, or audit the full Claude Code harness for a project. Trigger phrases: 'harness setup', 'set up harness', 'configure Claude Code for this project', 'create CLAUDE.md', 'bootstrap harness', 'harness engineering', '하네스 세팅', '하네스 구성', '하네스 점검', 'Claude Code 세팅', 'CLAUDE.md 만들어줘', 'hook 세팅', 'drift check', 'drift detection', 'set up this project for Claude', 'score harness', 'harness loop', '하네스 점수', joining a new project and wanting project-level rules, hooks, and automations. This skill handles the FULL harness (multiple components together) — for adding a single MCP server, creating one slash command, or writing one hook, use the relevant specific skill instead."
+description: "Bootstrap or audit a complete Claude Code harness for any project — CLAUDE.md (root + folder-level), hooks, .mcp.json, subagents, commands, sandbox, and code↔doc drift detection. Includes autonomous score+loop+verify orchestrator. Implements harness-engineering best practices. Use this skill whenever the user wants to set up, bootstrap, configure, or audit the full Claude Code harness for a project. Trigger phrases: 'harness setup', 'set up harness', 'configure Claude Code for this project', 'create CLAUDE.md', 'bootstrap harness', 'harness engineering', '하네스 세팅', '하네스 점검', 'Claude Code 세팅', 'CLAUDE.md 만들어줘', 'hook 세팅', 'drift check', 'score harness', 'harness loop', '하네스 점수', joining a new project and wanting project-level rules, hooks, and automations. This skill handles the FULL harness (multiple components together) — for adding a single MCP server, creating one slash command, or writing one hook, use the relevant specific skill instead."
 ---
 
 # Setup Harness
@@ -65,6 +65,14 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/bootstrap.sh
 
 This auto-detects stack, copies hook scripts to `.claude/scripts/`, merges hooks into `.claude/settings.local.json` (tuple-dedupe), scaffolds `CLAUDE.md`, creates `docs/adr/`, and stamps `.gitignore`. Use this for greenfield. For audit-only on existing harness, skip bootstrap and run the 8 steps interactively.
 
+After bootstrap, generate an environment-constraints block for the repo (shell, BSD/GNU userland, tool versions, CI runners). `--into` upserts a marker-delimited block — re-runs replace it instead of duplicating the header:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/generate_env_constraints.sh [REPO_PATH] --into CLAUDE.md
+```
+
+Build-only (W2); apply runs are W3. PickL-API excluded → W4-1.
+
 ### Shipped assets
 
 Ready to copy or invoke from this skill directory:
@@ -72,6 +80,7 @@ Ready to copy or invoke from this skill directory:
 | Path | Purpose |
 |------|---------|
 | `scripts/bootstrap.sh` | One-shot installer, idempotent |
+| `scripts/generate_env_constraints.sh` | Emit `## Environment Constraints` block (marker-wrapped; `--into FILE` = idempotent upsert): shell, BSD/GNU userland, pinned tool versions, CI runner topology |
 | `scripts/guard-bash.sh` | PreToolUse(Bash) — block destructive, --no-verify, force-push, git add -A, curl\|bash, sudo |
 | `scripts/block-env-edit.sh` | PreToolUse(Write/Edit) — block .env, SSH, AWS, PEM |
 | `scripts/protect-lint-config.sh` | PreToolUse(Write/Edit) — block linter/type config edits (prevents agent silencing) |
@@ -103,6 +112,8 @@ Ready to copy or invoke from this skill directory:
 | `evals/evals.json` / `.claude-plugin/plugin.json` | 6 eval scenarios + marketplace manifest |
 
 ## Step 1: Scan
+
+> Resolve project context before scanning: `skills/auto-pilot/references/project-context-resolution.md`.
 
 Detect project profile automatically:
 
@@ -190,14 +201,9 @@ In **merge mode** existing length may exceed 50; preserve content and add only w
 
 ### Prohibition Mining
 
-Priority order:
+Source priority: ① `git log --grep="fix|revert|hotfix|incident"` (real bugs) ② SDK/infra constraints (e.g., RPC `search_path=""`, pooler DDL limits) ③ Implicit rules (timezones, naming) ④ AI anti-patterns (`any` abuse, ghost files, comment floods, 36-40% AI code ships with security issues — `references/prohibition-patterns.md`).
 
-1. **git log**: `git log --oneline --grep="fix\|revert\|hotfix\|incident"` → patterns that caused real bugs
-2. **SDK/infra constraints**: undocumented runtime behavior (e.g., RPC `search_path=""` ambiguity, pooler DDL limits)
-3. **Implicit rules**: timezone conventions, naming, column constraints
-4. **AI-specific anti-patterns** (Snyk/OX Security data): `any` abuse, ghost files (new file instead of edit), comment floods, code duplication, 36–40% of AI code ships with security issues
-
-**Every prohibition must have a "why"** — point to an ADR, PR, or incident. Prohibitions without reasons get ignored.
+**Every prohibition must have a "why"** — ADR/PR/incident link. Prohibitions without reasons get ignored.
 
 ### Folder-Level (≤10 lines each)
 
@@ -227,7 +233,7 @@ Fewer than 5 source files? Stick to framework-safe defaults (git safety, secrets
 
 ### AGENTS.md compatibility
 
-If `.codex/` exists or project ships AGENTS.md, reference it from CLAUDE.md: `@AGENTS.md` at top. AGENTS.md (AAIF standard, Linux Foundation) is read natively by Codex / Cursor / Devin / Copilot. CLAUDE.md remains Claude Code specific (Hooks, Plan Mode).
+If `.codex/` exists or project ships AGENTS.md, add `@AGENTS.md` at top of CLAUDE.md. AGENTS.md (AAIF/Linux Foundation) is read natively by Codex/Cursor/Devin/Copilot. CLAUDE.md stays Claude Code specific (Hooks, Plan Mode).
 
 ## Step 3: Hooks (8 hooks across 6 events)
 
@@ -261,18 +267,9 @@ PostToolUse stdout is **not** treated as agent context. To inject feedback, the 
 
 The agent sees `additionalContext` in its next turn and self-corrects. A hook that only blocks (exit 2) stops the process; a hook that injects context drives the fix forward.
 
-### Per-language fast linter recommendation (March 2026)
+### Per-language fast linter
 
-PostToolUse hooks need to finish in **milliseconds**. Rust-based tools are 50–100x faster than ESLint/Flake8:
-
-| Language | Format (PostToolUse) | Lint (PostToolUse) | Type check (pre-commit) | Custom rules (CI) |
-|----------|---------------------|--------------------|-----------------------|-------------------|
-| TS/JS | Biome | Oxlint | tsc --noEmit | ESLint custom plugin / ast-grep |
-| Python | Ruff format | Ruff check --fix | mypy | ast-grep |
-| Go | gofumpt | golangci-lint (fast subset) | go vet | golangci-lint full |
-| Rust | rustfmt | clippy pedantic, `allow_attributes = "deny"` | cargo check | clippy full |
-| Swift | swift-format | SwiftLint --autocorrect | swiftc -typecheck | SwiftLint custom |
-| Kotlin | ktfmt | detekt | kotlinc -script-templates | detekt custom |
+PostToolUse hooks need to finish in **milliseconds** — Rust-based tools (Biome/Oxlint/Ruff) are 50–100x faster than ESLint/Flake8. Full per-language stacks (TS/Py/Go/Rust/Swift/Kotlin/Ruby/.NET/Elixir/PHP/Java + SQL/infra): `references/language-stacks.md`.
 
 ### Stack → Hook Mapping
 
@@ -387,15 +384,11 @@ Recommend project-specific subagents + slash commands. Present, let user select.
 
 ### When to use multi-agent
 
-Anthropic's harness-design research (Mar 2026): for tasks beyond what the model handles solo, separate **planner** (turn 1-line prompt into spec), **generator** (build feature-by-feature), **evaluator** (Playwright-driven QA, hard threshold per criterion, blocks completion). Cost: 20x solo. Justified when task sits at model's capability boundary. Strip whenever model upgrades make a layer non-load-bearing.
+Tasks beyond model solo capability: **planner** (1-line→spec) + **generator** (feature-by-feature) + **evaluator** (Playwright QA, hard threshold, blocks completion). Cost: 20x solo. Justified at model capability boundary; strip when model upgrades make a layer non-load-bearing.
 
 ## Step 7: Sandbox + Security (6 layers)
 
-Threat model (dwarvesf/Trail of Bits/Lasso Security):
-
-1. **Prompt injection via external content** — malicious instructions in READMEs, fetched pages, MCP responses
-2. **Supply chain via `.claude/`** — cloned repo with hostile hooks/MCP/CLAUDE.md
-3. **Credential exposure** — `.env`, SSH keys, AWS tokens read and leaked
+Threat model (dwarvesf/Trail of Bits/Lasso Security): prompt injection via external content · supply chain via `.claude/` (hostile hooks/MCP/CLAUDE.md) · credential exposure (`.env`, SSH, AWS tokens). Full detail: `references/sandbox-and-security.md`.
 
 Six layers, defense in depth:
 
@@ -477,50 +470,17 @@ When existing CLAUDE.md/AGENTS.md is found:
 
 ## Minimum Viable Harness (MVH) — phased rollout
 
-Don't adopt all of the above in one sitting. Suggest this rollout:
+**Week 1**: CLAUDE.md (pointer-style ≤50 lines) + pre-commit (Lefthook: fast linter + formatter + type check) + PostToolUse auto-format (Biome/Ruff/gofumpt/rustfmt) + first ADR.
 
-**Week 1**
-- CLAUDE.md pointer-style, ≤50 lines root
-- Pre-commit hook (Lefthook) running fast linter + formatter + type check
-- PostToolUse auto-format hook (Biome/Ruff/gofumpt/rustfmt)
-- First ADR
+**Week 2–4**: Every agent mistake → test or linter rule (compounding). Plan→approve→execute. E2E tool (Playwright CLI / Hurl / bats-core). Stop hook: tests must pass before done. Session startup (pwd + git log + PROGRESS.json).
 
-**Week 2–4**
-- Every agent mistake → add a test or linter rule (the compounding move)
-- Plan → approve → execute workflow
-- E2E tool (Playwright CLI, agent-browser, Hurl, or bats-core depending on stack)
-- Stop hook: tests must pass before agent declares done
-- Session startup routine (verify dir, git log, dev server)
+**Month 2–3**: Custom linter rules (`ERROR:/WHY:/FIX:/EXAMPLE:` format). ADR↔lint archgate coupling. Strip descriptive docs → replace with tests + ADRs. 6-layer security gates.
 
-**Month 2–3**
-- Custom linter rules with error messages in `ERROR: / WHY: / FIX: / EXAMPLE:` format (educate as it runs)
-- Couple ADRs with executable rules (archgate pattern)
-- Strip descriptive docs from repo → replace with tests + ADRs
-- Safety gates (PreToolUse): protect lint configs, block destructive commands
-- 6-layer security setup
-
-**Month 3+**
-- Plankton-style multi-linter PostToolUse with subprocess delegation
-- Garbage-collection agents (deterministic rules, not LLM judgement)
-- Multi-agent (Planner/Generator/Evaluator) for tasks at model boundary
-- Quantitative measurement: PR/day, rework rate, review-comment rate
+**Month 3+**: Multi-linter PostToolUse subprocess delegation. Garbage-collection agents (deterministic rules). Multi-agent (Planner/Generator/Evaluator) at model boundary. Quantitative: PR/day, rework rate.
 
 ## Anti-patterns
 
 See `@~/.claude/docs/harness-engineering.md` (section "Anti-patterns") — joint list shared with `harness-project-docs`.
-
-## Session Start Routine (recommend adding)
-
-At each session start, have the agent run:
-
-```bash
-pwd                                  # verify working dir
-git log --oneline -20                # what happened
-cat .claude/PROGRESS.json 2>/dev/null # JSON > Markdown — model less likely to overwrite
-# start dev server, sanity-check
-```
-
-JSON progress > Markdown progress: model rarely edits structured JSON accidentally.
 
 ## References
 

@@ -1,6 +1,6 @@
 ---
 name: auto-pilot
-description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (Opus 4.7) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis: bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
+description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (Opus 4.7) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis — bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
 ---
 
 # auto-pilot
@@ -64,6 +64,8 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
    Push, advance phase counter.
 10. **REPEAT** until spec's last phase verify passes or hard stop fires
 
+At phase end the PM MAY dispatch the `retro` agent (`agents/retro.md`) — appends evidence-cited doom-loop/wasted-pattern lessons to the project's `.claude/insights.md`; no verdicts, never blocks the loop.
+
 ### Hard stops
 
 - Spec's final phase verify all green → SUCCESS report, exit
@@ -97,7 +99,15 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 | Over-scoped contracts ("P1.1 not real issue") | `tech-critic-lead` gate BEFORE worker dispatch |
 | Implementation without tests | `tdd-enforcer` rejects runtime change diffs missing matching test file |
 | Workers touching files outside their contract | `claude-reviewer` + `codex-adversarial` scope-drift check (auto-REJECT on out-of-scope edits) |
-| Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase, `git reset --hard` on `status=failed` |
+| Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase; on `status=failed` it calls `stash_if_dirty` (non-destructive stash with a recoverable label) — `$ROOT` is intentionally not reset hard so worktree cleanup is the recovery unit (`iter.fail_no_root_reset` event logged) |
+
+## Parallel execution backend
+
+The plugin's swarm subsystem is an alternative execution backend: a persistent tmux multi-worker pool (1 PM pane + 4-10 worker panes, each on its own git worktree, file-based ticket bus under `.planning/autopilot/`). Entry points: `/auto-pilot:swarm <init|start|status|stop|ticket>`, bench via `swarm-bench`. Scripts live at `${CLAUDE_PLUGIN_ROOT}/swarm/`.
+
+When to prefer which:
+- **In-session subagents (this skill's default)** — spec-driven phased work in ONE session; PM context carries between phases; review fan-out + verify gates happen inline; ends when the spec ends.
+- **Swarm** — long-running or open-ended goals that should outlive this session, mixed Claude+Codex worker pools, or when you want workers surviving session restarts and observable in tmux. Swarm schedules by ticket scores/ledger, not by spec phases.
 
 ## Read these references when relevant
 

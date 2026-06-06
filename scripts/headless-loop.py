@@ -11,7 +11,7 @@ instead), added phase-aware verify and pivot detection.
 
 Per loop iteration:
   1. snapshot pre-phase HEAD
-  2. spawn `claude -p` headless session running `/auto-pilot start --phase N`
+  2. spawn `claude -p` headless session (prompts/iteration.md prose trigger: 'Run the auto-pilot skill', phase N)
   3. on session exit:
        - status=success → commit + advance phase
        - status=fail    → `git reset --hard <pre-phase-HEAD>`, mark pivot-needed, stop
@@ -62,9 +62,10 @@ def git_head() -> str:
     Raises:
         subprocess.CalledProcessError: when ``git rev-parse`` fails (e.g. not a
             git repo, detached state with no commits).
+        subprocess.TimeoutExpired: when git stalls past 30 s.
     """
     return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True
+        ["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True, timeout=30
     ).strip()
 
 
@@ -78,21 +79,33 @@ def stash_if_dirty(reason: str) -> str | None:
     Args:
         reason: short tag embedded in the stash message.
     """
-    porcelain = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-    )
+    try:
+        porcelain = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        # r2 review: an uncaught TimeoutExpired here crashed the loop with
+        # state un-finalized — degrade to "no stash" and keep the loop alive.
+        event("stash.timeout", reason=reason, step="status")
+        return None
     if not porcelain.stdout.strip():
         return None
     msg = f"auto-pilot-{reason}"
-    res = subprocess.run(
-        ["git", "stash", "push", "-u", "-m", msg],
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-    )
+    try:
+        res = subprocess.run(
+            ["git", "stash", "push", "-u", "-m", msg],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        event("stash.timeout", reason=reason, step="push")
+        return None
     if res.returncode != 0:
         event("stash.failed", reason=reason, stderr=res.stderr.strip()[:200])
         return None

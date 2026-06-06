@@ -12,12 +12,16 @@ Usage:
     python orchestrator.py pivot-check  --phase 1 --finding-hash abc123
     python orchestrator.py status
     python orchestrator.py stop
+    python orchestrator.py dispatch-contract-check --contract <path>
+    python orchestrator.py round-budget --score-dir .planning/score --round N
 """
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from _log import event
@@ -240,6 +244,141 @@ def cmd_stop(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
+    """Validate a contract file and write a pass artifact beside it.
+
+    Runs ``_contract.validate`` on the given contract path and writes
+    ``<contract_dir>/contract-check.json`` with:
+      {
+        "contract_sha256": "<hex64>",
+        "checked_at": "<iso8601>",
+        "schema_version": <int>,
+        "result": "pass"
+      }
+
+    Layer-2 enforcement: ``prepare_subagent_ticket`` in ``_dispatch.py``
+    refuses dispatch when this artifact is absent or the recorded
+    ``contract_sha256`` no longer matches the contract file on disk.
+    Layer-3 enforcement is the PreToolUse(Task) hook (contract γ builds it)
+    — that hook reads the same artifact format.
+
+    Args:
+        args: parsed CLI namespace; expects ``contract`` (path string).
+
+    Returns:
+        0 on success, 2 if the file is missing, 1 if validation fails.
+    """
+    import hashlib
+    import _contract
+
+    contract_path = Path(args.contract)
+    if not contract_path.exists():
+        event("dispatch_contract_check.missing", path=str(contract_path))
+        return 2
+
+    try:
+        _contract.validate(json.loads(contract_path.read_text()))
+    except _contract.ContractValidationError as exc:
+        event("dispatch_contract_check.invalid", error=str(exc))
+        print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
+        return 1
+
+    contract_bytes = contract_path.read_bytes()
+    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
+    schema_version = json.loads(contract_bytes.decode()).get("schema_version", 1)
+
+    artifact = {
+        "contract_sha256": contract_sha,
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "schema_version": schema_version,
+        "result": "pass",
+    }
+    artifact_path = contract_path.parent / "contract-check.json"
+    artifact_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    event("dispatch_contract_check.ok", sha=contract_sha[:16], artifact=str(artifact_path))
+    print(json.dumps({"ok": True, "artifact": str(artifact_path), **artifact}, indent=2))
+    return 0
+
+
+def cmd_round_budget(args: argparse.Namespace) -> int:
+    """Deterministic gate: check whether the review round budget is exhausted.
+
+    Reads findings-round-(N-1).json and findings-round-N.json from
+    ``--score-dir``.  Each file has the schema::
+
+        {
+            "round": <int>,
+            "reviewers": {
+                "claude": {"count": <int>, "findings": [...]},
+                "codex":  {"count": <int>, "findings": [...]}
+            }
+        }
+
+    Total live count = sum of reviewer counts (``claude.count + codex.count``).
+
+    Rules:
+      - N < 3  → exit 0, prints informational JSON.
+      - N == 3 AND count(3) >= count(2) → exit 3 + HARD-STOP message.
+      - N == 3 AND count(3) < count(2)  → exit 0 + "round 4 = final cap".
+      - Missing file  → exit 2 (usage error).
+
+    Args:
+        args: parsed CLI namespace; expects ``score_dir`` and ``round`` (int).
+
+    Returns:
+        0 (ok / informational), 2 (usage error / missing file), 3 (HARD-STOP).
+    """
+    score_dir = Path(args.score_dir)
+    n = args.round
+
+    def _load(r: int) -> dict:
+        p = score_dir / f"findings-round-{r}.json"
+        if not p.exists():
+            event("round_budget.missing_file", path=str(p))
+            return {}
+        return json.loads(p.read_text())
+
+    def _count(data: dict) -> int:
+        reviewers = data.get("reviewers", {})
+        return sum(v.get("count", 0) for v in reviewers.values())
+
+    if n < 3:
+        data_n = _load(n)
+        if not data_n:
+            return 2
+        c = _count(data_n)
+        print(json.dumps({"round": n, "count": c, "status": "informational"}, indent=2))
+        return 0
+
+    # N == 3
+    data_prev = _load(n - 1)
+    data_curr = _load(n)
+    if not data_prev or not data_curr:
+        return 2
+
+    c_prev = _count(data_prev)
+    c_curr = _count(data_curr)
+
+    if c_curr >= c_prev:
+        msg = "HARD-STOP: 전략 전환 필요"
+        print(json.dumps({
+            "round": n,
+            "count_prev": c_prev,
+            "count_curr": c_curr,
+            "verdict": msg,
+        }, indent=2))
+        print(msg, file=sys.stderr)
+        return 3
+    else:
+        print(json.dumps({
+            "round": n,
+            "count_prev": c_prev,
+            "count_curr": c_curr,
+            "verdict": "round 4 = final cap",
+        }, indent=2))
+        return 0
+
+
 _PHASE_HEADING = re.compile(r"^#{1,3}\s+Phase\b")
 
 
@@ -315,6 +454,15 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("stop").set_defaults(func=cmd_stop)
+
+    p_dcc = sub.add_parser("dispatch-contract-check")
+    p_dcc.add_argument("--contract", required=True)
+    p_dcc.set_defaults(func=cmd_dispatch_contract_check)
+
+    p_rb = sub.add_parser("round-budget")
+    p_rb.add_argument("--score-dir", required=True)
+    p_rb.add_argument("--round", type=int, required=True)
+    p_rb.set_defaults(func=cmd_round_budget)
 
     args = parser.parse_args(argv)
     rc: int = args.func(args)

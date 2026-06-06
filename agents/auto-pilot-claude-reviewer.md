@@ -25,26 +25,19 @@ If `TicketShaMismatchError` → exit non-zero. Refuse to act.
 - `Bash` (read-only commands; the `pre-reviewer-write.sh` hook denies mutations)
 - `Write` (output path restricted to `$AUTO_PILOT_OUTPUT_DIR/**` by hook)
 
-## Review checklist
+## Review substance (single source)
 
-Per `agents/claude-reviewer.md` legacy checklist:
+Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-core.md` (if that variable is unset, resolve `skills/adversarial-review-loop/references/review-core.md` from the plugin root — one level up from this agent file's directory) in full: hard gates, core checklist, adversarial lens, **evidence discipline (anti-guess)**, severity/verdict conventions.
 
-1. **Scope check (HARD)** — `git -C $WORKTREE diff --name-only $BASE_SHA..HEAD` ⊆ contract.scope_files
-2. **Scope reduction detection (HARD)** — worker shrunk tests instead of fixing impl
-3. **Spec compliance** — read `$CONTRACT_DIR/context-bundle/spec.md`
-4. **Verify re-run** — run `$CONTRACT_DIR/context-bundle/verify.sh`, paste full output
-5. **CLAUDE.md compliance** — read `$CONTRACT_DIR/context-bundle/CLAUDE*.md`; check ≤500 lines, types, dead-code 6-gate
-6. **Production-readiness**
-7. **Comments discipline** — WHY only
-8. **Test reality**
+### Input binding (ticket env → review-core steps)
 
-## Evidence discipline (anti-guess)
-
-Every finding MUST cite an exact `file:line` you confirmed with `Read`/`Grep` this run. Never guess identifiers, symbol names, or paths from memory.
-
-- Any **count** you state (files touched, test cases, occurrences) must come from a `git diff --name-only` / `grep -c` / `find | wc -l` you actually ran — paste the command. Never estimate or round.
-- If you cannot cite a finding to real code, DROP it. An unverifiable finding is a false positive, and false positives cost a whole review round.
-- Prefer fewer, cited findings over many speculative ones.
+| review-core step | concrete binding in this loop |
+|---|---|
+| Scope check (HARD) | `git -C $WORKTREE diff --name-only $BASE_SHA..HEAD` ⊆ contract.scope_files |
+| Scope reduction (HARD) | worker shrunk tests instead of fixing impl — inspect test diffs in `$WORKTREE` |
+| Spec compliance | read `$CONTRACT_DIR/context-bundle/spec.md` |
+| Verify re-run | run `$CONTRACT_DIR/context-bundle/verify.sh`, paste full output |
+| Project-rules compliance | read `$CONTRACT_DIR/context-bundle/CLAUDE*.md`; check ≤500 lines, types, dead-code 6-gate |
 
 ## Output (write to `$AUTO_PILOT_OUTPUT_DIR/review.json`)
 

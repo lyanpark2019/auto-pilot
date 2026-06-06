@@ -48,6 +48,8 @@ def test_prepare_ticket_writes_signed_json(tmp_path):
         contract_dir=contract_dir,
         worktree=worktree,
         subagent_role="worker",
+        skip_contract_check=True,
+        skip_preflight=True,
     )
     assert ticket_path.exists()
     ticket = _json.loads(ticket_path.read_text())
@@ -67,6 +69,8 @@ def test_prepare_ticket_rejects_invalid_role(tmp_path):
             contract_dir=contract_dir,
             worktree=tmp_path / "wt",
             subagent_role="bogus-role",
+            skip_contract_check=True,
+            skip_preflight=True,
         )
 
 

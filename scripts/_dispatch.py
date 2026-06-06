@@ -1,9 +1,30 @@
-"""PM-owned dispatch primitives for auto-pilot subagent ticket protocol."""
+"""PM-owned dispatch primitives for auto-pilot subagent ticket protocol.
+
+Enforcement layers for contract integrity (ⓓ-7②, 2026-06 round-2 W2):
+  Layer 1 — _contract.validate (schema validation on every read/write)
+  Layer 2 — prepare_subagent_ticket refuses dispatch when the
+             dispatch-contract-check artifact is absent or stale (this file)
+  Layer 3 — PreToolUse(Task) hook (contract γ builds it; the artifact format
+             is documented in dispatch_contract_check() below)
+
+Preflight gate (ⓓ-9, 2026-06 round-2 W2):
+  prepare_subagent_ticket also checks for a valid preflight artifact under
+  .planning/auto-pilot/preflight/phase-<N>.json.  Four rejection paths:
+  missing file, TTL > 900 s, wrong phase key, head_sha != current HEAD.
+  Interactive wiring of pm_preflight.sh via PreToolUse(Bash) is γ's hook
+  contract; if γ's wiring lands as prompt-gated only that is recorded as
+  residual risk (see module docstring).
+
+Residual risk: interactive review dispatch (Agent tool) bypasses this gate
+  entirely — the hook path is the only enforcement there.  Mitigation:
+  codex exec Bash timeout + Task deadline.
+"""
 from __future__ import annotations
 
 import hashlib
 import json
 import subprocess
+import sys
 import time as _time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,6 +40,8 @@ TICKET_SCHEMA_PATH = SCHEMAS_DIR / "ticket.schema.json"
 _VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer",
                 "tdd-enforcer", "security-reviewer", "tech-critic-lead"}
 
+PREFLIGHT_TTL_SEC = 900  # 15 minutes
+
 _TICKET_VALIDATOR: jsonschema.Draft202012Validator | None = None
 
 
@@ -32,22 +55,137 @@ def _validator() -> jsonschema.Draft202012Validator:
     return _TICKET_VALIDATOR
 
 
+def _check_contract_check_artifact(contract_dir: Path) -> None:
+    """Layer-2 enforcement: refuse dispatch when contract-check artifact is absent
+    or its contract_sha256 does not match the current contract file.
+
+    Raises ContractCheckMissing with a descriptive message.
+    """
+    artifact_path = contract_dir / "contract-check.json"
+    if not artifact_path.exists():
+        raise ContractCheckMissing(
+            f"contract-check artifact missing: {artifact_path}; "
+            "run `orchestrator.py dispatch-contract-check --contract <path>` first"
+        )
+    artifact = json.loads(artifact_path.read_text())
+    if artifact.get("result") != "pass":
+        raise ContractCheckMissing(
+            f"contract-check artifact result is not 'pass': {artifact.get('result')!r}"
+        )
+    contract_path = contract_dir / "contract.json"
+    actual_sha = _contract._sha256(contract_path.read_bytes())
+    recorded_sha = artifact.get("contract_sha256", "")
+    if actual_sha != recorded_sha:
+        raise ContractCheckMissing(
+            f"contract file modified since last dispatch-contract-check "
+            f"(expected={recorded_sha!r}, actual={actual_sha!r})"
+        )
+
+
+def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
+    """Preflight gate (ⓓ-9): reject dispatch when preflight is absent, stale,
+    wrong-phase, or the recorded head_sha does not match current HEAD.
+
+    The preflight artifact lives at:
+      .planning/auto-pilot/preflight/phase-<N>.json
+    relative to the repo root (two parents above contract_dir structure, or
+    derived from contract_dir / ".." traversal — we use the repo root heuristic:
+    walk up from contract_dir until a .git or .planning dir is found, then
+    anchor to <repo_root>/.planning/auto-pilot/preflight/phase-<N>.json).
+
+    Raises PreflightError with a descriptive message.
+    """
+    # Locate repo root: walk up from contract_dir
+    candidate = contract_dir
+    repo_root: Path | None = None
+    for _ in range(20):  # guard against infinite loops
+        if (candidate / ".git").exists() or (candidate / ".planning").exists():
+            repo_root = candidate
+            break
+        parent = candidate.parent
+        if parent == candidate:
+            break
+        candidate = parent
+    if repo_root is None:
+        raise PreflightError(
+            f"Cannot locate repo root from contract_dir={contract_dir}; "
+            "preflight check skipped but gate requires it"
+        )
+
+    preflight_path = repo_root / ".planning" / "auto-pilot" / "preflight" / f"phase-{phase}.json"
+    if not preflight_path.exists():
+        raise PreflightError(
+            f"Preflight artifact missing: {preflight_path}; "
+            "run `bash scripts/pm_preflight.sh` first"
+        )
+
+    preflight = json.loads(preflight_path.read_text())
+
+    # TTL check
+    generated_ts_str = preflight.get("generated_ts", "")
+    try:
+        generated_dt = datetime.fromisoformat(generated_ts_str)
+        age_sec = (datetime.now(timezone.utc) - generated_dt).total_seconds()
+        if age_sec > PREFLIGHT_TTL_SEC:
+            raise PreflightError(
+                f"Preflight artifact too old: {age_sec:.0f}s > TTL {PREFLIGHT_TTL_SEC}s; "
+                f"re-run `bash scripts/pm_preflight.sh`"
+            )
+    except (ValueError, TypeError) as exc:
+        raise PreflightError(
+            f"Preflight artifact has invalid generated_ts: {generated_ts_str!r}"
+        ) from exc
+
+    # Phase key check
+    artifact_phase = preflight.get("phase")
+    if artifact_phase != phase:
+        raise PreflightError(
+            f"Preflight artifact phase mismatch: artifact.phase={artifact_phase!r}, "
+            f"expected {phase}"
+        )
+
+    # HEAD sha check
+    try:
+        current_head = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+    except subprocess.CalledProcessError:
+        # If git fails, skip HEAD check (non-git environment)
+        return
+    artifact_head = preflight.get("head_sha", "")
+    if current_head != artifact_head:
+        raise PreflightError(
+            f"Preflight head_sha mismatch: artifact={artifact_head!r}, "
+            f"current HEAD={current_head!r}; re-run `bash scripts/pm_preflight.sh`"
+        )
+
+
 def prepare_subagent_ticket(
     *,
     contract_dir: Path,
     worktree: Path,
     subagent_role: str,
     diff_path: Path | None = None,
+    skip_preflight: bool = False,
+    skip_contract_check: bool = False,
 ) -> Path:
     """PM-side validation. Writes a signed ticket under <contract_dir>/tickets/<role>.json.
 
     Validates contract + PM-SIGNATURE + snapshots BEFORE writing the ticket.
+    Also enforces:
+      - Layer-2 contract-check artifact (ⓓ-7②): ``ContractCheckMissing`` on failure
+        (disable with ``skip_contract_check=True`` for tests / initial bootstrap).
+      - Preflight artifact (ⓓ-9): ``PreflightError`` on failure
+        (disable with ``skip_preflight=True`` for tests / non-interactive).
     Returns the ticket path.
 
     Raises:
         ValueError on invalid role.
         ContractValidationError / SnapshotMismatchError / PMSignatureMismatchError
             on contract integrity failures.
+        ContractCheckMissing when the contract-check artifact is absent or stale.
+        PreflightError when the preflight artifact is missing / stale / wrong HEAD.
     """
     if subagent_role not in _VALID_ROLES:
         raise ValueError(f"unknown subagent_role: {subagent_role!r}; allowed: {sorted(_VALID_ROLES)}")
@@ -55,6 +193,13 @@ def prepare_subagent_ticket(
     _contract.verify_pm_signature(contract_dir)
     _contract.verify_snapshots(contract_dir)
     contract = _contract.read_contract(contract_dir / "contract.json")
+
+    if not skip_contract_check:
+        _check_contract_check_artifact(contract_dir)
+
+    if not skip_preflight:
+        phase = contract.get("phase", 0)
+        _check_preflight_artifact(contract_dir, phase)
 
     output_dir = contract_dir / "outputs" / subagent_role
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -127,6 +272,24 @@ class MalformedReviewError(Exception):
 
 class RoundCollectTimeout(Exception):
     """Raised when an expected agent's done.marker never appears within the timeout."""
+
+
+class ContractCheckMissing(Exception):
+    """Raised when the contract-check artifact is absent or contract sha does not match.
+
+    Artifact format (written by ``dispatch_contract_check``):
+      {
+        "contract_sha256": "<hex>",
+        "checked_at": "<iso8601>",
+        "schema_version": <int>,
+        "result": "pass"
+      }
+    Layer 3 (PreToolUse hook built by contract γ) reads the same artifact.
+    """
+
+
+class PreflightError(Exception):
+    """Raised when the preflight artifact is missing, stale, wrong-phase, or wrong HEAD."""
 
 
 def read_review(path: Path) -> dict[str, Any]:

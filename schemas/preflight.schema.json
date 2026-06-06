@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/preflight/v1",
+  "title": "AutoPilotPreflight",
+  "description": "Preflight artifact written by scripts/pm_preflight.sh before each dispatch phase.",
+  "type": "object",
+  "required": [
+    "repo_root", "branch", "head_sha", "worktree_clean",
+    "expected_gh_user", "actual_gh_user",
+    "tool_versions", "generated_ts", "phase"
+  ],
+  "properties": {
+    "repo_root":        { "type": "string", "minLength": 1 },
+    "branch":           { "type": "string", "minLength": 1 },
+    "head_sha":         { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "worktree_clean":   { "type": "boolean" },
+    "expected_gh_user": { "type": "string", "minLength": 1 },
+    "actual_gh_user":   { "type": "string", "minLength": 1 },
+    "tool_versions": {
+      "type": "object",
+      "required": ["python3", "git"],
+      "properties": {
+        "python3": { "type": "string" },
+        "git":     { "type": "string" },
+        "codex":   { "type": ["string", "null"] },
+        "claude":  { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "generated_ts": { "type": "string", "format": "date-time" },
+    "phase":        { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": false
+}

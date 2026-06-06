@@ -4,6 +4,15 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 > **Read first for full context:** [`docs/master-plan.md`](docs/master-plan.md) — purpose (brownfield skill-integration loop), skill-integration map, progress, roadmap. Loop design detail: [`docs/architecture.md`](docs/architecture.md).
 
+## Principles (Nisi 2026-06)
+
+- **Prompts/specs are the durable re-runnable asset; code is the output** ("code is sawdust") — invest in the spec, not in patching generated artifacts.
+- **Enforce with code, not prompts** — invariants live in hooks, schemas, and state machines; prose explains, it does not enforce.
+- **Evidence over trust** — verify claims carry a persisted log + SHA-256 (`shasum -a 256`); reviewers recompute the hash, mismatch = REJECT.
+- **Skills = Gotchas-first, ≤500 lines** — guide around landmines instead of re-teaching coding; bulk goes to `references/`.
+- **Failures are harness bugs** — fix the system (hook, schema, gate, agent contract), not the one bad output.
+- **Measure with evals before believing** — a change "helps" only after the `evals/` harness says so, not because it reads well.
+
 ## Publish identity
 
 - **GitHub owner:** `lyanpark2019` (NOT Sewhoan, NOT fyqro)
@@ -13,16 +22,19 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 ## Layout
 
-- `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace
+- `.claude-plugin/{plugin,marketplace}.json` — manifest + standalone marketplace; `.mcp.json` — bundled MCP server config
 - `skills/auto-pilot/SKILL.md` — entry skill (fires on `/auto-pilot`)
-- `skills/` — bundled toolkit skills: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, codebase-perfection-loop, doc-drift-audit, llm-wiki-architect, improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
-- `commands/auto-pilot.md` — `/auto-pilot` slash command; `commands/harness-*.md` (8) — setup-harness commands
-- `agents/` — PM, worker, codex-adversarial / claude-reviewer (legacy), `auto-pilot-{codex,claude}-reviewer.md` (PR3), tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool, `harness-{planner,generator,evaluator}.md` (setup-harness)
-- `hooks/*.sh` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard (toolkit)
-- `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12)
-- `scripts/` — `orchestrator.py`, `headless-loop.py`, plus PR1/PR2/PR3/PR4 modules listed below
+- `skills/` — 14 dirs / 14 active: setup-harness (+ its `scripts/`, `references/`, `templates/`, `evals/`), adversarial-review-loop, quality-eval, pm-quality-harness-loop, residue-audit, codex-orchestra, sha-deploy-standard, swarm (subcommand-routed: init/start/status/stop/ticket) + swarm-bench, doc-management (the docs subsystem — REBUILD/MAINTAIN/AUDIT modes; absorbs the retired graphify-doc-rebuild / doc-drift-audit / doc-sync / llm-wiki-architect skills), improve-codebase-architecture, diagnosing-{llm-output-leaks,stale-runtime}
+- `commands/` — 11 slash commands: `auto-pilot{,-server}`, `eval-run`, `harness{,-ops}` (2), `vault-{build,score,dashboard,selftest}` (4), `setup-claude-md`, `sha-deploy-init`
+- `agents/` — 23 contracts: core loop (pm-orchestrator, worker, retro), review (codex-adversarial / claude-reviewer legacy, `auto-pilot-{codex,claude}-reviewer.md` PR3, tech-critic-lead, tdd-enforcer, security-reviewer, specialist-pool, code-perfector), `harness-{planner,generator,evaluator}.md`, swarm-{explorer,monitor,verifier}, vault set (vault-pm-orchestrator + vault-{edge-curator,graph-enricher,knowledge-author,structure-curator} — the 4 merged 2026-06 round-2, 25 legacy vault agents removed); shared review substance lives in `skills/adversarial-review-loop/references/review-core.md`; goal-{scout,judge,worker} live in global `~/.claude/agents/` (not bundled)
+- `hooks/*.sh|*.py` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard, `doc-sync-update.sh` (merged graph-freshness watcher: code graph stale-flag + vault raw/sources .md eager graphify update), `notebooklm_delete_gate.sh` (confirm-gated deletes, Bash + MCP shapes), `pm_final_report.sh`, + 7 round-2 enforcement hooks (`pre-edit-human-only`, `branch-lock`, `deletion-diff-guard`, `gh-auth-preflight`, `ruff-import-integrity`, `dispatch-contract-gate`, `creation-gate`) — full wiring SoT = `hooks/hooks.json` (17 scripts)
+- `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12); swarm's ticket/score/verify/plugin schemas live in `swarm/schemas/`
+- `scripts/` — `orchestrator.py`, `headless-loop.py`, PR1-PR5 modules listed below, `build_dashboard_data.py`, `quality/` gates
+- `vault/` — export layer (vault-builder absorbed): `pipeline/`, `sources/`, `scripts/`, `rubrics/`, `templates/`, `dashboard/`, `tests/`
+- `swarm/` — parallel execution backend: `scripts/`, `schemas/`, `tests/`, `docs/`
+- `codex/` — 12 codex skill forks (repo = SoT) + `sync-to-codex.sh`; `deploy/` — sha-deploy templates; `dashboard/` — scorecard dashboard; `evals/` — eval harness
 - `docs/architecture.md` — loop + design (canonical)
-- `docs/specs/` — PR-input specs (e.g. `2026-05-28-dogfood-smoke.md`)
+- `docs/specs/` — PR-input specs (e.g. `2026-06-06-unified-coding-system-design.md`)
 - `docs/superpowers/{specs,plans}/` — design specs + implementation plans
 
 ## Python helper modules
@@ -53,11 +65,14 @@ When changing agent contracts or hooks:
 ## Testing
 
 ```bash
-# Full suite (202 tests, mypy + ruff clean)
+# Full suite (count = whatever pytest collects — do not hardcode; mypy + ruff clean)
 python3 -m pytest tests/ -q
 python3 -m mypy scripts/ hooks/
 python3 -m ruff check scripts/ tests/ hooks/
-python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py  # bundled hook self-tests (script-style, not pytest)
+python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py && python3 hooks/test_notebooklm_delete_gate.py  # bundled hook self-tests (script-style, not pytest)
+
+# vault export-layer suite
+( cd vault && python3 -m pytest tests/ -q )
 
 # bats: ARL helpers (40) + setup-harness hooks/CLI (47)
 ( cd skills/adversarial-review-loop && bats tests/ )

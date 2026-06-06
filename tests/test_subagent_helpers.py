@@ -32,6 +32,9 @@ def test_read_ticket_validates_sha(tmp_path):
         contract_dir=contract_dir,
         worktree=tmp_path / "wt",
         subagent_role="worker",
+        # this test exercises ticket-sha validation, not the dispatch gates
+        skip_preflight=True,
+        skip_contract_check=True,
     )
     # Good read
     t = h.read_ticket(ticket_path)

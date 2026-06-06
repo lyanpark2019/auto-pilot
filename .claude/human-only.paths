@@ -1,0 +1,6 @@
+# human-only.paths — path prefixes that Claude must not edit without human review.
+# One path-prefix per line. Blank lines and lines starting with # are ignored.
+# NOTE: tier-2 hardcode in pre-edit-human-only.sh is authoritative for these 2 paths;
+#       this listing is informational.
+docs/specs/2026-06-06-unified-coding-system-design.md
+skills/doc-management/references/doc-management-system.md

@@ -53,23 +53,30 @@ def test_wait_all_returns_when_all_done_markers_appear(monkeypatch, tmp_path):
     h2_out.mkdir()
 
     class FakeHandle:
-        def __init__(self, out): self.output_dir = out
+        def __init__(self, out, role="test"):
+            self.output_dir = out
+            self.role = role
+            self._spawn_kwargs: dict = {}
         def poll(self): return 0
 
-    handles = [FakeHandle(h1_out), FakeHandle(h2_out)]
+    handles = [FakeHandle(h1_out, "r1"), FakeHandle(h2_out, "r2")]
     (h1_out / "done.marker").touch()
     (h2_out / "done.marker").touch()
 
-    rw.wait_all(handles, timeout_sec=2)
+    failures = rw.wait_all(handles, timeout_sec=2)
+    assert failures == []
 
 
 def test_wait_all_times_out(tmp_path):
     import _reviewer_wrapper as rw
 
     class FakeHandle:
-        def __init__(self, out): self.output_dir = out
+        def __init__(self, out, role="test"):
+            self.output_dir = out
+            self.role = role
+            self._spawn_kwargs: dict = {}
         def poll(self): return None
 
-    handle = FakeHandle(tmp_path)
+    handle = FakeHandle(tmp_path, "r1")
     with pytest.raises(rw.SpawnTimeoutError):
         rw.wait_all([handle], timeout_sec=1)

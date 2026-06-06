@@ -1,0 +1,88 @@
+# Template: Static site (rsync deploy)
+# Projects: fyqro
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Deploy commit SHA (leave empty for branch HEAD)"
+        required: false
+        default: ""
+
+concurrency:
+  group: __PROJECT_NAME__-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEPLOY_SHA: ${{ github.event.inputs.target_sha || github.sha }}
+
+jobs:
+  quality:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      # __QUALITY_STEPS__
+
+  deploy:
+    name: Deploy
+    needs: quality
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USERNAME }}
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            __SOURCE_DIR__/ \
+            "$SSH_USER@$SSH_HOST:__APP_DIR_NAME__/"
+
+      - name: Verify deployment
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USERNAME }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            "curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/ | grep -q '^200$'"
+
+      - name: Write deploy audit trail
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USERNAME }}
+        run: |
+          SHORT_SHA="${DEPLOY_SHA:0:7}"
+          TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%S%z)"
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_DIR=__APP_DIR_NAME__/.deploy && \
+             mkdir -p \$DEPLOY_DIR && \
+             echo '${DEPLOY_SHA}' > \$DEPLOY_DIR/last_good_commit && \
+             echo '$TIMESTAMP | ci | $SHORT_SHA | prod | main | SUCCESS' >> \$DEPLOY_DIR/deploy.log"

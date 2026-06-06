@@ -1,4 +1,5 @@
 ---
+name: auto-pilot-server
 description: Launch the headless infinite auto-pilot loop. Forks a Python driver that spawns `claude -p --dangerously-skip-permissions` sessions per phase, with pre-phase HEAD snapshot + rollback on failure. Truly hands-free.
 argument-hint: "[--max-iter N] [--sleep SEC] [--once] [--timeout-build SEC]"
 allowed-tools: Bash, Read

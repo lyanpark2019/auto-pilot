@@ -29,7 +29,7 @@ Each loop stage routes to a skill/agent. This is the "system that integrates var
 | Adversarial review | `codex` + cold `claude` reviewers | ✅ built |
 | TDD / security gates | `tdd-enforcer`, `security-reviewer` | ✅ built |
 | Verify / scoring | project verify cmds (+ `adversarial-review-loop` codebase mode, optional) | ✅ / 🔜 |
-| Doc sync | `doc-drift-audit` | 🔜 planned |
+| Doc sync | `doc-management` (MAINTAIN/AUDIT modes) | 🔜 planned |
 | Progress / decisions log | `PROGRESS.md` + `decisions.md` writer | 🔜 (Q2) |
 
 ## 3. What it is (structure)
@@ -68,6 +68,7 @@ The loop has never run with real subagents; all 16 `test_headless_loop.py` tests
 - `orchestrator.py discover --check` — pure git/mtime comparison, genuinely deterministic + unit-testable. `discover --record` — writes `.build-commit` + graphify version + timestamp AFTER the PM ran graphify. **Python never "snapshots the graph"** (that input is nondeterministic); it only records provenance.
 - **`.gitignore` graphify-out/** (or place under `.planning/auto-pilot/graphify-out/`) so it never dirties `$ROOT` and blocks `apply_to_main`'s clean-tree preflight.
 - Schema: `contract.schema.json` `snapshot_shas` += `project_context` sha as **optional**; bump `schema_version` → 2. Extend `verify_snapshots` with a **fail-closed** branch (declared sha → bundle file must exist + match; absent → log "ran context-blind"). Update `SnapshotShas`, `snapshot_context`, MANIFEST, PM-signature, fixtures together. Add a tamper test mirroring the existing spec/claude SHA tests.
+- **schema v2 landed in round-2 W2 unified migration (project_context seat + dispatch required fields: target_repo, target_layer, hard_constraints, pattern_refs); Step-1 remaining = discovery-seam wiring itself.**
 
 ### Step 2 — copy graphify context INTO the bundle (no drill-down)
 - Workers run in isolated worktrees (clean checkout at `base_sha`) → they **cannot** see `graphify-out/` in `$ROOT`. Everything a worker needs is **copied into `context-bundle/`** (which is per-contract). Drop the "drill into raw graph" idea entirely.
@@ -79,7 +80,7 @@ The loop has never run with real subagents; all 16 `test_headless_loop.py` tests
 - Build a PM-authored, scope-sliced `project-map.md` digest **only if** workers measurably degrade on the full report. Measure before optimizing. Split global-map (pre-PLAN) from per-contract slice (post-tech-critic) to avoid the circular timing (slice needs `scope_files`, which PLAN produces).
 
 ### P1 — Q2 progress / decisions docs (parallel-safe, any time)
-- PM writes `.planning/auto-pilot/PROGRESS.md` + `decisions.md` at every phase-end. Optionally wire `doc-drift-audit` after merges.
+- PM writes `.planning/auto-pilot/PROGRESS.md` + `decisions.md` at every phase-end. Optionally wire `doc-management` (AUDIT mode) after merges.
 
 ## 6. Resolved decisions + fatal contradictions
 
@@ -107,7 +108,7 @@ Integration targets must point at the canonical, current skill — verified on d
 | `quality-eval` (May 18) | ⚠️ superseded by adversarial-review-loop | do NOT integrate; was stale ref in earlier draft |
 | `quality-loop` | no standalone skill (command delegates) | n/a |
 | `codebase-perfection-loop` (May 16) | ⚠️ older, overlaps adversarial-review-loop multi-agent | do NOT integrate |
-| `doc-drift-audit` (May 29) | ✅ current | use for post-merge doc sync (P1) |
+| `doc-drift-audit` (May 29) | ⚠️ absorbed into `doc-management` (AUDIT mode, 2026-06-06) | use `doc-management` for post-merge doc sync (P1) |
 | `graphify` v0.8.14 | ✅ current, but **duplicate install**: canonical `~/.claude/skills/graphify` + orphan `~/.agents/skills/graphify` (older) | clean the orphan to avoid future drift; graphify provides `GRAPH_REPORT.md` + `--update` but NO `.build-commit` — auto-pilot owns that marker |
 
 Also: `headless-loop.py:14` comment says the session runs `/auto-pilot start --phase N`, but `prompts/iteration.md` actually sends a **prose** "Run the auto-pilot skill" (no explicit slash). Doc↔code drift; the Step-0 skill-fire smoke must record which trigger form actually works in `claude -p`.

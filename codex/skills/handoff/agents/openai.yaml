@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Create a next-session handoff"
+  default_prompt: "Use $handoff to write a compact handoff for the next session."

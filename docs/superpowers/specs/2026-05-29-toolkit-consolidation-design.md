@@ -2,6 +2,7 @@
 
 **Date:** 2026-05-29
 **Status:** design (awaiting user review → writing-plans)
+**Historical note (2026-06-06):** `llm-wiki-architect`, bundled by this consolidation, was later DELETED by the unified-coding-system merge; docs territory routes to `graphify-doc-rebuild` (→ `doc-management`). Mentions below are the 2026-05-29 record. See `docs/specs/2026-06-06-unified-coding-system-design.md`.
 **Topic:** Reframe the `auto-pilot` plugin as "autonomous dev loop **+ personal toolkit**" and bundle the user's hand-authored skills and hooks into it so they are managed as one versioned plugin instead of loose `~/.claude/` files.
 
 ## 1. Goal

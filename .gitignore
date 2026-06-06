@@ -1,6 +1,8 @@
 # Local Claude state
 .planning/
 .claude/settings.local.json
+.claude/score.json
+.claude/insights.md
 
 # Python
 __pycache__/

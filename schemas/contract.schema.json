@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://auto-pilot/contract/v1",
+  "$id": "https://auto-pilot/contract/v2",
   "title": "AutoPilotContract",
   "type": "object",
   "required": [
@@ -10,10 +10,11 @@
     "context_bundle_path", "verify_cmds",
     "snapshot_shas", "deadline_ts", "dispatched_at",
     "plugin_version", "worker_model", "reviewer_models",
-    "max_diff_loc", "kill_switch_path", "review_outputs"
+    "max_diff_loc", "kill_switch_path", "review_outputs",
+    "target_repo", "target_layer", "hard_constraints"
   ],
   "properties": {
-    "schema_version":     { "type": "integer", "minimum": 1, "maximum": 1 },
+    "schema_version":     { "type": "integer", "minimum": 2, "maximum": 2 },
     "id":                 { "type": "string", "pattern": "^iter-\\d+/phase-\\d+/contract-\\d+/round-\\d+$" },
     "idempotency_token":  { "type": "string", "pattern": "^[a-f0-9]{16,32}$" },
     "parent_contract_id": { "type": ["string", "null"] },
@@ -33,7 +34,8 @@
       "properties": {
         "spec":            { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "claude_md_chain": { "type": "array", "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"} },
-        "base_sha":        { "type": "string", "pattern": "^[a-f0-9]{40}$" }
+        "base_sha":        { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "project_context": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "additionalProperties": false
     },
@@ -57,7 +59,15 @@
         "specialists": { "type": "object", "additionalProperties": {"type": "string"} }
       },
       "additionalProperties": false
-    }
+    },
+    "target_repo":        { "type": "string", "minLength": 1 },
+    "target_layer":       { "type": "string", "enum": ["API", "BFF", "frontend", "worker", "plugin"] },
+    "hard_constraints":   {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "pattern_refs":       { "type": "array", "items": {"type": "string"} }
   },
   "additionalProperties": false
 }

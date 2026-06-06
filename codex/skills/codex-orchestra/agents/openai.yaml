@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Orchestra"
+  short_description: "Run Codex as worker under Opus PM gates"
+  default_prompt: "Use $codex-orchestra for this repo task with Opus as PM and Codex as worker."
