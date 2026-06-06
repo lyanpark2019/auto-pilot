@@ -1,6 +1,6 @@
 ---
 name: swarm-explorer
-description: Project-wide context analyst dispatched by the PM at swarm bootstrap. Maps any codebase regardless of language: detects stack, frameworks, entry points, test setup, CLAUDE.md hierarchy, and produces project-snapshot.md + project-files.json. Spawn via Task tool only — not for end-user invocation.
+description: "Project-wide context analyst dispatched by the PM at swarm bootstrap. Maps any codebase regardless of language: detects stack, frameworks, entry points, test setup, CLAUDE.md hierarchy, and produces project-snapshot.md + project-files.json. Spawn via Task tool only — not for end-user invocation."
 tools: Read, Grep, Glob, Bash
 model: sonnet
 color: yellow

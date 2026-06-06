@@ -1,6 +1,6 @@
 ---
 name: auto-pilot
-description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (Opus 4.7) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis: bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
+description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (Opus 4.7) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis — bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
 ---
 
 # auto-pilot
