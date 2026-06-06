@@ -47,25 +47,24 @@ auto-pilot/
 │   ├── setup-harness/                       # harness bootstrap (+ scripts/ references/ templates/ evals/)
 │   ├── sha-deploy-standard/                 # SHA-pinned deploy standard
 │   ├── codex-orchestra/                     # conductor: Claude plans/reviews, Codex implements
-│   ├── swarm/ + swarm-{init,bench,status,stop,ticket}/   # parallel execution backend skills
+│   ├── swarm/ (init/start/status/stop/ticket) + swarm-bench/   # parallel execution backend skills
 │   ├── improve-codebase-architecture/, diagnosing-{llm-output-leaks,stale-runtime}/
 │   └── codebase-perfection-loop/            # DEPRECATED shell — references/ kept (rubric provenance)
-├── commands/                                # 24 slash commands: auto-pilot{,-server}, eval-run,
-│                                            #   harness-{plan,build,qa,setup,drift,loop,score,verify},
-│                                            #   vault-{build,drift,score,audit,content-verify,dashboard,
-│                                            #   restructure,resume,selftest}, nbm-to-obsidian,
-│                                            #   quality-loop, setup-claude-md, sha-deploy-init
-├── agents/                                  # 47 agent contracts + references/ (shared checklists)
+├── commands/                                # 16 slash commands: auto-pilot{,-server}, eval-run,
+│                                            #   harness (plan/build/qa), harness-ops (setup/drift/loop/score/verify),
+│                                            #   vault-{build,score,dashboard,selftest},
+│                                            #   setup-claude-md, sha-deploy-init
+│                                            # (harness 8→2; vault 10→4; quality-loop+nbm-to-obsidian+goal-* removed)
+├── agents/                                  # 23 agent contracts (review substance: skills/adversarial-review-loop/references/)
 │   ├── core loop: pm-orchestrator, worker, retro
 │   ├── review: codex-adversarial + claude-reviewer (legacy),
 │   │   auto-pilot-{codex,claude}-reviewer (PR3, hook-sandboxed), tech-critic-lead,
 │   │   tdd-enforcer, security-reviewer, specialist-pool, code-perfector
 │   ├── harness trio: harness-{planner,generator,evaluator}
-│   ├── goal trio: goal-{scout,judge,worker}
 │   ├── swarm: swarm-{explorer,monitor,verifier}
-│   └── vault set (26): vault-pm-orchestrator, docs-{worker,verifier}, drift-fixer,
-│       gap-filler, orphan-pruner, content-fact-checker, adversarial-auditor,
-│       edge/concept/ADR/stub/link enrichers + curators
+│   └── vault set: vault-pm-orchestrator + vault-{edge-curator,graph-enricher,knowledge-author,structure-curator}
+│       (4 merged agents, 2026-06 round-2 — 25 legacy vault workers removed; repo-docs fixing → doc-management)
+│   (goal-{scout,judge,worker} removed from plugin — live in global ~/.claude/agents/)
 ├── hooks/
 │   ├── hooks.json                           # SessionStart + PreToolUse + PostToolUse registrations
 │   ├── preflight-path.sh                    # CWD / vault / state sanity
@@ -73,7 +72,7 @@ auto-pilot/
 │   ├── pre-bash-guard.sh                    # block TUI / chained SSL / unsafe bulk fix
 │   ├── pre-reviewer-write.sh                # PR3 reviewer sandbox (layer 2)
 │   ├── post-deploy-verify.sh                # zombie port / env placeholder check after deploy
-│   ├── graphify_update.sh, doc-sync-update.sh   # graph-freshness watchers (feed doc-management MAINTAIN)
+│   ├── doc-sync-update.sh                   # merged graph-freshness watcher: code graph stale-flag + vault raw/sources .md eager graphify update (feeds doc-management MAINTAIN)
 │   ├── notebooklm_delete_gate.sh            # confirm-gated notebooklm deletes (Bash CLI + MCP shapes)
 │   ├── pm_final_report.sh                   # PM final-report emission
 │   ├── guard-destructive.py, codex-conductor-guard.py   # destructive-command + conductor guards

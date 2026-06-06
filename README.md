@@ -11,21 +11,21 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 | Task | Entry |
 |---|---|
 | Autonomous spec-driven build (phased, in-session) | `/auto-pilot` — true headless: `/auto-pilot-server` |
-| Long-running parallel execution / tmux multi-worker pool / mixed Claude+Codex worker pools | `swarm` skill (`/auto-pilot:swarm`, launch) — satellites `swarm-init` · `swarm-ticket` · `swarm-status` · `swarm-stop` · `swarm-bench`; swarm assets live under `swarm/`, agents `swarm-{explorer,monitor,verifier}` at top-level `agents/` |
+| Long-running parallel execution / tmux multi-worker pool / mixed Claude+Codex worker pools | `swarm` skill (`/auto-pilot:swarm <init\|start\|status\|stop\|ticket>`) + `swarm-bench`; swarm assets live under `swarm/`, agents `swarm-{explorer,monitor,verifier}` at top-level `agents/` |
 | PR / branch dual review (Codex + cold Claude, loop until both APPROVE) | `adversarial-review-loop` (branch mode) |
-| Codebase quality score + fix loop | `adversarial-review-loop` (codebase mode) — `/quality-loop` is the thin command alias |
+| Codebase quality score + fix loop | `adversarial-review-loop` (codebase mode) |
 | Full quality lifecycle: lift → adversarial bug-hunt → harness-doc sync → autonomous merge | `pm-quality-harness-loop` |
 | Dead code / duplicates / residue removal | `residue-audit` |
 | Architecture improvement / module boundaries | `improve-codebase-architecture` |
-| Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`, 8 `harness-*` commands) |
+| Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`, `/harness` (plan/build/qa), `/harness-ops` (setup/drift/loop/score/verify)) |
 | Docs rotten / 문서 개판 / rebuild docs from code | `doc-management` (REBUILD mode) |
 | Code changed, docs behind / doc sync / 문서 동기화 | `doc-management` (MAINTAIN mode — `scripts/check_design_doc_freshness.py` STALE feed) |
 | Doc drift / 문서 최신화 / docs audit / claim verification | `doc-management` (AUDIT mode) |
-| Vault export to Obsidian / NotebookLM / bases / canvas / dashboard | `/vault-build` (+ `/vault-score` `/vault-audit` `/vault-resume` `/vault-restructure` `/vault-content-verify` `/vault-dashboard` `/vault-selftest`); `/nbm-to-obsidian` = legacy alias of `/vault-build --source notebooklm`. Vault/Obsidian/NotebookLM export is **NOT** doc-management. |
-| Vault-internal drift (exported vault vs source repo) | `/vault-drift` — repo code↔doc drift belongs to `doc-management` (AUDIT mode) instead |
+| Vault export to Obsidian / NotebookLM / bases / canvas / dashboard | `/vault-build` (+`--restructure`/`--resume`) · `/vault-score` (+`--audit`/`--content-verify`/`--drift`) · `/vault-dashboard` · `/vault-selftest`. Vault/Obsidian/NotebookLM export is **NOT** doc-management. |
+| Vault-internal drift (exported vault vs source repo) | `/vault-score --drift` — repo code↔doc drift belongs to `doc-management` (AUDIT mode) instead |
 | CI/CD setup / SHA-based deploy / rollback standard | `sha-deploy-standard` skill + `/sha-deploy-init` command — templates at `deploy/templates/` |
 | Conductor mode (Codex writes code, Claude plans/reviews/gates) | `codex-orchestra` — opt-in via `.codex-conductor` repo-root marker, enforced by `hooks/codex-conductor-guard.py` (registered in `hooks/hooks.json`) |
-| Goal intake / long-horizon task discovery receipts | `goal-scout` / `goal-judge` / `goal-worker` agents (dispatched by plain name from the external goalbuddy skill) |
+| Goal intake / long-horizon task discovery receipts | `goal-scout` / `goal-judge` / `goal-worker` global `~/.claude` agents (dispatched by plain name from the external goalbuddy skill; not bundled in this plugin) |
 | Post-run retrospective → project memory | `retro` agent — PM may dispatch at phase end; appends evidence-cited lessons to the project's `.claude/insights.md` |
 
 **Retired / deleted (do not route here):**

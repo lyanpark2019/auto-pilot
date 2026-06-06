@@ -1,12 +1,12 @@
 window.DASHBOARD_DATA = {
  "branch": "feat/unified-coding-system",
- "commit": "36e754e",
+ "commit": "6d3c008",
  "counts": {
-  "skill": 18,
+  "skill": 14,
   "skill-shell": 1,
-  "agent": 47,
-  "command": 24,
-  "hook": 11,
+  "agent": 23,
+  "command": 11,
+  "hook": 17,
   "codex-skill": 12
  },
  "assets": [
@@ -86,41 +86,6 @@ window.DASHBOARD_DATA = {
    "subsystem": "swarm"
   },
   {
-   "type": "skill",
-   "name": "swarm-init",
-   "subsystem": "swarm"
-  },
-  {
-   "type": "skill",
-   "name": "swarm-status",
-   "subsystem": "swarm"
-  },
-  {
-   "type": "skill",
-   "name": "swarm-stop",
-   "subsystem": "swarm"
-  },
-  {
-   "type": "skill",
-   "name": "swarm-ticket",
-   "subsystem": "swarm"
-  },
-  {
-   "type": "agent",
-   "name": "adr-audit",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "adr-generator",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "adversarial-auditor",
-   "subsystem": "other"
-  },
-  {
    "type": "agent",
    "name": "auto-pilot-claude-reviewer",
    "subsystem": "core-loop"
@@ -129,16 +94,6 @@ window.DASHBOARD_DATA = {
    "type": "agent",
    "name": "auto-pilot-codex-reviewer",
    "subsystem": "core-loop"
-  },
-  {
-   "type": "agent",
-   "name": "backlinks-enricher",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "bases-creator",
-   "subsystem": "other"
   },
   {
    "type": "agent",
@@ -157,96 +112,6 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "agent",
-   "name": "community-labeler",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "concept-grounding",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "concept-populator",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "confidence-rebalancer",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "content-fact-checker",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "cross-cat-prefixer",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "cross-vault-linker",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "density-booster",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "docs-verifier",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "docs-worker",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "drift-fixer",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "edge-enricher",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "edge-fact-corrector",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "extracted-booster",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "gap-filler",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "goal-judge",
-   "subsystem": "goal"
-  },
-  {
-   "type": "agent",
-   "name": "goal-scout",
-   "subsystem": "goal"
-  },
-  {
-   "type": "agent",
-   "name": "goal-worker",
-   "subsystem": "goal"
-  },
-  {
-   "type": "agent",
    "name": "harness-evaluator",
    "subsystem": "harness"
   },
@@ -259,21 +124,6 @@ window.DASHBOARD_DATA = {
    "type": "agent",
    "name": "harness-planner",
    "subsystem": "harness"
-  },
-  {
-   "type": "agent",
-   "name": "hot-cache-filler",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "orphan-linker",
-   "subsystem": "other"
-  },
-  {
-   "type": "agent",
-   "name": "orphan-pruner",
-   "subsystem": "other"
   },
   {
    "type": "agent",
@@ -294,11 +144,6 @@ window.DASHBOARD_DATA = {
    "type": "agent",
    "name": "specialist-pool",
    "subsystem": "review"
-  },
-  {
-   "type": "agent",
-   "name": "stub-merger",
-   "subsystem": "other"
   },
   {
    "type": "agent",
@@ -327,13 +172,28 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "agent",
+   "name": "vault-edge-curator",
+   "subsystem": "docs-vault-export"
+  },
+  {
+   "type": "agent",
+   "name": "vault-graph-enricher",
+   "subsystem": "docs-vault-export"
+  },
+  {
+   "type": "agent",
+   "name": "vault-knowledge-author",
+   "subsystem": "docs-vault-export"
+  },
+  {
+   "type": "agent",
    "name": "vault-pm-orchestrator",
    "subsystem": "docs-vault-export"
   },
   {
    "type": "agent",
-   "name": "wiki-stub-expander",
-   "subsystem": "other"
+   "name": "vault-structure-curator",
+   "subsystem": "docs-vault-export"
   },
   {
    "type": "agent",
@@ -357,53 +217,13 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "command",
-   "name": "harness-build",
+   "name": "harness-ops",
    "subsystem": "harness"
   },
   {
    "type": "command",
-   "name": "harness-drift",
+   "name": "harness",
    "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness-loop",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness-plan",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness-qa",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness-score",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness-setup",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness-verify",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "nbm-to-obsidian",
-   "subsystem": "docs-vault-export"
-  },
-  {
-   "type": "command",
-   "name": "quality-loop",
-   "subsystem": "quality"
   },
   {
    "type": "command",
@@ -417,37 +237,12 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "command",
-   "name": "vault-audit",
-   "subsystem": "docs-vault-export"
-  },
-  {
-   "type": "command",
    "name": "vault-build",
    "subsystem": "docs-vault-export"
   },
   {
    "type": "command",
-   "name": "vault-content-verify",
-   "subsystem": "docs-vault-export"
-  },
-  {
-   "type": "command",
    "name": "vault-dashboard",
-   "subsystem": "docs-vault-export"
-  },
-  {
-   "type": "command",
-   "name": "vault-drift",
-   "subsystem": "docs-vault-export"
-  },
-  {
-   "type": "command",
-   "name": "vault-restructure",
-   "subsystem": "docs-vault-export"
-  },
-  {
-   "type": "command",
-   "name": "vault-resume",
    "subsystem": "docs-vault-export"
   },
   {
@@ -462,7 +257,27 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "hook",
+   "name": "branch-lock.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
    "name": "codex-conductor-guard.py",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "creation-gate.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "deletion-diff-guard.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "dispatch-contract-gate.sh",
    "subsystem": "other"
   },
   {
@@ -472,7 +287,7 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "hook",
-   "name": "graphify_update.sh",
+   "name": "gh-auth-preflight.sh",
    "subsystem": "other"
   },
   {
@@ -507,12 +322,22 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "hook",
+   "name": "pre-edit-human-only.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
    "name": "pre-reviewer-write.sh",
    "subsystem": "review"
   },
   {
    "type": "hook",
    "name": "preflight-path.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "ruff-import-integrity.sh",
    "subsystem": "other"
   },
   {
