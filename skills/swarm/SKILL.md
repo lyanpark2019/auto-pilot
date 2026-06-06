@@ -1,7 +1,7 @@
 ---
 name: swarm
 description: "Auto-pilot multi-agent swarm — subcommand-routed skill: init (config wizard), start (launch tmux PM+workers), status (live diagnostics + ledger), stop (graceful shutdown, --purge worktrees), ticket (manual inbox injection). Use when the user says \"start the swarm\", \"launch swarm\", \"/swarm\", \"start autopilot\", \"deploy multi-agent system\", \"configure swarm\", \"swarm init\", \"set up autopilot\", \"choose workers\", \"swarm status\", \"how is autopilot doing\", \"show swarm\", \"ledger\", \"stop swarm\", \"kill autopilot\", \"shutdown autopilot\", \"tear down swarm\", \"give swarm a task\", \"inject ticket\", \"TODO into swarm\", or legacy \"run autopilot-swarm\" / \"/autopilot-swarm\" / \"/swarm-init\" / \"/swarm-status\" / \"/swarm-stop\" / \"/swarm-ticket\"."
-argument-hint: "<init|start|status|stop|ticket> [subcommand args]"
+argument-hint: "<init|start|status|stop|ticket|bench> [subcommand args]  (bench forwards to the standalone swarm-bench skill)"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
@@ -48,8 +48,8 @@ interactive Q&A. Output drives `start.sh`.
     {"id": 2, "engine": "claude", "model": "claude-sonnet-4-6","role": "general"},
     {"id": 3, "engine": "claude", "model": "claude-sonnet-4-6","role": "general"},
     {"id": 4, "engine": "claude", "model": "claude-haiku-4-5", "role": "general"},
-    {"id": 5, "engine": "codex",  "model": "gpt-5",            "role": "codegen"},
-    {"id": 6, "engine": "codex",  "model": "gpt-5",            "role": "codegen"}
+    {"id": 5, "engine": "codex",  "model": "gpt-5.5",          "role": "codegen"},
+    {"id": 6, "engine": "codex",  "model": "gpt-5.5",          "role": "codegen"}
   ],
   "initial_goal": {
     "title": "이 프로젝트 보안 취약점 제거",
@@ -79,7 +79,7 @@ interactive Q&A. Output drives `start.sh`.
 - **PM model is forced to `claude-opus-4-7`** — never let the user override it.
 - Worker count must be in `[4, 10]`.
 - Per worker, `engine ∈ {claude, codex}`, `model` must match engine
-  (claude-* for claude, gpt-5 for codex). `role` must match `^[a-z0-9][a-z0-9-]*$`.
+  (claude-* for claude, gpt-5.5 for codex). `role` must match `^[a-z0-9][a-z0-9-]*$`.
 - `initial_goal.title` ≤ 80 chars, `success_criteria` ≥ 1 verifiable shell command.
 - Refuse and tell user to fix when:
   - `git rev-parse --is-inside-work-tree` fails → `git init`

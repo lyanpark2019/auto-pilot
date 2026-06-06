@@ -1,7 +1,7 @@
 ---
 name: setup-claude-md
 description: 하네스 엔지니어링 방식 CLAUDE.md 체계 구축 (금지 사항 중심)
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task
 ---
 
 프로젝트에 하네스 엔지니어링 방식의 CLAUDE.md 체계를 구축한다.

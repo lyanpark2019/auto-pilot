@@ -84,7 +84,7 @@ For long phases only:
 
 ```bash
 node "$CC" task --background --write --model gpt-5.5 --effort xhigh "<handoff prompt>"
-node "$CC" status <jobId> --wait
+node "$CC" status <jobId> --wait   # --wait is a *status* flag (task does not support it)
 node "$CC" result <jobId>
 ```
 
