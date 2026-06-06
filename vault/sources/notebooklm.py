@@ -260,7 +260,7 @@ class NotebookLMAdapter:
         """Map low-scoring dims to worker tickets. PM uses this as starting plan."""
         plan = []
         scores = score_state.get("scores", {})
-        # Mapping mirrors agents/pm-orchestrator.md Worker → Dimension table
+        # Mapping mirrors agents/vault-pm-orchestrator.md Worker → Dimension table
         WORKER_FOR_DIM = {
             "graph_density": "density-booster",
             "confidence_balance": "confidence-rebalancer",

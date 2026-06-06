@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Plugin self-test: validate manifest, agents frontmatter, scripts syntax, rubric, hooks.
+"""Vault-subsystem self-test: validate manifest, vault agents frontmatter, scripts syntax, rubric, hooks.
+
+The vault subsystem lives at <plugin_root>/vault/ inside the auto-pilot plugin:
+- vault-internal assets (pipeline/, scripts/, sources/, rubrics/, templates/) anchor to VAULT_ROOT
+- plugin-level assets (.claude-plugin/, agents/, commands/, hooks/, .mcp.json) anchor to PLUGIN_ROOT
+  but agent/command frontmatter checks are scoped to the vault-owned file set —
+  whole-plugin structural validation belongs to plugin-dev:plugin-validator.
 
 Usage:
-    python3 -m notebooklm_vault_builder.selftest
-    # or
-    python3 scripts/selftest.py [--strict]
+    python3 vault/scripts/selftest.py
 
 Exit code:
     0 — all checks passed
@@ -22,7 +26,24 @@ from pathlib import Path
 
 import yaml
 
-PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+VAULT_ROOT = Path(__file__).resolve().parent.parent
+PLUGIN_ROOT = VAULT_ROOT.parent
+
+# The agent/command files the vault subsystem owns inside the merged plugin.
+VAULT_AGENTS = frozenset({
+    "adr-audit", "adr-generator", "adversarial-auditor", "backlinks-enricher",
+    "bases-creator", "community-labeler", "concept-grounding", "concept-populator",
+    "confidence-rebalancer", "content-fact-checker", "cross-cat-prefixer",
+    "cross-vault-linker", "density-booster", "docs-verifier", "docs-worker",
+    "drift-fixer", "edge-enricher", "edge-fact-corrector", "extracted-booster",
+    "gap-filler", "hot-cache-filler", "orphan-linker", "orphan-pruner",
+    "stub-merger", "vault-pm-orchestrator", "wiki-stub-expander",
+})
+VAULT_COMMANDS = frozenset({
+    "vault-audit", "vault-build", "vault-content-verify", "vault-dashboard",
+    "vault-drift", "vault-resume", "vault-restructure", "vault-score",
+    "vault-selftest", "nbm-to-obsidian",
+})
 
 
 class Check:
@@ -93,9 +114,13 @@ def _check_agents() -> Check:
     if not agents_dir.exists():
         c.fail("agents/ missing")
         return c
-    agent_files = [f for f in agents_dir.glob("*.md") if not f.name.startswith("_")]
+    agent_files = [f for f in agents_dir.glob("*.md")
+                   if not f.name.startswith("_") and f.stem in VAULT_AGENTS]
+    missing = VAULT_AGENTS - {f.stem for f in agent_files}
+    if missing:
+        c.fail(f"vault agents missing from agents/: {sorted(missing)}")
     if len(agent_files) < 20:
-        c.fail(f"only {len(agent_files)} agents found (expected ≥20: 18 nbm workers + PM + auditor + content-fact-checker + docs-worker + docs-verifier)")
+        c.fail(f"only {len(agent_files)} vault agents found (expected {len(VAULT_AGENTS)}: nbm workers + vault-pm-orchestrator + auditor + content-fact-checker + docs-worker + docs-verifier)")
     fm_pattern = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
     for f in agent_files:
         text = f.read_text()
@@ -129,7 +154,7 @@ def _check_agents() -> Check:
 
 def _check_scripts() -> Check:
     c = Check("scripts")
-    scripts_dir = PLUGIN_ROOT / "scripts"
+    scripts_dir = VAULT_ROOT / "scripts"
     for f in scripts_dir.glob("*.py"):
         try:
             ast.parse(f.read_text())
@@ -140,7 +165,7 @@ def _check_scripts() -> Check:
 
 def _check_rubric() -> Check:
     c = Check("rubric")
-    p = PLUGIN_ROOT / "templates" / "rubric.yaml"
+    p = VAULT_ROOT / "templates" / "rubric.yaml"
     if not p.exists():
         c.fail(f"missing: {p}")
         return c
@@ -231,8 +256,13 @@ def _check_commands() -> Check:
     if not cmds_dir.exists():
         c.fail("commands/ missing")
         return c
+    missing = VAULT_COMMANDS - {f.stem for f in cmds_dir.glob("*.md")}
+    if missing:
+        c.fail(f"vault commands missing from commands/: {sorted(missing)}")
     fm_pattern = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
     for f in cmds_dir.glob("*.md"):
+        if f.stem not in VAULT_COMMANDS:
+            continue
         text = f.read_text()
         m = fm_pattern.match(text)
         if not m:
@@ -252,7 +282,7 @@ def _check_commands() -> Check:
 
 def _check_sources() -> Check:
     c = Check("sources")
-    src_dir = PLUGIN_ROOT / "sources"
+    src_dir = VAULT_ROOT / "sources"
     if not src_dir.exists():
         c.fail("sources/ missing")
         return c
@@ -260,7 +290,7 @@ def _check_sources() -> Check:
         c.fail("sources/_adapter.py missing (adapter protocol)")
     # Verify adapter modules importable
     import sys
-    sys.path.insert(0, str(PLUGIN_ROOT))
+    sys.path.insert(0, str(VAULT_ROOT))
     try:
         from sources import _adapter
         _adapter._autodiscover()
@@ -274,7 +304,7 @@ def _check_sources() -> Check:
 
 def _check_rubrics_library() -> Check:
     c = Check("rubrics_library")
-    rdir = PLUGIN_ROOT / "rubrics"
+    rdir = VAULT_ROOT / "rubrics"
     if not rdir.exists():
         c.fail("rubrics/ missing")
         return c
@@ -286,7 +316,7 @@ def _check_rubrics_library() -> Check:
 
 def _check_restructure() -> Check:
     c = Check("restructure")
-    rdir = PLUGIN_ROOT / "scripts" / "restructure_phases"
+    rdir = VAULT_ROOT / "scripts" / "restructure_phases"
     if not rdir.is_dir():
         c.fail("scripts/restructure_phases/ missing")
         return c
@@ -298,7 +328,7 @@ def _check_restructure() -> Check:
     for f in required:
         if not (rdir / f).exists():
             c.fail(f"restructure_phases/{f} missing")
-    loop_script = PLUGIN_ROOT / "scripts" / "restructure_loop.py"
+    loop_script = VAULT_ROOT / "scripts" / "restructure_loop.py"
     if not loop_script.exists():
         c.fail("scripts/restructure_loop.py missing")
     cmd = PLUGIN_ROOT / "commands" / "vault-restructure.md"

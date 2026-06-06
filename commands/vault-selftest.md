@@ -31,7 +31,7 @@ Plugin internal consistency check.
 ## Execution
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/selftest.py"
+python3 "${CLAUDE_PLUGIN_ROOT}/vault/scripts/selftest.py"
 ```
 
 Exit 0 on pass, 1 on any failure.

@@ -49,7 +49,7 @@ Single-command autonomous restructure of `~/Documents/Obsidian/` per the project
 ## Execution
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/restructure_loop.py "$@"
+python3 ${CLAUDE_PLUGIN_ROOT}/vault/scripts/restructure_loop.py "$@"
 ```
 
 ## Verification

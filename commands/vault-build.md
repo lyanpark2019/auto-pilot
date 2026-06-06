@@ -6,6 +6,8 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 
 # /vault-build
 
+> **DEPRECATED for repo-docs doc-purpose use.** Running this pipeline to detect/fix/score a repo's own `docs/` tree (`--source code` drift → fix → rubric as the goal) is RETIRED — that job belongs to the **`doc-management`** skill (REBUILD / MAINTAIN / AUDIT modes). `/vault-build` remains fully supported as the **export pipeline**: building/updating Obsidian vaults, NotebookLM notebooks, bases, canvas, and graphify output from a project. Canonical mapping: doc-용도 제거, export 잔류.
+
 Universal project documentation pipeline. Run in CWD.
 
 ## Usage
@@ -87,7 +89,7 @@ When `--auto-graphify` is set:
 
 ```bash
 PROJECT="${1:-$PWD}"
-ROOT="${CLAUDE_PLUGIN_ROOT}"
+ROOT="${CLAUDE_PLUGIN_ROOT}/vault"
 
 # Phase 1-2: scan + drift
 python3 "$ROOT/pipeline/drift.py" "$PROJECT" --out "$PROJECT/.vault-builder/drift-report.md"
@@ -103,14 +105,14 @@ python3 "$ROOT/pipeline/dispatch.py" "$PROJECT" load-plan   # creates dispatch-s
 Agent(
   subagent_type="general-purpose",
   description="PM orchestrator drift-fix",
-  prompt=f"""Read {CLAUDE_PLUGIN_ROOT}/agents/pm-orchestrator.md and follow the
+  prompt=f"""Read {CLAUDE_PLUGIN_ROOT}/agents/vault-pm-orchestrator.md and follow the
   'Drift-fix mode' workflow on project {PROJECT}.
 
-  1. Call `python3 {CLAUDE_PLUGIN_ROOT}/pipeline/dispatch.py {PROJECT} list-pending`
+  1. Call `python3 {CLAUDE_PLUGIN_ROOT}/vault/pipeline/dispatch.py {PROJECT} list-pending`
   2. Dispatch every pending ticket in parallel via Agent tool (single message, multiple tool_use blocks)
   3. After workers reply, mark each delivered; run verify-all
   4. Reissue rejected (≤3 strikes); escalate after
-  5. Final rubric check: python3 {CLAUDE_PLUGIN_ROOT}/pipeline/verify.py {PROJECT}
+  5. Final rubric check: python3 {CLAUDE_PLUGIN_ROOT}/vault/pipeline/verify.py {PROJECT}
   6. Report final state (round count, pass/fail, escalations)
   """
 )

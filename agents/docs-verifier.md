@@ -80,6 +80,6 @@ CRITIQUE: <다음 라운드 dispatch 시 worker prompt 의 REVISE 섹션에 주�
 
 ## 관련 파일
 
-- `~/.claude/plugins/vault-builder/agents/pm-orchestrator.md`
-- `~/.claude/plugins/vault-builder/agents/docs-worker.md`
-- `~/.claude/plugins/vault-builder/commands/vault-build.md`
+- `${CLAUDE_PLUGIN_ROOT}/agents/vault-pm-orchestrator.md`
+- `${CLAUDE_PLUGIN_ROOT}/agents/docs-worker.md`
+- `${CLAUDE_PLUGIN_ROOT}/commands/vault-build.md`

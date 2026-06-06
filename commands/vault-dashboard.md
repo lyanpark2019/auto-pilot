@@ -32,12 +32,12 @@ Open HTML dashboard for a vault.
 
 ```bash
 VAULT="${1:-$HOME/Documents/Obsidian/NotebookLM-Archive}"
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/dashboard_data.py" "$VAULT"
+python3 "${CLAUDE_PLUGIN_ROOT}/vault/scripts/dashboard_data.py" "$VAULT"
 if [[ "${2:-}" != "--no-open" ]]; then
   case "$(uname)" in
-    Darwin) open "${CLAUDE_PLUGIN_ROOT}/dashboard/index.html" ;;
-    Linux)  xdg-open "${CLAUDE_PLUGIN_ROOT}/dashboard/index.html" ;;
-    *)      echo "open manually: ${CLAUDE_PLUGIN_ROOT}/dashboard/index.html" ;;
+    Darwin) open "${CLAUDE_PLUGIN_ROOT}/vault/dashboard/index.html" ;;
+    Linux)  xdg-open "${CLAUDE_PLUGIN_ROOT}/vault/dashboard/index.html" ;;
+    *)      echo "open manually: ${CLAUDE_PLUGIN_ROOT}/vault/dashboard/index.html" ;;
   esac
 fi
 ```

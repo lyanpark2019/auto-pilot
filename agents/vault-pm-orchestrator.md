@@ -1,6 +1,6 @@
 ---
-name: pm-orchestrator
-description: Use this agent when the vault-builder PM-Worker-Ticket loop needs to drive a vault toward rubric pass. Typical triggers include /vault-build dispatch after Phase 4, user resumes a stalled vault session, and score-state below threshold. See "When to invoke" in the agent body for worked scenarios.
+name: vault-pm-orchestrator
+description: Use this agent when the vault PM-Worker-Ticket loop needs to drive a vault toward rubric pass. Typical triggers include /vault-build dispatch after Phase 4, user resumes a stalled vault session, and score-state below threshold. See "When to invoke" in the agent body for worked scenarios.
 tools: Bash, Read, Write, Edit, Grep, Glob
 model: opus
 color: magenta
@@ -10,7 +10,7 @@ color: magenta
 ## When to invoke
 
 - **Post-extract dispatch.** /vault-build invokes this agent after Phase 4 (graphify extract) to drive the PM loop until rubric pass.
-- **Resume request.** User explicitly asks to resume a stalled vault-builder session or re-run scoring rounds.
+- **Resume request.** User explicitly asks to resume a stalled vault build session or re-run scoring rounds.
 - **Below-threshold state.** score-state.json or fix-plan.json present and below pass threshold — orchestrator picks up where last round left off.
 
 ## Source-aware modes
@@ -31,7 +31,7 @@ Detect mode by reading state files. Default → `drift-fix` when invoked from `/
 
 ```bash
 PROJECT="$1"   # CWD by default
-python3 ${CLAUDE_PLUGIN_ROOT}/pipeline/dispatch.py "$PROJECT" load-plan
+python3 ${CLAUDE_PLUGIN_ROOT}/vault/pipeline/dispatch.py "$PROJECT" load-plan
 ```
 
 This reads `fix-plan.json` into `dispatch-state.json` (idempotent).
@@ -59,11 +59,11 @@ This reads `fix-plan.json` into `dispatch-state.json` (idempotent).
    )
 
 3. After workers reply, capture each deliverable:
-   python3 ${CLAUDE_PLUGIN_ROOT}/pipeline/dispatch.py <PROJECT> ...
+   python3 ${CLAUDE_PLUGIN_ROOT}/vault/pipeline/dispatch.py <PROJECT> ...
    board.deliver(ticket.id, deliverable_paths)
 
 4. Verify all delivered tickets:
-   python3 ${CLAUDE_PLUGIN_ROOT}/pipeline/dispatch.py <PROJECT> verify-all
+   python3 ${CLAUDE_PLUGIN_ROOT}/vault/pipeline/dispatch.py <PROJECT> verify-all
 
 5. For rejected tickets:
    - if retry_count < 3: board.reissue(ticket.id, feedback) → goto 2
@@ -100,8 +100,8 @@ If auditor's drift count > internal board belief by >5 entries → trust auditor
 
 ```
 1. Read current state:
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/score_structural.py <vault>
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/score_content.py <vault>
+   python3 ${CLAUDE_PLUGIN_ROOT}/vault/scripts/score_structural.py <vault>
+   python3 ${CLAUDE_PLUGIN_ROOT}/vault/scripts/score_content.py <vault>
    
 2. Identify gaps (dimensions below max):
    - Map each gap dimension → worker type

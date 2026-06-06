@@ -11,7 +11,7 @@ Usage:
     python3 pm_loop.py <vault-path> [--rubric path/to/rubric.yaml]
 
 Note: This is the state machine. Actual worker dispatch is done by the
-pm-orchestrator AGENT (uses Agent tool), not by this script directly.
+vault-pm-orchestrator AGENT (uses Agent tool), not by this script directly.
 This script provides:
   - score reading
   - gap identification
@@ -132,8 +132,11 @@ def main():
         print("Usage: pm_loop.py <vault-path>", file=sys.stderr)
         sys.exit(1)
     vault = Path(sys.argv[1]).expanduser().resolve()
-    plugin_root = Path(os.environ.get("CLAUDE_PLUGIN_ROOT",
-                                      Path(__file__).resolve().parent.parent))
+    # Vault-subsystem root: <plugin_root>/vault when CLAUDE_PLUGIN_ROOT is set
+    # (vault assets live under vault/ inside the auto-pilot plugin), else
+    # anchored to this file's grandparent (= vault/).
+    env_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    plugin_root = (Path(env_root) / "vault") if env_root else Path(__file__).resolve().parent.parent
     rubric = load_rubric(plugin_root)
 
     scores = read_scores(vault)

@@ -40,7 +40,7 @@ For edges flagged NO-support by content-fact-checker, demote confidence (INFERRE
    - cat:src -X-> cat:tgt  | demote INF→AMB | reason: tokens absent
    - cat:src -X-> cat:tgt  | REMOVE         | reason: AMB cap exceeded
    ```
-6. After all edits: re-run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/score_content.py <vault>` to verify edge_fact dim improvement
+6. After all edits: re-run `python3 ${CLAUDE_PLUGIN_ROOT}/vault/scripts/score_content.py <vault>` to verify edge_fact dim improvement
 
 ## AMB band rule
 

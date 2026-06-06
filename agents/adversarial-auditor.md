@@ -44,7 +44,7 @@ This prevents the case where PM and auditor agree only because they sampled the 
 
 ## Rubric source
 
-Read `${CLAUDE_PLUGIN_ROOT}/templates/rubric.yaml` (or fallback hardcoded thresholds if yaml unavailable).
+Read `${CLAUDE_PLUGIN_ROOT}/vault/templates/rubric.yaml` (or fallback hardcoded thresholds if yaml unavailable).
 
 ## Workflow
 

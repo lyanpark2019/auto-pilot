@@ -5,7 +5,7 @@ Pure orchestration — no source-specific logic. Reads adapter, runs phases:
     discover → classify → bootstrap → materialize → score → PM loop until pass
 
 Phase 5 (PM loop) is interactive: the actual Agent dispatch happens inside Claude
-Code via the pm-orchestrator agent. This script prepares the plan + state.
+Code via the vault-pm-orchestrator agent. This script prepares the plan + state.
 
 Usage as CLI:
     python3 -m vault_builder.pipeline.loop <vault> --source notebooklm [--input <path>]
@@ -57,7 +57,7 @@ def run(vault: Path, source: str, input_path: Path | None = None, **opts) -> dic
 
     pipeline_state.save(vault, st)
     print(f"Saved state: {pipeline_state.state_path(vault)}")
-    print(f"\nNext: invoke pm-orchestrator agent to run PM loop. Or call /vault-score {vault} to score current state.")
+    print(f"\nNext: invoke vault-pm-orchestrator agent to run PM loop. Or call /vault-score {vault} to score current state.")
     return st
 
 

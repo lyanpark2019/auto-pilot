@@ -6,6 +6,8 @@ allowed-tools: [Bash, Read]
 
 # /vault-drift
 
+> **Routing — repo-docs path DEPRECATED**: repo code↔doc drift (a project's own `docs/` tree vs its source) is RETIRED here and belongs to the docs subsystem — `doc-management` AUDIT mode (absorbs the old `/doc-drift-audit`); fixes go through its MAINTAIN mode. THIS command covers **vault-internal drift only**: an exported Obsidian/NotebookLM vault cross-checked against its source repo (`--doc-root <vault>`). Canonical mapping: doc-용도 제거, export 잔류.
+
 Code ↔ docs drift report. Read-only diagnosis.
 
 ## Usage
@@ -31,7 +33,7 @@ Manual-edit pages (`frontmatter.manual_edit: true` or `<!-- manual -->` marker) 
 ## Implementation
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/pipeline/drift.py" "$REPO" [--doc-root D] [--format json|md] [--out PATH]
+python3 "${CLAUDE_PLUGIN_ROOT}/vault/pipeline/drift.py" "$REPO" [--doc-root D] [--format json|md] [--out PATH]
 ```
 
 ## Validated
@@ -44,13 +46,7 @@ ga4-collector (103 modules, 23 docs):
 
 ## Next step
 
-`/vault-drift` produces a report. To auto-fix:
-```
-/vault-build --source code <vault> --resume
-# PM dispatches gap-filler / orphan-pruner / drift-fixer workers per drift type
-```
-
-(PM wiring to drift report is Phase 5 work; current `/vault-drift` is read-only diagnostic.)
+`/vault-drift` produces a report. Fixing **repo-docs** drift via `/vault-build --source code` is **DEPRECATED** — route fixes to the `doc-management` skill instead: MAINTAIN (per-doc refresh against the code graph), AUDIT (evidence-ranked P0/P1/P2 findings), REBUILD (clean-slate regeneration). For **vault-internal** drift (exported Obsidian/NotebookLM vault vs source repo), re-export with `/vault-build` upsert semantics.
 
 ## Limitations
 
