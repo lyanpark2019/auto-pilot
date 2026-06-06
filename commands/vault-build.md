@@ -1,4 +1,5 @@
 ---
+name: vault-build
 description: "Run in any project directory to: scan code + docs, auto-fix drift, verify against rubric, export to Obsidian + NotebookLM + graphify. Single command. Upsert semantics — existing Obsidian vault / NotebookLM notebook updated; missing ones created."
 argument-hint: "--source <code|notebooklm|api_kb> <vault_path> [--input <repo_path>] [--rubric <file>] [--dry-run]"
 allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]

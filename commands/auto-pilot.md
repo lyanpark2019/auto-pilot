@@ -1,4 +1,5 @@
 ---
+name: auto-pilot
 description: Self-driving development loop. PM (Opus 4.7) + Sonnet 1M workers + dual Codex/Claude adversarial review + phase verify gates. Full auto.
 argument-hint: "[start|status|resume|stop] [--spec PATH] [--max-workers N] [--time-box DURATION]"
 allowed-tools: Bash, Read, Write, Edit, Agent, Glob, Grep, TaskCreate, TaskList, TaskUpdate

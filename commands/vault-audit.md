@@ -1,4 +1,5 @@
 ---
+name: vault-audit
 description: "Run adversarial-auditor independent strict re-score. Output: meta/audit-rN.md."
 argument-hint: "<vault_path>"
 allowed-tools: [Bash, Read, Task]

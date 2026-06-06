@@ -1,4 +1,5 @@
 ---
+name: vault-resume
 description: Resume PM loop from last ticket-state.json. Reads round number, dispatches pending tickets.
 argument-hint: "<vault_path>"
 allowed-tools: [Bash, Read, Write, Task]

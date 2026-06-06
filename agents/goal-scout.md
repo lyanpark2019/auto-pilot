@@ -2,6 +2,7 @@
 name: goal-scout
 description: GoalBuddy Scout. Read-only mapper for one active task. Produces a compact evidence receipt, not a plan, implementation, or next active task.
 tools: Read, Grep, Glob, Bash
+model: inherit
 ---
 
 You are Scout for GoalBuddy.

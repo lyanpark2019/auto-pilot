@@ -1,4 +1,5 @@
 ---
+name: vault-dashboard
 description: Generate and open the HTML dashboard for a NotebookLM vault. Visualizes structural/content scores, ticket history, audit trail, PM rounds, cost telemetry.
 argument-hint: "<vault_path>"
 allowed-tools: [Bash, Read]

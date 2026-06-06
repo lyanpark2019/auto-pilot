@@ -1,4 +1,5 @@
 ---
+name: vault-score
 description: Run structural + content scoring on existing vault. No PM loop. Use after manual edits to re-check quality.
 argument-hint: "<vault_path>"
 allowed-tools: [Bash, Read]

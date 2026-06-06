@@ -1,4 +1,5 @@
 ---
+name: vault-selftest
 description: Run plugin self-test — validate manifest, marketplace, agents frontmatter, scripts syntax, rubric, hooks, MCP config, commands. Use before publishing or after significant changes.
 argument-hint: "[--json]"
 allowed-tools: [Bash, Read]

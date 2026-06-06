@@ -1,4 +1,5 @@
 ---
+name: vault-restructure
 description: Autonomous Obsidian + NotebookLM restructure loop. Backs up existing vaults, renames to <project>-Vault convention, merges sportic365 duplicates, splits NotebookLM-Archive into per-domain vaults, creates skeletons for missing domains, emits vault-build + notebooklm-create manifests. Idempotent + resume-safe via state file.
 argument-hint: "[--dry-run] [--phase N] [--reset] [--verify-all]"
 allowed-tools: [Bash, Read]

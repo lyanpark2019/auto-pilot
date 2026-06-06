@@ -1,4 +1,5 @@
 ---
+name: vault-drift
 description: "Run drift detector on any project. Cross-references code AST ↔ existing docs. Finds 4 drift types: gap (undocumented), orphan (dead refs), symbol drift, claim drift (signature mismatch). Read-only — produces report, no mutations."
 argument-hint: "<project_path> [--vault <vault_path>]"
 allowed-tools: [Bash, Read]

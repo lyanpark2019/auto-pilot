@@ -1,4 +1,5 @@
 ---
+name: vault-content-verify
 description: "Run content-fact-checker on existing vault. Verifies edge/concept/ADR factual grounding. Output: meta/content-audit-rN.md."
 argument-hint: "<vault_path>"
 allowed-tools: [Bash, Read, Task]

@@ -1,4 +1,5 @@
 ---
+name: nbm-to-obsidian
 description: "Legacy alias for /vault-build --source notebooklm. Maintained for backward compatibility with notebooklm-vault-builder users."
 argument-hint: "<vault_path>"
 allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
