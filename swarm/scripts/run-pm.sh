@@ -79,7 +79,10 @@ if [ ! -f "$ROOT/knowledge/.explored" ]; then
     touch "$ROOT/knowledge/.explored"
   else
     echo "[pm] explore incomplete — retry next loop" | tee -a "$LOG"
-    sleep 30; continue 2>/dev/null || exec "$0"
+    # NOTE: top-level code (the main `while true` starts later), so `continue`
+    # is invalid here — bash treats it as a no-op returning 0, which silently
+    # fell through to Phase 0b instead of retrying. Re-exec like Phases 0b/0c.
+    sleep 30; exec "$0"
   fi
 fi
 
