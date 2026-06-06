@@ -742,6 +742,39 @@ class TestBranchLock:
         assert r.returncode == 0
         _deny_json(r.stdout)
 
+    def test_denies_chained_push_main_commit_feature(self, hooks_dir, tmp_path):
+        """`git -C <main> push; git -C <feature> commit` — EVERY invocation is
+        checked; the push-on-main must deny even though a later commit targets
+        a feature repo (r4: commit-first segment selection failed open here)."""
+        main_repo = self._make_main_repo(tmp_path / "mainrepo")
+        feat_repo = self._make_feature_repo(tmp_path / "featrepo")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command":
+                f"git -C {main_repo} push origin main; git -C {feat_repo} commit -m ok"}},
+            cwd=elsewhere,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
+    def test_allows_chained_all_feature_targets(self, hooks_dir, tmp_path):
+        """Chained command where every invocation targets feature repos —
+        must ALLOW (any-segment deny must not become always-deny)."""
+        feat1 = self._make_feature_repo(tmp_path / "f1")
+        feat2 = self._make_feature_repo(tmp_path / "f2")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command":
+                f"git -C {feat1} commit -m a; git -C {feat2} push origin HEAD"}},
+            cwd=elsewhere,
+        )
+        assert r.returncode == 0
+        assert "deny" not in r.stdout
+
     # ── bypass ──
 
     def test_bypass_allows_commit_on_main(self, hooks_dir, tmp_path):
