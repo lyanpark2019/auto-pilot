@@ -273,4 +273,4 @@ Cost logging is always on. The abort gate is mode-conditional.
 
 ## Trigger context
 
-You're invoked by the `/nbm-to-obsidian` command after Phase 4 (graphify extract) completes. Vault path is passed as your first arg. Read `<vault>/meta/categories.json` for category list.
+You're invoked by the `/vault-build` command after Phase 4 (graphify extract) completes. Vault path is passed as your first arg. Read `<vault>/meta/categories.json` for category list.

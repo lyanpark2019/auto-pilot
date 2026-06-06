@@ -43,7 +43,24 @@ fi
 # Extract contract_dir from prompt (marker: contract_dir=<path>)
 contract_dir=$(printf '%s' "$prompt" | grep -oE 'contract_dir=[^[:space:]]+' | head -1 | sed 's/contract_dir=//' || echo "")
 
-# Marker absent → allow (non-worker dispatch)
+# Fallback (review r1): live dispatch prompts carry TICKET=<contract_dir>/tickets/<role>.json
+# (pm-orchestrator.md template) — keying only on contract_dir= left the gate inert
+# for every real worker dispatch. Derive contract_dir from the ticket path.
+if [[ -z "$contract_dir" ]]; then
+  ticket_path=$(printf '%s' "$prompt" | grep -oE 'TICKET=[^[:space:]]+' | head -1 | sed 's/TICKET=//' || echo "")
+  if [[ -n "$ticket_path" ]]; then
+    cand_dir="$(dirname "$(dirname "$ticket_path")")"
+    if [[ -f "$cand_dir/contract.json" ]]; then
+      contract_dir="$cand_dir"
+    else
+      # TICKET= present = worker dispatch; missing contract.json at the derived
+      # dir means the PM skipped contract prep → deny rather than silently allow.
+      deny "TICKET marker present but no contract.json at derived contract_dir=$cand_dir. Run orchestrator dispatch-contract-check first."
+    fi
+  fi
+fi
+
+# No marker at all → allow (non-worker dispatch)
 [[ -z "$contract_dir" ]] && exit 0
 
 # ── ⓓ-7③: contract-check.json verification ──

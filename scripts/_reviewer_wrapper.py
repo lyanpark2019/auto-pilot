@@ -161,6 +161,7 @@ def wait_all(
     warned: set[str] = set()
     killed: set[str] = set()
     retrying: dict[str, SpawnHandle] = {}  # role → retry handle
+    retry_started: dict[str, float] = {}   # role → respawn wall-clock
     failures: list[ReviewerFailure] = []
     # Map role → original handle (roles must be unique)
     by_role: dict[str, SpawnHandle] = {h.role: h for h in handles}
@@ -186,6 +187,17 @@ def wait_all(
                         retrying.pop(role, None)
                         continue
                     # Retry truly failed without a marker
+                    failures.append(
+                        ReviewerFailure(role=role, reason=f"retry-exit-{retry_h.poll()}")
+                    )
+                    remaining.discard(role)
+                    retrying.pop(role, None)
+                    continue
+                # Bound the retry like the original (review r1: an unbounded hung
+                # retry leaked an orphan subprocess and surfaced as the outer
+                # SpawnTimeoutError instead of a structured failure).
+                if now - retry_started.get(role, now) > hard_kill_sec:
+                    _hard_kill(retry_h.proc, role)
                     failures.append(ReviewerFailure(role=role, reason="retry-hard-kill"))
                     remaining.discard(role)
                     retrying.pop(role, None)
@@ -210,6 +222,7 @@ def wait_all(
                 logger.warning("watchdog: respawning reviewer %s after hard kill", role)
                 retry_h = _respawn(by_role[role])
                 retrying[role] = retry_h
+                retry_started[role] = time.time()
                 continue
 
             # ── soft-warn window ─────────────────────────────────────────
@@ -230,6 +243,14 @@ def wait_all(
             break
         if time.time() > deadline:
             roles = list(remaining)
+            # Kill anything still alive before raising — never leave orphans.
+            # (getattr: test fakes may expose poll() without a real proc)
+            for role in roles:
+                for h in (retrying.get(role), by_role.get(role)):
+                    if h is not None and h.poll() is None:
+                        proc = getattr(h, "proc", None)
+                        if proc is not None:
+                            _hard_kill(proc, role)
             raise SpawnTimeoutError(
                 f"timed out waiting for done.marker from {roles}"
             )

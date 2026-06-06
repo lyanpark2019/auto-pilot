@@ -64,7 +64,7 @@ def git_head() -> str:
             git repo, detached state with no commits).
     """
     return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True
+        ["git", "rev-parse", "HEAD"], cwd=str(ROOT), text=True, timeout=30
     ).strip()
 
 
@@ -83,6 +83,7 @@ def stash_if_dirty(reason: str) -> str | None:
         cwd=str(ROOT),
         capture_output=True,
         text=True,
+        timeout=30,
     )
     if not porcelain.stdout.strip():
         return None
@@ -92,6 +93,7 @@ def stash_if_dirty(reason: str) -> str | None:
         cwd=str(ROOT),
         capture_output=True,
         text=True,
+        timeout=60,
     )
     if res.returncode != 0:
         event("stash.failed", reason=reason, stderr=res.stderr.strip()[:200])

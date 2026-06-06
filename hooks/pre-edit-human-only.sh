@@ -54,8 +54,14 @@ for _ in 1 2 3 4 5; do
 done
 
 # ── Tier (c): tier-2 hardcoded core ──
+# Anchored to THIS plugin's root (review r1: bare substring */schemas/* match
+# false-denied any target repo's schemas/ dir — auto-pilot's core cross-repo
+# edit use case). Relative paths resolve against CWD before comparison.
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+abs_path="$file_path"
+[[ "$abs_path" != /* ]] && abs_path="$(pwd)/$abs_path"
 for prefix in "${TIER2_PREFIXES[@]}"; do
-  if [[ "$file_path" == "$prefix"* ]] || [[ "$file_path" == *"/$prefix"* ]]; then
+  if [[ "$abs_path" == "$plugin_root/$prefix"* ]]; then
     if [[ "${AUTO_PILOT_ALLOW_CORE_EDIT:-0}" == "1" ]]; then
       echo "auto-pilot: ALLOW tier-2 core edit (AUTO_PILOT_ALLOW_CORE_EDIT=1): $file_path" >&2
     else

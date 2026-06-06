@@ -226,9 +226,12 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
 2. PM writes contract.json via `_contract.write_contract(c, contract_dir / "contract.json")`
 3. PM writes PM-SIGNATURE via `_contract.write_pm_signature(contract_dir, run_id=state["run_id"])`
 4. PM calls `_dispatch.prepare_subagent_ticket(contract_dir, worktree, subagent_role, diff_path=None)` per subagent
-5. PM Agent-dispatches with prompt template:
+5. PM Agent-dispatches with prompt template (the `contract_dir=` marker is what
+   `hooks/dispatch-contract-gate.sh` keys on; the hook also derives it from
+   `TICKET=` as fallback — keep both lines):
    ```
    TICKET={ticket_path}
+   contract_dir={contract_dir}
    Read ticket. Verify ticket_sha. Refuse to act if mismatch.
    Refuse if boot_ok_at older than 5min.
    Do work per ticket.subagent_role.
@@ -269,7 +272,8 @@ try:
                      if os.environ.get("AUTO_PILOT_USE_NEW_REVIEWERS") == "1"
                      else "general-purpose")
     Agent(subagent_type=subagent_type,
-          prompt=f"TICKET={ticket}\nRead ticket. Refuse if ticket_sha mismatch.")
+          prompt=f"TICKET={ticket}\ncontract_dir={contract_dir}\n"
+                 "Read ticket. Refuse if ticket_sha mismatch.")
 finally:
     for k, v in zip(("AUTO_PILOT_SUBAGENT_ROLE", "AUTO_PILOT_OUTPUT_DIR"), prior):
         if v is None: os.environ.pop(k, None)

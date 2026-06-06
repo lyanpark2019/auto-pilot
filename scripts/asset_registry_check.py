@@ -106,7 +106,10 @@ def _scan_hooks() -> list[Asset]:
     if not hooks_dir.exists():
         return assets
     for f in hooks_dir.iterdir():
-        if f.suffix in {".sh", ".py"} and f.name != "hooks.json":
+        # Skip hook test scripts — they are not assets; counting them put this
+        # registry at 80 vs build_dashboard_data.collect_assets' canonical 77
+        # (review r1 divergence finding).
+        if f.suffix in {".sh", ".py"} and f.name != "hooks.json" and not f.name.startswith("test_"):
             # Use filename stem as name, first comment line as description
             text = f.read_text(encoding="utf-8", errors="replace")
             desc_match = re.search(r"^#\s*(.+)", text, re.MULTILINE)

@@ -523,10 +523,13 @@ class TestPreEditHumanOnly:
     # ── deny: tier-2 hardcoded paths ──
 
     def test_denies_tier2_governance_doc(self, hooks_dir, tmp_path):
+        # Tier-2 is anchored to the PLUGIN root — use an absolute plugin path
         repo = self._make_repo(tmp_path)
         r = _run_hook(
             self._hook(hooks_dir),
-            {"tool_input": {"file_path": "docs/specs/2026-06-06-unified-coding-system-design.md"}},
+            {"tool_input": {"file_path": str(
+                REPO_ROOT / "docs/specs/2026-06-06-unified-coding-system-design.md"
+            )}},
             cwd=repo,
             env={"AUTO_PILOT_ALLOW_CORE_EDIT": ""},
         )
@@ -537,12 +540,27 @@ class TestPreEditHumanOnly:
         repo = self._make_repo(tmp_path)
         r = _run_hook(
             self._hook(hooks_dir),
-            {"tool_input": {"file_path": "schemas/some-schema.json"}},
+            {"tool_input": {"file_path": str(REPO_ROOT / "schemas/contract.schema.json")}},
             cwd=repo,
             env={"AUTO_PILOT_ALLOW_CORE_EDIT": ""},
         )
         assert r.returncode == 0
         _deny_json(r.stdout)
+
+    def test_allows_foreign_repo_schemas_dir(self, hooks_dir, tmp_path):
+        """A target repo's own schemas/ must NOT be tier-2 denied (review r1:
+        bare substring match false-denied every repo's schemas/ dir)."""
+        repo = self._make_repo(tmp_path)
+        (repo / "schemas").mkdir()
+        (repo / "schemas" / "some-schema.json").write_text("{}")
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"file_path": "schemas/some-schema.json"}},
+            cwd=repo,
+            env={"AUTO_PILOT_ALLOW_CORE_EDIT": ""},
+        )
+        assert r.returncode == 0
+        assert "deny" not in r.stdout
 
     # ── bypass: AUTO_PILOT_ALLOW_CORE_EDIT=1 for tier-2 ──
 
@@ -550,7 +568,7 @@ class TestPreEditHumanOnly:
         repo = self._make_repo(tmp_path)
         r = _run_hook(
             self._hook(hooks_dir),
-            {"tool_input": {"file_path": "schemas/something.json"}},
+            {"tool_input": {"file_path": str(REPO_ROOT / "schemas/preflight.schema.json")}},
             cwd=repo,
             env={"AUTO_PILOT_ALLOW_CORE_EDIT": "1"},
         )
@@ -637,6 +655,32 @@ class TestBranchLock:
         r = _run_hook(
             self._hook(hooks_dir),
             {"tool_input": {"command": "git push origin main"}},
+            cwd=repo,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
+    # ── deny: global options must not bypass (review r1) ──
+
+    def test_denies_commit_with_dash_C(self, hooks_dir, tmp_path):
+        """`git -C <main-repo> commit` from elsewhere must still be locked."""
+        repo = self._make_main_repo(tmp_path / "mainrepo")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command": f"git -C {repo} commit -m 'oops'"}},
+            cwd=elsewhere,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
+    def test_denies_push_with_dash_c_config(self, hooks_dir, tmp_path):
+        """`git -c key=val push` on main must still be locked."""
+        repo = self._make_main_repo(tmp_path)
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command": "git -c user.name=x push origin main"}},
             cwd=repo,
         )
         assert r.returncode == 0
@@ -936,6 +980,47 @@ class TestDispatchContractGate:
         assert r.returncode == 0
         # With correct sha + fresh preflight: allow (head_sha mismatch only if hook reads
         # different git HEAD than what we wrote — acceptable in isolated tmp_path context)
+
+    # ── TICKET= marker (the REAL dispatch prompt shape) fires the gate ──
+
+    def test_ticket_marker_fires_gate(self, hooks_dir, tmp_path):
+        """Live dispatches use `TICKET=<contract_dir>/tickets/<role>.json`
+        (pm-orchestrator.md template) — the gate must fire on that shape too
+        (review r1: contract_dir=-only matching left the gate inert)."""
+        contract_dir = tmp_path / "contracts"
+        tickets_dir = contract_dir / "tickets"
+        tickets_dir.mkdir(parents=True)
+        contract_json = contract_dir / "contract.json"
+        contract_json.write_text('{"id": "phase-3", "phase": "3"}')
+        ticket = tickets_dir / "worker.json"
+        ticket.write_text("{}")
+        # NO contract-check.json → gate must deny (proves it fired)
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_name": "Task", "tool_input": {
+                "prompt": f"TICKET={ticket}\nRead ticket. Refuse if ticket_sha mismatch."
+            }},
+            cwd=tmp_path,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
+    def test_ticket_marker_without_contract_json_denies(self, hooks_dir, tmp_path):
+        """TICKET= present but no contract.json at the derived dir = PM skipped
+        contract prep → deny, not silent allow."""
+        tickets_dir = tmp_path / "contracts" / "tickets"
+        tickets_dir.mkdir(parents=True)
+        ticket = tickets_dir / "worker.json"
+        ticket.write_text("{}")
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_name": "Task", "tool_input": {
+                "prompt": f"TICKET={ticket}\nRead ticket."
+            }},
+            cwd=tmp_path,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
 
     # ── preflight stale → deny ──
 

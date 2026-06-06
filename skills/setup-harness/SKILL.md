@@ -65,10 +65,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/bootstrap.sh
 
 This auto-detects stack, copies hook scripts to `.claude/scripts/`, merges hooks into `.claude/settings.local.json` (tuple-dedupe), scaffolds `CLAUDE.md`, creates `docs/adr/`, and stamps `.gitignore`. Use this for greenfield. For audit-only on existing harness, skip bootstrap and run the 8 steps interactively.
 
-After bootstrap, generate an environment-constraints block for the repo (shell, BSD/GNU userland, tool versions, CI runners):
+After bootstrap, generate an environment-constraints block for the repo (shell, BSD/GNU userland, tool versions, CI runners). `--into` upserts a marker-delimited block — re-runs replace it instead of duplicating the header:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/generate_env_constraints.sh [REPO_PATH] >> CLAUDE.md
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/generate_env_constraints.sh [REPO_PATH] --into CLAUDE.md
 ```
 
 Build-only (W2); apply runs are W3. PickL-API excluded → W4-1.
@@ -80,7 +80,7 @@ Ready to copy or invoke from this skill directory:
 | Path | Purpose |
 |------|---------|
 | `scripts/bootstrap.sh` | One-shot installer, idempotent |
-| `scripts/generate_env_constraints.sh` | Emit `## Environment Constraints` block: shell, BSD/GNU userland, pinned tool versions, CI runner topology |
+| `scripts/generate_env_constraints.sh` | Emit `## Environment Constraints` block (marker-wrapped; `--into FILE` = idempotent upsert): shell, BSD/GNU userland, pinned tool versions, CI runner topology |
 | `scripts/guard-bash.sh` | PreToolUse(Bash) — block destructive, --no-verify, force-push, git add -A, curl\|bash, sudo |
 | `scripts/block-env-edit.sh` | PreToolUse(Write/Edit) — block .env, SSH, AWS, PEM |
 | `scripts/protect-lint-config.sh` | PreToolUse(Write/Edit) — block linter/type config edits (prevents agent silencing) |

@@ -31,13 +31,17 @@ fi
 
 [[ -z "$cmd" ]] && exit 0
 
-# Only fire when command actually contains a commit or push (word boundary check)
+# Only fire when command actually contains a commit or push (word boundary check).
+# Tolerate git GLOBAL options before the subcommand (`git -C <path> commit`,
+# `git -c k=v push`, `git --no-pager push`) — review r1: adjacency-only regex
+# let those bypass the lock.
+GIT_OPTS='([[:space:]]+(-C[[:space:]]+[^[:space:];|&]+|-c[[:space:]]+[^[:space:];|&]+|--[A-Za-z0-9-]+(=[^[:space:];|&]*)?))*'
 has_commit=0
 has_push=0
-if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&])git[[:space:]]+commit([[:space:]]|$)'; then
+if printf '%s' "$cmd" | grep -qE "(^|[[:space:];|&])git${GIT_OPTS}[[:space:]]+commit([[:space:]]|\$)"; then
   has_commit=1
 fi
-if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&])git[[:space:]]+push([[:space:]]|$)'; then
+if printf '%s' "$cmd" | grep -qE "(^|[[:space:];|&])git${GIT_OPTS}[[:space:]]+push([[:space:]]|\$)"; then
   has_push=1
 fi
 
@@ -60,6 +64,16 @@ except Exception:
 
 if [[ -z "$work_dir" ]]; then
   work_dir="$(pwd)"
+fi
+
+# Honor `git -C <path>` — the branch that matters is the -C target's, not CWD's
+c_path=$(printf '%s' "$cmd" | grep -oE '(^|[[:space:];|&])git[[:space:]]+-C[[:space:]]+[^[:space:];|&]+' | head -1 | sed -E 's/.*-C[[:space:]]+//' || echo "")
+if [[ -n "$c_path" ]]; then
+  if [[ "$c_path" == /* ]]; then
+    work_dir="$c_path"
+  else
+    work_dir="$work_dir/$c_path"
+  fi
 fi
 
 # Get current branch (tolerate non-git dirs)

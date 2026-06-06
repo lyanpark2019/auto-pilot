@@ -80,8 +80,10 @@ while IFS= read -r f; do
   # ruff F821,F401 check
   ruff_out=""
   if [[ "$ruff_bin" == *" "* ]]; then
-    # has space → use eval
-    ruff_out=$(eval "$ruff_bin check --select F821,F401 --no-fix --quiet '$abs_f'" 2>/dev/null || true)
+    # multi-word (e.g. "python3 -m ruff") → tokenize; never eval (a crafted
+    # filename from git diff would reach the shell — review r1 injection finding)
+    read -ra ruff_cmd <<< "$ruff_bin"
+    ruff_out=$("${ruff_cmd[@]}" check --select F821,F401 --no-fix --quiet "$abs_f" 2>/dev/null || true)
   else
     ruff_out=$("$ruff_bin" check --select F821,F401 --no-fix --quiet "$abs_f" 2>/dev/null || true)
   fi
