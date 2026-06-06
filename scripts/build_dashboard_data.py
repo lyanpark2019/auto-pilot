@@ -20,6 +20,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCORE_DIR = ROOT / ".planning" / "score"
@@ -74,20 +75,26 @@ def collect_assets() -> list[dict[str, str]]:
     return assets
 
 
-def load_rounds() -> list[dict]:
-    rounds: list[dict] = []
+def load_rounds() -> list[dict[str, Any]]:
+    rounds: list[dict[str, Any]] = []
     if SCORE_DIR.is_dir():
         for f in sorted(SCORE_DIR.glob("round-*.json")):
             try:
-                rounds.append(json.loads(f.read_text()))
+                loaded = json.loads(f.read_text())
             except json.JSONDecodeError:
                 continue
+            if isinstance(loaded, dict):
+                rounds.append(loaded)
     return rounds
 
 
-def weighted(s: dict) -> float:
-    return round(s.get("core_fit", 0) * 0.4 + s.get("uniqueness", 0) * 0.25
-                 + s.get("evidence", 0) * 0.2 + s.get("cost", 0) * 0.15, 1)
+def weighted(s: dict[str, Any]) -> float:
+    def num(key: str) -> float:
+        v = s.get(key, 0)
+        return float(v) if isinstance(v, (int, float)) else 0.0
+
+    return round(num("core_fit") * 0.4 + num("uniqueness") * 0.25
+                 + num("evidence") * 0.2 + num("cost") * 0.15, 1)
 
 
 def main() -> None:
@@ -98,16 +105,20 @@ def main() -> None:
     assets = collect_assets()
     rounds = load_rounds()
     for rnd in rounds:
-        for key, s in rnd.get("assets", {}).items():
+        for s in rnd.get("assets", {}).values():
             s["total"] = weighted(s)
-    data = {
+    asset_rows: list[dict[str, str]] = [
+        {**a, "subsystem": subsystem_of(a["name"])} for a in assets
+    ]
+    counts: dict[str, int] = {}
+    for a in asset_rows:
+        counts[a["type"]] = counts.get(a["type"], 0) + 1
+    data: dict[str, Any] = {
         "branch": branch, "commit": head,
-        "counts": {},
-        "assets": [{**a, "subsystem": subsystem_of(a["name"])} for a in assets],
+        "counts": counts,
+        "assets": asset_rows,
         "rounds": rounds,
     }
-    for a in data["assets"]:
-        data["counts"][a["type"]] = data["counts"].get(a["type"], 0) + 1
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("window.DASHBOARD_DATA = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n")
     print(f"wrote {OUT} — {len(assets)} assets, {len(rounds)} round(s), HEAD {head}")
