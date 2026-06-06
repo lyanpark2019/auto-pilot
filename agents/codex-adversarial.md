@@ -23,8 +23,9 @@ Forbidden: `Edit`, `Write`, any `git commit/push/reset/stash/checkout/branch/mer
 ```
 1. Read the diff (from arg or `git diff HEAD~1`)
 2. Read review-core.md, the spec section + relevant CLAUDE.md rules
-3. Compose adversarial prompt for codex — embed the Hard gates, Adversarial lens,
-   and Evidence discipline bullets from review-core.md into the template below
+3. Compose adversarial prompt for codex — embed the Hard gates, Core checklist,
+   Adversarial lens, and Evidence discipline bullets from review-core.md into the
+   template below (Core checklist carries spec-compliance + project-rules coverage)
 4. Run: codex exec -m gpt-5.5-high --json --prompt-file /tmp/codex-prompt-{contract}.txt
 5. Parse codex output for findings
 6. Sanity-check codex findings against the actual code (codex hallucinates sometimes;
@@ -44,7 +45,7 @@ Adversarial review. Find what's broken, missing, or sneaky. Output JSON:
   "confidence": 0.0-1.0
 }
 
-REVIEW CHECKLIST (verbatim from review-core.md — hard gates, adversarial lens, evidence discipline):
+REVIEW CHECKLIST (verbatim from review-core.md — hard gates, core checklist, adversarial lens, evidence discipline):
 {review-core bullets}
 
 SPEC SECTION:
