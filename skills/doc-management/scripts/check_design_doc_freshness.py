@@ -4,8 +4,10 @@
 Zero-LLM: per doc, parse frontmatter `source_commit` + `manual_edit`, collect cited
 source paths from the body (backtick path tokens, same style as the L2 guard), run
 `git diff --name-only <source_commit>..HEAD -- <paths>`; non-empty -> STALE (prints
-doc + changed files). Missing `source_commit` = frontmatter-contract WARN.
-`manual_edit: true` docs are skipped. WARN-only gate: ALWAYS exits 0 (blocking would
+doc + changed files). Frontmatter contract (doc-management-system.md section 5): every
+generated-mirror doc must carry `type` + `topic` + `source_commit` + `manual_edit`;
+any missing/empty key = WARN (one line listing the gaps). `manual_edit: true` docs
+are skipped for freshness (contract check still applies). WARN-only gate: ALWAYS exits 0 (blocking would
 hold every code PR hostage to doc updates). Known limits (doc-management-system.md
 section 9): renames/moves untracked; fenced-code cites ignored (matches L2 guard);
 cites are collected ONLY under the top-level path-prefix allowlist below (CONFIG /
@@ -23,6 +25,8 @@ import sys
 from pathlib import Path
 
 PATH_TOKEN = re.compile(r"`([^`\s]+)`")
+# Frontmatter contract — doc-management-system.md section 5 (generated-mirror docs).
+REQUIRED_FRONTMATTER = ("type", "topic", "source_commit", "manual_edit")
 # ─── CONFIG — EDIT PER PROJECT (mirrors the L2 guard's CONFIG block in
 # check-doc-reference-integrity.mjs). A backtick token counts as a source ref
 # only when it starts with one of these top-level dirs; anything else is NOT
@@ -91,14 +95,16 @@ def main(argv: list[str]) -> int:
                 continue  # archived docs are frozen, never checked
             scanned += 1
             meta = parse_frontmatter(doc.read_text(encoding="utf-8", errors="replace"))
+            missing = [k for k in REQUIRED_FRONTMATTER if not meta.get(k, "").strip()]
+            if missing:
+                print(f"WARN {doc}: frontmatter contract missing key(s): {', '.join(missing)}")
+                warned += 1
             if meta.get("manual_edit", "").lower() == "true":
                 print(f"SKIP {doc}: manual_edit=true (automation must not touch)")
                 continue
             commit = meta.get("source_commit", "")
             if not commit:
-                print(f"WARN {doc}: missing source_commit in frontmatter")
-                warned += 1
-                continue
+                continue  # cannot diff without a base commit (gap already WARNed above)
             if git("cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
                 print(f"WARN {doc}: source_commit {commit} not found in git history")
                 warned += 1

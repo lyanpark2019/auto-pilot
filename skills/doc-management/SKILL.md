@@ -133,8 +133,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_fre
 Zero-LLM: parses each doc's frontmatter `source_commit` + `manual_edit`, collects cited
 source paths from the body (same path-token style as the L2 guard), runs
 `git diff --name-only <source_commit>..HEAD -- <paths>` → non-empty = **STALE** (prints
-doc + changed files). Missing `source_commit` = frontmatter-contract **WARN**.
-`manual_edit: true` docs are skipped — automation never touches them. **Always exits
+doc + changed files). Missing/empty required frontmatter keys (`type`/`topic`/
+`source_commit`/`manual_edit` — the section-5 contract) = frontmatter-contract **WARN**.
+`manual_edit: true` docs are skipped for freshness — automation never touches them. **Always exits
 0** — this is a WARN gate; a blocking gate would hold every code PR hostage to doc
 updates. Known limits: renames/moves untracked (path-based diff); cited paths are
 collected only under the script's top-level path-prefix allowlist (labeled CONFIG
