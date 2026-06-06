@@ -22,11 +22,55 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-human-only.sh",
+            "description": "Block edits to human-only paths and HUMAN-ONLY marked files",
+            "timeout": 8
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/branch-lock.sh",
+            "description": "Deny git commit/push on main or master branch",
+            "timeout": 8
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/deletion-diff-guard.sh",
+            "description": "Warn on git push with large deletion ratio (>500 deletions and >3x insertions)",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/gh-auth-preflight.sh",
+            "description": "Verify correct gh user is active before gh commands",
+            "timeout": 8
           }
         ]
       },
@@ -78,6 +122,39 @@
             "description": "Block notebooklm MCP delete tools without explicit user confirmation"
           }
         ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch-contract-gate.sh",
+            "description": "Verify contract_dir marker, contract-check.json sha256, and preflight freshness for worker Task dispatches",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/creation-gate.sh",
+            "description": "Require fresh asset overlap artifact before invoking creator skills",
+            "timeout": 8
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/creation-gate.sh",
+            "description": "Require fresh asset overlap artifact before plugin-dev:agent-creator Task dispatches",
+            "timeout": 8
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -87,6 +164,17 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-deploy-verify.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/ruff-import-integrity.sh",
+            "description": "After ruff format/fix: verify .py files compile and have no F821/F401 import errors",
+            "timeout": 10
           }
         ]
       },

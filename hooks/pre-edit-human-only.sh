@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# ⓓ-1 pre-edit-human-only.sh — PreToolUse Edit|Write|MultiEdit
+# Deny edits to paths/files that are human-only.
+#
+# Three protection tiers:
+#   (a) Paths listed in .claude/human-only.paths (one path-prefix per line, # comments)
+#   (b) Files whose content contains a HUMAN-ONLY marker line
+#   (c) Tier-2 hardcoded core: schemas/, hooks/guard-*, and the two governance SoT pages
+#
+# Bypass: AUTO_PILOT_ALLOW_CORE_EDIT=1 overrides tier-2 only (logs allow reason).
+# Unparseable stdin → allow (fail-open repo convention).
+set -euo pipefail
+
+# ── Tier-2 hardcoded paths (authoritative; .claude/human-only.paths lists them informally) ──
+TIER2_PREFIXES=(
+  "schemas/"
+  "hooks/guard-"
+  "docs/specs/2026-06-06-unified-coding-system-design.md"
+  "skills/doc-management/references/doc-management-system.md"
+)
+
+deny() {
+  local reason="$1"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}' \
+    "${reason//\"/\\\"}"
+  exit 0
+}
+
+payload=$(cat)
+
+file_path=$(printf '%s' "$payload" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print((d.get("tool_input") or {}).get("file_path") or "")
+except Exception:
+    print("")
+' 2>/dev/null || echo "")
+
+if [[ -z "$file_path" ]]; then
+  # Unparseable or no file_path → allow
+  exit 0
+fi
+
+# Locate repo root (walk up from CWD looking for .claude/human-only.paths)
+repo_root="$(pwd)"
+candidate="$repo_root"
+for _ in 1 2 3 4 5; do
+  if [[ -f "$candidate/.claude/human-only.paths" ]]; then
+    repo_root="$candidate"
+    break
+  fi
+  candidate="$(dirname "$candidate")"
+done
+
+# ── Tier (c): tier-2 hardcoded core ──
+for prefix in "${TIER2_PREFIXES[@]}"; do
+  if [[ "$file_path" == "$prefix"* ]] || [[ "$file_path" == *"/$prefix"* ]]; then
+    if [[ "${AUTO_PILOT_ALLOW_CORE_EDIT:-0}" == "1" ]]; then
+      echo "auto-pilot: ALLOW tier-2 core edit (AUTO_PILOT_ALLOW_CORE_EDIT=1): $file_path" >&2
+    else
+      deny "Tier-2 core protected path: $file_path — set AUTO_PILOT_ALLOW_CORE_EDIT=1 to override"
+    fi
+    break
+  fi
+done
+
+# ── Tier (a): .claude/human-only.paths prefixes ──
+human_only_file="$repo_root/.claude/human-only.paths"
+if [[ -f "$human_only_file" ]]; then
+  while IFS= read -r line; do
+    # Skip blank lines and comments
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    if [[ "$file_path" == "$line"* ]] || [[ "$file_path" == *"/$line"* ]]; then
+      deny "Path is listed in .claude/human-only.paths ($line): $file_path"
+    fi
+  done < "$human_only_file"
+fi
+
+# ── Tier (b): file contains HUMAN-ONLY marker ──
+# Resolve target file: check as absolute, then relative to repo_root, then CWD
+target_file=""
+if [[ -f "$file_path" ]]; then
+  target_file="$file_path"
+elif [[ -f "$repo_root/$file_path" ]]; then
+  target_file="$repo_root/$file_path"
+fi
+
+if [[ -n "$target_file" ]]; then
+  if grep -qF 'HUMAN-ONLY' "$target_file" 2>/dev/null; then
+    deny "File contains HUMAN-ONLY marker: $file_path"
+  fi
+fi
+
+exit 0
