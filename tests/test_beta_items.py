@@ -315,7 +315,7 @@ class TestDispatchContractCheck:
             )
 
     def test_layer2_gate_stale_sha(self, tmp_path):
-        import _dispatch, _contract
+        import _dispatch
         contract_dir = _make_contract_dir(tmp_path)
         # Write a contract-check with wrong sha
         (contract_dir / "contract-check.json").write_text(json.dumps({
@@ -415,7 +415,7 @@ class TestPreflightGate:
         (tmp_path / "a.txt").write_text("x\n")
         subprocess.run(["git", "-C", str(tmp_path), "add", "a.txt"], check=True)
         subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"], check=True)
-        real_head = subprocess.check_output(
+        subprocess.check_output(
             ["git", "-C", str(tmp_path), "rev-parse", "HEAD"], text=True
         ).strip()
 
@@ -517,7 +517,6 @@ class TestReviewerWatchdog:
     def _make_handle(self, role: str, tmp_path: Path,
                      cmd: list[str]) -> "object":
         """Spawn a real subprocess and return a SpawnHandle-like object."""
-        import _reviewer_wrapper as rw
         output_dir = tmp_path / role
         output_dir.mkdir(parents=True, exist_ok=True)
         proc = subprocess.Popen(cmd)
@@ -601,8 +600,7 @@ class TestReviewerWatchdog:
         # Long-running process that will be killed
         proc = subprocess.Popen(["sleep", "60"])
         # Capture kill calls
-        killed: list[int] = []
-        orig_kill = _reviewer_wrapper_kill_injector(proc)
+        _reviewer_wrapper_kill_injector(proc)
 
         retry_output_dir = tmp_path / "r2-retry"
         retry_output_dir.mkdir()

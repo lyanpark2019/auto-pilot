@@ -1,11 +1,11 @@
 window.DASHBOARD_DATA = {
  "branch": "main",
- "commit": "0d38f87",
+ "commit": "cc6aef8",
  "counts": {
   "skill": 11,
   "agent": 19,
   "command": 10,
-  "hook": 17,
+  "hook": 19,
   "codex-skill": 12
  },
  "assets": [
@@ -211,12 +211,22 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "hook",
+   "name": "artifact-ledger.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
    "name": "branch-lock.sh",
    "subsystem": "other"
   },
   {
    "type": "hook",
    "name": "codex-conductor-guard.py",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "context-watch.sh",
    "subsystem": "other"
   },
   {

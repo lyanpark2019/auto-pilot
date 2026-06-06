@@ -59,6 +59,16 @@ Worker reports are claims, not evidence. Worker verify reports must include the 
 
 When the verdict is produced via Codex CLI, sanity-check every codex finding against the actual code (`Read`/`Grep`) before reporting — codex hallucinates `file:line` refs. Discard any finding whose cited location does not exist, and report whether the sanity-check passed.
 
+### Scoped re-review (round N+1)
+
+On a re-review round your input is the PM-frozen FIX diff (fix commits since the prior
+round), not the whole branch. Verify that diff against the prior round's findings —
+each fixed correctly and completely — and hunt regressions **in those hunks only**.
+Out-of-scope re-audit is wasted tokens; do it only if you state cause in the verdict
+(e.g., a fix hunk changes a contract that out-of-scope code consumes).
+(WHO reviews is the PM's `scripts/risk_assess.py` gate; WHAT you review is this clause.)
+Scope policy SoT: `agents/pm-orchestrator.md` § Token-efficiency rules, rule b.
+
 ## Severity + verdict conventions
 
 - **Verdict is binary:** `APPROVE` | `REJECT`. A tripped hard gate (§1–2), a failing verify re-run (§4), or a verify-log hash mismatch forces REJECT.

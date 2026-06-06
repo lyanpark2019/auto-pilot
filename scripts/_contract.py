@@ -258,7 +258,7 @@ def verify_snapshots(contract_dir: Path) -> None:
         ctx_file = bundle / "project-context.md"
         if not ctx_file.exists():
             raise SnapshotMismatchError(
-                f"project-context.md declared in snapshot_shas but absent from bundle"
+                "project-context.md declared in snapshot_shas but absent from bundle"
             )
         actual_ctx = _sha256(ctx_file.read_bytes())
         if actual_ctx != expected_ctx:

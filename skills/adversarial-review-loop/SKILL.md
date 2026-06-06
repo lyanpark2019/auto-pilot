@@ -90,7 +90,18 @@ Start each round by running the per-round baseline above. Then run **two indepen
 
 ### 1. Parallel review (initial)
 
-Spawn both at once in a single message:
+**Risk gate first:** run `python3 scripts/risk_assess.py --diff-range {base_ref}..HEAD` (auto-pilot plugin root — resolve to an absolute path before running, same caveat as `../quality-eval/SKILL.md` above; advisory JSON, exit 0) and dispatch per its `review_policy`. Rule SoT = `agents/pm-orchestrator.md` § Token-efficiency rules (2026-06-07), rule a — the table below is dispatch shorthand, not a second definition; tier/policy tokens are defined in `scripts/risk_assess.py` only.
+
+| `review_policy` | tracks to spawn |
+|---|---|
+| `skip-review` | none — ONLY if tier is `none` AND no hook/schema/script files (`hooks/`, `schemas/`, `scripts/`) in the diff; else `single-reviewer` minimum |
+| `single-reviewer` | ONE track (alternate codex/claude across rounds/contracts) |
+| `dual-review` | both tracks below (default) |
+| `dual-review+gatekeeper(security mode)+tight-rescope` | both tracks + security-mode gatekeeper + per-finding tight re-scope |
+
+PM may override upward, never below the tool's tier without recorded cause (see SoT).
+
+For `dual-review` (default), spawn both at once in a single message:
 
 - **Codex track**: `/codex:adversarial-review --base {base_ref}` (background if diff is large, foreground if small).
 - **Claude track**: independent self-review. Use the `/review` slash skill, OR spawn a `general-purpose` Agent with a strict reviewer prompt. The reviewer must NOT have seen the implementation reasoning — it reviews the diff cold. Pass: branch, base ref, focus hints.
@@ -145,10 +156,12 @@ For non-testable findings:
 
 Cross-repo finding (e.g. backend ↔ web)? Patch both sides in the same round.
 
-### 4. Parallel re-review
+### 4. Parallel re-review (scoped — fix commits only)
 
-Spawn both tracks again, same as step 1, but include focus hint:
-> "Round N. Previous findings fixed: [list]. Verify the fixes are correct and complete. Look for new issues introduced by the fixes."
+Round N+1 reviews ONLY the fix commits since round N's reviewed diff — record `prev_head=$(git rev-parse HEAD)` when round N's reviewers are dispatched; the re-review input = `git diff {prev_head}..HEAD`, NOT the whole branch diff re-frozen. Full-branch re-review only when (a) a fix touched >30% of the original scope files, or (b) a reviewer requests it with stated cause. (Scope-contraction rule SoT: `agents/pm-orchestrator.md` § Token-efficiency rules, rule b.)
+
+Spawn the same tracks as step 1 (per `review_policy`) over that fix diff, with focus hint:
+> "Round N. Previous findings fixed: [list]. Verify the fixes are correct and complete. Look for new issues introduced by the fixes — in these hunks."
 
 ### 5. Verdict gate
 
@@ -551,10 +564,10 @@ Delegate to ARL **multi-agent mode**: ANALYZE → EVALUATE (dual-track, Claude +
 
 Dimension scores measure *shape*; they don't catch logic bugs. Add a correctness gate on top via ARL **branch mode** over the full diff:
 
-1. Spawn **two independent reviewers** in parallel: Codex (`codex exec -s read-only`, strict-JSON findings) and a **cold** Claude subagent (no implementation context). Each hunts logic errors, type lies, error-handling regressions, broken invariants, boundary/race bugs, security/gate weakening.
+1. **Risk gate first:** `python3 scripts/risk_assess.py --diff-range {base}..HEAD` → dispatch per `review_policy`, same gate + policy table as branch mode §1 (rule SoT = `agents/pm-orchestrator.md` § Token-efficiency rules; skip guard included). Then, for the default `dual-review` policy, spawn **two independent reviewers** in parallel: Codex (`codex exec -s read-only`, strict-JSON findings) and a **cold** Claude subagent (no implementation context). Each hunts logic errors, type lies, error-handling regressions, broken invariants, boundary/race bugs, security/gate weakening.
 2. **Cross-verify**: a finding only becomes a fix ticket if both confirm it, OR one flags it and you read the cited code and confirm it real. Read the actual code before accepting any finding.
 3. Fix confirmed findings RED→GREEN (testable) or with the proving gate (non-testable).
-4. **Loop until two consecutive rounds surface zero new confirmed findings.** One clean round isn't convergence — the second confirms the fixes didn't open new holes.
+4. **Loop until two consecutive rounds surface zero new confirmed findings.** One clean round isn't convergence — the second confirms the fixes didn't open new holes. Re-review rounds are scoped to the fix commits only (branch mode §4 scope-contraction; full re-review only on >30% scope touch or reviewer-stated cause).
 5. **Whack-a-mole stop guard**: if the same finding survives 2 rounds, or reviewers contradict each other 3 rounds running, or you're playing deny-list whack-a-mole with no convergence — STOP and report "strategy change needed". Do not loop forever.
 
 Run it again pre-merge if Phase 3/4 changed code.

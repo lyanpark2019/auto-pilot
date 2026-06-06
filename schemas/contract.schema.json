@@ -26,6 +26,7 @@
     "acceptance":         { "type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1 },
     "test_files":         { "type": "array", "items": {"type": "string", "minLength": 1} },
     "max_diff_loc":       { "type": "integer", "minimum": 1 },
+    "token_budget":       { "type": "integer", "minimum": 1000, "description": "Advisory per-worker output-token ceiling; worker reports usage mid-flight and splits the contract when exceeded." },
     "verify_cmds":        { "type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1 },
     "context_bundle_path":{ "type": "string", "minLength": 1 },
     "snapshot_shas": {

@@ -31,16 +31,16 @@ footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d
 </head>
 <body>
 <h1>auto-pilot — Architecture</h1>
-<div class="sub">branch <code>main</code> · commit <code>0d38f87</code> · generated 2026-06-07 · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
+<div class="sub">branch <code>main</code> · commit <code>cc6aef8</code> · generated 2026-06-07 · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
 
 <h2>Asset counts</h2>
-<div class="counts"><div class="cb"><span class="n">19</span><span class="t">agent</span></div><div class="cb"><span class="n">12</span><span class="t">codex-skill</span></div><div class="cb"><span class="n">10</span><span class="t">command</span></div><div class="cb"><span class="n">17</span><span class="t">hook</span></div><div class="cb"><span class="n">11</span><span class="t">skill</span></div><div class="cb"><span class="n">69</span><span class="t">total</span></div></div>
+<div class="counts"><div class="cb"><span class="n">19</span><span class="t">agent</span></div><div class="cb"><span class="n">12</span><span class="t">codex-skill</span></div><div class="cb"><span class="n">10</span><span class="t">command</span></div><div class="cb"><span class="n">19</span><span class="t">hook</span></div><div class="cb"><span class="n">11</span><span class="t">skill</span></div><div class="cb"><span class="n">71</span><span class="t">total</span></div></div>
 
 <h2>4-Pillar purpose (모든 자산은 ≥1 pillar 에 역할 정의 의무)</h2>
 <div class="pillars"><div class="card" style="border-top:3px solid #3fb950"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #3fb950;color:#3fb950">P① 자율 코딩 루프</div><p class="desc">PM-worker-이중리뷰. Contract-based dispatch, frozen-diff dual adversarial review, fixer convergence.</p><div class="count-badge">21 assets</div></div>
 <div class="card" style="border-top:3px solid #d29922"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #d29922;color:#d29922">P② 문서 신선도</div><p class="desc">doc-management flagship. REBUILD/AUDIT/MAINTAIN 3 modes; stale-doc assets absorbed or REMOVE.</p><div class="count-badge">13 assets</div></div>
 <div class="card" style="border-top:3px solid #bc8cff"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #bc8cff;color:#bc8cff">P③ 지식 영속</div><p class="desc">vault · retro · memory. Obsidian vault primary context, retro append-only, session handoff.</p><div class="count-badge">0 assets</div></div>
-<div class="card" style="border-top:3px solid #f85149"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #f85149;color:#f85149">P④ 안전·집행</div><p class="desc">hooks · contracts · gates. Enforcement-not-instruction; mechanical compensation for operator weaknesses.</p><div class="count-badge">35 assets</div></div>
+<div class="card" style="border-top:3px solid #f85149"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #f85149;color:#f85149">P④ 안전·집행</div><p class="desc">hooks · contracts · gates. Enforcement-not-instruction; mechanical compensation for operator weaknesses.</p><div class="count-badge">37 assets</div></div>
 </div>
 
 <h2>Coding-loop process (SoT: agents/pm-orchestrator.md)</h2>
@@ -108,8 +108,10 @@ footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d
 <tr><td><code>vault-dashboard</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
 <tr><td><code>vault-score</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
 <tr><td><code>vault-selftest</code></td><td class="dim">command</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
+<tr><td><code>artifact-ledger.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>branch-lock.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>codex-conductor-guard.py</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
+<tr><td><code>context-watch.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>creation-gate.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>deletion-diff-guard.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>dispatch-contract-gate.sh</code></td><td class="dim">hook</td><td class="dim">other</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
@@ -139,6 +141,6 @@ footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d
 
 </table>
 
-<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD 0d38f87. Stale when code changes without re-run.</footer>
+<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD cc6aef8. Stale when code changes without re-run.</footer>
 </body>
 </html>

@@ -187,6 +187,30 @@
             "description": "Graph-freshness watcher (merged): marks graphify code graph stale on code edits (fail-open; eager rebuild with GRAPHIFY_AUTOSYNC=1) AND runs `graphify update <dir>` when vault raw/sources .md files change (disable with GRAPHIFY_VAULT_AUTOSYNC=0)"
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/artifact-ledger.sh",
+            "description": "Observer (never blocks): ledger ephemeral-artifact writes (plans/specs/brainstorm/handoff) to .planning/auto-pilot/session-artifacts.jsonl",
+            "timeout": 8
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/context-watch.sh",
+            "description": "Estimate context usage from transcript size; once past threshold (AUTO_PILOT_CONTEXT_LIMIT_TOKENS x AUTO_PILOT_HANDOFF_PCT), inject a one-time `/auto-pilot handoff` nudge",
+            "timeout": 8
+          }
+        ]
       }
     ],
     "Stop": [

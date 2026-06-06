@@ -1,7 +1,7 @@
 ---
 name: auto-pilot
 description: Self-driving development loop. PM (Opus 4.7) + Sonnet 1M workers + dual Codex/Claude adversarial review + phase verify gates. Full auto.
-argument-hint: "[start|status|resume|stop|eval] [--spec PATH] [--max-workers N] [--time-box DURATION]"
+argument-hint: "[start|status|resume|stop|eval|handoff] [--spec PATH] [--max-workers N] [--time-box DURATION]"
 allowed-tools: Bash, Read, Write, Edit, Task, Glob, Grep, TaskCreate, TaskList, TaskUpdate
 ---
 
@@ -16,6 +16,7 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
 - `resume` — continue from last checkpoint
 - `stop` — mark state stopped
 - `eval` — run the cut-1 evals harness in advisory mode (see `## eval` below)
+- `handoff` — write the next-session handoff document (see `## handoff` below)
 
 ## Pre-flight (run before dispatching anything)
 
@@ -91,6 +92,18 @@ Methodology (`scripts/evals/cli.py` → `scripts/evals/runner.py`):
 5. **Cost ceiling** — `--max-total-cost-usd` (default 50.0); stops before the next case once exceeded.
 
 Paths are repo-root-relative: harness driver `scripts/evals/cli.py`, runner `scripts/evals/runner.py`; cases + baseline live at `evals/cases/` and `evals/baseline.json`.
+
+## handoff
+
+Also triggers on: "핸드오프", "세션 넘겨", "다음 세션 준비", or the `context-watch.sh` hook advisory recommending it. Full format spec: `SKILL.md ## handoff (세션 인수인계)`.
+
+You (the PM) write `<repo_root>/.planning/auto-pilot/handoff-next.md` — this is an LLM authoring task, not a script:
+
+1. **Gather** — `git log --oneline <session-start-sha>..HEAD` (what shipped), `.planning/auto-pilot/session-artifacts.jsonl` (artifact ledger), and the live task list (mid-flight work).
+2. **Write** the file: YAML frontmatter (`written_at` ISO-8601 UTC, `session_id`, `head_sha` = current HEAD, `status: pending`) + sections ① 상태 (shipped / mid-flight) ② 결정 (decisions + why, this session) ③ 다음 단계 (ordered) ④ NEXT-PROMPT (verbatim block the next session executes first) ⑤ 산출물 처분표 (per ledger path: SHIPPED → distill→delete 권고 / ACTIVE → keep / SCRATCH → delete 권고).
+3. **Memory pointer** — if the durable next-session entry point changed, update the auto-memory `MEMORY.md` pointer line to reference the handoff.
+
+Next session, `hooks/preflight-path.sh` (SessionStart) auto-injects a pending fresh (<7d) handoff as `additionalContext` and flips it to `status: consumed`; `hooks/pm_final_report.sh` (Stop) appends a naive `## Session artifacts` disposition table to the PM final report.
 
 ## Friction guards (auto-loaded via plugin hooks)
 

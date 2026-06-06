@@ -109,6 +109,43 @@ When to prefer which:
 - **In-session subagents (this skill's default)** — spec-driven phased work in ONE session; PM context carries between phases; review fan-out + verify gates happen inline; ends when the spec ends.
 - **Swarm** — long-running or open-ended goals that should outlive this session, mixed Claude+Codex worker pools, or when you want workers surviving session restarts and observable in tmux. Swarm schedules by ticket scores/ledger, not by spec phases.
 
+## handoff (세션 인수인계)
+
+Triggers: `/auto-pilot handoff`, "핸드오프", "세션 넘겨", "다음 세션 준비" — or the `hooks/context-watch.sh` advisory (context budget running low) recommends this command.
+
+**Path (fixed):** `<repo_root>/.planning/auto-pilot/handoff-next.md`
+
+**Format** — YAML frontmatter + 5 sections, in this order:
+
+```markdown
+---
+written_at: 2026-06-07T04:00:00Z   # ISO-8601 UTC
+session_id: <session id, or "unknown">
+head_sha: <git rev-parse HEAD>
+status: pending                     # pending | consumed (pickup hook flips it)
+---
+## ① 상태
+What shipped this session; what is mid-flight (branch, uncommitted work).
+## ② 결정
+Decisions made this session + why (one line each).
+## ③ 다음 단계
+Ordered next steps.
+## ④ NEXT-PROMPT
+Verbatim prompt block the next session should execute first.
+## ⑤ 산출물 처분표
+From `.planning/auto-pilot/session-artifacts.jsonl`, one row per artifact:
+SHIPPED → distill→delete 권고 · ACTIVE → keep · SCRATCH → delete 권고.
+```
+
+**Write procedure (PM, this is an LLM task — no script writes this file):**
+1. Gather: `git log` since session start, `.planning/auto-pilot/session-artifacts.jsonl`, and the live task list.
+2. Write the file with `status: pending` and a fresh `written_at`.
+3. If the durable next-session entry point changed, also update the auto-memory `MEMORY.md` pointer line.
+
+**Pickup (automatic):** `hooks/preflight-path.sh` (SessionStart) walks up from CWD for the file. If `status: pending` AND `written_at` < 7 days old, it injects the first 6000 chars as SessionStart `additionalContext` and flips the frontmatter to `status: consumed` + `consumed_at: <ISO>`. Stale (>7d), already-consumed, or malformed files are silently skipped (fail-open).
+
+**Disposition (automatic):** `hooks/pm_final_report.sh` (Stop) appends a `## Session artifacts` section to the PM final report — one line per unique ledger path with a naive classification: path under a `plans/`/`specs/` segment → "distill→delete 후보"; consumed `handoff-next.md` → "삭제 후보"; everything else → "확인 필요". The authoritative SHIPPED/ACTIVE/SCRATCH call stays with the PM in section ⑤.
+
 ## Read these references when relevant
 
 - `${CLAUDE_PLUGIN_ROOT}/docs/architecture.md` — loop diagram, agent contracts
