@@ -2,10 +2,10 @@
 name: adversarial-review-loop
 description: >
   Dual-track review + improvement loop, three modes.
-  **branch mode** (default): Codex + Claude independently review working branch/PR, cross-verify findings, fix, re-review until both approve. Triggers: "adversarial review", "codex review loop", "review until approve", "이중 리뷰", "코덱스 리뷰 반복", "approve 날 때까지 리뷰", "PR cross-review", "codex + claude review", risky PR pre-merge.
-  **codebase mode**: scores entire codebase against quality-eval 13-dim rubric, fans out improvement contracts in parallel, re-scores until target hit. Triggers: "quality loop", "코드 품질 점수", "score this project", "95점", "빅테크 평가", "codebase quality improvement", "quality-eval", "quality-loop". Replaces standalone quality-eval + quality-loop skills.
-  **multi-agent mode** (opt-in dispatch layer on codebase mode): Opus 4.7 main session = PM (dispatch, no code edits) + hybrid Worker pool (dim-routed Codex CLI `codex exec` / Claude general-purpose) + Reviewer pool (cold Claude). Triggers: `mode=multi-agent`, `--multi-agent`, "multi-agent review", "pm-worker loop", "코덱스 워커 풀". Activation-gated by repo size + contract count.
-  Includes git-baseline hygiene checks (uncommitted/unpushed/stash/conflict markers) at every round.
+  **branch mode** (default): Codex + Claude independently review the working branch/PR, cross-verify findings, fix, re-review until both approve. Triggers: "adversarial review", "codex review loop", "review until approve", "이중 리뷰", "PR cross-review", risky PR pre-merge.
+  **codebase mode**: scores the whole codebase on the quality-eval 13-dim rubric, fans out improvement contracts in parallel, re-scores until target. Triggers: "quality loop", "코드 품질 점수", "score this project", "95점", "빅테크 평가", "codebase quality improvement", "quality-eval". Supersedes quality-eval/quality-loop skills.
+  **multi-agent mode** (opt-in dispatch layer on codebase mode): PM main session + dim-routed Codex/Claude worker pool + cold-Claude reviewer pool; activation-gated by repo size + contract count. Triggers: `mode=multi-agent`, `--multi-agent`, "multi-agent review", "pm-worker loop", "코덱스 워커 풀".
+  Git-baseline hygiene checks (uncommitted/unpushed/stash/conflicts) every round.
 ---
 
 # Adversarial Review Loop (Codex × Claude)

@@ -4,24 +4,18 @@ description: >
   Find and remove CODE RESIDUE that static linters miss — dead code, duplicate
   logic, stale comments, wrong/unused imports, orphan symbols — via a parallel,
   read-only, judgment-based audit with strict false-positive guards, then fix
-  report-first. This is the SEMANTIC counterpart to mechanical CI gates
-  (ruff / vulture / jscpd): the classes a hook cannot safely block on. Use when
-  asked to "residue audit", "dead code purge", "find dead code", "remove dead
-  code", "kill duplicates", "dedupe logic", "잔재 제거", "데드코드 정리",
-  "중복 코드 찾아", "쓸모없는 코드", "안 쓰는 import 정리", "orphan code",
-  "clean up leftovers", or right after a large refactor / migration / feature
-  removal that likely left behind unreferenced symbols, divergent copies, and
-  comments describing deleted behavior. Runs Phase 0 baseline (linters green) →
-  Phase 1 parallel read-only scan (deterministic tools + agent fan-out per
-  subtree, NO deletes) → ranked P0/P1/P2 findings with a 6-gate column →
-  approval gate → Phase 2 batched fixes (one residue category per PR, 6-gate
-  each) → optional Phase 3 (wire mechanical CI guards). Distinguishes real
-  residue from false positives (fixtures, reflection-registered classes,
-  dormant flag-gated subsystems, schema example dicts, re-exports). Never
-  blind-deletes — any uncertain gate is REPORT-ONLY. Language-agnostic;
-  Python/FastAPI examples. NOT for: doc↔code prose drift (doc-management AUDIT
-  mode), whole-codebase quality scoring (quality-loop / adversarial-review),
-  DB-schema / env-config drift, or bootstrapping a harness (setup-harness).
+  report-first. The SEMANTIC counterpart to mechanical CI gates
+  (ruff/vulture/jscpd): the classes a hook cannot safely block on. Use when
+  asked to "residue audit", "dead code purge", "find dead code", "dedupe
+  logic", "잔재 제거", "데드코드 정리", "중복 코드 찾아", "쓸모없는 코드",
+  "안 쓰는 import 정리", "orphan code", "clean up leftovers", or after a big
+  refactor/migration/feature removal. Flow: baseline → parallel read-only
+  scan → ranked P0/P1/P2 findings (6-gate column) → approval gate → batched
+  fixes (one category per PR) → optional mechanical CI guards.
+  Uncertain gate = REPORT-ONLY, never blind-deletes. Language-agnostic. NOT
+  for: doc↔code prose drift (doc-management AUDIT mode), whole-codebase
+  quality scoring (adversarial-review-loop), DB-schema / env-config drift, or
+  harness bootstrap (setup-harness).
 ---
 
 # Residue Audit

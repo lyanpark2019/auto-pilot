@@ -6,16 +6,14 @@ description: >-
   ("get this to big-tech 95", "quality lift", "코드 품질 빅테크로 올려줘", "score and
   fix this codebase then merge", "harden + ship this repo"), OR when they want the
   full lifecycle around a quality pass — not just scoring, but fixing across
-  dimensions, an adversarial correctness bug-hunt, syncing the harness docs to the
-  new gates, and an autonomous merge. This is the SUPERSET orchestrator: it composes
-  auto-pilot:adversarial-review-loop (multi-agent mode for the dimension fan-out,
-  branch mode for the bug-hunt) as its engine and adds the three things that engine
-  lacks — a harness-doc-update phase, an autonomous-merge tail, and an HONEST
-  definition-of-done (report the real weighted score, never a forced round number).
-  Reach for this over plain adversarial-review-loop when the deliverable is "the repo
-  is measurably better AND shipped AND its docs match", not just "a score" or "a
-  reviewed branch". The PM (this session) dispatches subagents and does git-ops only —
-  it does not edit code itself.
+  dimensions, an adversarial correctness bug-hunt, syncing harness docs to the new
+  gates, and an autonomous merge. SUPERSET orchestrator: composes
+  adversarial-review-loop (multi-agent dim fan-out + branch-mode bug-hunt) as its
+  engine and adds what that engine lacks — harness-doc-update phase,
+  autonomous-merge tail, HONEST definition-of-done (real weighted score, never a
+  forced round number). Choose this over plain adversarial-review-loop when the
+  deliverable is "measurably better AND shipped AND docs match", not just a score
+  or a reviewed branch. PM dispatches subagents + git-ops only; never edits code.
 ---
 
 # PM Quality Harness Loop
