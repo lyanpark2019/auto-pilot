@@ -6,6 +6,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 ## Principles (Nisi 2026-06)
 
+- **Prompts/specs are the durable re-runnable asset; code is the output** ("code is sawdust") — invest in the spec, not in patching generated artifacts.
 - **Enforce with code, not prompts** — invariants live in hooks, schemas, and state machines; prose explains, it does not enforce.
 - **Evidence over trust** — verify claims carry a persisted log + SHA-256 (`shasum -a 256`); reviewers recompute the hash, mismatch = REJECT.
 - **Skills = Gotchas-first, ≤500 lines** — guide around landmines instead of re-teaching coding; bulk goes to `references/`.

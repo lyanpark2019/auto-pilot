@@ -64,6 +64,12 @@ Forbidden patterns: per-module structure pages (the rot machine) · hand-mirrori
 structure facts (query the graph instead) · governance restated in N pages (single SoT
 page + one-line cites) · unreviewed LLM prose going live.
 
+## Authoring inputs — project-context resolution
+
+Before Phase-0 diagnosis (REBUILD) or any authoring pass (MAINTAIN/AUDIT), resolve
+project understanding in the 4-step order:
+`skills/auto-pilot/references/project-context-resolution.md`.
+
 ## MODE: REBUILD — full demolish + reauthor
 
 Full procedure (the proven 7-phase, end-to-end-verified on PickL-API):

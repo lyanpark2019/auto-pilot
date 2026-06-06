@@ -39,6 +39,9 @@ LOAD STATE
   ↓
 LOAD SPEC + CLAUDE.md chain (root + folder-level)
   ↓
+RESOLVE PROJECT CONTEXT — 4-step order before any scan:
+  skills/auto-pilot/references/project-context-resolution.md
+  ↓
 DETECT PHASE MODE
   - spec has `## Phase N` headers → use spec phases
   - else → use docs/7-phase-template.md (Brainstorm→Spec→Plan→TDD→Build→Review→Finalize)
@@ -202,6 +205,18 @@ VERDICT: APPROVE or REJECT + findings table.
   }
 }
 ```
+
+## Dispatch-manifest gate (v2)
+
+Before dispatching any worker, verify the contract manifest is complete. Required fields:
+`Track`, `Branch`, `Scope`, `Boundary`, `Merge target`, `approval_ref`
+(where `approval_ref` = verbatim quote of the approving instruction;
+message-id / timestamp are auxiliary and never a substitute for the quote).
+
+**Rule:** ALL fields present → dispatch without confirm; ANY field missing → gate (ask).
+Mechanical completeness is the only criterion — do not apply judgment to field content.
+This gate coexists with hard rule 3 ("Dispatch parallel") and the "기승인 N≥3 fan-out은
+confirm 재추가 금지" constraint: a complete manifest enables immediate fan-out.
 
 ## Contract dispatch protocol (v1)
 

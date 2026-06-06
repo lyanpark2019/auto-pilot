@@ -67,6 +67,38 @@ When the verdict is produced via Codex CLI, sanity-check every codex finding aga
   - Hardened shells emit `schemas/review.schema.json` findings (`severity`, `file`, `line`, `issue`, `fix`, `finding_hash`).
 - Scope-drift results are surfaced explicitly (out-of-scope file list), scope reduction as a dedicated flag/finding — per each shell's output contract.
 
+## Reviewer contract — 4 clauses (ⓗ, appended 2026-06; supersedes nothing above)
+
+**1. Pre-mortem mandatory question**
+For every new-mechanism diff, ask: "사고 후 리뷰가 요구할 deterministic guard 가 이 PR 에
+있나?" A missing guard is a **FINDING** (not a suggestion). Precedents that define the
+standard: `check_doc_source_refs.py` (mechanical drift gate), `RETIRED_SYMBOLS` denylist
+(dead-symbol re-introduction guard).
+
+**2. Liveness triage**
+Before any fix round, verify each finding is LIVE — cross-check the defended layer (e.g.,
+the service layer may already guard what the diff exposes). Single-line adversarial findings
+unverified against the live path: **do not act, mark `needs-triage`**. Acting on a stale
+finding wastes a review round and can introduce regressions.
+
+**3. 판단 휴리스틱 4종 (judgment heuristics — precedent-backed)**
+- **measure-before-revert** — validate performance claims empirically before reverting
+  (precedent: xdist measured +29s on 2-vCPU, then reverted — not assumed).
+- **experiment-before-pivot** — run the targeted fix first; pivot only after the experiment
+  fails (precedent: W4 realtime bounce before rewriting the crawler→API path).
+- **flag-rollback-required** — dark-ship diffs need an explicit rollback path documented;
+  absence = FINDING (precedent: REALTIME_CACHE_INVALIDATION_ENABLED dark-ship).
+- **reviews-may-overturn-me** — when a later review finds a prior review wrong, record
+  the overturn without defensiveness (precedent: W3c-2 P1 security regression caught by
+  Codex after Claude initial pass).
+
+**4. Round budget**
+Deterministic gate input: `.planning/score/findings-round-N.json`.
+Rule: round 3 live findings not decreased vs round 2 → hard-stop before round 4 +
+report "전략 전환 필요"; decreasing count → round 4 = final cap.
+Enforcement is an orchestrator subcommand (built by contract β of this wave) — this
+clause cites it; does not implement it.
+
 ## Addendum — unhashable verify claims force REJECT (evidence enforcement, 2026-06)
 
 Appended tightening of §Worker verify-report cross-check; everything above stands except where this supersedes it. The worker hash mandate is now universal (`worker.md` hard rule: verify output → persisted log + SHA-256) and the PM pre-screens reports for it before review dispatch (`pm-orchestrator.md`). At review time:

@@ -70,7 +70,26 @@ You are a single-contract implementation worker for the auto-pilot loop. The PM 
 - {risk 1}
 - {risk 2}
 - or "None observed" if truly clean
+
+**Layer/approach:** {which layer; what approach taken}
+**Pattern followed:** {file:line of the existing pattern matched}
+**Rejected alternative:** {what you did not do} — {reason}
 ```
+
+## Contract compliance block
+
+Every worker report MUST include all four enforcement clauses AND the three report fields:
+
+**Four clauses (hard — missing any = bounce before review):**
+1. **Branch-lock** — all edits stay in the contract worktree; never touch `$ROOT` directly.
+2. **Scope-allowlist** — only files in `contract.scope_files`; out-of-scope edits auto-REJECT.
+3. **Post-lint import recheck** — after any ruff/auto-fix, re-verify no import-cycle or composition-root drift was introduced.
+4. **Watchdog timeout** — worker must complete within 20 minutes; PM kills and marks failed beyond that.
+
+**Three report fields (ⓓ-8 — all required, in the report):**
+1. **Chosen layer/approach** — which layer you operated in and what approach you took.
+2. **Existing pattern followed** — cite the file (e.g., `scripts/_contract.py:42`) whose pattern you matched.
+3. **Rejected alternative + reason** — what you considered but did not do and why.
 
 ## Ticket-based boot (v1)
 

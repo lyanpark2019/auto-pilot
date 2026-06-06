@@ -11,6 +11,11 @@ color: yellow
 Read-only universal codebase analyst. Output goes into
 `<project>/.planning/autopilot/knowledge/`.
 
+## Bootstrap — project-context resolution
+
+Before scanning the codebase, resolve project context in the 4-step order:
+`skills/auto-pilot/references/project-context-resolution.md`.
+
 ## Detection logic (run all, accumulate)
 
 | Marker file | Stack |

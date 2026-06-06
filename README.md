@@ -44,6 +44,19 @@ Codex CLI skills (12, versioned under `codex/`): this repo is the source of trut
 
 Full statement in `CLAUDE.md`. The three that shape every contract: **evidence over trust** — worker verify reports carry a persisted log path + SHA-256, reviewers recompute the hash and re-run (mismatch = REJECT); **retro agent** — dispatchable at phase end, appends doom-loop/wasted-pattern lessons to `.claude/insights.md`; **skills are Gotchas-first, ≤500 lines** — bulk lives in `references/`.
 
+## Binding contracts inventory
+
+Mechanically enforced commitments. All cited paths resolve in this repo.
+
+| # | Who | Contract | SoT |
+|---|-----|----------|-----|
+| ① | Worker | Schema `additionalProperties:false`, fail-closed on unknown fields | `schemas/contract.schema.json` |
+| ② | Reviewer | Read-only sandbox + PM-frozen diff + structured `APPROVE`/`REJECT` output | `skills/adversarial-review-loop/references/review-core.md` |
+| ③ | PM | 보고형식·금지행위 (dispatch, gate, commit — never edits code) | `agents/pm-orchestrator.md` |
+| ④ | Round-2 | `schemas/preflight.schema.json` · dispatch required fields (manifest v2) · creation gate (`scripts/asset_registry_check.py`) · dispatch-manifest gate | `agents/pm-orchestrator.md §Dispatch-manifest gate` |
+
+Asset roles and ownership: `docs/asset-charter.md`.
+
 ## Install
 
 ```bash

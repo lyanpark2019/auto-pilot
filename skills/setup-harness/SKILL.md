@@ -104,6 +104,8 @@ Ready to copy or invoke from this skill directory:
 
 ## Step 1: Scan
 
+> Resolve project context before scanning: `skills/auto-pilot/references/project-context-resolution.md`.
+
 Detect project profile automatically:
 
 ```bash
