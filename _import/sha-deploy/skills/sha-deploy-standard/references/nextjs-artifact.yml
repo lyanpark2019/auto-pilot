@@ -1,0 +1,128 @@
+# Template: Next.js + artifact-based deploy (build in CI, SCP to EC2)
+# Projects: sportic365-web
+
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Deploy commit SHA (leave empty for branch HEAD)"
+        required: false
+        default: ""
+
+concurrency:
+  group: __PROJECT_NAME__-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEPLOY_SHA: ${{ github.event.inputs.target_sha || github.sha }}
+  # __SHARED_ENV__: env vars for quality gates + build
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build-prod:
+    name: Build (Production)
+    needs: lint
+    if: |
+      (github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Package artifact
+        run: |
+          tar -czf "deploy-artifact-${DEPLOY_SHA}.tgz" \
+            .next/ public/ package.json package-lock.json \
+            next.config.* ecosystem.config.*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-artifact-${{ env.DEPLOY_SHA }}
+          path: deploy-artifact-${{ env.DEPLOY_SHA }}.tgz
+          retention-days: 1
+
+  deploy-prod:
+    name: Deploy Production
+    needs: build-prod
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deploy-artifact-${{ env.DEPLOY_SHA }}
+
+      - name: Copy artifact to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          source: deploy-artifact-${{ env.DEPLOY_SHA }}.tgz
+          target: ~/
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.1.0
+        env:
+          TARGET_SHA: ${{ env.DEPLOY_SHA }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          timeout: 120s
+          envs: TARGET_SHA
+          script: |
+            set -euo pipefail
+            APP_DIR="$HOME/__APP_DIR_NAME__"
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+
+            tar -xzf ~/deploy-artifact-${TARGET_SHA}.tgz -C "$APP_DIR"
+            rm -f ~/deploy-artifact-${TARGET_SHA}.tgz
+            npm ci --production
+
+            # __ENV_FILE__: replace with .env heredoc + sed -i 's/^[[:space:]]*//' .env
+
+            PM2_APP="__PM2_APP_NAME__"
+            if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+              pm2 restart "$PM2_APP" --update-env
+            else
+              pm2 start ecosystem.config.js
+            fi
+            pm2 save
+
+            DEPLOY_DIR="$APP_DIR/.deploy"
+            mkdir -p "$DEPLOY_DIR"
+            echo "$TARGET_SHA" > "$DEPLOY_DIR/last_good_commit"
+            echo "$(date -u +%Y-%m-%dT%H:%M:%S%z) | ci | ${TARGET_SHA:0:7} | prod | main | SUCCESS" >> "$DEPLOY_DIR/deploy.log"
+
+            pm2 status
+            echo "Deployment complete!"

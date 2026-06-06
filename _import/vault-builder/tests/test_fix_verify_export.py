@@ -1,0 +1,103 @@
+"""Tests for fix plan builder + verify + export."""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PLUGIN_ROOT))
+
+from pipeline import fix, verify, export
+
+
+def _mk_project(tmp_path: Path) -> Path:
+    repo = tmp_path / "proj"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "auth.py").write_text(
+        '"""Auth."""\ndef login(user: str, password: str) -> bool:\n    return True\n'
+    )
+    (repo / "docs").mkdir()
+    (repo / "docs" / "auth.md").write_text(
+        "---\nsource_files: [\"src/auth.py\"]\n---\n\n# Auth\n\nCall `login(user)` to auth.\n"
+    )
+    return repo
+
+
+def test_fix_plan_groups_by_drift_type(tmp_path: Path) -> None:
+    repo = _mk_project(tmp_path)
+    # Add a gap module
+    (repo / "src" / "billing.py").write_text("def charge() -> int:\n    return 0\n")
+    # Add an orphan ref
+    (repo / "docs" / "stale.md").write_text("# stale\n\nSee `src/removed.py`.\n")
+
+    plan = fix.build_plan(repo)
+    assert plan["drift_summary"]["gap"] >= 1
+    assert plan["drift_summary"]["orphan"] >= 1
+    assert plan["drift_summary"]["claim_drift"] >= 1
+    workers = {t["worker_type"] for t in plan["tickets"]}
+    assert "gap-filler" in workers
+    assert "orphan-pruner" in workers
+    assert "drift-fixer" in workers
+
+
+def test_verify_runs_against_code_docs_rubric(tmp_path: Path) -> None:
+    repo = _mk_project(tmp_path)
+    result = verify.verify(repo)
+    assert "dimensions" in result
+    assert "total" in result
+    assert isinstance(result["pass"], bool)
+    # Should produce per-dim scores
+    assert "hallucination" in result["dimensions"]
+    assert "completeness" in result["dimensions"]
+
+
+def test_verify_completeness_zero_when_full_gap(tmp_path: Path) -> None:
+    repo = tmp_path / "proj"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "a.py").write_text("def public_fn(): pass\n")
+    (repo / "src" / "b.py").write_text("def another_fn(): pass\n")
+    # No docs at all → completeness should be low
+    (repo / "docs").mkdir()
+    result = verify.verify(repo)
+    assert result["dimensions"]["completeness"]["score"] < result["dimensions"]["completeness"]["max"]
+
+
+def test_export_obsidian_upsert_creates_when_missing(tmp_path: Path) -> None:
+    repo = _mk_project(tmp_path)
+    vault_root = tmp_path / "vaults"
+    result = export.export_obsidian(repo, vault_root=vault_root, project_name="proj")
+    assert result["created_new"] is True
+    assert (vault_root / "proj" / "auth.md").exists()
+    assert (vault_root / "proj" / "index.md").exists()
+
+
+def test_export_obsidian_preserves_manual_edit(tmp_path: Path) -> None:
+    repo = _mk_project(tmp_path)
+    vault_root = tmp_path / "vaults"
+    # First run — fresh
+    export.export_obsidian(repo, vault_root=vault_root, project_name="proj")
+    # Modify vault page to manual_edit
+    (vault_root / "proj" / "auth.md").write_text(
+        "---\nsource_files: [\"src/auth.py\"]\nmanual_edit: true\n---\n\n# Custom Auth Doc\n"
+    )
+    # Change repo doc
+    (repo / "docs" / "auth.md").write_text("---\nsource_files: [\"src/auth.py\"]\n---\n# DIFFERENT\n")
+    # Re-export — should NOT overwrite manual_edit page
+    result = export.export_obsidian(repo, vault_root=vault_root, project_name="proj")
+    assert result["created_new"] is False
+    assert "Custom Auth Doc" in (vault_root / "proj" / "auth.md").read_text()
+    assert result["manual_pages_preserved"] >= 1
+
+
+def test_export_all_handles_unknown_destination(tmp_path: Path) -> None:
+    repo = _mk_project(tmp_path)
+    results = export.export_all(repo, ["bogus"])
+    assert "error" in results["bogus"]
+
+
+def test_export_graphify_skips_when_binary_missing(tmp_path: Path, monkeypatch) -> None:
+    repo = _mk_project(tmp_path)
+    monkeypatch.setattr(export, "GRAPHIFY_BIN", "/nonexistent/graphify")
+    result = export.export_graphify(repo)
+    assert result.get("skipped") is True

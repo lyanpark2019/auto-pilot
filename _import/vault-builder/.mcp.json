@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "notebooklm-vault": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp_vault_server.py"],
+      "env": {
+        "NBM_VAULT_PATH": "${NBM_VAULT_PATH}",
+        "GRAPHIFY_BIN": "${GRAPHIFY_BIN}"
+      }
+    }
+  }
+}

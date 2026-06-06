@@ -1,0 +1,59 @@
+# Code-docs rubric — derived from autonomous-docs-loop (sportic365-syndicator R1 71→R3 100 validated pattern).
+# 6 dims, 100pt. Pass = 95.
+
+structural:
+  total_max: 100
+  pass_threshold: 95
+  dimensions:
+    hallucination:
+      max: 25
+      acceptance:
+        per_finding_penalty: -10
+        zero_findings_required: true
+        verifier_method: "grep source_files/file:line citations vs actual code"
+    accuracy:
+      max: 15
+      acceptance:
+        public_api_byte_identical: true
+        signature_match_required: true
+    completeness:
+      max: 20
+      acceptance:
+        core_files_covered_pct: 1.0
+    cross_link:
+      max: 15
+      acceptance:
+        wikilinks_per_page_min: 3
+        canonical_refs_required: true
+    examples:
+      max: 15
+      acceptance:
+        file_line_citations_min: 10
+    structure:
+      max: 10
+      acceptance:
+        frontmatter_required: ["type", "category", "source_files", "status", "created"]
+        body_sections_required: ["Purpose", "Key Files", "Data Flow", "Public API", "Examples", "Edge Cases", "Cross-links"]
+
+# Content section absent — code-docs has no separate content rubric; hallucination dim covers factual correctness.
+content:
+  total_max: 0
+  pass_threshold: 0
+  dimensions: {}
+
+safety:
+  retry_cap: 3
+  delta_watchdog:
+    min_delta: 1.0
+    consecutive_rounds: 2
+  cost_alert:
+    tokens_per_round_warn: 500000
+    tokens_per_round_abort: 2000000
+  max_rounds: 8
+  audit_every_n_rounds: 2
+
+cost:
+  mode: subscription
+  max_total_usd: 50.0
+  max_round_usd: 10.0
+  warn_round_usd: 5.0

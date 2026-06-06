@@ -1,0 +1,27 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "vault-builder",
+  "description": "Unified autonomous Obsidian vault builder. Pluggable source adapters (NotebookLM / code / api-kb) drive PM-Worker-Ticket loop with rubric-driven scoring.",
+  "owner": {
+    "name": "lyan",
+    "url": "https://github.com/lyan"
+  },
+  "plugins": [
+    {
+      "name": "vault-builder",
+      "description": "PM-Worker-Ticket-Score-Verify loop building Obsidian vaults from NotebookLM, code, and API KBs with rubric-driven scoring.",
+      "source": "./",
+      "category": "knowledge-management",
+      "tags": [
+        "notebooklm",
+        "obsidian",
+        "knowledge-graph",
+        "multi-agent",
+        "pm-orchestrator",
+        "rag",
+        "graphify",
+        "korean"
+      ]
+    }
+  ]
+}

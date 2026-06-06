@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prototype"
+  short_description: "Explore designs with throwaway prototypes"
+  default_prompt: "Use $prototype to build a throwaway prototype that answers this design question."

@@ -1,0 +1,101 @@
+{
+  "vault": "<vault-path>",
+  "vault_name": "<vault-name>",
+  "structural": {
+    "total": 100,
+    "scores": {
+      "graph_density": 15,
+      "confidence_balance": 10.0,
+      "concept_entity_depth": 10.0,
+      "adr_pages": 10,
+      "cross_vault": 10.0,
+      "hot_cache": 10.0,
+      "wiki_articles": 10.0,
+      "bases": 5,
+      "backlinks": 10.0,
+      "conflict_dup": 10
+    },
+    "details": {
+      "graph_density": "222n/357e dens=1.61 hyper=7/7 cats≥1.5: 7/7",
+      "confidence_balance": "7/7 in band",
+      "concept_entity_depth": "7/7 cats ≥3 concepts & entities",
+      "adr_pages": "4 cats have ≥2 ADRs",
+      "cross_vault": "30/30 cross-vault links verified (46 total)",
+      "hot_cache": "7/7 hot.md structured",
+      "wiki_articles": "87/87 articles pass",
+      "bases": "11 .base files",
+      "backlinks": "63/63 sources ≥2 inbound",
+      "conflict_dup": "0 spurious dup stems"
+    },
+    "categories": [
+      "pickl-projects",
+      "llm-research",
+      "lotto",
+      "agri-trade",
+      "match-analysis",
+      "ai-libraries",
+      "sportic-projects"
+    ]
+  },
+  "content": {
+    "total": 98.0,
+    "scores": {
+      "edge_fact": 28.0,
+      "concept_accuracy": 20.0,
+      "adr_fidelity": 15.0,
+      "label_fit": 10.0,
+      "cross_vault_relevance": 10.0,
+      "hot_citation": 5.0,
+      "non_hallucinated": 10.0
+    },
+    "details": {
+      "edge_fact": "28/30 edges grounded in raw co-occurrence (e.g. lotto: 로또잭팟 (QR코드 당첨확인, App Store) -X-> 한국 로또 시장)",
+      "concept_accuracy": "14/14 concepts grounded",
+      "adr_fidelity": "12/12 ADRs grounded",
+      "label_fit": "36/36 labels fit members",
+      "cross_vault_relevance": "15/15 real cross-vault targets exist",
+      "hot_citation": "7/7 hot.md cites real god nodes",
+      "non_hallucinated": "100% pages have source linkage"
+    },
+    "categories": [
+      "agri-trade",
+      "ai-libraries",
+      "llm-research",
+      "lotto",
+      "match-analysis",
+      "pickl-projects",
+      "sportic-projects"
+    ],
+    "type": "content"
+  },
+  "tickets": null,
+  "structural_audits": [
+    {
+      "file": "audit-r3.md",
+      "size": 5962,
+      "mtime": 1778662249.3495123
+    },
+    {
+      "file": "audit-r4.md",
+      "size": 10236,
+      "mtime": 1778662737.8652282
+    },
+    {
+      "file": "audit-r6.md",
+      "size": 7718,
+      "mtime": 1778663426.3244712
+    },
+    {
+      "file": "audit-r8.md",
+      "size": 7158,
+      "mtime": 1778669196.1880403
+    },
+    {
+      "file": "audit-r9.md",
+      "size": 3691,
+      "mtime": 1778669297.4648876
+    }
+  ],
+  "content_audits": [],
+  "pm_rounds": []
+}

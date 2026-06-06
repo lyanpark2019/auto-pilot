@@ -1,0 +1,10 @@
+{
+  "repo": "/Users/lyan/.claude/plugins/vault-builder/.tmp/vb-graphify-smoke",
+  "exports": {
+    "graphify": {
+      "destination": "graphify",
+      "error": "doc_root missing: /Users/lyan/.claude/plugins/vault-builder/.tmp/vb-graphify-smoke/docs",
+      "skipped": true
+    }
+  }
+}
