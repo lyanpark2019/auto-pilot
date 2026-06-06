@@ -52,3 +52,15 @@ def test_case_attempt_construct() -> None:
     att = CaseAttempt(oracle=OracleResult("pass", ""), run=run)
     assert att.oracle.outcome == "pass"
     assert att.run.cost_usd == 2.5
+
+
+def test_stats_zero_attempts_no_crash() -> None:
+    from evals.stats import diff_upper, is_regression
+
+    # n==0 must not raise ZeroDivisionError; undefined diff => max upper bound (no regression)
+    assert diff_upper(0, 0, 5, 5) == 1.0
+    assert diff_upper(5, 50, 0, 0) == 1.0
+    # armed (n_new>=50) but baseline empty => cannot be a regression
+    assert is_regression(5, 50, 0, 0) == (True, False)
+    # zero new attempts => not armed, not failed
+    assert is_regression(0, 0, 1000, 1000) == (False, False)
