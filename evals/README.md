@@ -8,6 +8,9 @@ floor; baseline is hand-written). The rate gate arms in cut 2 on a measured base
 `python3 -m pytest tests/test_evals_*.py -q` — runs in CI's python gate.
 
 ## Manual end-to-end smoke (one real agent run; costs ~$1-5, minutes)
+Run in a **clean window** — no other `claude` sessions active. The eval disables
+the per-loop fork-bomb pid guard, but a real agent still runs; bounds are
+`--max-cost-usd` (per case) and `--max-total-cost-usd` (whole run).
 ```
 python3 scripts/evals/cli.py run --case dogfood-smoke --repeats 1
 ```
