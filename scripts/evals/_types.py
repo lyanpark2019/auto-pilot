@@ -29,3 +29,12 @@ class OracleResult:
 
     outcome: str
     reason: str  # required for fail/error; "" for pass
+
+
+@dataclass(frozen=True)
+class CaseAttempt:
+    """One case attempt: the deterministic oracle verdict plus the run metadata
+    (cost/status/iters) needed for cost ceilings and richer summaries."""
+
+    oracle: OracleResult
+    run: RunResult

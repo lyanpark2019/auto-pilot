@@ -39,3 +39,16 @@ def test_arming_and_mde_boundary() -> None:
     assert armed is True and failed is True
     armed, failed = is_regression(45, 50, 1000, 1000)  # -0.043 >= -0.05
     assert armed is True and failed is False
+
+
+def test_case_attempt_construct() -> None:
+    from evals._types import CaseAttempt, OracleResult, RunResult
+
+    run = RunResult(
+        returncode=0, status="success",
+        state_path=Path(".planning/auto-pilot/state.json"),
+        cost_usd=2.5, iters=2, log_dir=Path("/tmp/l"), workdir=Path("/tmp/c"),
+    )
+    att = CaseAttempt(oracle=OracleResult("pass", ""), run=run)
+    assert att.oracle.outcome == "pass"
+    assert att.run.cost_usd == 2.5
