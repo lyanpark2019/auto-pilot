@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -918,8 +919,11 @@ class TestDispatchContractGate:
         # Write fresh preflight
         preflight_dir = tmp_path / ".planning" / "auto-pilot" / "preflight"
         preflight_dir.mkdir(parents=True)
+        # ISO-8601, matching what pm_preflight.sh actually writes (schema
+        # format: date-time) — epoch-int fixtures masked a hook parse bug.
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         (preflight_dir / "phase-1.json").write_text(
-            json.dumps({"generated_ts": int(time.time()), "head_sha": head})
+            json.dumps({"generated_ts": now_iso, "head_sha": head})
         )
 
         r = _run_hook(
@@ -948,11 +952,14 @@ class TestDispatchContractGate:
             json.dumps({"contract_sha256": sha})
         )
 
-        # Write stale preflight (> 900s old)
+        # Write stale preflight (> 900s old), ISO-8601 like the real producer
         preflight_dir = tmp_path / ".planning" / "auto-pilot" / "preflight"
         preflight_dir.mkdir(parents=True)
+        stale_iso = (datetime.now(timezone.utc) - timedelta(seconds=1000)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         (preflight_dir / "phase-2.json").write_text(
-            json.dumps({"generated_ts": int(time.time()) - 1000, "head_sha": "abc123"})
+            json.dumps({"generated_ts": stale_iso, "head_sha": "abc123"})
         )
 
         r = _run_hook(

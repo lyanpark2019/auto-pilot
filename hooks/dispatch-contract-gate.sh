@@ -101,8 +101,17 @@ if [[ -z "$phase" ]]; then
 fi
 
 # Determine repo root for preflight file location
-# Use CWD or walk up from contract_dir
+# Walk up from CWD looking for .planning (mirrors creation-gate.sh; bare $(pwd)
+# false-denied when dispatch CWD was a worktree subdir)
 repo_root="$(pwd)"
+candidate="$repo_root"
+for _ in 1 2 3 4 5; do
+  if [[ -d "$candidate/.planning" ]]; then
+    repo_root="$candidate"
+    break
+  fi
+  candidate="$(dirname "$candidate")"
+done
 
 preflight_file="$repo_root/.planning/auto-pilot/preflight/phase-${phase}.json"
 
@@ -113,12 +122,19 @@ fi
 # Check TTL (900s) and head_sha
 now=$(date +%s)
 check_result=$(python3 -c '
-import sys, json, time
+import sys, json
+from datetime import datetime
 try:
     d = json.load(open(sys.argv[1]))
-    generated_ts = d.get("generated_ts") or 0
+    raw = d.get("generated_ts") or ""
     head_sha = d.get("head_sha") or ""
-    age = int(sys.argv[2]) - int(generated_ts)
+    # pm_preflight.sh writes ISO-8601 (schema format: date-time) — parse like
+    # _dispatch.py does; int() on the ISO string denied every real dispatch.
+    try:
+        gen_epoch = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        gen_epoch = float(raw)  # tolerate legacy epoch-int artifacts
+    age = int(int(sys.argv[2]) - gen_epoch)
     print(f"{age}|{head_sha}")
 except Exception as e:
     print(f"ERROR|{e}")

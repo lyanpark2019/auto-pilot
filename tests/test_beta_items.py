@@ -535,8 +535,10 @@ class TestReviewerWatchdog:
 
         return _RealHandle()
 
-    def test_soft_warn_fires_proc_finishes_no_kill(self, tmp_path):
+    def test_soft_warn_fires_proc_finishes_no_kill(self, tmp_path, caplog):
         """Soft-warn fires, process finishes normally (no kill)."""
+        import logging
+
         import _reviewer_wrapper as rw
 
         output_dir = tmp_path / "r1"
@@ -573,15 +575,21 @@ class TestReviewerWatchdog:
         t = threading.Thread(target=_write_marker, daemon=True)
         t.start()
 
-        failures = rw.wait_all(
-            [handle],
-            timeout_sec=5,
-            soft_warn_sec=0,       # fire immediately
-            hard_kill_sec=9999,    # never kill
-        )
+        with caplog.at_level(logging.WARNING, logger="_reviewer_wrapper"):
+            failures = rw.wait_all(
+                [handle],
+                timeout_sec=5,
+                soft_warn_sec=0,       # fire immediately
+                hard_kill_sec=9999,    # never kill
+            )
         t.join(timeout=2)
         assert failures == []
         assert (output_dir / "done.marker").exists()
+        # The soft-warn branch must actually fire — without this assert,
+        # deleting the warn path left the test green (review r1 P2).
+        assert any("lagging" in rec.getMessage() for rec in caplog.records)
+        # And no kill happened on this path
+        assert not any("hard-kill" in rec.getMessage() for rec in caplog.records)
 
     def test_hard_kill_retry_succeeds(self, tmp_path):
         """Hard kill fires; retry spawns successfully and writes done.marker."""
