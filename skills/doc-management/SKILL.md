@@ -47,27 +47,10 @@ diagnosis decides between full rebuild and targeted cleanup; when in doubt start
 
 ## Gotchas (hard-won — read BEFORE running any mode)
 
-Every row is a real incident, not a hypothetical.
-
-| Gotcha | Mitigation |
-|--------|------------|
-| graphify full corpus ingests `.md` → stale docs bleed INTO the graph | always filter to code-only for the structure SoT (REBUILD Phase 1 snippet) |
-| `file_type=="code"` alone insufficient — json/sh/test nodes carry it too | also filter by language extension + exclude tests/scratch paths |
-| graph.json edge key is `links` (networkx), not `edges` | filter snippet handles both |
-| `graphify .` first-build needs an LLM key; `cluster-only` needs `<dir>/graphify-out/graph.json` layout | use `graphify update` (AST-only, key-free) + write the canonical layout |
-| Hard-coding the filtered graph under `/tmp` | repo-rooted `.graphify/code-only/` — survives reboots, MAINTAIN diffs against it later; gitignore it |
-| Vault-relative cites (`intent/...`) and `[[wikilinks]]` dangle when ported into the repo | repoint to repo-relative paths; convert to standard `[text](path)` links |
-| Line-number cites rot the moment a file is restructured | symbol anchors (`` `file.py` → `SYMBOL` ``) for churn-prone files; section names for `.md`→`.md` |
-| Why ≠ structure — decisions/incidents are NOT in the call graph | harvest Why into `intent/` BEFORE deleting old docs ("none lost" invariant) |
-| Moving a machine-read doc breaks the gate that parses it | discover `<MACHINE_READ_DOCS>` first; those files never move (live exception) |
-| Archiving an ops-essential doc leaves an ops gap window | verify-restore at the original path in the SAME commit |
-| Docs-only merge on a no-path-filter CI silently redeploys prod | check deploy governance; bundle docs into a code PR |
-| Author cannot self-detect own P0s | dual adversarial review is mandatory, not self-servable |
-| Global find-replace on a retired term rewrites correct history | read code per occurrence — some mentions are correct-historical |
-| Grep alone cannot tell stale from historical | the auditor must READ the code at each occurrence |
-| A claim looks verified because another doc asserts it | verify against code > tests > CLI > config — never against docs |
-| Full-auto LLM rewrite + auto-commit | FORBIDDEN in every mode — unreviewed prose is how rot reproduces |
-| Hand-maintained verification JSON (claim ledger) rots like any hand-maintained doc | retired pattern — SHA freshness (L3) + AUDIT replace it |
+**Read `references/gotchas.md` first** — 17 incident-backed gotcha→mitigation rows
+(every row a real incident: graph filtering, cite rot, Why-harvest ordering,
+machine-read docs, deploy governance, review discipline, claim-ledger retirement).
+That file is the source of truth; nothing here duplicates it.
 
 ## The 3-layer model (shared by all modes)
 
@@ -130,19 +113,16 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_fre
 # default DOC_ROOT: .claude/design — or run the repo's own installed copy
 ```
 
-Zero-LLM: parses each doc's frontmatter `source_commit` + `manual_edit`, collects cited
-source paths from the body (same path-token style as the L2 guard), runs
-`git diff --name-only <source_commit>..HEAD -- <paths>` → non-empty = **STALE** (prints
-doc + changed files). Missing/empty required frontmatter keys (`type`/`topic`/
-`source_commit`/`manual_edit` — the section-5 contract) = frontmatter-contract **WARN**.
-`manual_edit: true` docs are skipped for freshness — automation never touches them. **Always exits
-0** — this is a WARN gate; a blocking gate would hold every code PR hostage to doc
-updates. Known limits: renames/moves untracked (path-based diff); cited paths are
-collected only under the script's top-level path-prefix allowlist (labeled CONFIG
-block, mirroring the L2 guard's; override per repo via
-`DOC_FRESHNESS_PATH_PREFIXES="dir1,dir2"` env) — cites under trees outside the
-allowlist are invisible and silently report fresh, so extend it when a repo grows
-a new source tree.
+Zero-LLM: per doc, diffs the body's cited source paths against frontmatter
+`source_commit` (`git diff --name-only <commit>..HEAD -- <paths>`) → non-empty =
+**STALE** (prints doc + changed files). Missing/empty required frontmatter keys
+(`type`/`topic`/`source_commit`/`manual_edit` — the section-5 contract) =
+frontmatter-contract **WARN**. `manual_edit: true` docs are skipped for freshness —
+automation never touches them. **Always exits 0** — a blocking gate would hold every
+code PR hostage to doc updates. Known limits: renames/moves untracked (path-based
+diff); cites are collected only under the script's path-prefix allowlist (CONFIG
+block / `DOC_FRESHNESS_PATH_PREFIXES` env) — out-of-allowlist cites silently report
+fresh, so extend the list when a repo grows a new source tree.
 
 **Per-doc refresh, for each STALE doc:**
 1. Re-query the graph for the doc's topic (`graphify query`/`explain` against
@@ -163,10 +143,10 @@ a new source tree.
 - **Escalation:** if the stale set exceeds ~30% of the doc tree, STOP patching and run
   REBUILD Phase 0 — at that scale the tree's organizing structure is stale, not just
   its facts.
-- Optional sync state (useful in busy repos): `.planning/doc-sync/last-sync.json`
-  recording `last_sync_commit` + per-doc covered-modules map; update entries in place.
-  The frontmatter `source_commit` contract is the SoT — the state file is an index,
-  not a second truth.
+- Optional sync-state index for busy repos: `.planning/doc-sync/last-sync.json`
+  (`last_sync_commit` + per-doc covered-modules map, updated in place) — the
+  frontmatter `source_commit` contract stays the SoT; the state file is never a
+  second truth.
 
 **FORBIDDEN: full-auto LLM rewrite + auto-commit.** Detection is automatic; every
 refresh lands through review. Committing/merging follows the repo's own governance
@@ -235,6 +215,8 @@ itself needs maintenance.
   CI. Parses all real-world anchor styles incl. `file.py:33,36,37` comma lists.
 - `references/doc-management-system.md` — canonical system spec (3-layer model,
   contracts, automation table, known limits). The Why behind every rule here.
+- `references/gotchas.md` — 17 incident-backed gotcha→mitigation rows (single
+  source; read before running any mode).
 - `references/rebuild-phases.md` — full REBUILD procedure (7 phases, discovery slots,
   code-only filter snippet, red-flag table).
 - `references/audit-methodology.md` — full AUDIT methodology (auditor prompt template,
