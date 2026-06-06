@@ -68,6 +68,7 @@ The loop has never run with real subagents; all 16 `test_headless_loop.py` tests
 - `orchestrator.py discover --check` — pure git/mtime comparison, genuinely deterministic + unit-testable. `discover --record` — writes `.build-commit` + graphify version + timestamp AFTER the PM ran graphify. **Python never "snapshots the graph"** (that input is nondeterministic); it only records provenance.
 - **`.gitignore` graphify-out/** (or place under `.planning/auto-pilot/graphify-out/`) so it never dirties `$ROOT` and blocks `apply_to_main`'s clean-tree preflight.
 - Schema: `contract.schema.json` `snapshot_shas` += `project_context` sha as **optional**; bump `schema_version` → 2. Extend `verify_snapshots` with a **fail-closed** branch (declared sha → bundle file must exist + match; absent → log "ran context-blind"). Update `SnapshotShas`, `snapshot_context`, MANIFEST, PM-signature, fixtures together. Add a tamper test mirroring the existing spec/claude SHA tests.
+- **schema v2 landed in round-2 W2 unified migration (project_context seat + dispatch required fields: target_repo, target_layer, hard_constraints, pattern_refs); Step-1 remaining = discovery-seam wiring itself.**
 
 ### Step 2 — copy graphify context INTO the bundle (no drill-down)
 - Workers run in isolated worktrees (clean checkout at `base_sha`) → they **cannot** see `graphify-out/` in `$ROOT`. Everything a worker needs is **copied into `context-bundle/`** (which is per-contract). Drop the "drill into raw graph" idea entirely.

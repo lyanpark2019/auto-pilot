@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "iter-1/phase-1/contract-1/round-1",
   "idempotency_token": "a0f1c3d4e5b6a78901234567",
   "parent_contract_id": null,
@@ -37,5 +37,8 @@
     "codex":  ".planning/auto-pilot/contracts/iter-1/phase-1/contract-1/round-1/outputs/codex-reviewer/review.json",
     "claude": ".planning/auto-pilot/contracts/iter-1/phase-1/contract-1/round-1/outputs/claude-reviewer/review.json",
     "specialists": {}
-  }
+  },
+  "target_repo":       "Sewhoan/pickl-api",
+  "target_layer":      "API",
+  "hard_constraints":  ["max_diff_loc<=300", "no new dependencies"]
 }
