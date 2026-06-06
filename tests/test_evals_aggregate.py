@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evals._types import OracleResult
-
 
 def test_select_cases_by_tier(tmp_path: Path) -> None:
     from evals import aggregate
@@ -19,20 +17,34 @@ def test_select_cases_by_tier(tmp_path: Path) -> None:
     assert sorted(aggregate.select_cases(cases, tier="full")) == ["a", "b"]
 
 
+def _attempt(outcome: str, reason: str = "", cost: float = 0.0):  # type: ignore[no-untyped-def]
+    from evals._types import CaseAttempt, OracleResult, RunResult
+
+    run = RunResult(
+        returncode=0, status="success",
+        state_path=Path("/tmp/s.json"), cost_usd=cost, iters=1,
+        log_dir=Path("/tmp"), workdir=Path("/tmp"),
+    )
+    return CaseAttempt(OracleResult(outcome, reason), run)
+
+
 def test_aggregate_counts() -> None:
     from evals import aggregate
 
-    results = [
-        OracleResult("pass", ""),
-        OracleResult("pass", ""),
-        OracleResult("fail", "x"),
-        OracleResult("error", "boom"),
+    attempts = [
+        _attempt("pass", "", 1.0),
+        _attempt("pass", "", 1.5),
+        _attempt("fail", "x", 0.5),
+        _attempt("error", "boom", 0.0),
     ]
-    summary = aggregate.summarize("dogfood-smoke", results)
+    summary = aggregate.summarize("dogfood-smoke", attempts)
     assert summary["passed"] == 2
     assert summary["failed"] == 1
     assert summary["errored"] == 1
-    assert summary["attempts"] == 4  # error counts toward total_attempted
+    assert summary["attempts"] == 4
+    assert summary["cost_usd"] == 3.0  # 1.0 + 1.5 + 0.5
+    assert abs(summary["pass_rate"] - 0.5) < 1e-6
+    assert summary["reasons"] == ["x", "boom"]
 
 
 def test_write_results_round_trip(tmp_path: Path) -> None:
@@ -47,7 +59,6 @@ def test_write_results_round_trip(tmp_path: Path) -> None:
 
 def test_cli_run_smoke_invokes_runner(tmp_path, monkeypatch, capsys):  # type: ignore[no-untyped-def]
     from evals import cli
-    from evals._types import OracleResult
 
     # Hermetic: don't depend on the real evals/baseline.json contents.
     baseline = tmp_path / "baseline.json"
@@ -57,7 +68,7 @@ def test_cli_run_smoke_invokes_runner(tmp_path, monkeypatch, capsys):  # type: i
     monkeypatch.setattr("evals.cli._BASELINE", baseline)
     monkeypatch.setattr(
         "evals.cli.run_case",
-        lambda case_id, **kw: OracleResult("pass", ""),
+        lambda case_id, **kw: _attempt("pass", "", 0.0),
     )
     monkeypatch.setattr("evals.cli.select_cases", lambda d, tier: ["dogfood-smoke"])
 

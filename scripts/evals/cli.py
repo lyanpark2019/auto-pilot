@@ -39,8 +39,8 @@ def main(argv: list[str] | None = None) -> int:
         baseline_cases = json.loads(_BASELINE.read_text()).get("cases", {})
     summaries: list[dict[str, Any]] = []
     for cid in case_ids:
-        results = [run_case(cid, run_id="local") for _ in range(args.repeats)]
-        s = summarize(cid, results)
+        attempts = [run_case(cid, run_id="local") for _ in range(args.repeats)]
+        s = summarize(cid, attempts)
         summaries.append(s)
         baseline = baseline_cases.get(cid)
         if baseline:

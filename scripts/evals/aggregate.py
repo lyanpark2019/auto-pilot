@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from evals._types import OracleResult
+from evals._types import CaseAttempt
 
 
 def select_cases(cases_dir: Path, tier: str) -> list[str]:
@@ -22,25 +22,29 @@ def select_cases(cases_dir: Path, tier: str) -> list[str]:
     return out
 
 
-def summarize(case_id: str, results: list[OracleResult]) -> dict[str, Any]:
-    """Aggregate per-case results. error counts toward total_attempted (non-pass)."""
-    passed = sum(1 for r in results if r.outcome == "pass")
-    failed = sum(1 for r in results if r.outcome == "fail")
-    errored = sum(1 for r in results if r.outcome == "error")
-    attempts = len(results)
+def summarize(case_id: str, attempts: list[CaseAttempt]) -> dict[str, Any]:
+    """Aggregate per-case attempts. error counts toward total_attempted (non-pass)."""
+    passed = sum(1 for a in attempts if a.oracle.outcome == "pass")
+    failed = sum(1 for a in attempts if a.oracle.outcome == "fail")
+    errored = sum(1 for a in attempts if a.oracle.outcome == "error")
+    n = len(attempts)
     return {
         "case": case_id,
         "passed": passed,
         "failed": failed,
         "errored": errored,
-        "attempts": attempts,
-        "pass_rate": (passed / attempts) if attempts else 0.0,
-        "reasons": [r.reason for r in results if r.outcome != "pass"],
+        "attempts": n,
+        "pass_rate": (passed / n) if n else 0.0,
+        "cost_usd": round(sum(a.run.cost_usd for a in attempts), 4),
+        "reasons": [a.oracle.reason for a in attempts if a.oracle.outcome != "pass"],
     }
 
 
-def write_results(path: Path, run_id: str, summaries: list[dict[str, Any]]) -> None:
+def write_results(
+    path: Path, run_id: str, summaries: list[dict[str, Any]],
+    meta: dict[str, Any] | None = None,
+) -> None:
     """Write ``summaries`` to ``path`` as JSON under a ``run_id`` envelope."""
-    payload = {"run_id": run_id, "cases": summaries}
+    payload: dict[str, Any] = {**(meta or {}), "run_id": run_id, "cases": summaries}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n")
