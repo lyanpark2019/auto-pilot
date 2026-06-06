@@ -44,7 +44,7 @@ test_writes_valid_json_with_private_mode() {
 }
 
 test_killed_writer_never_exposes_partial_target() {
-  local dir target sentinel writer i observed
+  local dir target sentinel writer observed
   dir="$(mktemp -d)"
   target="$dir/sentinel.json"
   sentinel='{"sentinel":true}'
@@ -58,7 +58,7 @@ test_killed_writer_never_exposes_partial_target() {
   ) | atomic_write_json "$target" &
   writer=$!
 
-  for i in $(seq 1 20); do
+  for _ in $(seq 1 20); do
     observed="$(cat "$target")"
     [ "$observed" = "$sentinel" ] || fail "observed partial or replaced target: $observed"
     jq -e . "$target" >/dev/null || fail "observed invalid JSON in target"

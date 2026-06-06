@@ -11,14 +11,11 @@ VALID="tests/ticket-schema/valid.json"
 INVALID_MISSING_ID="tests/ticket-schema/invalid-missing-id.json"
 INVALID_BAD_ROLE="tests/ticket-schema/invalid-bad-role.json"
 
-# Detect validator
+# Detect validator (jq fallback is used whenever python3-jsonschema is absent)
 USE_JSONSCHEMA=0
-USE_JQ_FALLBACK=0
 
 if python3 -c 'import jsonschema' 2>/dev/null; then
   USE_JSONSCHEMA=1
-else
-  USE_JQ_FALLBACK=1
 fi
 
 # --- jsonschema-based validation ---

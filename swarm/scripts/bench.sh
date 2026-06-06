@@ -26,13 +26,14 @@ run_arm_solo() {
   local arm=$1; local engine=$2; local model=$3
   local wt="$PROJECT/../$BASE-bench-$arm-$TS"
   git -C "$PROJECT" worktree add -B "bench/$arm/$TS" "$wt" HEAD >/dev/null
-  local t0=$(date +%s)
+  local t0 t1
+  t0=$(date +%s)
   cd "$wt"
   case "$engine" in
     claude) timeout 600 claude --model "$model" -p --dangerously-skip-permissions "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
     codex)  timeout 600 codex exec --model "$model" -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "$TASK" > "$DIR/arm-$arm/log.md" 2>&1 || true;;
   esac
-  local t1=$(date +%s)
+  t1=$(date +%s)
   git -C "$wt" add -A; git -C "$wt" commit -m "bench arm $arm" --allow-empty >/dev/null
   if git -C "$wt" rev-parse HEAD~1 >/dev/null 2>&1; then
     git -C "$wt" diff HEAD~1 HEAD > "$DIR/arm-$arm/diff.patch" 2>/dev/null || true
@@ -55,9 +56,10 @@ run_arm_swarm() {
     --arg worktree "../$BASE-worker-$target_worker" \
     '{id:$id,title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:["task addressed"],issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
     > "$ROOT/inbox/worker-$target_worker/T-$id.json"
-  local t0=$(date +%s)
+  local t0 t1 t_now
+  t0=$(date +%s)
   while [ ! -f "$ROOT/scores/T-$id.json" ]; do
-    local t_now=$(date +%s)
+    t_now=$(date +%s)
     local elapsed=$((t_now - t0))
     if [ $elapsed -ge "$SWARM_TIMEOUT" ]; then
       echo "timeout" > "$DIR/arm-a/skipped"
@@ -70,7 +72,7 @@ run_arm_swarm() {
     fi
     sleep 10
   done
-  local t1=$(date +%s)
+  t1=$(date +%s)
   cp "$ROOT/scores/T-$id.json" "$DIR/arm-a/score.json"
   cp -r "$ROOT/results/T-$id" "$DIR/arm-a/result" 2>/dev/null || true
   echo "$((t1-t0))" > "$DIR/arm-a/wall_seconds"

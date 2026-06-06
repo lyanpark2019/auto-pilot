@@ -5,7 +5,6 @@ set -euo pipefail
 
 PLUGIN_ROOT="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/auto-pilot}}"
 PROJECT="$(pwd)"
-BASE="$(basename "$PROJECT")"
 ROOT="$PROJECT/.planning/autopilot"
 CONFIG="$ROOT/config.json"
 PROMPTS="$PLUGIN_ROOT/swarm/scripts/prompts"

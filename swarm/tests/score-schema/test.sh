@@ -11,14 +11,11 @@ VALID="tests/score-schema/valid.json"
 INVALID_BAD_VERDICT="tests/score-schema/invalid-bad-verdict.json"
 INVALID_RUBRIC_OOR="tests/score-schema/invalid-rubric-out-of-range.json"
 
-# Detect validator
+# Detect validator (jq fallback is used whenever python3-jsonschema is absent)
 USE_JSONSCHEMA=0
-USE_JQ_FALLBACK=0
 
 if python3 -c 'import jsonschema' 2>/dev/null; then
   USE_JSONSCHEMA=1
-else
-  USE_JQ_FALLBACK=1
 fi
 
 # --- jsonschema-based validation ---
@@ -45,8 +42,9 @@ PYEOF
 }
 
 # --- jq fallback: structural checks ---
+# (engine enum is only enforced on the jsonschema path; the jq fallback
+# checks keys/ticket_id/verdict/rubric ranges)
 VALID_VERDICTS='["merge","request-changes","reject"]'
-VALID_ENGINES='["claude","codex"]'
 
 jq_validate_valid() {
   local fixture="$1"

@@ -23,7 +23,7 @@ tmux new-session -d -s "$SESSION" -n monitor \
   "while true; do clear; python3 $PY/pm.py status; sleep 5; done"
 
 # Worker panes split from monitor window
-for i in $(seq 1 "$N"); do
+for _ in $(seq 1 "$N"); do
   tmux split-window -t "$SESSION":0 -v "python3 $PY/worker.py --poll-interval 3"
   tmux select-layout -t "$SESSION":0 tiled
 done

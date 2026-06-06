@@ -3,7 +3,7 @@
 Design proposal for swarm M2 race-hardening (written pre-merge for the standalone
 autopilot-swarm plugin; paths updated to the merged auto-pilot layout). Target file:
 `${CLAUDE_PLUGIN_ROOT}/swarm/scripts/run-pm.sh`
-(scoring + merge stanza, currently lines 115–135).
+(scoring + merge stanza, currently lines 123–147).
 
 Proposal only — **no shell edits in this ticket**. Implementation ticket must
 verify every one-liner under [Acceptance hooks](#acceptance-hooks).
@@ -26,10 +26,10 @@ Source guidance:
 
 ## Problem
 
-`run-pm.sh:115–135` iterates `$ROOT/done/*.json`, scores each ticket, runs an
+`run-pm.sh:123–142` iterates `$ROOT/done/*.json`, scores each ticket, runs an
 optional verifier when `verdict=="merge"`, then archives. The actual GitHub
 PR merge call (`gh pr merge --squash --delete-branch …`) is delegated to the
-`pm-ledger.md` prompt (`pm_call pm-ledger.md …` at line 138).
+`pm-ledger.md` prompt (`pm_call pm-ledger.md …` at line 145).
 
 Today the PM merges tickets **sequentially within one PM tick** — safe. The
 race appears in two realistic scenarios:
@@ -44,13 +44,13 @@ race appears in two realistic scenarios:
    SHA (synthesis T14).
 
 2. **Worker auto-merge skill running alongside PM.** The `swarm-ticket`
-   skill comment at line 143 already acknowledges a co-writer to `inbox/`.
+   skill comment at line 150 already acknowledges a co-writer to `inbox/`.
    The same co-writer pattern leaks into the merge path when a worker is
    permitted to self-merge (future M5 scope) — without serialization, two
    merges race.
 
 The repo already has a **dispatch** lock (`$LOCKDIR`,
-`$ROOT/ledger/dispatch.lock.d`, lines 13/18–30) that only guards inbox
+`$ROOT/ledger/dispatch.lock.d`, lines 12/17–29) that only guards inbox
 writes. There is **no lock around the merge stanza**, and the dispatch lock
 is the wrong primitive (different concern, different file, mkdir-based with
 30s stale-clear and no PID stamp — see synthesis T3).
@@ -68,7 +68,7 @@ is the wrong primitive (different concern, different file, mkdir-based with
   3–10 s in practice; 60 s covers a slow GitHub Actions required-check
   re-poll). Longer holds will starve subsequent PMs.
 - Must not regress the existing `acquire_lock` / `release_lock` /
-  `trap release_lock EXIT` shape (`run-pm.sh:18–30`). The new lock is a
+  `trap release_lock EXIT` shape (`run-pm.sh:17–29`). The new lock is a
   **second**, independent lock — distinct file, distinct trap entry.
 - Must keep `set -euo pipefail` compatible (no unguarded `$?` after a `||`).
 
@@ -87,8 +87,8 @@ the recorded PID is no longer alive.
 ### Exact bash snippet (for the implementation ticket)
 
 To be inserted **near the top of `run-pm.sh`** (right after `release_lock`
-declaration at line 29), and the wrapper invocation goes around the
-`pm-ledger.md` call at line 138.
+declaration at line 28), and the wrapper invocation goes around the
+`pm-ledger.md` call at line 145.
 
 ```bash
 # Merge serialization — independent of dispatch lock.
@@ -144,7 +144,7 @@ _merge_lock_cleanup() { rm -rf "${MERGE_LOCK}.d" 2>/dev/null || true; }
 trap '_merge_lock_cleanup; release_lock' EXIT INT TERM
 ```
 
-Invocation around the existing merge stanza (line 138 region):
+Invocation around the existing merge stanza (line 145 region):
 
 ```bash
 # 2. ledger reconcile + cherry-pick winners — serialized via merge.lock.
@@ -233,7 +233,7 @@ bash -n scripts/run-pm.sh
   **`merge.lock`** as the flock target and **`merge.lock.d/`** as the
   mkdir target. Both literal strings appear in the script, satisfying the
   M2 grep and keeping the two implementations textually distinct.
-- **Should `pm-score.md` (line 121) also be wrapped?** Scoring is
+- **Should `pm-score.md` (line 128) also be wrapped?** Scoring is
   read-only and does not push to `origin/main`. No — keep the lock scoped
   to merge-effecting calls only. Wider scope adds latency without payoff.
 - **Hold time budget — 60 s vs 120 s?** GitHub required-checks can take
