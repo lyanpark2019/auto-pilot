@@ -147,7 +147,7 @@ while true; do
   rm -f "$ROOT/logs/ledger.log.tmp"
 
   # 3. dispatch new tickets where inbox empty
-  # Lock prevents race with `swarm-ticket` skill that may also write to inbox/.
+  # Lock prevents race with `swarm` skill `ticket` subcommand that may also write to inbox/.
   acquire_lock
   for i in $(jq -r '.workers[].id' "$CONFIG"); do
     if [ -z "$(ls "$ROOT"/inbox/worker-$i/*.json 2>/dev/null)" ]; then

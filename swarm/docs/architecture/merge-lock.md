@@ -43,8 +43,8 @@ race appears in two realistic scenarios:
    recorded, and `pm-ledger.md`'s "winner cherry-pick" step lands the wrong
    SHA (synthesis T14).
 
-2. **Worker auto-merge skill running alongside PM.** The `swarm-ticket`
-   skill comment at line 150 already acknowledges a co-writer to `inbox/`.
+2. **Worker auto-merge skill running alongside PM.** The `swarm` skill
+   `ticket` subcommand comment at line 150 already acknowledges a co-writer to `inbox/`.
    The same co-writer pattern leaks into the merge path when a worker is
    permitted to self-merge (future M5 scope) — without serialization, two
    merges race.
@@ -222,7 +222,7 @@ bash -n scripts/run-pm.sh
 - **No change to dispatch lock** (`$LOCKDIR`,
   `$ROOT/ledger/dispatch.lock.d`). That is synthesis T3 / topic
   `flock-based-pm-lockdir` — a separate M2 ticket.
-- **No swarm-ticket skill changes.** If/when a worker skill earns merge
+- **No `swarm ticket` subcommand changes.** If/when a worker skill earns merge
   rights (M5+), it must call into the same `with_merge_lock` wrapper or
   re-implement the same `merge.lock` semantics.
 

@@ -65,8 +65,9 @@ others must be measured against it — without evals you ship regressions blind.
 | `skills/setup-harness/evals/evals.json` | **legacy** LLM-judge eval format — see [Reconciliation](#reconciliation) | confirmed present |
 
 **Corrected non-reuse (round-1 findings):** `headless-loop.py` has **no** `--spec`
-(the loop is state-driven). `swarm-bench bench.sh` **does not exist** in this repo
-(only an empty `.benchmarks/`). `_dispatch.py` is **ticket plumbing, not a fan-out
+(the loop is state-driven). ~~`swarm-bench bench.sh` **does not exist** in this repo~~
+`swarm/scripts/bench.sh` exists (round-1 finding was stale — bench.sh was added after
+that audit). `_dispatch.py` is **ticket plumbing, not a fan-out
 seam** (`grep -niE 'thread|pool|parallel' scripts/_dispatch.py` → 0). Eval-level
 parallelism = N concurrent `headless-loop.py` subprocesses, not `_dispatch.py`.
 

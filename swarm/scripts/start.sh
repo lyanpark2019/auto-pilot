@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # auto-pilot swarm: bootstrap tmux session inside CURRENT terminal.
-# Reads .planning/autopilot/config.json (created by swarm-init).
+# Reads .planning/autopilot/config.json (created by /auto-pilot:swarm init).
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/auto-pilot}"
@@ -12,7 +12,7 @@ SESSION="autopilot-$BASE"
 
 # 0. config required
 if [ ! -f "$CONFIG" ]; then
-  echo "[start] no config at $CONFIG. Run /auto-pilot:swarm-init first." >&2
+  echo "[start] no config at $CONFIG. Run /auto-pilot:swarm init first." >&2
   exit 2
 fi
 # `.git` is a directory in normal repos but a FILE inside worktrees.

@@ -99,11 +99,11 @@ At phase end the PM MAY dispatch the `retro` agent (`agents/retro.md`) — appen
 | Over-scoped contracts ("P1.1 not real issue") | `tech-critic-lead` gate BEFORE worker dispatch |
 | Implementation without tests | `tdd-enforcer` rejects runtime change diffs missing matching test file |
 | Workers touching files outside their contract | `claude-reviewer` + `codex-adversarial` scope-drift check (auto-REJECT on out-of-scope edits) |
-| Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase, `git reset --hard` on `status=failed` |
+| Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase; on `status=failed` it calls `stash_if_dirty` (non-destructive stash with a recoverable label) — `$ROOT` is intentionally not reset hard so worktree cleanup is the recovery unit (`iter.fail_no_root_reset` event logged) |
 
 ## Parallel execution backend
 
-The plugin's swarm subsystem is an alternative execution backend: a persistent tmux multi-worker pool (1 PM pane + 4-10 worker panes, each on its own git worktree, file-based ticket bus under `.planning/autopilot/`). Entry points: `/auto-pilot:swarm` (launch), `swarm-init` (config), `swarm-ticket` (inject work), `swarm-status` / `swarm-stop` / `swarm-bench`. Scripts live at `${CLAUDE_PLUGIN_ROOT}/swarm/`.
+The plugin's swarm subsystem is an alternative execution backend: a persistent tmux multi-worker pool (1 PM pane + 4-10 worker panes, each on its own git worktree, file-based ticket bus under `.planning/autopilot/`). Entry points: `/auto-pilot:swarm <init|start|status|stop|ticket>`, bench via `swarm-bench`. Scripts live at `${CLAUDE_PLUGIN_ROOT}/swarm/`.
 
 When to prefer which:
 - **In-session subagents (this skill's default)** — spec-driven phased work in ONE session; PM context carries between phases; review fan-out + verify gates happen inline; ends when the spec ends.
