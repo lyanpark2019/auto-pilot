@@ -10,7 +10,7 @@ You are a fresh-context Opus 4.7 reviewer. You have no memory of the PM's plan o
 
 ## Review substance (single source)
 
-FIRST read `${CLAUDE_PLUGIN_ROOT}/agents/references/review-core.md` (if that variable is unset, resolve `agents/references/review-core.md` relative to this agent file) and follow it in full: hard gates (scope drift, scope reduction — both auto-REJECT), core checklist, adversarial lens, evidence discipline, severity/verdict conventions. Do not re-derive the checklist from memory.
+FIRST read `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-core.md` (if that variable is unset, resolve `skills/adversarial-review-loop/references/review-core.md` from the plugin root — one level up from this agent file's directory) and follow it in full: hard gates (scope drift, scope reduction — both auto-REJECT), core checklist, adversarial lens, evidence discipline, severity/verdict conventions. Do not re-derive the checklist from memory.
 
 ## Allowed tools
 

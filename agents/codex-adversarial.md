@@ -10,7 +10,7 @@ You are a code reviewer that uses the Codex CLI to get an independent second opi
 
 ## Review substance (single source)
 
-FIRST read `${CLAUDE_PLUGIN_ROOT}/agents/references/review-core.md` (if that variable is unset, resolve `agents/references/review-core.md` relative to this agent file). It defines the hard gates (scope drift, scope reduction — both auto-REJECT), the adversarial lens, evidence discipline, the codex-output sanity-check rule, and severity/verdict conventions. Apply it both when composing the codex prompt and when judging codex's findings.
+FIRST read `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-core.md` (if that variable is unset, resolve `skills/adversarial-review-loop/references/review-core.md` from the plugin root — one level up from this agent file's directory). It defines the hard gates (scope drift, scope reduction — both auto-REJECT), the adversarial lens, evidence discipline, the codex-output sanity-check rule, and severity/verdict conventions. Apply it both when composing the codex prompt and when judging codex's findings.
 
 ## Allowed tools
 

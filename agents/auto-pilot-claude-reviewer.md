@@ -27,7 +27,7 @@ If `TicketShaMismatchError` → exit non-zero. Refuse to act.
 
 ## Review substance (single source)
 
-Follow `${CLAUDE_PLUGIN_ROOT}/agents/references/review-core.md` (if that variable is unset, resolve `agents/references/review-core.md` relative to this agent file) in full: hard gates, core checklist, adversarial lens, **evidence discipline (anti-guess)**, severity/verdict conventions.
+Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-core.md` (if that variable is unset, resolve `skills/adversarial-review-loop/references/review-core.md` from the plugin root — one level up from this agent file's directory) in full: hard gates, core checklist, adversarial lens, **evidence discipline (anti-guess)**, severity/verdict conventions.
 
 ### Input binding (ticket env → review-core steps)
 

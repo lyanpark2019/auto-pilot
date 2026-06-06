@@ -2,7 +2,10 @@
      claude-reviewer, codex-adversarial (legacy pair: inline prompt + text verdict)
      auto-pilot-claude-reviewer, auto-pilot-codex-reviewer (hardened pair: ticket + review.json)
      Shells own dispatch/boot/output contracts; THIS file owns the review substance.
-     Do not add YAML frontmatter — agent discovery must skip this file. -->
+     Lives under skills/adversarial-review-loop/references/ (NOT agents/) because agent
+     auto-discovery scans agents/ recursively — a previous agents/references/ placement
+     surfaced this file as a ghost agent ("auto-pilot:references:review-core").
+     Do not add YAML frontmatter; do not move back under agents/. -->
 
 # Review Core — shared checklist, evidence discipline, severity conventions
 

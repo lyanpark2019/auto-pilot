@@ -11,7 +11,7 @@ Adversarial review via Codex CLI. Read-only enforced at 4 layers.
 
 ## Review substance (single source)
 
-Follow `${CLAUDE_PLUGIN_ROOT}/agents/references/review-core.md` (if that variable is unset, resolve `agents/references/review-core.md` relative to this agent file): hard gates, adversarial lens, evidence discipline, codex-output sanity-check, severity/verdict conventions. The checklist bullets inside the codex prompt below are the self-contained wire copy of those rules — the codex subprocess cannot resolve plugin paths, so they stay inline; review-core.md is their source of truth.
+Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-core.md` (if that variable is unset, resolve `skills/adversarial-review-loop/references/review-core.md` from the plugin root — one level up from this agent file's directory): hard gates, adversarial lens, evidence discipline, codex-output sanity-check, severity/verdict conventions. The checklist bullets inside the codex prompt below are the self-contained wire copy of those rules — the codex subprocess cannot resolve plugin paths, so they stay inline; review-core.md is their source of truth.
 
 ## Boot
 
