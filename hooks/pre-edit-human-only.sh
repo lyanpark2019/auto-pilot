@@ -60,6 +60,10 @@ done
 plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 abs_path="$file_path"
 [[ "$abs_path" != /* ]] && abs_path="$(pwd)/$abs_path"
+# Canonicalize ./ .. and symlinks (r2 review: lexical compare was bypassable
+# via `schemas/../schemas/x` or a symlink into the plugin). realpath works for
+# not-yet-existing files too (resolves the existing prefix lexically+symlink).
+abs_path="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$abs_path" 2>/dev/null || printf '%s' "$abs_path")"
 for prefix in "${TIER2_PREFIXES[@]}"; do
   if [[ "$abs_path" == "$plugin_root/$prefix"* ]]; then
     if [[ "${AUTO_PILOT_ALLOW_CORE_EDIT:-0}" == "1" ]]; then

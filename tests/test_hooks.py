@@ -547,6 +547,21 @@ class TestPreEditHumanOnly:
         assert r.returncode == 0
         _deny_json(r.stdout)
 
+    def test_denies_tier2_via_dotdot_traversal(self, hooks_dir, tmp_path):
+        """`<plugin>/docs/../schemas/x` must canonicalize and still deny
+        (r2: lexical compare was bypassable via ./ .. segments)."""
+        repo = self._make_repo(tmp_path)
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"file_path": str(
+                REPO_ROOT / "docs" / ".." / "schemas" / "contract.schema.json"
+            )}},
+            cwd=repo,
+            env={"AUTO_PILOT_ALLOW_CORE_EDIT": ""},
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
     def test_allows_foreign_repo_schemas_dir(self, hooks_dir, tmp_path):
         """A target repo's own schemas/ must NOT be tier-2 denied (review r1:
         bare substring match false-denied every repo's schemas/ dir)."""
@@ -682,6 +697,20 @@ class TestBranchLock:
             self._hook(hooks_dir),
             {"tool_input": {"command": "git -c user.name=x push origin main"}},
             cwd=repo,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
+    def test_denies_commit_with_c_before_dash_C(self, hooks_dir, tmp_path):
+        """`git -c a=b -C <main-repo> commit` — -C after another global opt
+        must still resolve the -C target (r2 extraction-order bypass)."""
+        repo = self._make_main_repo(tmp_path / "mainrepo")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command": f"git -c user.name=x -C {repo} commit -m 'oops'"}},
+            cwd=elsewhere,
         )
         assert r.returncode == 0
         _deny_json(r.stdout)
@@ -1004,6 +1033,19 @@ class TestDispatchContractGate:
         )
         assert r.returncode == 0
         _deny_json(r.stdout)
+
+    def test_non_path_ticket_token_allows(self, hooks_dir, tmp_path):
+        """Prose `TICKET=PROJ-123` (no slash) is not a worker dispatch — must
+        NOT trip the gate (r2 false-deny finding)."""
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_name": "Task", "tool_input": {
+                "prompt": "Investigate TICKET=PROJ-123 from the issue tracker."
+            }},
+            cwd=tmp_path,
+        )
+        assert r.returncode == 0
+        assert "deny" not in r.stdout
 
     def test_ticket_marker_without_contract_json_denies(self, hooks_dir, tmp_path):
         """TICKET= present but no contract.json at the derived dir = PM skipped

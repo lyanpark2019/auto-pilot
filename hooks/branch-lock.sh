@@ -66,8 +66,11 @@ if [[ -z "$work_dir" ]]; then
   work_dir="$(pwd)"
 fi
 
-# Honor `git -C <path>` — the branch that matters is the -C target's, not CWD's
-c_path=$(printf '%s' "$cmd" | grep -oE '(^|[[:space:];|&])git[[:space:]]+-C[[:space:]]+[^[:space:];|&]+' | head -1 | sed -E 's/.*-C[[:space:]]+//' || echo "")
+# Honor `git -C <path>` — the branch that matters is the -C target's, not CWD's.
+# -C may appear after other global opts (`git -c a=b -C /repo commit`) — match it
+# anywhere in the git invocation segment, not only immediately after `git`
+# (r2 review: extraction-order bypass).
+c_path=$(printf '%s' "$cmd" | grep -oE '(^|[[:space:];|&])git[[:space:]][^;|&]*-C[[:space:]]+[^[:space:];|&]+' | head -1 | sed -E 's/.*-C[[:space:]]+//' || echo "")
 if [[ -n "$c_path" ]]; then
   if [[ "$c_path" == /* ]]; then
     work_dir="$c_path"

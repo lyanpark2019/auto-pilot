@@ -114,7 +114,15 @@ end = block.splitlines()[-1]
 
 text = open(path, encoding="utf-8").read()
 start = text.index(begin)
-stop = text.index(end, start) + len(end)
+try:
+    stop = text.index(end, start) + len(end)
+except ValueError:
+    # BEGIN without END = hand-corrupted managed block. Refuse cleanly rather
+    # than traceback (r2 review) — file left untouched.
+    sys.exit(
+        f"env-constraints: BEGIN marker found in {path} but END marker missing "
+        "— repair or delete the managed block, then re-run."
+    )
 open(path, "w", encoding="utf-8").write(text[:start] + block + text[stop:])
 PYEOF
 else

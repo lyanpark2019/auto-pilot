@@ -59,3 +59,15 @@ class TestEnvConstraintsIdempotency:
         text = target.read_text()
         assert text.count(HEADER) == 1
         assert text.count(BEGIN) == 1
+
+    def test_begin_without_end_fails_cleanly(self, tmp_path: Path) -> None:
+        """Hand-corrupted block (BEGIN, no END) → clean refusal, file untouched,
+        no python traceback (r2 finding)."""
+        target = tmp_path / "CLAUDE.md"
+        corrupted = "# Doc\n\n" + BEGIN + " (generate_env_constraints.sh — managed block, do not edit inside) -->\nstuff\n"
+        target.write_text(corrupted)
+        r = _run([str(tmp_path), "--into", str(target)], cwd=tmp_path)
+        assert r.returncode != 0
+        assert "END marker missing" in (r.stderr + r.stdout)
+        assert "Traceback" not in r.stderr
+        assert target.read_text() == corrupted  # untouched

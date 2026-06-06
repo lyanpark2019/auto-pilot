@@ -48,6 +48,10 @@ contract_dir=$(printf '%s' "$prompt" | grep -oE 'contract_dir=[^[:space:]]+' | h
 # for every real worker dispatch. Derive contract_dir from the ticket path.
 if [[ -z "$contract_dir" ]]; then
   ticket_path=$(printf '%s' "$prompt" | grep -oE 'TICKET=[^[:space:]]+' | head -1 | sed 's/TICKET=//' || echo "")
+  # Only path-valued TICKET= markers count (contain a slash) — a prose mention
+  # like `TICKET=PROJ-123` in a foreign-repo prompt must not trip the gate
+  # (r2 review false-deny finding). Real dispatches always use a ticket path.
+  [[ "$ticket_path" != */* ]] && ticket_path=""
   if [[ -n "$ticket_path" ]]; then
     cand_dir="$(dirname "$(dirname "$ticket_path")")"
     if [[ -f "$cand_dir/contract.json" ]]; then
