@@ -1,0 +1,15 @@
+.DS_Store
+*.log
+
+# runtime artifacts — created by PM/workers during execution
+.planning/autopilot/archive/
+.planning/autopilot/done/
+.planning/autopilot/in_progress/
+.planning/autopilot/inbox/
+.planning/autopilot/knowledge/
+.planning/autopilot/ledger/
+.planning/autopilot/logs/
+.planning/autopilot/outbox/
+.planning/autopilot/results/
+.planning/autopilot/scores/
+.planning/quality/
