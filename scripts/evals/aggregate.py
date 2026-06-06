@@ -12,7 +12,11 @@ def select_cases(cases_dir: Path, tier: str) -> list[str]:
     """Return case ids whose meta tags include ``tier`` (``full`` selects all)."""
     out: list[str] = []
     for meta_path in sorted(cases_dir.glob("*/meta.json")):
-        tags = set(json.loads(meta_path.read_text()).get("tags", []))
+        try:
+            meta = json.loads(meta_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"malformed meta.json: {meta_path}") from exc
+        tags = set(meta.get("tags", []))
         if tier == "full" or tier in tags:
             out.append(meta_path.parent.name)
     return out

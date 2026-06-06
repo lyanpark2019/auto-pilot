@@ -67,3 +67,15 @@ def test_cli_run_smoke_invokes_runner(tmp_path, monkeypatch, capsys):  # type: i
     out = capsys.readouterr().out
     assert "dogfood-smoke" in out
     assert out_path.exists()  # results JSON was written
+
+
+def test_select_cases_malformed_meta_raises_valueerror(tmp_path: Path) -> None:
+    import pytest
+
+    from evals import aggregate
+
+    cases = tmp_path / "cases"
+    (cases / "bad").mkdir(parents=True)
+    (cases / "bad" / "meta.json").write_text("{not json")
+    with pytest.raises(ValueError, match="malformed meta.json"):
+        aggregate.select_cases(cases, tier="smoke")
