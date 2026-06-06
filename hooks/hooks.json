@@ -179,22 +179,12 @@
         ]
       },
       {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/graphify_update.sh",
-            "description": "Auto-run `graphify update <cat>` when .md changes inside raw/ or sources/"
-          }
-        ]
-      },
-      {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-update.sh",
-            "description": "Mark graphify code graph stale on code edits (fail-open; eager rebuild only with GRAPHIFY_AUTOSYNC=1) — feeds doc-management MAINTAIN"
+            "description": "Graph-freshness watcher (merged): marks graphify code graph stale on code edits (fail-open; eager rebuild with GRAPHIFY_AUTOSYNC=1) AND runs `graphify update <dir>` when vault raw/sources .md files change (disable with GRAPHIFY_VAULT_AUTOSYNC=0)"
           }
         ]
       }

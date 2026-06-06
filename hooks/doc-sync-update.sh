@@ -2,15 +2,15 @@
 # auto-pilot doc-sync hook: keep the graphify code graph fresh as code is edited.
 # Graph-freshness watcher feeding the doc-management skill's MAINTAIN mode.
 #
-# PostToolUse (Write|Edit) watcher, generalized from vault-builder's graphify_update.sh
-# (which watched vault markdown; this watches CODE in any graphify-enabled repo).
-#
-# Behavior: when the edited file is a code file inside a repo that has graphify-out/,
-# mark the graph stale by touching graphify-out/needs_update — the exact flag
-# `graphify check-update` reads and doc-management MAINTAIN consumes (its graph
-# rebuild step clears it).
-# Opt-in eager mode: GRAPHIFY_AUTOSYNC=1 runs `graphify update <repo>` right away
-# (AST-only, no LLM key) and clears the flag on success.
+# Merged from two PostToolUse watchers (previously separate entries in hooks.json):
+#   1. CODE watcher (original doc-sync-update.sh) — when the edited file is a code
+#      file inside a repo that has graphify-out/, marks the graph stale by touching
+#      graphify-out/needs_update.  Opt-in eager: GRAPHIFY_AUTOSYNC=1 runs `graphify
+#      update <repo>` (AST-only) and clears the flag.
+#   2. VAULT MARKDOWN watcher (absorbed from graphify_update.sh) — when the edited
+#      file is a .md inside a vault raw/ or sources/ dir, runs `graphify update <dir>`
+#      synchronously so the vault graph stays current after each source edit.
+#      Guard: GRAPHIFY_BIN must be executable; fails silently (warn on stderr only).
 #
 # FAIL-OPEN BY DESIGN: doc freshness must never block or break an edit.
 # Every path exits 0; all output is suppressed or best-effort stderr warnings.
@@ -34,16 +34,37 @@ file_path=$(printf '%s' "$payload" \
 [[ -z "${file_path}" ]] && exit 0
 [[ "${file_path}" != /* ]] && exit 0   # need an absolute path to walk up from
 
-# Skip non-code and generated/vendored/scratch locations.
+# Skip generated/vendored/scratch locations regardless of file type.
 case "$file_path" in
   */graphify-out/*|*/.git/*|*/node_modules/*|*/.venv/*|*/venv/*|*/__pycache__/*|*/.graphify/*|*/dist/*|*/build/*)
     exit 0 ;;
 esac
+
+# ── VAULT MARKDOWN BRANCH (absorbed from graphify_update.sh) ──────────────────
+# When the edited file is a .md inside a vault raw/ or sources/ dir, run
+# `graphify update <dir>` synchronously so the vault graph stays current.
+# GRAPHIFY_VAULT_AUTOSYNC=0 disables this branch; default ON.
+if [[ "${file_path}" == *.md ]]; then
+  if [[ "${GRAPHIFY_VAULT_AUTOSYNC:-1}" != "0" ]]; then
+    if [[ "$file_path" =~ /([^/]+)/(raw|sources)/[^/]+\.md$ ]]; then
+      source_dir=$(dirname "$file_path")
+      graphify_bin="${GRAPHIFY_BIN:-${HOME}/.local/bin/graphify}"
+      if [[ -x "$graphify_bin" ]]; then
+        ( cd "$source_dir" && "$graphify_bin" update . >/dev/null 2>&1 ) || \
+          printf 'doc-sync hook: graphify vault update failed for %s\n' "$source_dir" >&2
+      fi
+    fi
+  fi
+  exit 0  # markdown handled (or skipped); code-graph branch is code-only
+fi
+
+# ── CODE GRAPH BRANCH ─────────────────────────────────────────────────────────
+# Mark graphify code graph stale when a code file is edited in a graphify-enabled repo.
 case "$file_path" in
   *.py|*.pyi|*.js|*.jsx|*.ts|*.tsx|*.mjs|*.cjs|*.go|*.rs|*.java|*.kt|*.kts|*.swift|*.rb|*.php|*.c|*.h|*.cc|*.cpp|*.hpp|*.cs|*.scala|*.sql|*.sh|*.bash|*.m|*.mm|*.vue|*.svelte|*.lua|*.ex|*.exs|*.zig)
     ;;  # code — proceed
   *)
-    exit 0 ;;  # markdown/config/other — not this hook's job
+    exit 0 ;;  # config/other — not this hook's job
 esac
 
 # Walk up from the edited file to find the nearest dir containing graphify-out/.

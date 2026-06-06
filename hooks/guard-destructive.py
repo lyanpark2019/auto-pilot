@@ -177,15 +177,32 @@ def main() -> None:
     scanned = scrub_text_arguments(command)
 
     # Hour-rotated evidence marker (in tmpdir, no persistence beyond an hour).
+    now = datetime.now()
     marker = os.path.join(
         tempfile.gettempdir(),
-        f"claude-destructive-approved-{datetime.now().strftime('%Y%m%d-%H')}.marker",
+        f"claude-destructive-approved-{now.strftime('%Y%m%d-%H')}.marker",
     )
+
+    # Validate marker mtime: only honor markers whose mtime falls within the
+    # current calendar hour.  Pre-created future-hour markers (batch runs that
+    # touch markers for every hour) must NOT be honored when their hour
+    # arrives — the marker must have been created during the current hour.
+    def _marker_valid(path: str) -> bool:
+        try:
+            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            return (
+                mtime.year == now.year
+                and mtime.month == now.month
+                and mtime.day == now.day
+                and mtime.hour == now.hour
+            )
+        except OSError:
+            return False
 
     for pattern, reason in DESTRUCTIVE_PATTERNS:
         try:
             if re.search(pattern, scanned, re.IGNORECASE):
-                if os.path.isfile(marker):
+                if os.path.isfile(marker) and _marker_valid(marker):
                     respond_and_exit(
                         "allow",
                         (
