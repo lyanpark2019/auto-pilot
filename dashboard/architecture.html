@@ -31,13 +31,13 @@ footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d
 </head>
 <body>
 <h1>auto-pilot — Architecture</h1>
-<div class="sub">branch <code>feat/unified-coding-system</code> · commit <code>02d5122</code> · generated 2026-06-07 · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
+<div class="sub">branch <code>main</code> · commit <code>ebfa01b</code> · generated 2026-06-07 · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
 
 <h2>Asset counts</h2>
-<div class="counts"><div class="cb"><span class="n">23</span><span class="t">agent</span></div><div class="cb"><span class="n">12</span><span class="t">codex-skill</span></div><div class="cb"><span class="n">11</span><span class="t">command</span></div><div class="cb"><span class="n">17</span><span class="t">hook</span></div><div class="cb"><span class="n">14</span><span class="t">skill</span></div><div class="cb"><span class="n">77</span><span class="t">total</span></div></div>
+<div class="counts"><div class="cb"><span class="n">20</span><span class="t">agent</span></div><div class="cb"><span class="n">12</span><span class="t">codex-skill</span></div><div class="cb"><span class="n">11</span><span class="t">command</span></div><div class="cb"><span class="n">17</span><span class="t">hook</span></div><div class="cb"><span class="n">14</span><span class="t">skill</span></div><div class="cb"><span class="n">74</span><span class="t">total</span></div></div>
 
 <h2>4-Pillar purpose (모든 자산은 ≥1 pillar 에 역할 정의 의무)</h2>
-<div class="pillars"><div class="card" style="border-top:3px solid #3fb950"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #3fb950;color:#3fb950">P① 자율 코딩 루프</div><p class="desc">PM-worker-이중리뷰. Contract-based dispatch, frozen-diff dual adversarial review, fixer convergence.</p><div class="count-badge">28 assets</div></div>
+<div class="pillars"><div class="card" style="border-top:3px solid #3fb950"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #3fb950;color:#3fb950">P① 자율 코딩 루프</div><p class="desc">PM-worker-이중리뷰. Contract-based dispatch, frozen-diff dual adversarial review, fixer convergence.</p><div class="count-badge">25 assets</div></div>
 <div class="card" style="border-top:3px solid #d29922"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #d29922;color:#d29922">P② 문서 신선도</div><p class="desc">doc-management flagship. REBUILD/AUDIT/MAINTAIN 3 modes; stale-doc assets absorbed or REMOVE.</p><div class="count-badge">14 assets</div></div>
 <div class="card" style="border-top:3px solid #bc8cff"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #bc8cff;color:#bc8cff">P③ 지식 영속</div><p class="desc">vault · retro · memory. Obsidian vault primary context, retro append-only, session handoff.</p><div class="count-badge">0 assets</div></div>
 <div class="card" style="border-top:3px solid #f85149"><div class="pill" style="background:rgba(0,0,0,.2);border:1px solid #f85149;color:#f85149">P④ 안전·집행</div><p class="desc">hooks · contracts · gates. Enforcement-not-instruction; mechanical compensation for operator weaknesses.</p><div class="count-badge">35 assets</div></div>
@@ -69,20 +69,17 @@ footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d
 <tr><th>Asset</th><th>Type</th><th>Subsystem</th><th>Pillar</th></tr>
 <tr><td><code>auto-pilot-claude-reviewer</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>auto-pilot-codex-reviewer</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
-<tr><td><code>claude-reviewer</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>code-perfector</code></td><td class="dim">agent</td><td class="dim">quality</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
-<tr><td><code>codex-adversarial</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>harness-evaluator</code></td><td class="dim">agent</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>harness-generator</code></td><td class="dim">agent</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>harness-planner</code></td><td class="dim">agent</td><td class="dim">harness</td><td><span style="color:#f85149;font-size:10.5px">safety</span></td></tr>
 <tr><td><code>pm-orchestrator</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>retro</code></td><td class="dim">agent</td><td class="dim">core-loop</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
-<tr><td><code>security-reviewer</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
+<tr><td><code>review-gatekeeper</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>specialist-pool</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>swarm-explorer</code></td><td class="dim">agent</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>swarm-monitor</code></td><td class="dim">agent</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>swarm-verifier</code></td><td class="dim">agent</td><td class="dim">swarm</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
-<tr><td><code>tdd-enforcer</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>tech-critic-lead</code></td><td class="dim">agent</td><td class="dim">review</td><td><span style="color:#3fb950;font-size:10.5px">core-loop</span></td></tr>
 <tr><td><code>vault-edge-curator</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
 <tr><td><code>vault-graph-enricher</code></td><td class="dim">agent</td><td class="dim">docs-vault-export</td><td><span style="color:#d29922;font-size:10.5px">docs</span></td></tr>
@@ -147,6 +144,6 @@ footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d
 
 </table>
 
-<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD 02d5122. Stale when code changes without re-run.</footer>
+<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD ebfa01b. Stale when code changes without re-run.</footer>
 </body>
 </html>

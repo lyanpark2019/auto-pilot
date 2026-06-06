@@ -111,10 +111,9 @@ For each phase in the spec:
 3. Dispatches N Sonnet 4.6 workers in 1 message (parallel) in isolated worktrees
 4. Each worker edits, runs verify tee'd to a persisted log, reports diff + verify-log path + SHA-256 (hash-less reports are bounced before review; reviewers recompute the hash)
 5. Dispatches reviewers in 1 message (parallel):
-   - `codex-adversarial` (always)
-   - `claude-reviewer` cold (always)
-   - `tdd-enforcer` if runtime code touched (deletes impl written before tests, from Superpowers)
-   - `security-reviewer` if trust-boundary files touched
+   - `auto-pilot-codex-reviewer` (always) — hardened pair, legacy `codex-adversarial` deleted 2026-06-07
+   - `auto-pilot-claude-reviewer` cold (always) — hardened pair, legacy `claude-reviewer` deleted 2026-06-07
+   - `review-gatekeeper` if runtime code touched / trust-boundary files touched (tdd-enforcer + security-reviewer merged 2026-06-07)
    - Other specialists per `agents/specialist-pool.md`
 6. ALL reviewers must APPROVE — any REJECT → loop with finding
 7. Hard gates inside review: scope-drift (out-of-contract files), scope-reduction (worker loosened test instead of fixing impl)
@@ -151,8 +150,8 @@ For each phase in the spec:
 - `ruff --fix` on composition roots — blocked
 - Post-deploy: zombie port check, env placeholder leak check
 - Over-scoped contracts — `tech-critic-lead` rejects with reason
-- Implementation without tests — `tdd-enforcer` REJECTs
-- Out-of-scope edits — claude-reviewer + codex-adversarial REJECT on scope drift
+- Implementation without tests — `review-gatekeeper` REJECTs
+- Out-of-scope edits — auto-pilot-claude-reviewer + auto-pilot-codex-reviewer REJECT on scope drift
 - Reviewer writes outside `outputs/<role>/` — `hooks/pre-reviewer-write.sh` blocks (PR3)
 - Phase fail leaves dirty tree — `headless-loop.py` `stash_if_dirty` (PR4 replaces destructive reset)
 - Run-away cost or fork-bomb — `--max-cost-usd` / `--max-tokens` / `--max-concurrent-claude` (PR4)

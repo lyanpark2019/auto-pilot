@@ -8,7 +8,7 @@ set -uo pipefail
 
 role="${AUTO_PILOT_SUBAGENT_ROLE:-}"
 case "$role" in
-  codex-reviewer|claude-reviewer|tdd-enforcer|security-reviewer|tech-critic-lead) ;;
+  codex-reviewer|claude-reviewer|review-gatekeeper|tech-critic-lead) ;;
   *) exit 0 ;;
 esac
 

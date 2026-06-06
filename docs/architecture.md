@@ -96,7 +96,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 14 skills · 23 agents · 11 commands · 17 hooks · 12 codex-skills = 77 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 14 skills · 20 agents · 11 commands · 17 hooks · 12 codex-skills = 74 assets total.
 
 ```
 auto-pilot/
@@ -115,11 +115,12 @@ auto-pilot/
 │   ├── swarm/{init,start,status,stop,ticket,bench}/   # P①: parallel execution backend
 │   ├── improve-codebase-architecture/, diagnosing-{llm-output-leaks,stale-runtime}/  # diagnostics
 │   └── (codebase-perfection-loop/ deleted — rubric SoT = quality-eval)
-├── agents/  (23 contracts)
+├── agents/  (20 contracts)
 │   ├── core: pm-orchestrator, worker, retro
-│   ├── review (P①④): codex-adversarial, claude-reviewer (legacy),
-│   │         auto-pilot-{codex,claude}-reviewer (PR3), tech-critic-lead,
-│   │         tdd-enforcer, security-reviewer, specialist-pool, code-perfector
+│   ├── review (P①④): auto-pilot-{codex,claude}-reviewer (hardened pair —
+│   │         legacy codex-adversarial/claude-reviewer deleted 2026-06-07),
+│   │         tech-critic-lead, review-gatekeeper (tdd-enforcer + security-reviewer
+│   │         merged 2026-06-07), specialist-pool, code-perfector
 │   ├── harness: harness-{planner,generator,evaluator}
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator

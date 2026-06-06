@@ -42,11 +42,11 @@ For each contract, dispatch a worker (Sonnet 4.6 1M ctx) to make the failing tes
 - Minimal implementation per contract
 - `pnpm test` / `pytest` green
 
-Verify gate: full review fan-out (codex-adversarial + claude-reviewer + tdd-enforcer + matching specialists). All APPROVE.
+Verify gate: full review fan-out (auto-pilot-codex-reviewer + auto-pilot-claude-reviewer + review-gatekeeper + matching specialists). All APPROVE.
 
 ### Phase 5 — Review
 
-Aggregate review pass over the merged Phase-4 work. PM dispatches a single cold claude-reviewer over the cumulative diff (not per-contract). Catches cross-contract issues missed in per-worker review. Produces:
+Aggregate review pass over the merged Phase-4 work. PM dispatches a single cold auto-pilot-claude-reviewer over the cumulative diff (not per-contract). Catches cross-contract issues missed in per-worker review. Produces:
 - `docs/auto-pilot/5-review.md` — findings + dispositions
 
 Verify gate: zero open P0/P1 findings. P2 findings logged but not blocking.

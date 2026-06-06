@@ -45,7 +45,7 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 5. **PREFLIGHT** path validation hook fires (kills typo-path failure class)
 6. **DISPATCH WORKERS** — N Sonnet-4.6-1M workers in 1 message (N parallel Agent blocks, `isolation: worktree`)
 7. **REVIEW FAN-OUT** in parallel per worker diff:
-   - Default: `codex-adversarial`, `claude-reviewer`
+   - Default: `auto-pilot-codex-reviewer`, `auto-pilot-claude-reviewer`
    - If diff touches runtime code: + `tdd-enforcer`
    - If diff touches trust boundary (auth/API/secrets/SQL/migrations/payments): + `security-reviewer`
    - Additional specialists per `agents/specialist-pool.md` mapping
@@ -98,7 +98,7 @@ At phase end the PM MAY dispatch the `retro` agent (`agents/retro.md`) — appen
 | Interactive TUI in non-interactive shell | PM avoids `claude doctor` etc., uses flag equivalents |
 | Over-scoped contracts ("P1.1 not real issue") | `tech-critic-lead` gate BEFORE worker dispatch |
 | Implementation without tests | `tdd-enforcer` rejects runtime change diffs missing matching test file |
-| Workers touching files outside their contract | `claude-reviewer` + `codex-adversarial` scope-drift check (auto-REJECT on out-of-scope edits) |
+| Workers touching files outside their contract | `auto-pilot-claude-reviewer` + `auto-pilot-codex-reviewer` scope-drift check (auto-REJECT on out-of-scope edits) |
 | Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase; on `status=failed` it calls `stash_if_dirty` (non-destructive stash with a recoverable label) — `$ROOT` is intentionally not reset hard so worktree cleanup is the recovery unit (`iter.fail_no_root_reset` event logged) |
 
 ## Parallel execution backend

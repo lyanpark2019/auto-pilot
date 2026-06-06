@@ -32,20 +32,14 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
    fi
    ```
 
-7. **Subagent discovery probe** (PR3 fallback gate):
+7. **Subagent discovery probe** (presence health-check — hardened pair is required):
    ```bash
    # `claude --list-agents` does not exist; probe via no-op dispatch with sentinel token.
-   if [ "${AUTO_PILOT_DISABLE_NEW_REVIEWERS:-0}" != "1" ]; then
-     probe_result=$(timeout 30 claude -p --max-turns 1 \
-        "@subagent:auto-pilot-claude-reviewer reply with literal token AUTOPILOT_PROBE_OK" 2>&1)
-     if echo "$probe_result" | grep -q AUTOPILOT_PROBE_OK; then
-       export AUTO_PILOT_USE_NEW_REVIEWERS=1
-     else
-       echo "auto-pilot: subagent discovery probe failed; falling back to general-purpose dispatch" >&2
-       export AUTO_PILOT_USE_NEW_REVIEWERS=0
-     fi
-   else
-     export AUTO_PILOT_USE_NEW_REVIEWERS=0
+   probe_result=$(timeout 30 claude -p --max-turns 1 \
+      "@subagent:auto-pilot-claude-reviewer reply with literal token AUTOPILOT_PROBE_OK" 2>&1)
+   if ! echo "$probe_result" | grep -q AUTOPILOT_PROBE_OK; then
+     echo "auto-pilot: subagent discovery probe failed; hardened reviewer pair unavailable — aborting (no legacy fallback)" >&2
+     exit 3
    fi
    ```
 
@@ -59,7 +53,7 @@ Invoke the `auto-pilot` skill. The skill loads `${CLAUDE_PLUGIN_ROOT}/skills/aut
    fi
    ```
 
-In degraded mode (`AUTO_PILOT_USE_NEW_REVIEWERS=0`), PM dispatches via legacy `subagent_type: general-purpose, model: opus`. Hook `pre-reviewer-write.sh` still fires (env-keyed), so layers 2+3 remain active. Layer 1 (frontmatter `tools:` whitelist) disabled.
+The hardened pair (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) is the only reviewer dispatch path — there is no legacy `general-purpose` inline-text fallback (legacy pair deleted 2026-06-07). All four sandbox layers stay active: frontmatter `tools:` whitelist (layer 1), the env-keyed `pre-reviewer-write.sh` hook (layers 2+3), and the codex `--sandbox read-only` deterrent (layer 4).
 
 ## Execution
 
@@ -68,9 +62,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py` for the canonical loop. Dri
 For each phase:
 1. Plan contracts (Read spec + current code)
 2. Dispatch workers (1 message, N parallel `Agent` blocks with `subagent_type: "general-purpose"` and the model override `sonnet` — Sonnet 4.6 1M context)
-3. Dispatch reviewers (1 message, 2 parallel blocks per worker). Reviewer pair depends on subagent probe result (step 7 above):
-   - **Hardened loop** (`AUTO_PILOT_USE_NEW_REVIEWERS=1`): `auto-pilot-codex-reviewer` + `auto-pilot-claude-reviewer` (ticket-JSON contract, frozen-diff SHA, sandboxed; defined in `agents/auto-pilot-{codex,claude}-reviewer.md`)
-   - **Legacy / degraded** (`AUTO_PILOT_USE_NEW_REVIEWERS=0`): `codex-adversarial` + `claude-reviewer` (inline-text verdict, general-purpose dispatch; defined in `agents/{codex-adversarial,claude-reviewer}.md`)
+3. Dispatch reviewers (1 message, 2 parallel blocks per worker). The hardened pair is the only path: `auto-pilot-codex-reviewer` + `auto-pilot-claude-reviewer` (ticket-JSON contract, frozen-diff SHA, sandboxed; defined in `agents/auto-pilot-{codex,claude}-reviewer.md`). The subagent discovery probe (step 7 above) is a presence health-check; if it fails the loop aborts rather than degrading to an inline-text reviewer.
 4. Apply approved fixes, commit atomically, advance state
 
 Stop conditions defined in `SKILL.md`.

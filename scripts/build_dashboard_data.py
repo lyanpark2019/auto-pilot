@@ -33,7 +33,7 @@ SUBSYSTEM_RULES: list[tuple[str, str]] = [
     (r"^(harness|setup-harness|setup-claude-md)", "harness"),
     (r"^(adversarial-review-loop|quality|pm-quality|residue-audit|code-perfector)", "quality"),
     (r"^(auto-pilot|eval-run|worker$|pm-orchestrator$|retro$)", "core-loop"),
-    (r"(reviewer|codex-adversarial|tdd-enforcer|security-reviewer|tech-critic|specialist-pool)", "review"),
+    (r"(reviewer|review-gatekeeper|tech-critic|specialist-pool)", "review"),
     (r"^(sha-deploy|deploy)", "deploy"),
     (r"^(codex-orchestra)", "conductor"),
     (r"^(goal-)", "goal"),

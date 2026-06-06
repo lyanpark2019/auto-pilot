@@ -1,6 +1,7 @@
 <!-- NOT an agent. Shared review substance (single source) for:
-     claude-reviewer, codex-adversarial (legacy pair: inline prompt + text verdict)
      auto-pilot-claude-reviewer, auto-pilot-codex-reviewer (hardened pair: ticket + review.json)
+     (legacy inline-prompt/text-verdict pair claude-reviewer + codex-adversarial deleted 2026-06-07 —
+      both shells are now the auto-pilot-* hardened pair)
      Shells own dispatch/boot/output contracts; THIS file owns the review substance.
      Lives under skills/adversarial-review-loop/references/ (NOT agents/) because agent
      auto-discovery scans agents/ recursively — a previous agents/references/ placement

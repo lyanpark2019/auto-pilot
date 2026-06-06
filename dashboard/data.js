@@ -1,9 +1,9 @@
 window.DASHBOARD_DATA = {
- "branch": "feat/unified-coding-system",
- "commit": "02d5122",
+ "branch": "main",
+ "commit": "ebfa01b",
  "counts": {
   "skill": 14,
-  "agent": 23,
+  "agent": 20,
   "command": 11,
   "hook": 17,
   "codex-skill": 12
@@ -91,18 +91,8 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "agent",
-   "name": "claude-reviewer",
-   "subsystem": "review"
-  },
-  {
-   "type": "agent",
    "name": "code-perfector",
    "subsystem": "quality"
-  },
-  {
-   "type": "agent",
-   "name": "codex-adversarial",
-   "subsystem": "review"
   },
   {
    "type": "agent",
@@ -131,7 +121,7 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "agent",
-   "name": "security-reviewer",
+   "name": "review-gatekeeper",
    "subsystem": "review"
   },
   {
@@ -153,11 +143,6 @@ window.DASHBOARD_DATA = {
    "type": "agent",
    "name": "swarm-verifier",
    "subsystem": "swarm"
-  },
-  {
-   "type": "agent",
-   "name": "tdd-enforcer",
-   "subsystem": "review"
   },
   {
    "type": "agent",
