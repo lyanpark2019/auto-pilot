@@ -34,7 +34,7 @@ Each loop stage routes to a skill/agent. This is the "system that integrates var
 
 ## 3. What it is (structure)
 
-A **plugin** (container) bundling: 1 skill, 1 command, 10 agents, 5 hooks, schemas, Python helpers. Why a plugin and not a lone skill: **hooks cannot ship inside a skill**, and the friction guards are hook-only. Layout: see project `CLAUDE.md`.
+A **plugin** (container) bundling: skills, commands, agents, hooks, schemas, Python helpers. Why a plugin and not a lone skill: **hooks cannot ship inside a skill**, and the friction guards are hook-only. Layout: see project `CLAUDE.md`.
 
 Runtime roles (easy to confuse):
 - **PM** = the main Opus session itself, reading `agents/pm-orchestrator.md` as its contract. **Never dispatched as a subagent.**

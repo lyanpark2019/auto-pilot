@@ -96,7 +96,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 19 agents · 10 commands · 17 hooks · 12 codex-skills = 69 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 8 commands · 17 hooks · 12 codex-skills = 64 assets total.
 
 ```
 auto-pilot/
@@ -115,13 +115,13 @@ auto-pilot/
 │   ├── improve-codebase-architecture/, diagnosing/  # diagnostics (2 modes, merged 2026-06-07)
 │   └── (deleted: codebase-perfection-loop, pm-quality-harness-loop → ARL --lifecycle,
 │        swarm-bench → swarm bench, diagnosing-* pair → diagnosing; 2026-06-07)
-├── agents/  (19 contracts)
+├── agents/  (16 contracts)
 │   ├── core: pm-orchestrator, worker, retro
 │   ├── review (P①④): auto-pilot-{codex,claude}-reviewer (hardened pair —
 │   │         legacy codex-adversarial/claude-reviewer deleted 2026-06-07),
 │   │         tech-critic-lead, review-gatekeeper (tdd-enforcer + security-reviewer
 │   │         merged 2026-06-07), specialist-pool (code-perfector retired 2026-06-07)
-│   ├── harness: harness-{planner,generator,evaluator}
+│   │         (harness-{planner,generator,evaluator} deleted 2026-06-07 — 1:1 duplicate of loop)
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)

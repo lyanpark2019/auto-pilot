@@ -98,8 +98,8 @@ Ready to copy or invoke from this skill directory:
 | `scripts/track-read.sh` / `verify-gate.sh` / `kill-switch.sh` / `steer.sh` / `commit-on-stop.sh` | Canonical Anthropic hooks from `cwc-long-running-agents` |
 | `scripts/telemetry.sh` / `weekly-metrics.sh` | PostToolUse jsonl + OTLP emitter, jq weekly report |
 | `scripts/budget-guard.sh` / `poll-cost.sh` | PreToolUse daily/harness spend cap + Anthropic Admin API cost poll |
-| `agents/harness-planner.md` / `harness-generator.md` / `harness-evaluator.md` | Anthropic Mar 2026 multi-agent pattern; file-based handoff via `.claude/harness/spec.md` |
-| `commands/harness-{setup,loop,score,verify,drift,plan,build,qa}.md` | 8 slash commands wrapping the orchestrator |
+| ~~`agents/harness-planner.md` / `harness-generator.md` / `harness-evaluator.md`~~ | Deleted 2026-06-07 — 1:1 duplicate of auto-pilot loop; use `/auto-pilot` instead |
+| ~~`commands/harness.md` / `commands/harness-ops.md`~~ | Deleted 2026-06-07; use scripts directly: `bootstrap.sh` (setup), `harness-loop.sh` (loop), `score-harness.sh` (score), `verify-harness.sh` (verify), `drift-scan.sh` (drift), `/auto-pilot` (plan/build) |
 | `templates/CLAUDE.md.template` | Pointer-style ≤50-line scaffold |
 | `templates/AGENTS.md.template` | AAIF standard for Codex/Cursor/Devin parity |
 | `templates/ADR-template.md` | Immutable ADR with enforcement section (archgate pattern) |

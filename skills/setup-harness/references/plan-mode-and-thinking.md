@@ -13,7 +13,7 @@ Toggled via `/` command menu or `permissionMode: plan` in subagent frontmatter.
 | Harness task | Plan Mode? | Why |
 |--------------|-----------|-----|
 | Audit existing harness | ✅ | Read-only by nature |
-| Score (`/harness-ops score`) | ✅ | Pure read |
+| Score (harness script direct) | ✅ | Pure read |
 | Drift scan | ✅ | Reads files + greps |
 | Bootstrap new harness | ❌ | Needs writes |
 | Run autonomous loop | ❌ | Loop applies autofixes |
@@ -23,10 +23,10 @@ Toggled via `/` command menu or `permissionMode: plan` in subagent frontmatter.
 
 ```
 1. /plan-mode on
-2. /harness-ops score        # see current state, read-only
+2. bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/score-harness.sh   # see current state, read-only
 3. Discuss with Claude: which dimensions matter most, what to skip
 4. /plan-mode off
-5. /harness-ops loop 95 15   # execute the plan
+5. TARGET=95 MAX_ITERATIONS=15 bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/harness-loop.sh
 ```
 
 ## Extended Thinking budget
@@ -58,30 +58,9 @@ case "$effort_level" in
 esac
 ```
 
-## Combining with the 3-agent harness
+## Historical: 3-agent harness pattern (deleted 2026-06-07)
 
-The Anthropic harness-design paper (Mar 2026) used:
-
-| Subagent | Effort level | Plan Mode |
-|----------|--------------|-----------|
-| `harness-planner` | `xhigh` or `max` | not used (writes spec.md) |
-| `harness-generator` | `high` | not used (writes code) |
-| `harness-evaluator` | `medium` | optional first pass for contract review |
-
-Higher effort on the Planner is justified — its spec quality compounds into every downstream sprint. Cheaper effort on the Evaluator is fine because criteria are hard-coded.
-
-## Cost impact
-
-Anthropic's harness-design DAW example:
-
-```
-Planner    4.7 min  $0.46    (effort: high)
-Build×3    3h 19m   $113.85  (effort: medium)
-QA×3      25.2 min  $10.39   (effort: medium)
-Total     3h 50m    $124.70
-```
-
-Switching Planner to `low` effort would cut $0.46 → ~$0.10 but spec quality drops; the savings are not worth it. Switching QA to `xhigh` would cost ~$30 more with marginal quality gain. The defaults above reflect this calibration.
+The Anthropic harness-design paper (Mar 2026) described a planner/generator/evaluator trio. The corresponding agents (`harness-planner`, `harness-generator`, `harness-evaluator`) were removed as 1:1 duplicates of the auto-pilot loop — use `/auto-pilot` instead. Cost calibration from the paper applied the same effort-level reasoning (higher on planning, medium on generation/QA).
 
 ## Anti-patterns
 

@@ -17,7 +17,7 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 | Full quality lifecycle: lift → adversarial bug-hunt → harness-doc sync → autonomous merge | `adversarial-review-loop --lifecycle` (absorbed pm-quality-harness-loop 2026-06-07) |
 | Dead code / duplicates / residue removal | `residue-audit` |
 | Architecture improvement / module boundaries | `improve-codebase-architecture` |
-| Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`, `/harness` (plan/build/qa), `/harness-ops` (setup/drift/loop/score/verify)) |
+| Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`; `/harness` and `/harness-ops` deleted 2026-06-07 — use `bootstrap.sh`/`harness-loop.sh` directly) |
 | Docs rotten / 문서 개판 / rebuild docs from code | `doc-management` (REBUILD mode) |
 | Code changed, docs behind / doc sync / 문서 동기화 | `doc-management` (MAINTAIN mode — `scripts/check_design_doc_freshness.py` STALE feed) |
 | Doc drift / 문서 최신화 / docs audit / claim verification | `doc-management` (AUDIT mode) |
