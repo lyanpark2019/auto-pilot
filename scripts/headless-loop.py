@@ -11,7 +11,7 @@ instead), added phase-aware verify and pivot detection.
 
 Per loop iteration:
   1. snapshot pre-phase HEAD
-  2. spawn `claude -p` headless session running `/auto-pilot start --phase N`
+  2. spawn `claude -p` headless session (prompts/iteration.md prose trigger: 'Run the auto-pilot skill', phase N)
   3. on session exit:
        - status=success → commit + advance phase
        - status=fail    → `git reset --hard <pre-phase-HEAD>`, mark pivot-needed, stop

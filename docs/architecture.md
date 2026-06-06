@@ -96,13 +96,13 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 14 skills · 1 skill-shell · 23 agents · 11 commands · 17 hooks · 12 codex-skills = 78 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 14 skills · 23 agents · 11 commands · 17 hooks · 12 codex-skills = 77 assets total.
 
 ```
 auto-pilot/
 ├── .claude-plugin/plugin.json + marketplace.json
 ├── .mcp.json                          # notebooklm vault MCP
-├── skills/  (19 dirs, 14 active SKILL.md + 1 deprecated shell)
+├── skills/  (14 dirs, all active SKILL.md)
 │   ├── auto-pilot/                    # P①: entry skill / core loop
 │   ├── adversarial-review-loop/       # P①④: branch/codebase/multi-agent review
 │   ├── doc-management/                # P②: REBUILD/MAINTAIN/AUDIT flagship
