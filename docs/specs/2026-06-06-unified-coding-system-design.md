@@ -95,6 +95,12 @@ CEO directives: (a) similar assets truly MERGED, not co-located; (b) **EVERY ass
 | quality-loop command | 1 | 0 | pure alias; skill triggers cover it |
 | goal-{scout,judge,worker} | in plugin | revert to ~/.claude | they serve the EXTERNAL goalbuddy skill by plain-name dispatch — out of coding-system scope |
 
+**System heart (CEO 2026-06-06): contracts + retro-memory.** Two first-class mechanisms every subsystem hangs off:
+
+1. **Project-context resolution order (new shared contract — `agents/references/project-context-resolution.md`):** whenever any agent needs project understanding (PM PLAN ingestion, doc-management Phase-0/authoring, retro read-side, swarm-explorer, setup-harness scan), resolve in this order — ① **Obsidian vault** `~/Documents/Knowledge/wiki/projects/<repo-slug>/` (read `_graph/GRAPH_REPORT.md`, `intent/` decisions·gotchas·history, hot cache) → ② repo `graphify-out/` (graph query/explain) → ③ build code-only graph (`graphify update .`, AST-only) → ④ raw source scan (last resort). Vault hit = cheapest + carries Why; codebase = fallback, never first. Wire-in points patched in round-2: pm-orchestrator.md, doc-management SKILL.md, retro.md, swarm-explorer.md, setup-harness Step 1.
+2. **Retro write contract:** lessons append-only + evidence-cited to — vault `intent/gotchas` (if vault exists) AND repo `.claude/insights.md`, with a one-line pointer into session memory. Never rewrite prior entries. This closes the loop: next run's context resolution (①) reads what retro wrote.
+3. **Binding contracts inventory** (README section in round-2): ticket schema · review.json schema · scope_files hard gate · SHA-256 verify-log evidence · doc frontmatter (type/topic/source_commit/manual_edit) · goal receipts · swarm ticket schema — all code-validated, none prompt-only.
+
 **Loop contract (체계화):** repeat rounds of [CONSOLIDATE/OPTIMIZE → functional QA (F1–F6: hook stdin cases, discovery, script smokes incl. freshness fixtures + vault selftest + MCP boot, full suites, quality-eval 13-dim honest score, eval smoke) → skill-reviewer pass → dual adversarial review] until BOTH reviewers APPROVE with zero new findings; cap 4 rounds then honest stop-report. Every merge passes a zero-capability-loss diff check (old content coverage mapped into new home). Each round = logical commits. Self-assessment never claims perfection — residual risks always listed.
 
 - vault Python path move: import breakage risk — gated by running vault tests post-move.
