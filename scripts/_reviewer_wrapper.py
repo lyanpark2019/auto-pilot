@@ -7,6 +7,12 @@ a `claude -p` subprocess with an ISOLATED env dict — no shared state.
 Hook (`pre-reviewer-write.sh`) reads AUTO_PILOT_SUBAGENT_ROLE +
 AUTO_PILOT_OUTPUT_DIR from the spawned env; each subprocess sees only
 its own.
+
+Spawn-prompt scope (decided 2026-06, round-2 W1-7): the prompt stays a
+minimal pointer (ticket path + sha-refusal tripwire) ON PURPOSE — the
+ticket file is the single instruction source; duplicating instructions
+into the prompt would create a second drifting copy. Reviewer liveness
+is the watchdog's job (soft/hard timeouts in _dispatch), not the prompt's.
 """
 from __future__ import annotations
 
