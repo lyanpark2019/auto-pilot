@@ -715,6 +715,33 @@ class TestBranchLock:
         assert r.returncode == 0
         _deny_json(r.stdout)
 
+    def test_denies_commit_with_dash_C_in_message(self, hooks_dir, tmp_path):
+        """A `-C` token inside the commit MESSAGE must not hijack the branch
+        check (r3 regression: message -C made the hook check a non-repo path
+        → false-allow on main)."""
+        repo = self._make_main_repo(tmp_path)
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command": "git commit -m 'support -C flag'"}},
+            cwd=repo,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
+    def test_denies_real_dash_C_with_dash_C_in_message(self, hooks_dir, tmp_path):
+        """Real `git -C <main>` plus a message mentioning `-C /tmp` — only the
+        global-opts -C counts; the message token must not override it."""
+        repo = self._make_main_repo(tmp_path / "mainrepo")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"command": f"git -C {repo} commit -m 'note -C /tmp here'"}},
+            cwd=elsewhere,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
     # ── bypass ──
 
     def test_bypass_allows_commit_on_main(self, hooks_dir, tmp_path):
