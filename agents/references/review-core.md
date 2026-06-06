@@ -34,6 +34,7 @@
 - **Composition-root breakage** — modified `__init__.py` re-exports / re-export drift, import cycles, side effects at module load.
 - **Security** — secrets in code, PII in logs, SQL/cmd/XSS injection, missing CSRF on mutations, admin key in client bundle.
 - **Test theatre** — assertions that always pass, mocked-everything, no real coverage.
+- **Spec drift** — diff implements something the spec doesn't ask for, or skips what the spec demands. (Adversarial twin of §3 Spec compliance: §3 checks the diff against the spec; this lens hunts for the sneaky cases — gold-plating, silent scope swaps, "while I was here" extras.)
 
 ## Evidence discipline (anti-guess)
 
