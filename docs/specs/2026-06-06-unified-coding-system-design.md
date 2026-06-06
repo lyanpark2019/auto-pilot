@@ -20,7 +20,7 @@ OUT (unchanged this round): graphify engine skill (stays global — CEO decision
 | review | adversarial-review-loop + reviewer/specialist agents + tdd-enforcer + security-reviewer + tech-critic-lead | reviewer pairs: extract shared checklist → `agents/references/review-core.md`; both shells cite it; **names unchanged** (scripts/tests dispatch by name) |
 | quality | quality-eval (rubric SoT) + pm-quality-harness-loop (superset) + residue-audit + quality-loop alias + code-perfector | codebase-perfection-loop SKILL.md DELETED (references/ kept — rubric provenance) |
 | harness | setup-harness + harness-* commands + harness trio agents + setup-claude-md command | trio = best-of-breed: PickL fork's richer contract (Goal/Public-interface/Deep-module/Invariants/Write-set/Tests/Rollback-surface) upstreamed into generator+evaluator |
-| **docs (flagship)** | graphify-doc-rebuild (rebuild entry) + doc-drift-audit (audit+claim ledger) + **NEW doc-sync** (automation) + vault/ (vault-builder export machinery) | see below |
+| **docs (flagship)** | ONE skill **doc-management** (3 modes: REBUILD / MAINTAIN / AUDIT) + vault/ (export layer) | canonical spec = `skills/doc-management/references/doc-management-system.md`; see below |
 | swarm | 6 swarm skills + 3 swarm agents + swarm/ scripts | absorbed; documented as parallel execution backend of core loop |
 | deploy | sha-deploy-standard skill + sha-deploy-init command + deploy/templates | absorbed verbatim |
 | conductor | codex-orchestra skill + codex-conductor-guard hook | skill moved in; guard already here (SoT) |
@@ -28,17 +28,34 @@ OUT (unchanged this round): graphify engine skill (stays global — CEO decision
 | diagnostics | diagnosing-* ×2 + improve-codebase-architecture | unchanged |
 | codex | codex/skills ×12 + sync-to-codex.sh | repo = SoT; one-way sync out |
 
-## Docs subsystem — flagship design (zero duplication)
+## Docs subsystem — flagship (zero duplication)
 
-Four former tools → three roles + one export layer, no overlapping triggers:
+Canonical design = `doc-management-system.md` (graphify-native 3-layer model: What=code graph / Why=intent / Generated mirror+review gate). **ONE skill `doc-management`** (renamed from graphify-doc-rebuild) = single entry, three modes:
 
-1. **`/graphify-doc-rebuild`** (skill, moved in) — full rebuild when docs rotten. Diagnose-first gate kept. Fix known issues: `/tmp/code-only` hard-coding → repo-rooted `.graphify/code-only/`.
-2. **`/doc-drift-audit`** (skill, already here) — in-place semantic audit + durable claim ledger. Gains bundled generic assets: `claim-ledger.schema.md` + `verify_claim_ledger` template (generalized from PickL) next to existing `check-doc-reference-integrity.mjs`.
-3. **NEW `/doc-sync`** (skill + hook) — the "plugin directly performs doc updates" requirement:
-   - Hook (PostToolUse/post-commit, generalized from vault-builder's `graphify_update.sh` + `graphify hook install` pattern): code change → deterministic code-only graph rebuild (zero LLM cost), doc-affecting change → `needs_doc_sync` flag.
-   - Command flow: rebuild code-only graph → diff vs last-sync manifest → map changed modules to affected design docs → regenerate/patch those docs from graph (`graphify query`/`explain` + source read, file:line cites) → run ref-integrity guard → report. Incremental counterpart to rebuild.
-4. **vault/** (export layer) — vault-builder wholesale: Obsidian/NotebookLM/bases/canvas export, rubric scoring, PM loop for vault quality. Its code-drift half is NOT deleted (wholesale promise) but `vault-drift` command header routes repo code↔doc drift to `/doc-drift-audit`; vault-drift scope = vault-internal sources. vault agents keep working; `pm-orchestrator` name collision → vault copy renamed `vault-pm-orchestrator` (+ internal ref sweep).
-5. **DELETED: llm-wiki-architect** (per-module wiki = rot machine; superseded by graph-native authoring).
+1. **REBUILD** — existing proven 7-phase + gap-4 confirmed present: clean-slate `_archive/` branch (only reviewed docs go live), root-doc fresh rewrite step, `<MACHINE_READ_DOCS>` discovery slot (gate-parsed docs never move), ops verify-restore in same commit (no gap window). Fix: `/tmp/code-only` hard-coding → repo-rooted `.graphify/code-only/`.
+2. **MAINTAIN** (new) — consumes STALE list from NEW `scripts/check_design_doc_freshness.py` (~60–100L, zero LLM: parse frontmatter `source_commit` → collect cited source paths → `git diff --name-only <commit>..HEAD -- <paths>` → STALE report; gate **WARN only**, never block). Per-doc refresh: re-query graph → re-read source → update cites/prose → bump `source_commit`; large batches go through dual review. **Forbidden: full-auto LLM rewrite + auto-commit.** The `hooks/doc-sync-update.sh` watcher (generalized from vault-builder's graphify_update.sh) keeps the graph fresh and feeds this mode.
+3. **AUDIT** — doc-drift-audit methodology absorbed: read-only parallel fan-out, evidence precedence code>tests>CLI>config>generated>logs, stale-as-current (fix) vs correct-historical (leave), P0/P1/P2 findings; fixes delegated to MAINTAIN. Its repo-agnostic `check-doc-reference-integrity.mjs` carried as the skill's L2 guard asset.
+
+**claim-ledger: NOT adopted** — hand-maintained JSON + manual `last_verified` bump is itself a rot pattern; SHA freshness (L3) + AUDIT replace it. No ledger assets bundled.
+
+**DELETED skills after absorption:** `graphify-doc-rebuild` (renamed→doc-management), `doc-drift-audit` (→AUDIT mode), interim `doc-sync` (→MAINTAIN mode), `llm-wiki-architect` (per-module wiki = rot machine). Old trigger phrases live on in doc-management's description.
+
+**vault/** = export layer (Obsidian/NotebookLM/bases/canvas + vault-quality PM loop). Its repo-code doc-purpose path (`--source code` drift/fix/rubric on repo docs) is RETIRED with a pointer to doc-management (canonical mapping: "doc-용도 제거, export 잔류"); NotebookLM/knowledge-vault building stays fully functional. `pm-orchestrator` name collision → vault copy renamed `vault-pm-orchestrator` (+ internal ref sweep).
+
+## Nick Nisi principles (WorkOS 2026-06 talk — applied plugin-wide)
+
+- **Evidence over trust**: worker verify reports must include SHA-256 of the full verify output log; reviewers re-run and cross-check the hash — mismatch = REJECT. (Extends worker.md, review-core.md, pm-orchestrator.md.)
+- **Retro agent + memory**: NEW `agents/retro.md` — post-run transcript/state analysis → distills doom-loops, wasted tool calls, repeated findings into per-project memory (Gotchas-first, evidence-cited, append-only). PM may dispatch at phase end.
+- **Skill minimization (Gotchas-first)**: skills guide around landmines, not re-teach coding; bodies ≤500 lines with bulk in `references/`. Stated as a plugin principle in CLAUDE.md.
+- **Enforce with code, not prompts / fix the harness, not the output / measure with evals** — already embodied (hooks+schemas+state, harness-first doctrine, evals harness); stated explicitly in CLAUDE.md principles.
+
+## Naming clarity (CEO: names must match the plugin, be unambiguous)
+
+Plugin name `auto-pilot` kept. In-plugin renames: `graphify-doc-rebuild`→**doc-management** · `autopilot-swarm` skill→**swarm** · vault `pm-orchestrator`→**vault-pm-orchestrator**. Renames swept across the plugin. Dispatch-by-name agents (worker, reviewer pairs) NOT renamed — scripts/tests dispatch by name.
+
+## Authoring standards (CEO directive)
+
+Skill creation/edit follows `skill-creator` + `plugin-dev:skill-development` methodology (trigger-rich descriptions, progressive disclosure via references/). Plugin manifest/layout follows `plugin-dev:plugin-structure` + `plugin-dev:plugin-settings`; final structure validated by the `plugin-dev:plugin-validator` agent in Verify.
 
 ## Merge invariants (must not be lost — reviewers check these)
 
@@ -54,7 +71,7 @@ Four former tools → three roles + one export layer, no overlapping triggers:
 ## Verification
 
 1. All test suites green: existing 228 (pytest+BATS), vault tests under `vault/`, hook tests, `bash -n` on all moved shell scripts, vault selftest.
-2. `/reload-plugins`-equivalent structural validation (frontmatter, hooks.json schema, command/agent discovery).
+2. `/reload-plugins`-equivalent structural validation (frontmatter, hooks.json schema, command/agent discovery) + **plugin-dev:plugin-validator agent pass** + `python3 -m py_compile` on `check_design_doc_freshness.py` + grep gates: zero claim-ledger adoption (historical mentions only), zero references to deleted skill names, swarm rename consistency.
 3. **Dual adversarial review loop**: Codex-style adversarial + cold Claude review full branch diff vs this spec; fix; repeat until BOTH APPROVE (cap 3 rounds, then report honestly).
 
 ## Tail (after merge verified, separate commits)
@@ -68,3 +85,5 @@ Four former tools → three roles + one export layer, no overlapping triggers:
 - swarm untested for 3 weeks — selftest after move, not full e2e.
 - Hook symlink behavior (settings.json → symlink) verified at tail, fallback = 1-line wrapper.
 - Agent count 46+ in one plugin: same as today's total across plugins; no net context increase.
+- claim-ledger retirement: PickL-API's live ledger instance untouched this round (its repo's clean-slate track retires it separately); the PATTERN is simply not carried into the plugin.
+- Renames (doc-management, swarm): old trigger phrases preserved in descriptions, but external docs/memory referencing old skill names go stale until tail cleanup.
