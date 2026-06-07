@@ -1,0 +1,14 @@
+# gitleaks configuration — suppress test-fixture false positives only.
+# Verified locally with `gitleaks detect --source . --no-git` before adding;
+# both findings are synthetic test data, not real credentials:
+#   - skills/setup-harness/tests/harness-hooks.bats:82 — fake ghp_… PAT used
+#     to exercise the gh-auth-preflight hook (placeholder value, not real token)
+#   - tests/fixtures/contracts/sample_contract.json:4 — hex idempotency_token
+#     (random 24-char hex for de-dup only, not an API key)
+
+[allowlist]
+description = "test-fixture paths containing synthetic placeholder secrets"
+paths = [
+    '''skills/setup-harness/tests/harness-hooks\.bats''',
+    '''tests/fixtures/contracts/sample_contract\.json''',
+]
