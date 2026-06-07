@@ -61,6 +61,25 @@ def test_prepare_ticket_writes_signed_json(tmp_path):
     assert ticket["ticket_sha"] == recomputed
 
 
+def test_prepare_ticket_accepts_review_gatekeeper_role(tmp_path):
+    import _dispatch
+    contract_dir = _make_contract_dir(tmp_path)
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+
+    ticket_path = _dispatch.prepare_subagent_ticket(
+        contract_dir=contract_dir,
+        worktree=worktree,
+        subagent_role="review-gatekeeper",
+        skip_contract_check=True,
+        skip_preflight=True,
+    )
+
+    ticket = _json.loads(ticket_path.read_text())
+    assert ticket["subagent_role"] == "review-gatekeeper"
+    assert ticket["output_dir"].endswith("/outputs/review-gatekeeper")
+
+
 def test_prepare_ticket_rejects_invalid_role(tmp_path):
     import _dispatch
     contract_dir = _make_contract_dir(tmp_path)

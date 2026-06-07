@@ -183,7 +183,7 @@ python3 "$ROOT/pipeline/export.py" "$PROJECT" \
 
 ## `--restructure` mode (absorbed from /vault-restructure)
 
-Single-command autonomous restructure of `~/Documents/Obsidian/` per the project ↔ vault ↔ NotebookLM mapping in `scripts/restructure_phases/_mapping.py`. Idempotent + resume-safe via state file.
+Single-command autonomous restructure of `~/Documents/Obsidian/` per the project ↔ vault ↔ NotebookLM mapping in `${CLAUDE_PLUGIN_ROOT}/vault/scripts/restructure_phases/_mapping.py`. Idempotent + resume-safe via state file.
 
 ```bash
 /vault-build --restructure                  # live run; resumes from last completed phase

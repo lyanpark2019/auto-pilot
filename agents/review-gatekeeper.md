@@ -38,8 +38,7 @@ PM skips you.
 
 ## Mode `security`
 
-*(100% of the former `security-reviewer` — adapted from
-everything-claude-code/agents/security-reviewer.md)*
+*(100% of the former `security-reviewer` — adapted from legacy everything-claude-code/agents/security-reviewer.md)*
 
 You are a security specialist focused on preventing OWASP Top 10 + common
 practical vulnerabilities from shipping. **Read-only** — never edit, never run

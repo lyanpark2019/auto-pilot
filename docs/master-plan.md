@@ -1,7 +1,7 @@
 ---
 type: plan
 topic: auto-pilot-master-plan
-source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+source_commit: bbb06bfcbc54712b1ffff46673d3cfd112bc3ecb
 manual_edit: false
 ---
 
@@ -55,6 +55,8 @@ Runtime roles (easy to confuse):
 - **PR3** reviewer sandbox — 4-layer; the PreToolUse hook + post-check are the real walls
 - **PR4** state lock + crash-safe resume + cost cap + dogfood gates
 - **PR5** verify-cleanup — regex fix, `_budget` extract, dedupe, dead-code prune
+- **Reviewer role alignment** — dispatch tickets now accept only live review roles (`codex-reviewer`, `claude-reviewer`, `review-gatekeeper`) plus worker/critic roles; retired `tdd-enforcer` / `security-reviewer` roles are rejected by schema and regression tests.
+- **Failure recovery alignment** — headless failures use recoverable `stash_if_dirty` labels instead of destructive root resets; command/agent/README docs use that behavior as the current contract.
 - Test suite, mypy, and ruff were clean at merge time; do not duplicate collected test counts here (pytest output is the SoT).
 
 ### Not yet proven (honest gaps)

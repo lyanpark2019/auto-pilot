@@ -1,7 +1,7 @@
 ---
 type: runbook
 topic: auto-pilot-performance-budget
-source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+source_commit: bbb06bfcbc54712b1ffff46673d3cfd112bc3ecb
 manual_edit: false
 ---
 

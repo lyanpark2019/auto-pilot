@@ -213,17 +213,17 @@ class TestTier2:
             _populate_outputs(
                 round_dir,
                 ["worker", "codex-reviewer", "claude-reviewer"],
-                specialists=["security-reviewer"],
+                specialists=["review-gatekeeper"],
             )
         # Sanity: passes when specialist artifacts are present
         report = gate.run_tier2(good_repo, expected_phases=2)
         assert report.passed, report.failures
         # Now break the specialist: missing exit-code.txt → failure
-        bad = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1" / "outputs" / "specialists" / "security-reviewer" / "exit-code.txt"
+        bad = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1" / "outputs" / "specialists" / "review-gatekeeper" / "exit-code.txt"
         bad.unlink()
         report2 = gate.run_tier2(good_repo, expected_phases=2)
         assert not report2.passed
-        assert any("exit-code.txt" in f and "security-reviewer" in f for f in report2.failures)
+        assert any("exit-code.txt" in f and "review-gatekeeper" in f for f in report2.failures)
 
 
 class TestCli:

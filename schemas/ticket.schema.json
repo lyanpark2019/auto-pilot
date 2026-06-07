@@ -12,7 +12,7 @@
     "contract_dir":    { "type": "string" },
     "worktree":        { "type": "string" },
     "subagent_role":   { "enum": ["worker", "codex-reviewer", "claude-reviewer",
-                                   "tdd-enforcer", "security-reviewer", "tech-critic-lead"] },
+                                   "review-gatekeeper", "tech-critic-lead"] },
     "output_dir":      { "type": "string" },
     "helper_abspath":  { "type": "string" },
     "diff_path":       { "type": ["string", "null"] },

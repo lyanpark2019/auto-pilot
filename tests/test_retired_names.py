@@ -31,12 +31,14 @@ RETIRED_NAMES = [
     "diagnosing-stale-runtime",
     "code-perfector",
     "codex-adversarial",
+    "security-reviewer",
+    "tdd-enforcer",
 ]
 
 # A line mentioning a retired name is OK iff it explicitly marks retirement
 HISTORICAL_MARKERS = re.compile(
     r"deleted|legacy|superse|replace[sd]|absorb|retired|renamed|alias|"
-    r"provenance|merged into|→",
+    r"provenance|merged into|former|adapted|inspired|→",
     re.IGNORECASE,
 )
 

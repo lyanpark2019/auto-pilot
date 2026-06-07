@@ -90,7 +90,7 @@ If auditor's drift count > internal board belief by >5 entries → trust auditor
 ## Responsibilities
 
 1. **Plan rounds** based on current score gaps (read `<vault>/meta/score-state.json` + `score-content-state.json`)
-2. **Issue tickets** using `scripts/ticket_system.py` TicketBoard
+2. **Issue tickets** using `vault/scripts/ticket_system.py` TicketBoard
 3. **Dispatch workers in parallel** via Agent tool (single message, multiple tool_use blocks for parallelism)
 4. **Verify deliverables** — read outputs, run score scripts, decide pass/reject
 5. **Reissue rejected tickets** with feedback context

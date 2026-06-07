@@ -19,7 +19,7 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 | Architecture improvement / module boundaries | `improve-codebase-architecture` |
 | Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`; `/harness` and `/harness-ops` deleted 2026-06-07 — use `bootstrap.sh`/`harness-loop.sh` directly) |
 | Docs rotten / 문서 개판 / rebuild docs from code | `doc-management` (REBUILD mode) |
-| Code changed, docs behind / doc sync / 문서 동기화 | `doc-management` (MAINTAIN mode — `scripts/check_design_doc_freshness.py` STALE feed) |
+| Code changed, docs behind / doc sync / 문서 동기화 | `doc-management` (MAINTAIN mode — `skills/doc-management/scripts/check_design_doc_freshness.py` STALE feed) |
 | Doc drift / 문서 최신화 / docs audit / claim verification | `doc-management` (AUDIT mode) |
 | Vault export to Obsidian / NotebookLM / bases / canvas / dashboard | `/vault-build` (+`--restructure`/`--resume`) · `/vault-score` (+`--audit`/`--content-verify`/`--drift`) · `/vault-dashboard` · `/vault-selftest`. Vault/Obsidian/NotebookLM export is **NOT** doc-management. |
 | Vault-internal drift (exported vault vs source repo) | `/vault-score --drift` — repo code↔doc drift belongs to `doc-management` (AUDIT mode) instead |
@@ -161,7 +161,7 @@ For each phase in the spec:
 
 ## Inspired by
 
-- [greatSumini/cc-system](https://github.com/greatSumini/cc-system) — `run-server.py` infinite loop pattern, `tech-critic-lead`, HARNESS_HEADLESS env signal, iter-id commit trailers, rollback on fail
+- [greatSumini/cc-system](https://github.com/greatSumini/cc-system) — `run-server.py` infinite loop pattern, `tech-critic-lead`, HARNESS_HEADLESS env signal, iter-id commit trailers; auto-pilot replaces destructive rollback with recoverable stash-on-fail
 - [obra/superpowers](https://github.com/obra/superpowers) — 7-phase template, TDD-first hard rule (deletes pre-test code)
 - [everything-claude-code](https://github.com/JonathanRosenberg/everything-claude-code) — specialist agent pool (security/database/tdd-guide/etc.)
 - [LiorCohen/sdd](https://github.com/LiorCohen/sdd) — Spec-driven development phasing

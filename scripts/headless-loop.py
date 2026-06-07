@@ -5,16 +5,17 @@ Drives a real autonomous PM loop by spawning `claude -p --dangerously-skip-permi
 subprocess sessions, one per loop step. Each session is fully headless: stdin is
 DEVNULL, env carries HARNESS_HEADLESS=1 so the skill auto-skips all user prompts.
 
-Adapted from cc-system run-server.py (greatSumini, MIT) — kept its iter-id +
-rollback-on-fail pattern, dropped its ideation step (auto-pilot uses spec phases
-instead), added phase-aware verify and pivot detection.
+Adapted from cc-system run-server.py (greatSumini, MIT) — kept its iter-id loop
+shape, dropped its ideation step (auto-pilot uses spec phases instead), added
+phase-aware verify and pivot detection. The original destructive root reset was
+replaced by recoverable `stash_if_dirty` handling.
 
 Per loop iteration:
   1. snapshot pre-phase HEAD
   2. spawn `claude -p` headless session (prompts/iteration.md prose trigger: 'Run the auto-pilot skill', phase N)
   3. on session exit:
-       - status=success → commit + advance phase
-       - status=fail    → `git reset --hard <pre-phase-HEAD>`, mark pivot-needed, stop
+       - status=success → phase completed; loop may advance/exit per state
+       - status=failed  → stash dirty root with a recoverable label, stop
        - status=pivot-needed → stop (no rollback — partial work may be committed)
   4. sleep N seconds (default 10)
   5. exit when state.json status in {success, stopped, pivot-needed, failed}

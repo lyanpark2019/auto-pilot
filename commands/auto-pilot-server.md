@@ -1,6 +1,6 @@
 ---
 name: auto-pilot-server
-description: Launch the headless infinite auto-pilot loop. Forks a Python driver that spawns `claude -p --dangerously-skip-permissions` sessions per phase, with pre-phase HEAD snapshot + rollback on failure. Truly hands-free.
+description: Launch the headless infinite auto-pilot loop. Forks a Python driver that spawns `claude -p --dangerously-skip-permissions` sessions per phase, with pre-phase HEAD snapshot + non-destructive stash on failure. Truly hands-free.
 argument-hint: "[--max-iter N] [--sleep SEC] [--once] [--timeout-build SEC]"
 allowed-tools: Bash, Read
 ---
@@ -56,13 +56,13 @@ For iteration N at phase P:
 
 1. Driver snapshots current HEAD
 2. Driver spawns `claude -p --dangerously-skip-permissions "<HEADLESS_PREAMBLE> resume auto-pilot iter N phase P ..."` with `HARNESS_HEADLESS=1`
-3. Claude session runs the `auto-pilot` skill — plans contracts, dispatches workers + reviewers (tech-critic-lead BEFORE workers, codex/claude/tdd-enforcer/specialists AFTER), commits with `auto-pilot-iter: N` trailer, advances phase
+3. Claude session runs the `auto-pilot` skill — plans contracts, dispatches workers + reviewers (tech-critic-lead BEFORE workers; codex/claude/review-gatekeeper modes/specialists AFTER), commits with `auto-pilot-iter: N` trailer, advances phase
 4. Session exits naturally
 5. Driver reads state.json
    - `status=success` (final phase done) → driver exits 0
    - `status=stopped` (user `/auto-pilot stop`) → driver exits 0
    - `status=pivot-needed` (3rd-round same finding) → driver exits 1
-   - `status=failed` → driver `git reset --hard` to pre-phase HEAD, exits 1
+   - `status=failed` → driver stashes any dirty root changes with a recoverable `auto-pilot-iter-N-failed` label, exits 1
    - `status=running` → driver sleeps `--sleep` seconds, next iteration
 6. Driver caps at `--max-iter` total iterations
 

@@ -216,9 +216,9 @@ itself needs maintenance.
 
 ## Bundled assets
 
-- `scripts/check_design_doc_freshness.py` — L3 freshness checker (zero-LLM, WARN-only,
+- `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py` — L3 freshness checker (zero-LLM, WARN-only,
   exit 0 always). Copy into the target repo's scripts dir or run from the skill.
-- `scripts/check-doc-reference-integrity.mjs` — L2 deterministic guard
+- `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check-doc-reference-integrity.mjs` — L2 deterministic guard
   (project-agnostic, Node built-ins only). Copy in, edit the CONFIG block, wire into
   CI. Parses all real-world anchor styles incl. `file.py:33,36,37` comma lists.
 - `references/doc-management-system.md` — canonical system spec (3-layer model,

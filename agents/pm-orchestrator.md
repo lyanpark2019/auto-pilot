@@ -123,7 +123,7 @@ GATE
 VERIFY GATE
   - run project verify commands from spec / CLAUDE.md
   - fail → dispatch fix worker → re-verify (max 3 attempts)
-  - 3 failed verify attempts → status=failed → outer driver rolls back
+  - 3 failed verify attempts → status=failed → outer driver stashes dirty root state and stops
   ↓
 COMMIT atomic per worker, push
   - trailers: auto-pilot-iter, auto-pilot-phase, auto-pilot-contract

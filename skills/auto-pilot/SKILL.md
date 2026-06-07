@@ -47,10 +47,10 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 6. **DISPATCH WORKERS** — N Sonnet-4.6-1M workers in 1 message (N parallel Agent blocks, `isolation: worktree`)
 7. **REVIEW FAN-OUT** in parallel per worker diff:
    - Default: `auto-pilot-codex-reviewer`, `auto-pilot-claude-reviewer`
-   - If diff touches runtime code: + `tdd-enforcer`
-   - If diff touches trust boundary (auth/API/secrets/SQL/migrations/payments): + `security-reviewer`
+   - If diff touches runtime code: + `review-gatekeeper` mode `tdd-gate`
+   - If diff touches trust boundary (auth/API/secrets/SQL/migrations/payments): + `review-gatekeeper` mode `security`
    - Additional specialists per `agents/specialist-pool.md` mapping
-   - All dispatched reviewers must APPROVE. Any REJECT → return findings → worker fix → re-review
+   - All dispatched reviewers/modes must APPROVE. Any REJECT → return findings → worker fix → re-review
    - 3rd-round same finding → pivot-check trips → status=pivot-needed → STOP
 8. **VERIFY GATE** — phase checklist (project-specific, parsed from spec or `CLAUDE.md`):
    - `pnpm test && pnpm lint && pnpm typecheck && pnpm build` for Next.js
@@ -159,7 +159,7 @@ Paths are repo-root-relative: harness driver `scripts/evals/cli.py`, runner `scr
 | SSL stacking outages | Infra changes serialized 1-at-a-time with verify between |
 | Interactive TUI in non-interactive shell | PM avoids `claude doctor` etc., uses flag equivalents |
 | Over-scoped contracts ("P1.1 not real issue") | `tech-critic-lead` gate BEFORE worker dispatch |
-| Implementation without tests | `tdd-enforcer` rejects runtime change diffs missing matching test file |
+| Implementation without tests | `review-gatekeeper` mode `tdd-gate` rejects runtime change diffs missing matching test file |
 | Workers touching files outside their contract | `auto-pilot-claude-reviewer` + `auto-pilot-codex-reviewer` scope-drift check (auto-REJECT on out-of-scope edits) |
 | Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase; on `status=failed` it calls `stash_if_dirty` (non-destructive stash with a recoverable label) — `$ROOT` is intentionally not reset hard so worktree cleanup is the recovery unit (`iter.fail_no_root_reset` event logged) |
 
@@ -214,7 +214,7 @@ SHIPPED → distill→delete 권고 · ACTIVE → keep · SCRATCH → delete 권
 - `${CLAUDE_PLUGIN_ROOT}/docs/7-phase-template.md` — fallback when spec has no phases
 - `${CLAUDE_PLUGIN_ROOT}/agents/pm-orchestrator.md` — PM rules
 - `${CLAUDE_PLUGIN_ROOT}/agents/tech-critic-lead.md` — pre-dispatch scope gate
-- `${CLAUDE_PLUGIN_ROOT}/agents/tdd-enforcer.md` — test-first hard rule
+- `${CLAUDE_PLUGIN_ROOT}/agents/review-gatekeeper.md` — security + test-first specialist modes
 - `${CLAUDE_PLUGIN_ROOT}/agents/specialist-pool.md` — which extra reviewers to dispatch when
 - `${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py` — state mgmt helper
 - `${CLAUDE_PLUGIN_ROOT}/scripts/headless-loop.py` — true infinite headless driver (use via `/auto-pilot-server`)

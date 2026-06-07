@@ -1,7 +1,7 @@
 ---
 type: architecture
 topic: unified-coding-system
-source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+source_commit: bbb06bfcbc54712b1ffff46673d3cfd112bc3ecb
 manual_edit: false
 ---
 
@@ -9,7 +9,7 @@ manual_edit: false
 
 ## One-line
 
-Opus 4.7 PM (main session) dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
+Opus 4.7 PM (main session) dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
 ## Purpose (locked 2026-05-29)
 
@@ -40,7 +40,7 @@ PM (code-edit 0)
   → contract 발행  [⛓ contract.schema.json · snapshot_shas SHA-pin · idempotency_token]
   → worker dispatch  (Sonnet 1M · worktree isolation)
   → diff + verify-log  [⛓ SHA-256 mandatory — missing = bounce]
-  → dual review  [⛓ Codex read-only + cold Claude · PM-frozen diff]
+  → review fan-out  [⛓ Codex read-only + cold Claude + review-gatekeeper modes · PM-frozen diff]
   → fixer commit  (re-review after commit — prevents timing artifacts)
   → merge  (human checkpoint, decision 14)
   → retro → memory  [⛓ vault gotchas + .claude/insights.md]
@@ -55,7 +55,7 @@ Full contract schemas and enforcement contracts: see README "Binding contracts i
 | Contract | Form | Binds |
 |----------|------|-------|
 | worker | `schemas/contract.schema.json` v2 — target_repo · target_layer · hard_constraints · pattern_refs · snapshot_shas.project_context; `additionalProperties:false` fail-closed | worker scope · evidence · deadline |
-| reviewer | read-only sandbox + frozen diff + structured APPROVE/REJECT (round-2: pre-mortem · liveness triage · 4 heuristics · round-budget gate) | Codex + cold Claude reviewers |
+| reviewer | read-only sandbox + frozen diff + structured APPROVE/REJECT (round-2: pre-mortem · liveness triage · 4 heuristics · round-budget gate); ticket roles are limited to live agents/modes (`codex-reviewer`, `claude-reviewer`, `review-gatekeeper`) plus worker/critic roles | Codex + cold Claude reviewers + gatekeeper modes |
 | PM | `agents/pm-orchestrator.md` — reporting format · prohibited actions · code-edit 0 | PM main session |
 | round-2 additions | `schemas/preflight.schema.json` (phase-key · TTL 900s · head_sha) · dispatch required fields · creation gate (asset_registry_check) · dispatch-manifest gate | all pre-dispatch stages |
 
@@ -146,6 +146,8 @@ auto-pilot/
 `.planning/auto-pilot/state.json` — SoT for loop state. Owned by `scripts/_state.py`. Writers hold `flock(LOCK_EX)` on `state.lock`; reads hold `LOCK_SH`. Writes use `_contract.atomic_write_text` (tempfile + fsync + rename, `F_FULLFSYNC` on Darwin) — never a partial file. Resume-safe: PM reads `current_phase` + `phases[last]`, continues from next contract.
 
 Accumulates `cost_usd` + `tokens` across iters. Exceeds `--max-cost-usd` or `--max-tokens` → terminal `cost-cap`. `pgrep -x claude` count above `--max-concurrent-claude` → same exit (fork-bomb guard).
+
+Failure recovery is intentionally non-destructive: `headless-loop.py` snapshots pre-phase HEAD, but `status=failed` / timeout stashes dirty `$ROOT` state with a recoverable `auto-pilot-iter-N-{failed,timeout}` label instead of a destructive hard reset; per-worker worktree cleanup is the recovery unit.
 
 ## Contract layer (PR1)
 

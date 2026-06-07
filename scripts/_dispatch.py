@@ -43,7 +43,7 @@ _GIT_TREE_TIMEOUT = 60   # diff across potentially large trees
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 TICKET_SCHEMA_PATH = SCHEMAS_DIR / "ticket.schema.json"
 _VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer",
-                "tdd-enforcer", "security-reviewer", "tech-critic-lead"}
+                "review-gatekeeper", "tech-critic-lead"}
 
 # Env var mirrors AutoPilotConfig.preflight_ttl_sec (scripts/_config.py).
 # Module-level read chosen deliberately: _dispatch does not instantiate

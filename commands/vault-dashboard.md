@@ -19,8 +19,8 @@ Open HTML dashboard for a vault.
 
 ## What it does
 
-1. Run `scripts/dashboard_data.py <vault>` → writes `dashboard/data.json`
-2. Open `dashboard/index.html` in default browser (macOS `open`, Linux `xdg-open`)
+1. Run `${CLAUDE_PLUGIN_ROOT}/vault/scripts/dashboard_data.py <vault>` → writes `${CLAUDE_PLUGIN_ROOT}/vault/dashboard/data.json`
+2. Open `${CLAUDE_PLUGIN_ROOT}/vault/dashboard/index.html` in default browser (macOS `open`, Linux `xdg-open`)
 3. Dashboard shows:
    - Structural score (total + per-dim)
    - Content score (total + per-dim)
@@ -45,4 +45,4 @@ fi
 
 ## Data refresh
 
-Dashboard reads `dashboard/data.json` (static). Re-run `/vault-dashboard <vault>` to refresh.
+Dashboard reads `${CLAUDE_PLUGIN_ROOT}/vault/dashboard/data.json` (static). Re-run `/vault-dashboard <vault>` to refresh.
