@@ -257,20 +257,31 @@ If user omits `--accept`, derive 1 sane check from project type via `swarm-explo
 
 ### Output
 
-Write `<cwd>/.planning/autopilot/inbox/worker-<id>/T-manual-<epoch>.json`:
+Write `<cwd>/.planning/autopilot/inbox/worker-<id>/T-manual-<epoch>.json`
+where `<epoch>` is the unix seconds (for filename-based `is_manual_ticket` skip in run-pm.sh).
+The JSON `id` field uses `date +%Y%m%d-%H%M%S` format to satisfy the schema pattern
+`^T-[0-9]{8}-[0-9]{6}$`. All 11 required fields must be present.
 
 ```json
 {
-  "id": "T-manual-<epoch>",
-  "title": "<<task summary>>",
+  "id": "T-$(date +%Y%m%d-%H%M%S)",
+  "topic": "<<one-word or short-phrase summarising the task domain>>",
+  "title": "<<task summary, ≤80 chars>>",
   "prompt": "<<full task as user typed it, plus scope reminder>>",
-  "scope_paths": ["..."],
-  "acceptance": ["..."],
-  "issued_at": "<iso8601>",
+  "scope_paths": ["<<path1>>", "<<path2>>"],
+  "acceptance": ["<<shell command that exits 0 on success>>"],
+  "engine_hint": "claude",
+  "role": "general",
+  "difficulty": 2,
+  "issued_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "issued_by": "user",
   "worktree": "../<basename>-worker-<id>"
 }
 ```
+
+Valid `engine_hint` values: `claude`, `codex`, `haiku`, `sonnet`, `opus`.
+Valid `role` values: `architecture-review`, `codegen`, `general`, `security`, `verification`.
+`difficulty` is an integer 1–5.
 
 ### Steps
 
@@ -302,6 +313,27 @@ when no swarm is up.
 - `--auto-start`: if no swarm session is up, launch one detached (`start.sh
   --no-attach`) for arm A, then stop it (`stop.sh`) after arm A completes.
   A swarm that was already running is never stopped by bench.
+- `--acceptance "<cmd>"` (repeatable): shell command that exits 0 when the task
+  succeeded. Each `--acceptance` flag appends one entry to the ticket's
+  `acceptance` array. Empty or whitespace-only values are rejected with a fatal
+  error. When omitted, the default is
+  `git diff-tree --no-commit-id --name-only -r HEAD | grep -q .` — exits 0 only if
+  the worker's HEAD commit touched at least one file (locale-free, plumbing-safe).
+  Note: `diff-tree` without `-m` does not follow merge commits; a merge-only HEAD
+  returns no files and causes a conservative false-reject.
+  This default runs in the worker worktree (`cd <worktree> && <cmd>` per
+  pm-score.md), so no path prefix is needed. Do **not** use `true` or any
+  pass-always command — an empty-diff bench task auto-rejects with score 0.
+  **TOCTOU caveat**: the default only proves a file changed at HEAD; on a busy
+  shared swarm, HEAD may have advanced past the worker's commit by score time.
+  For reliable acceptance, supply explicit `--acceptance` commands pinned to
+  task-specific artifacts (e.g. `test -f output.txt`). The default is only
+  appropriate with `--auto-start` or a dedicated idle swarm.
+
+> **Bench tasks must produce a real diff.** If the worker finds nothing to do
+> (target already satisfied), arm A scores 0 and verdict is `reject` regardless
+> of quality. Always use a task that requires the worker to create or modify at
+> least one file, and pair it with a matching `--acceptance` check.
 
 ### Steps
 
@@ -318,11 +350,18 @@ when no swarm is up.
    `<cwd>/.planning/autopilot/bench/<epoch>/` with `arm-a/`, `arm-b/`, `arm-c/`.
 3. **Run the harness**:
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT}/swarm/scripts/bench.sh" "<task>" --repeats $N
+   bash "${CLAUDE_PLUGIN_ROOT}/swarm/scripts/bench.sh" "<task>" --repeats $N \
+     --acceptance "<verification-cmd>"
+   ```
+   Example guaranteed-diff task with matching acceptance:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/swarm/scripts/bench.sh" \
+     "Create a file bench-marker.txt containing the text 'bench-run-ok'" \
+     --acceptance "grep -q bench-run-ok bench-marker.txt"
    ```
    `bench.sh`:
-   - **Arm A (swarm)**: injects a manual `T-bench-<ts>-rN.json` ticket into the
-     first worker's inbox, then polls `scores/T-bench-<ts>-rN.json` until the PM
+   - **Arm A (swarm)**: injects a `T-YYYYMMDD-HHMMSS.json` ticket into the
+     first worker's inbox, then polls `scores/T-YYYYMMDD-HHMMSS.json` until the PM
      records a verdict (or `--swarm-timeout` elapses, or a `STOP` file appears).
      Copies the score json + `results/` artifacts into `arm-a/`.
    - **Arm B (claude opus solo)**: in a throwaway worktree on branch
@@ -366,3 +405,12 @@ when no swarm is up.
 - Both solo arms use throwaway worktrees (`../<basename>-bench-<arm>-<ts>-rN`) so
   the user's main repo is never touched. `--dangerously-skip-permissions` is
   scoped to those throwaway worktrees only.
+- **Always supply `--acceptance`** with a command that matches the task. The
+  default (`git diff-tree --no-commit-id --name-only -r HEAD | grep -q .`) only
+  guards against an empty commit — it does not verify correctness. Arm A can only
+  win `alignment_with_acceptance` if the acceptance command(s) exit 0.
+- **Bench tasks must not be no-ops.** If the target state already exists before
+  the worker runs, the worker produces an empty diff → pm-score returns total 0,
+  verdict `reject`. Pick tasks that unconditionally require creating or modifying
+  a file (e.g., "create bench-marker.txt with …", not "add a docstring to X if
+  it is missing").

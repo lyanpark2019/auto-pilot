@@ -108,6 +108,8 @@ new_pane_with_cmd() {
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "[start] session '$SESSION' exists."
 else
+  # Clear any leftover STOP sentinel only when spawning a fresh session.
+  rm -f "$ROOT/STOP"
   # window 1: pane 0 = PM
   tmux new-session -d -s "$SESSION" -n auto -c "$PROJECT"
   # Keep dead panes visible for postmortem debug.

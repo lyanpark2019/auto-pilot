@@ -12,7 +12,36 @@ LOG="$ROOT/logs/pm.log"
 LOCKDIR="$ROOT/ledger/dispatch.lock.d"
 PM_ENGINE="$(jq -r '.pm.engine // "claude"' "$CONFIG")"
 PM_MODEL="$(jq -r '.pm.model // (if .pm.engine == "codex" then "gpt-5.5" else "claude-opus-4-7" end)' "$CONFIG")"
-mkdir -p "$ROOT/logs" "$ROOT/knowledge"
+PM_CALL_TIMEOUT_SEC="$(jq -r '.policy.pm_call_timeout_sec // 600' "$CONFIG")"
+DISPATCH_BACKOFF_THRESHOLD="$(jq -r '.policy.dispatch_backoff_threshold // 3' "$CONFIG")"
+DISPATCH_ABORT_THRESHOLD="$(jq -r '.policy.dispatch_abort_threshold // 10' "$CONFIG")"
+VALIDATE_TICKET="$PLUGIN_ROOT/swarm/scripts/validate-ticket.sh"
+
+# shellcheck source=swarm/scripts/lib/dispatch-backoff.sh
+. "$PLUGIN_ROOT/swarm/scripts/lib/dispatch-backoff.sh"
+
+mkdir -p "$ROOT/logs" "$ROOT/knowledge" "$ROOT/archive" "$ROOT/in_progress"
+
+# Validate numeric config values; fall back to defaults on garbage input.
+case "$PM_CALL_TIMEOUT_SEC" in
+  (*[!0-9]*|'') echo "[pm] WARNING: pm_call_timeout_sec invalid — using 600" | tee -a "$LOG"; PM_CALL_TIMEOUT_SEC=600;;
+esac
+case "$DISPATCH_BACKOFF_THRESHOLD" in
+  (*[!0-9]*|'') echo "[pm] WARNING: dispatch_backoff_threshold invalid — using 3" | tee -a "$LOG"; DISPATCH_BACKOFF_THRESHOLD=3;;
+esac
+case "$DISPATCH_ABORT_THRESHOLD" in
+  (*[!0-9]*|'') echo "[pm] WARNING: dispatch_abort_threshold invalid — using 10" | tee -a "$LOG"; DISPATCH_ABORT_THRESHOLD=10;;
+esac
+
+# Resolve timeout binary once at startup (P2: portability + kill-after guard).
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout"
+else
+  echo "[pm] WARNING: timeout(1) not found — pm_call runs unwrapped" | tee -a "$LOG"
+fi
 
 acquire_lock() {
   local tries=0
@@ -44,16 +73,35 @@ pm_call() {
   local rendered
   rendered="$(env "${envvars[@]}" envsubst < "$PROMPTS/$tpl")"
   local rc
-  case "$PM_ENGINE" in
-    codex)
-      codex exec --model "$PM_MODEL" -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "$rendered" > "$out" 2>&1
-      rc=$?
-      ;;
-    *)
-      claude --model "$PM_MODEL" -p --dangerously-skip-permissions "$rendered" > "$out" 2>&1
-      rc=$?
-      ;;
-  esac
+  if [ -n "$TIMEOUT_CMD" ]; then
+    case "$PM_ENGINE" in
+      codex)
+        "$TIMEOUT_CMD" -k 30 "$PM_CALL_TIMEOUT_SEC" \
+          codex exec --model "$PM_MODEL" -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "$rendered" > "$out" 2>&1
+        rc=$?
+        ;;
+      *)
+        "$TIMEOUT_CMD" -k 30 "$PM_CALL_TIMEOUT_SEC" \
+          claude --model "$PM_MODEL" -p --dangerously-skip-permissions "$rendered" > "$out" 2>&1
+        rc=$?
+        ;;
+    esac
+  else
+    case "$PM_ENGINE" in
+      codex)
+        codex exec --model "$PM_MODEL" -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "$rendered" > "$out" 2>&1
+        rc=$?
+        ;;
+      *)
+        claude --model "$PM_MODEL" -p --dangerously-skip-permissions "$rendered" > "$out" 2>&1
+        rc=$?
+        ;;
+    esac
+  fi
+  if [ "$rc" -eq 124 ]; then
+    echo "[pm/$PM_ENGINE] $tpl TIMEOUT after ${PM_CALL_TIMEOUT_SEC}s" | tee -a "$LOG"
+    return 1
+  fi
   if [ "$rc" -ne 0 ]; then
     echo "[pm/$PM_ENGINE] $tpl exited nonzero ($rc)" | tee -a "$LOG"
     return 1
@@ -78,9 +126,6 @@ if [ ! -f "$ROOT/knowledge/.explored" ]; then
     touch "$ROOT/knowledge/.explored"
   else
     echo "[pm] explore incomplete — retry next loop" | tee -a "$LOG"
-    # NOTE: top-level code (the main `while true` starts later), so `continue`
-    # is invalid here — bash treats it as a no-op returning 0, which silently
-    # fell through to Phase 0b instead of retrying. Re-exec like Phases 0b/0c.
     sleep 30; exec "$0"
   fi
 fi
@@ -112,6 +157,7 @@ fi
 
 # Main loop
 SELF_IMPROVE_TARGET="$(jq -r '.policy.self_improve_target // ""' "$CONFIG")"
+DISPATCH_FAILURES=0
 
 while true; do
   # I3: STOP sentinel — exit cleanly between iterations.
@@ -142,8 +188,14 @@ while true; do
   done
 
   # 2. ledger reconcile + cherry-pick winners
-  pm_call pm-ledger.md "$ROOT/logs/ledger.log.tmp" PROJECT="$PROJECT"
-  cat "$ROOT/logs/ledger.log.tmp" >> "$ROOT/logs/ledger.log"
+  # P1: guard bare pm_call under set -e; also guard the following cat (tmp may not exist on timeout).
+  if ! pm_call pm-ledger.md "$ROOT/logs/ledger.log.tmp" PROJECT="$PROJECT"; then
+    echo "[pm] ledger failed — continuing" | tee -a "$LOG"
+  else
+    if [ -f "$ROOT/logs/ledger.log.tmp" ]; then
+      cat "$ROOT/logs/ledger.log.tmp" >> "$ROOT/logs/ledger.log"
+    fi
+  fi
   rm -f "$ROOT/logs/ledger.log.tmp"
 
   # 3. dispatch new tickets where inbox empty
@@ -164,18 +216,116 @@ while true; do
         if [ $((DISPATCH_COUNT % 4)) -eq 0 ]; then USE_SELF_IMPROVE=1; fi
       fi
 
+      # Snapshot inbox BEFORE pm_call to detect worker-claimed files.
+      # Newline-delimited to handle paths that contain spaces.
+      # Also stamp a reference time used later to detect in_progress arrivals.
+      INBOX_DIR="$ROOT/inbox/worker-$i"
+      PRE_SNAPSHOT=""
+      for pre_tf in "$INBOX_DIR"/*.json; do
+        [ -e "$pre_tf" ] || continue
+        PRE_SNAPSHOT="${PRE_SNAPSHOT}${pre_tf}
+"
+      done
+
+      DISPATCH_STAMP="$ROOT/logs/.dispatch-stamp"
+      touch "$DISPATCH_STAMP"
+
+      DISPATCH_OK=0
       if [ $USE_SELF_IMPROVE -eq 1 ]; then
         echo "[pm] self-improve dispatch → worker-$i (target=$SELF_IMPROVE_TARGET)" | tee -a "$LOG"
-        pm_call pm-self-improve.md "$ROOT/logs/dispatch.log.tmp" \
-          WORKER_ID="$i" ENGINE_HINT="$ENGINE_HINT" ROLE="$ROLE" \
-          PROJECT="$PROJECT" SELF_IMPROVE_TARGET="$SELF_IMPROVE_TARGET" || true
+        if pm_call pm-self-improve.md "$ROOT/logs/dispatch.log.tmp" \
+            WORKER_ID="$i" ENGINE_HINT="$ENGINE_HINT" ROLE="$ROLE" \
+            PROJECT="$PROJECT" SELF_IMPROVE_TARGET="$SELF_IMPROVE_TARGET"; then
+          DISPATCH_OK=1
+        fi
       else
         echo "[pm] dispatch → worker-$i ($ENGINE_HINT/$ROLE)" | tee -a "$LOG"
-        pm_call pm-dispatch.md "$ROOT/logs/dispatch.log.tmp" \
-          WORKER_ID="$i" ENGINE_HINT="$ENGINE_HINT" ROLE="$ROLE" PROJECT="$PROJECT" || true
+        if pm_call pm-dispatch.md "$ROOT/logs/dispatch.log.tmp" \
+            WORKER_ID="$i" ENGINE_HINT="$ENGINE_HINT" ROLE="$ROLE" PROJECT="$PROJECT"; then
+          DISPATCH_OK=1
+        fi
       fi
       cat "$ROOT/logs/dispatch.log.tmp" >> "$ROOT/logs/dispatch.log" 2>/dev/null || true
       rm -f "$ROOT/logs/dispatch.log.tmp"
+
+      if [ "$DISPATCH_OK" -eq 1 ]; then
+        # P0/P3: Find ALL new tickets (not in pre-snapshot, not manual).
+        # A worker may have claimed a pre-existing file during pm_call; exclude those.
+        FOUND_VALID=0
+        FOUND_ANY_NEW=0
+        for tf in "$INBOX_DIR"/*.json; do
+          [ -e "$tf" ] || continue
+          # Skip T-manual-* tickets — PM didn't write them; never count or delete.
+          if is_manual_ticket "$tf"; then
+            continue
+          fi
+          # Check if this file was already present before pm_call.
+          # Iterate newline-delimited PRE_SNAPSHOT to avoid word-split on spaces.
+          was_pre=0
+          while IFS= read -r pre_tf; do
+            [ -z "$pre_tf" ] && continue
+            if [ "$pre_tf" = "$tf" ]; then
+              was_pre=1
+              break
+            fi
+          done <<EOF_PRE
+$PRE_SNAPSHOT
+EOF_PRE
+          [ "$was_pre" -eq 1 ] && continue
+          # New file written by this dispatch.
+          FOUND_ANY_NEW=1
+          # Send validator stderr to LOG.
+          if "$VALIDATE_TICKET" "$tf" >/dev/null 2>>"$LOG"; then
+            FOUND_VALID=1
+          else
+            # P2: worker may have mv-claimed between the glob and validate.
+            if [ ! -f "$tf" ]; then
+              echo "[pm] dispatch worker-$i: claimed mid-validation — not a failure" | tee -a "$LOG"
+              FOUND_VALID=1
+            else
+              TID_INV="$(basename "$tf" .json)"
+              INVALID_PATH="$ROOT/archive/${TID_INV}.invalid.json"
+              if mv "$tf" "$INVALID_PATH" 2>/dev/null; then
+                echo "[pm] dispatch worker-$i: schema invalid → archived $INVALID_PATH" | tee -a "$LOG"
+              else
+                echo "[pm] dispatch worker-$i: schema invalid and mv failed (claimed?) — not a failure" | tee -a "$LOG"
+                FOUND_VALID=1
+              fi
+            fi
+          fi
+        done
+
+        if [ "$DISPATCH_OK" -eq 1 ] && [ "$FOUND_ANY_NEW" -eq 0 ]; then
+          # Worker may have mv-claimed the ticket from inbox during pm_call's window.
+          # Use find -newer stamp (stamp was touched immediately before pm_call)
+          # so only genuinely new in_progress files (mtime after stamp) are counted.
+          if find "$ROOT/in_progress" -type f -name '*.json' -newer "$DISPATCH_STAMP" | grep -q .; then
+            echo "[pm] dispatch worker-$i: ticket claimed by worker during pm_call — not a failure" | tee -a "$LOG"
+            FOUND_VALID=1
+          else
+            echo "[pm] dispatch worker-$i: no ticket produced" | tee -a "$LOG"
+          fi
+        fi
+
+        DISPATCH_FAILURES="$(apply_dispatch_result 1 "$FOUND_VALID" "$DISPATCH_FAILURES")"
+      else
+        DISPATCH_FAILURES="$(apply_dispatch_result 0 0 "$DISPATCH_FAILURES")"
+      fi
+
+      if [ "$DISPATCH_FAILURES" -ge "$DISPATCH_ABORT_THRESHOLD" ]; then
+        echo "[pm] dispatch abort: $DISPATCH_FAILURES consecutive failures — touching STOP (recover: stop.sh then start.sh, or rm $ROOT/STOP before next start)" | tee -a "$LOG"
+        touch "$ROOT/STOP"
+        release_lock
+        exit 1
+      fi
+
+      if [ "$DISPATCH_FAILURES" -ge "$DISPATCH_BACKOFF_THRESHOLD" ]; then
+        backoff_sec="$(compute_backoff_sec "$DISPATCH_FAILURES" "$DISPATCH_BACKOFF_THRESHOLD")"
+        echo "[pm] dispatch backoff: $DISPATCH_FAILURES consecutive failures — sleeping ${backoff_sec}s" | tee -a "$LOG"
+        release_lock
+        sleep "$backoff_sec"
+        acquire_lock
+      fi
     fi
   done
   release_lock
