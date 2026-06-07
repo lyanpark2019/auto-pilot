@@ -35,3 +35,12 @@ def test_ci_installs_vault_pytest_dependencies() -> None:
     requirements = REQUIREMENTS_DEV.read_text(encoding="utf-8")
 
     assert "PyYAML" in requirements
+
+
+def test_ci_uses_node24_action_majors() -> None:
+    text = _ci_text()
+
+    assert "actions/checkout@v4" not in text
+    assert "actions/setup-python@v5" not in text
+    assert "actions/checkout@v5" in text
+    assert "actions/setup-python@v6" in text

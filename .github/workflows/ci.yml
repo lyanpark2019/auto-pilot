@@ -13,24 +13,16 @@ concurrency:
   # branch runs freely to avoid burning minutes on stale pushes.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-# Opt into Node 24 runtime for all javascript actions. Node 20 is deprecated
-# (default switch June 2nd 2026, removal Sep 16th 2026 — see
-# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/).
-# Setting this env var silences the deprecation warning today and keeps the
-# pipeline working past the default switch even if any pinned action lags.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   python:
     name: python gates (ruff + mypy + pytest + bench + prompt-regression)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -67,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Pin to the dev version — the runner's preinstalled shellcheck drifts
       # and would flag style/warning findings 0.11.0 doesn't (see PR #12).
@@ -96,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: install bats + jq
         run: sudo apt-get update && sudo apt-get install -y bats jq
@@ -123,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: validate plugin.json + hooks.json
         run: |
@@ -142,10 +134,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -169,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
