@@ -356,6 +356,7 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
         try:
             results[d] = fn(repo, **{k: v for k, v in opts.items() if k in fn.__code__.co_varnames})
         except Exception as e:
+            print(f"export: destination={d} error_type={type(e).__name__}: {e}", file=sys.stderr)
             results[d] = {"destination": d, "error": str(e), "failed": True}
     return results
 

@@ -34,12 +34,13 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import IO
 
 import _budget
 import _config
 import _prompts
 from _log import event
-from _state import STATE_DIR, STATE_FILE, load_state, save_state
+from _state import STATE_DIR, STATE_FILE, State, load_state, save_state
 
 # ROOT captured at import time; used only for subprocess cwd (git ops + claude
 # session). State + log paths come from _state and resolve lazily relative to
@@ -95,6 +96,10 @@ def stash_if_dirty(reason: str) -> str | None:
         return None
     if not porcelain.stdout.strip():
         return None
+    return _push_stash(reason)
+
+
+def _push_stash(reason: str) -> str | None:
     msg = f"auto-pilot-{reason}"
     try:
         res = subprocess.run(
@@ -128,6 +133,44 @@ def commit_trailer(iter_n: int, phase: int) -> str:
     return f"\n\nauto-pilot-iter: {iter_n}\nauto-pilot-phase: {phase}\n"
 
 
+def _timed_stream(proc: subprocess.Popen[str], lf: IO[str], timeout_sec: float) -> bool:
+    """Stream proc stdout to *lf* and stdout; kill proc if timeout fires.
+
+    Returns ``True`` when the timeout timer fired before the process exited.
+    """
+    hit_timeout: dict[str, bool] = {"v": False}
+
+    def _on_timeout() -> None:
+        hit_timeout["v"] = True
+        event("session.timeout", timeout_s=int(timeout_sec))
+        lf.write(f"\n[TIMEOUT] killed after {timeout_sec:.0f}s\n")
+        lf.flush()
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        except (OSError, subprocess.SubprocessError):
+            # proc may already be dead or PID reused; nothing to recover.
+            pass
+
+    timer = threading.Timer(timeout_sec, _on_timeout)
+    timer.daemon = True
+    timer.start()
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            lf.write(line)
+            lf.flush()
+        proc.wait()
+    finally:
+        timer.cancel()
+    return hit_timeout["v"]
+
+
 def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
     """Spawn a headless ``claude -p`` session and stream its output to a log.
 
@@ -155,48 +198,50 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
             bufsize=1,
             env={**os.environ, **HEADLESS_ENV},
         )
+        timed_out = _timed_stream(proc, lf, timeout_sec)
 
-        hit_timeout = {"v": False}
+    if timed_out:
+        return 124
+    return proc.returncode
 
-        def _on_timeout() -> None:
-            hit_timeout["v"] = True
-            event("session.timeout", timeout_s=int(timeout_sec))
-            lf.write(f"\n[TIMEOUT] killed after {timeout_sec:.0f}s\n")
-            lf.flush()
-            try:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-            except (OSError, subprocess.SubprocessError):
-                # proc may already be dead or PID reused; nothing to recover.
-                pass
 
-        timer = threading.Timer(timeout_sec, _on_timeout)
-        timer.daemon = True
-        timer.start()
-        try:
-            assert proc.stdout is not None
-            for line in proc.stdout:
-                sys.stdout.write(line)
-                sys.stdout.flush()
-                lf.write(line)
-                lf.flush()
-            proc.wait()
-        finally:
-            timer.cancel()
+def _accumulate_usage(log: Path, args: argparse.Namespace, state: State) -> None:
+    """Parse session usage from *log* and add it to *state* in-place; persist."""
+    log_cost, log_tokens = _budget.parse_session_usage(log)
+    if log_cost <= 0.0:
+        log_cost = args.per_iter_cost_estimate
+    state["cost_usd"] = float(state.get("cost_usd", 0.0)) + log_cost
+    state["tokens"] = int(state.get("tokens", 0)) + log_tokens
+    save_state(state)
 
-        if hit_timeout["v"]:
-            return 124
-        return proc.returncode
+
+def _handle_timeout(iter_n: int, pre_head: str, state_after: State) -> str:
+    """Record timeout event, stash dirty tree, flip state to failed; return 'failed'."""
+    event("iter.timeout_no_root_reset",
+          pre_head=pre_head[:8],
+          note="state.status set to failed; $ROOT untouched")
+    stash_if_dirty(reason=f"iter-{iter_n}-timeout")
+    state_after["status"] = "failed"
+    save_state(state_after)
+    return "failed"
+
+
+def _early_exit_status(state: State, args: argparse.Namespace) -> str | None:
+    """Return a terminal status string if iteration should be skipped, else None."""
+    current: str | None = state.get("status")
+    if current in {"success", "stopped", "pivot-needed", "failed", "cost-cap"}:
+        assert current is not None  # narrowed by membership check above
+        return current
+    cap_hit = _budget.check_caps(args, state)
+    if cap_hit is not None:
+        state["status"] = cap_hit
+        save_state(state)
+        return cap_hit
+    return None
 
 
 def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     """Run one PM cycle and return the final ``state.status`` for it.
-
-    On timeout (return code 124) or post-run ``status == "failed"``, hard-resets
-    the working tree to the pre-iteration HEAD so failed phases leave no trace.
 
     Args:
         iter_n: 1-based outer-loop iteration index.
@@ -211,16 +256,9 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
         event("loop.state_missing")
         return "failed"
 
-    current_status = state.get("status")
-    if current_status in {"success", "stopped", "pivot-needed", "failed", "cost-cap"}:
-        assert current_status is not None  # narrowed by membership check above
-        return current_status
-
-    cap_hit = _budget.check_caps(args, state)
-    if cap_hit is not None:
-        state["status"] = cap_hit
-        save_state(state)
-        return cap_hit
+    early = _early_exit_status(state, args)
+    if early is not None:
+        return early
 
     phase = state.get("current_phase", 0)
     pre_head = git_head()
@@ -228,64 +266,30 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
 
     log = LOG_DIR / f"iter-{iter_n:04d}-phase-{phase}.log"
     prompt = _prompts.render("iteration", iter_n=iter_n, phase=phase)
-
     rc = run_claude_session(prompt, log, args.timeout_build)
 
-    # Accumulate cost + tokens regardless of exit code (best-effort)
-    log_cost, log_tokens = _budget.parse_session_usage(log)
-    if log_cost <= 0.0:
-        log_cost = args.per_iter_cost_estimate
     state_after = load_state() or state
-    state_after["cost_usd"] = float(state_after.get("cost_usd", 0.0)) + log_cost
-    state_after["tokens"] = int(state_after.get("tokens", 0)) + log_tokens
-    save_state(state_after)
+    _accumulate_usage(log, args, state_after)
 
     if rc == 124:
-        event("iter.timeout_no_root_reset",
-              pre_head=pre_head[:8],
-              note="state.status set to failed; $ROOT untouched")
-        stash_if_dirty(reason=f"iter-{iter_n}-timeout")
-        state2 = load_state()
-        state2["status"] = "failed"
-        save_state(state2)
-        return "failed"
+        return _handle_timeout(iter_n, pre_head, state_after)
 
-    new_state = load_state()
-    status = new_state.get("status", "running")
-
+    status = (load_state() or {}).get("status", "running")
     if status == "failed":
         event("iter.fail_no_root_reset",
               note="per PR2: $ROOT untouched on phase fail; worktree cleanup is the recovery unit")
         stash_if_dirty(reason=f"iter-{iter_n}-failed")
-
     return status
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point for the headless driver loop.
-
-    Args:
-        argv: optional argv list (defaults to ``sys.argv[1:]``).
-
-    Returns:
-        ``0`` for normal completion (success or max-iter exhausted), ``1`` when
-        the loop ends in a non-success terminal status, ``2`` when no state
-        file exists.
-    """
+def _build_parser() -> argparse.ArgumentParser:
+    """Construct the CLI argument parser for the headless driver."""
     p = argparse.ArgumentParser(prog="auto-pilot-headless")
     p.add_argument("--max-iter", type=int, default=CONFIG.default_max_iter)
-    p.add_argument(
-        "--sleep",
-        type=int,
-        default=CONFIG.default_sleep_sec,
-        help="seconds between iterations",
-    )
-    p.add_argument(
-        "--timeout-build",
-        type=float,
-        default=CONFIG.default_timeout_build_sec,
-        help="per-iteration claude session timeout (s)",
-    )
+    p.add_argument("--sleep", type=int, default=CONFIG.default_sleep_sec,
+                   help="seconds between iterations")
+    p.add_argument("--timeout-build", type=float, default=CONFIG.default_timeout_build_sec,
+                   help="per-iteration claude session timeout (s)")
     p.add_argument(
         "--max-cost-usd",
         type=float,
@@ -311,7 +315,21 @@ def main(argv: list[str] | None = None) -> int:
         help="abort spawn when this many claude processes are already running",
     )
     p.add_argument("--once", action="store_true", help="run one iteration and exit (smoke test)")
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point for the headless driver loop.
+
+    Args:
+        argv: optional argv list (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        ``0`` for normal completion (success or max-iter exhausted), ``1`` when
+        the loop ends in a non-success terminal status, ``2`` when no state
+        file exists.
+    """
+    args = _build_parser().parse_args(argv)
 
     if not STATE_FILE.exists():
         event("loop.no_state_file")

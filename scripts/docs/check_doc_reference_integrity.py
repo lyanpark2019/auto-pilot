@@ -116,26 +116,156 @@ def _doc_files(repo_root: Path) -> list[Path]:
     return targets
 
 
+class _FileCache:
+    """Memoised line loader — avoids repeated disk reads across citations."""
+
+    def __init__(self) -> None:
+        self._lines: dict[Path, list[str] | None] = {}
+        self._counts: dict[Path, int | None] = {}
+
+    def get_lines(self, p: Path) -> list[str] | None:
+        if p not in self._lines:
+            self._lines[p] = _load_file_lines(p)
+        return self._lines[p]
+
+    def get_line_count(self, p: Path) -> int | None:
+        if p not in self._counts:
+            lines = self.get_lines(p)
+            self._counts[p] = len(lines) if lines is not None else None
+        return self._counts[p]
+
+
+def _warn_symbols(
+    cache: _FileCache,
+    doc_lines: list[str],
+    doc_rel: str,
+    doc_lineno_0: int,
+    target_path: Path,
+    raw_path: str,
+    cited_lineno: int,
+) -> None:
+    """Emit a WARN to stderr when nearby symbols are absent from the cited line window."""
+    nearby = _nearby_symbols(doc_lines, doc_lineno_0)
+    if not nearby:
+        return
+    code_lines = cache.get_lines(target_path)
+    if code_lines is None:
+        return
+    missing = _find_symbol_in_window(code_lines, cited_lineno - 1, nearby)
+    if missing:
+        print(
+            f"WARN {doc_rel}:{doc_lineno_0 + 1}: symbol(s) "
+            f"{missing} not found near {raw_path}:{cited_lineno}",
+            file=sys.stderr,
+        )
+
+
+def _check_path_resolvable(
+    doc_rel: str,
+    doc_lineno_0: int,
+    citation: str,
+    raw_path: str,
+    repo_root: Path,
+) -> tuple[Path, None] | tuple[None, Violation]:
+    """Validate that raw_path is relative and exists; return (target_path, None) or (None, violation)."""
+    if raw_path.startswith("~/") or raw_path.startswith("/"):
+        return None, _violation(
+            doc_rel, doc_lineno_0, citation,
+            "absolute/home path citation — cannot resolve from repo root",
+            "use a repo-relative path",
+        )
+    target_path = repo_root / raw_path
+    if not target_path.exists():
+        return None, _violation(
+            doc_rel, doc_lineno_0, citation,
+            f"file not found: {raw_path}",
+            "verify the path or mark historical with <!-- cite-ignore -->",
+        )
+    return target_path, None
+
+
+def _violation(
+    doc_rel: str, doc_lineno_0: int, citation: str,
+    reason: str, suggestion: str,
+) -> Violation:
+    return Violation(
+        doc_file=doc_rel, doc_line=doc_lineno_0 + 1,
+        citation=citation, reason=reason, suggestion=suggestion,
+    )
+
+
+def _check_line_bounds(
+    cache: _FileCache,
+    doc_rel: str,
+    doc_lineno_0: int,
+    citation: str,
+    raw_path: str,
+    target_path: Path,
+    line_str: str,
+    end_line_str: str | None,
+) -> Violation | None:
+    """Return a Violation if cited line or range end is out of bounds, else None."""
+    cited_lineno = int(line_str)
+    line_count = cache.get_line_count(target_path)
+    if line_count is None:
+        return _violation(doc_rel, doc_lineno_0, citation, f"could not read {raw_path}", "")
+    if cited_lineno > line_count:
+        return _violation(
+            doc_rel, doc_lineno_0, citation,
+            f"line {cited_lineno} > file length {line_count} in {raw_path}",
+            f"{raw_path} has {line_count} lines",
+        )
+    if end_line_str is not None:
+        end_lineno = int(end_line_str)
+        if end_lineno > line_count:
+            return _violation(
+                doc_rel, doc_lineno_0, citation,
+                f"range end {end_lineno} > file length {line_count} in {raw_path}",
+                f"{raw_path} has {line_count} lines",
+            )
+    return None
+
+
+def _check_citation(
+    cache: _FileCache,
+    repo_root: Path,
+    doc_rel: str,
+    doc_lines: list[str],
+    doc_lineno_0: int,
+    raw_path: str,
+    line_str: str,
+    end_line_str: str | None,
+    citation: str,
+) -> Violation | None:
+    """Validate one citation match; return a Violation or None (clean / WARN-only)."""
+    target_path, path_violation = _check_path_resolvable(
+        doc_rel, doc_lineno_0, citation, raw_path, repo_root
+    )
+    if path_violation is not None:
+        return path_violation
+
+    assert target_path is not None
+    bounds_violation = _check_line_bounds(
+        cache, doc_rel, doc_lineno_0, citation, raw_path,
+        target_path, line_str, end_line_str,
+    )
+    if bounds_violation is not None:
+        return bounds_violation
+
+    _warn_symbols(
+        cache, doc_lines, doc_rel, doc_lineno_0,
+        target_path, raw_path, int(line_str),
+    )
+    return None
+
+
 def check_citations(repo_root: Path) -> list[Violation]:
     """Run all citation checks; return a list of violations."""
     violations: list[Violation] = []
-    # Cache resolved file line counts to avoid repeated reads.
-    _line_count_cache: dict[Path, int | None] = {}
-    _lines_cache: dict[Path, list[str] | None] = {}
-
-    def get_lines(p: Path) -> list[str] | None:
-        if p not in _lines_cache:
-            _lines_cache[p] = _load_file_lines(p)
-        return _lines_cache[p]
-
-    def get_line_count(p: Path) -> int | None:
-        if p not in _line_count_cache:
-            lines = get_lines(p)
-            _line_count_cache[p] = len(lines) if lines is not None else None
-        return _line_count_cache[p]
+    cache = _FileCache()
 
     for doc_path in _doc_files(repo_root):
-        doc_lines = get_lines(doc_path)
+        doc_lines = cache.get_lines(doc_path)
         if doc_lines is None:
             continue
         doc_rel = str(doc_path.relative_to(repo_root))
@@ -147,93 +277,18 @@ def check_citations(repo_root: Path) -> list[Violation]:
             for m in _CITE_RE.finditer(raw_line):
                 raw_path = m.group(1)
                 line_str = m.group(2)
-                end_line_str = m.group(3)  # optional range end (e.g. :35-36)
+                end_line_str = m.group(3)
                 citation = m.group(0).strip("`")
 
-                if _is_skipped_path(raw_path):
-                    continue
-                if not _is_checkable(raw_path):
+                if _is_skipped_path(raw_path) or not _is_checkable(raw_path):
                     continue
 
-                # Strip leading ~/ — those are absolute personal paths, flag as
-                # unresolvable but don't crash.
-                if raw_path.startswith("~/") or raw_path.startswith("/"):
-                    violations.append(Violation(
-                        doc_file=doc_rel,
-                        doc_line=lineno_0 + 1,
-                        citation=citation,
-                        reason="absolute/home path citation — cannot resolve from repo root",
-                        suggestion="use a repo-relative path",
-                    ))
-                    continue
-
-                target_path = repo_root / raw_path
-                if not target_path.exists():
-                    violations.append(Violation(
-                        doc_file=doc_rel,
-                        doc_line=lineno_0 + 1,
-                        citation=citation,
-                        reason=f"file not found: {raw_path}",
-                        suggestion="verify the path or mark historical with <!-- cite-ignore -->",
-                    ))
-                    continue
-
-                cited_lineno = int(line_str)
-                line_count = get_line_count(target_path)
-                if line_count is None:
-                    violations.append(Violation(
-                        doc_file=doc_rel,
-                        doc_line=lineno_0 + 1,
-                        citation=citation,
-                        reason=f"could not read {raw_path}",
-                        suggestion="",
-                    ))
-                    continue
-
-                if cited_lineno > line_count:
-                    violations.append(Violation(
-                        doc_file=doc_rel,
-                        doc_line=lineno_0 + 1,
-                        citation=citation,
-                        reason=(
-                            f"line {cited_lineno} > file length {line_count} "
-                            f"in {raw_path}"
-                        ),
-                        suggestion=f"{raw_path} has {line_count} lines",
-                    ))
-                    continue
-
-                # Validate range end if present.
-                if end_line_str is not None:
-                    end_lineno = int(end_line_str)
-                    if end_lineno > line_count:
-                        violations.append(Violation(
-                            doc_file=doc_rel,
-                            doc_line=lineno_0 + 1,
-                            citation=citation,
-                            reason=(
-                                f"range end {end_lineno} > file length {line_count} "
-                                f"in {raw_path}"
-                            ),
-                            suggestion=f"{raw_path} has {line_count} lines",
-                        ))
-                        continue
-
-                # Best-effort symbol check.
-                nearby = _nearby_symbols(doc_lines, lineno_0)
-                if nearby:
-                    code_lines = get_lines(target_path)
-                    if code_lines is not None:
-                        missing = _find_symbol_in_window(
-                            code_lines, cited_lineno - 1, nearby
-                        )
-                        if missing:
-                            # WARN only — does not fail.
-                            print(
-                                f"WARN {doc_rel}:{lineno_0 + 1}: symbol(s) "
-                                f"{missing} not found near {raw_path}:{cited_lineno}",
-                                file=sys.stderr,
-                            )
+                v = _check_citation(
+                    cache, repo_root, doc_rel, doc_lines,
+                    lineno_0, raw_path, line_str, end_line_str, citation,
+                )
+                if v is not None:
+                    violations.append(v)
 
     return violations
 
