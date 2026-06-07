@@ -44,6 +44,9 @@ jobs:
       - name: ruff
         run: python -m ruff check scripts/ tests/
 
+      - name: doc reference integrity (file:line citations in docs)
+        run: python3 scripts/docs/check_doc_reference_integrity.py
+
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
 

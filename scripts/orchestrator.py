@@ -280,7 +280,8 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
     try:
         _contract.validate(json.loads(contract_path.read_text()))
     except _contract.ContractValidationError as exc:
-        event("dispatch_contract_check.invalid", error=str(exc))
+        event("dispatch_contract_check.invalid", error=str(exc),
+              error_type=type(exc).__name__)
         print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
         return 1
 

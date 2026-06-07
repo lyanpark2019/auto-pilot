@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time as _time
@@ -44,7 +45,11 @@ TICKET_SCHEMA_PATH = SCHEMAS_DIR / "ticket.schema.json"
 _VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer",
                 "tdd-enforcer", "security-reviewer", "tech-critic-lead"}
 
-PREFLIGHT_TTL_SEC = 900  # 15 minutes
+# Env var mirrors AutoPilotConfig.preflight_ttl_sec (scripts/_config.py).
+# Module-level read chosen deliberately: _dispatch does not instantiate
+# AutoPilotConfig (heavyweight import chain not needed here), so we read the
+# same env var directly to stay DRY without introducing a circular dependency.
+PREFLIGHT_TTL_SEC = int(os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC", "900"))
 
 _TICKET_VALIDATOR: jsonschema.Draft202012Validator | None = None
 

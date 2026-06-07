@@ -87,10 +87,11 @@ def stash_if_dirty(reason: str) -> str | None:
             text=True,
             timeout=30,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         # r2 review: an uncaught TimeoutExpired here crashed the loop with
         # state un-finalized — degrade to "no stash" and keep the loop alive.
-        event("stash.timeout", reason=reason, step="status")
+        event("stash.timeout", reason=reason, step="status",
+              error_type=type(exc).__name__)
         return None
     if not porcelain.stdout.strip():
         return None
@@ -103,8 +104,9 @@ def stash_if_dirty(reason: str) -> str | None:
             text=True,
             timeout=60,
         )
-    except subprocess.TimeoutExpired:
-        event("stash.timeout", reason=reason, step="push")
+    except subprocess.TimeoutExpired as exc:
+        event("stash.timeout", reason=reason, step="push",
+              error_type=type(exc).__name__)
         return None
     if res.returncode != 0:
         event("stash.failed", reason=reason, stderr=res.stderr.strip()[:200])

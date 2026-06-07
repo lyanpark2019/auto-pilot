@@ -28,18 +28,41 @@ codex exec Bash timeout + Task deadline (residual risk documented here).
 """
 from __future__ import annotations
 
-import logging
 import os
 import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol, cast, runtime_checkable
+
+from _log import event
 
 SOFT_WARN_SEC = 300
 HARD_KILL_SEC = 480
 KILL_GRACE_SEC = 10
+_PROGRESS_INTERVAL_TICKS = 300  # 300 × 0.1 s = 30 s between progress events
 
-logger = logging.getLogger(__name__)
+
+@runtime_checkable
+class SpawnHandleProtocol(Protocol):
+    """Structural type accepted by :func:`wait_all`.
+
+    Concrete :class:`SpawnHandle` satisfies this Protocol. Tests substitute
+    lightweight in-process fakes (see ``test_reviewer_wrapper.py:55`` and
+    ``test_beta_watchdog.py:23``) that also satisfy it — the Protocol makes
+    that contract explicit.
+
+    Note: :func:`_respawn` needs the full :class:`SpawnHandle` (``ticket``,
+    ``allowed_tools``, ``disallowed_tools``); callers that pass fakes must
+    ensure the hard-kill respawn path is never exercised (e.g. by setting
+    ``hard_kill_sec`` beyond the test window).
+    """
+
+    role: str
+    output_dir: Path
+    proc: subprocess.Popen[bytes]
+
+    def poll(self) -> int | None: ...
 
 
 class SpawnTimeoutError(Exception):
@@ -141,19 +164,20 @@ def _respawn(handle: SpawnHandle) -> SpawnHandle:
 
 def _hard_kill(proc: subprocess.Popen[bytes], role: str) -> None:
     """terminate → wait 10 s → kill."""
-    logger.warning("watchdog: hard-killing reviewer %s (pid=%s)", role, proc.pid)
+    event("watchdog.hard_kill", role=role, pid=proc.pid)
     proc.terminate()
     try:
         proc.wait(timeout=KILL_GRACE_SEC)
     except subprocess.TimeoutExpired:
-        logger.warning("watchdog: SIGKILL reviewer %s (pid=%s)", role, proc.pid)
+        event("watchdog.sigkill", role=role, pid=proc.pid,
+              error_type="TimeoutExpired")
         proc.kill()
         proc.wait()
 
 
 def _poll_retry_handle(
     role: str,
-    retrying: dict[str, SpawnHandle],
+    retrying: dict[str, SpawnHandleProtocol],
     retry_started: dict[str, float],
     remaining: set[str],
     failures: list[ReviewerFailure],
@@ -186,11 +210,11 @@ def _poll_retry_handle(
 
 def _poll_original_handle(
     role: str,
-    h: SpawnHandle,
-    by_role: dict[str, SpawnHandle],
+    h: SpawnHandleProtocol,
+    by_role: dict[str, SpawnHandleProtocol],
     killed: set[str],
     warned: set[str],
-    retrying: dict[str, SpawnHandle],
+    retrying: dict[str, SpawnHandleProtocol],
     retry_started: dict[str, float],
     remaining: set[str],
     hard_kill_deadline: float,
@@ -209,16 +233,14 @@ def _poll_original_handle(
         if not exited:
             _hard_kill(h.proc, role)
         killed.add(role)
-        logger.warning("watchdog: respawning reviewer %s after hard kill", role)
-        retry_h = _respawn(by_role[role])
+        event("watchdog.respawn", role=role)
+        retry_h = _respawn(cast(SpawnHandle, by_role[role]))
         retrying[role] = retry_h
         retry_started[role] = time.time()
         return
     if now > soft_warn_deadline and role not in warned and role not in killed:
-        logger.warning(
-            "watchdog: reviewer %s lagging (%.0fs elapsed, soft-warn threshold=%ds)",
-            role, now - start, soft_warn_sec,
-        )
+        event("watchdog.reviewer_lagging", role=role,
+              elapsed_s=int(now - start), soft_warn_threshold_s=soft_warn_sec)
         warned.add(role)
     if exited and not marker.exists():
         remaining.discard(role)
@@ -226,14 +248,14 @@ def _poll_original_handle(
 
 def _drain_remaining(
     remaining: set[str],
-    retrying: dict[str, SpawnHandle],
-    by_role: dict[str, SpawnHandle],
+    retrying: dict[str, SpawnHandleProtocol],
+    by_role: dict[str, SpawnHandleProtocol],
     deadline: float,
 ) -> None:
     """Kill orphan subprocesses and raise SpawnTimeoutError for outstanding roles."""
     roles = list(remaining)
     for role in roles:
-        candidate: SpawnHandle | None
+        candidate: SpawnHandleProtocol | None
         for candidate in (retrying.get(role), by_role.get(role)):
             if candidate is not None and candidate.poll() is None:
                 proc = getattr(candidate, "proc", None)
@@ -244,8 +266,8 @@ def _drain_remaining(
 
 def _tick_all_roles(
     remaining: set[str],
-    by_role: dict[str, SpawnHandle],
-    retrying: dict[str, SpawnHandle],
+    by_role: dict[str, SpawnHandleProtocol],
+    retrying: dict[str, SpawnHandleProtocol],
     retry_started: dict[str, float],
     killed: set[str],
     warned: set[str],
@@ -270,7 +292,7 @@ def _tick_all_roles(
 
 
 def wait_all(
-    handles: list[SpawnHandle],
+    handles: list[SpawnHandleProtocol],
     *,
     timeout_sec: int,
     soft_warn_sec: int = SOFT_WARN_SEC,
@@ -291,11 +313,12 @@ def wait_all(
     hard_kill_deadline = start + hard_kill_sec
     warned: set[str] = set()
     killed: set[str] = set()
-    retrying: dict[str, SpawnHandle] = {}
+    retrying: dict[str, SpawnHandleProtocol] = {}
     retry_started: dict[str, float] = {}
     failures: list[ReviewerFailure] = []
-    by_role: dict[str, SpawnHandle] = {h.role: h for h in handles}
+    by_role: dict[str, SpawnHandleProtocol] = {h.role: h for h in handles}
     remaining: set[str] = set(by_role.keys())
+    tick = 0
     while remaining:
         _tick_all_roles(remaining, by_role, retrying, retry_started, killed,
                         warned, failures, hard_kill_sec, hard_kill_deadline,
@@ -304,5 +327,10 @@ def wait_all(
             break
         if time.time() > deadline:
             _drain_remaining(remaining, retrying, by_role, deadline)
+        tick += 1
+        if tick % _PROGRESS_INTERVAL_TICKS == 0:
+            event("wait_all.progress",
+                  waited_s=int(time.time() - start),
+                  outstanding=sorted(remaining))
         time.sleep(0.1)
     return failures

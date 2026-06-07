@@ -337,7 +337,8 @@ class WorktreeManager:
             event("worktree.cleanup.timeout",
                   contract_id=handle.contract_id,
                   branch=handle.branch,
-                  cmd=" ".join(str(a) for a in (exc.cmd or [])))
+                  cmd=" ".join(str(a) for a in (exc.cmd or [])),
+                  error_type=type(exc).__name__)
 
     def rehydrate(self, contract_dir: Path) -> WorktreeHandle | None:
         """Reconstruct WorktreeHandle from <contract_dir>/worktree-handle.json after PM restart."""
@@ -396,9 +397,9 @@ class WorktreeManager:
                          "--force", str(wt_path)],
                         capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
                     )
-                except subprocess.TimeoutExpired:
+                except subprocess.TimeoutExpired as exc:
                     event("worktree.reap.timeout", contract_id=contract_id,
-                          wt_path=str(wt_path))
+                          wt_path=str(wt_path), error_type=type(exc).__name__)
                     continue
             reaped.append(wt_path)
         return reaped

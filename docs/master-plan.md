@@ -111,7 +111,7 @@ Integration targets must point at the canonical, current skill — verified on d
 | `doc-drift-audit` (May 29) | ⚠️ absorbed into `doc-management` (AUDIT mode, 2026-06-06) | use `doc-management` for post-merge doc sync (P1) |
 | `graphify` v0.8.14 | ✅ current, but **duplicate install**: canonical `~/.claude/skills/graphify` + orphan `~/.agents/skills/graphify` (older) | clean the orphan to avoid future drift; graphify provides `GRAPH_REPORT.md` + `--update` but NO `.build-commit` — auto-pilot owns that marker |
 
-Also: `headless-loop.py:14` comment says the session runs `/auto-pilot start --phase N`, but `prompts/iteration.md` actually sends a **prose** "Run the auto-pilot skill" (no explicit slash). Doc↔code drift; the Step-0 skill-fire smoke must record which trigger form actually works in `claude -p`.
+Also: `scripts/headless-loop.py:14` comment says the session runs `/auto-pilot start --phase N`, but `prompts/iteration.md` actually sends a **prose** "Run the auto-pilot skill" (no explicit slash). Doc↔code drift; the Step-0 skill-fire smoke must record which trigger form actually works in `claude -p`.
 
 ## 7. Cost model
 - **Interactive subscription (this user):** token $ is irrelevant — global rule is *speed > token cost*. graphify regen is gated on latency + redundancy only, never $.
