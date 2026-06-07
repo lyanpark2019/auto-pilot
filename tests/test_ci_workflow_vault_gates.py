@@ -11,10 +11,10 @@ def _ci_text() -> str:
     return CI.read_text(encoding="utf-8")
 
 
-def test_ci_ruff_gate_includes_vault_tree() -> None:
+def test_ci_ruff_gate_includes_vault_and_hooks_trees() -> None:
     text = _ci_text()
 
-    assert "python -m ruff check scripts/ tests/ vault/" in text
+    assert "python -m ruff check scripts/ tests/ hooks/ vault/" in text
 
 
 def test_ci_runs_vault_pytest_suite() -> None:

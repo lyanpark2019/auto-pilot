@@ -42,7 +42,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
 
       - name: ruff
-        run: python -m ruff check scripts/ tests/ vault/
+        run: python -m ruff check scripts/ tests/ hooks/ vault/
 
       - name: doc reference integrity (file:line citations in docs)
         run: python3 scripts/docs/check_doc_reference_integrity.py
