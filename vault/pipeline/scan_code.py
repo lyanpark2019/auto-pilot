@@ -41,7 +41,8 @@ def _sig(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Render function signature as `name(args) -> ret`."""
     try:
         sig_inner = ast.unparse(node.args)
-    except Exception:
+    except Exception as exc:
+        print(f"scan_code: failed to unparse args for {node.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
         sig_inner = "..."
     ret = f" -> {ast.unparse(node.returns)}" if node.returns else ""
     prefix = "async " if isinstance(node, ast.AsyncFunctionDef) else ""

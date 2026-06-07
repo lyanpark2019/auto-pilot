@@ -301,84 +301,65 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_findings(score_dir: Path, r: int) -> dict[str, Any]:
+    """Load a findings-round-N.json file; return {} and log if missing."""
+    p = score_dir / f"findings-round-{r}.json"
+    if not p.exists():
+        event("round_budget.missing_file", path=str(p))
+        return {}
+    parsed: dict[str, Any] = json.loads(p.read_text())
+    return parsed
+
+
+def _count_findings(data: dict[str, Any]) -> int:
+    """Sum reviewer finding counts from a findings file payload."""
+    reviewers: dict[str, Any] = data.get("reviewers", {})
+    return sum(int(v.get("count", 0)) for v in reviewers.values())
+
+
+def _emit_hard_stop(n: int, c_prev: int, c_curr: int) -> int:
+    """Print HARD-STOP verdict to stdout+stderr and return exit 3."""
+    msg = "HARD-STOP: 전략 전환 필요"
+    print(json.dumps({
+        "round": n, "count_prev": c_prev, "count_curr": c_curr, "verdict": msg,
+    }, indent=2))
+    print(msg, file=sys.stderr)
+    return 3
+
+
 def cmd_round_budget(args: argparse.Namespace) -> int:
     """Deterministic gate: check whether the review round budget is exhausted.
 
-    Reads findings-round-(N-1).json and findings-round-N.json from
-    ``--score-dir``.  Each file has the schema::
+    Reads findings-round-{N-1,N}.json from ``--score-dir``.  Rules:
+      N < 3  → exit 0 informational.
+      N == 3, count(N) >= count(N-1)  → exit 3 HARD-STOP.
+      N == 3, count(N) < count(N-1)   → exit 0 "round 4 = final cap".
+      Missing file → exit 2.
 
-        {
-            "round": <int>,
-            "reviewers": {
-                "claude": {"count": <int>, "findings": [...]},
-                "codex":  {"count": <int>, "findings": [...]}
-            }
-        }
-
-    Total live count = sum of reviewer counts (``claude.count + codex.count``).
-
-    Rules:
-      - N < 3  → exit 0, prints informational JSON.
-      - N == 3 AND count(3) >= count(2) → exit 3 + HARD-STOP message.
-      - N == 3 AND count(3) < count(2)  → exit 0 + "round 4 = final cap".
-      - Missing file  → exit 2 (usage error).
-
-    Args:
-        args: parsed CLI namespace; expects ``score_dir`` and ``round`` (int).
-
-    Returns:
-        0 (ok / informational), 2 (usage error / missing file), 3 (HARD-STOP).
+    Returns 0 (ok/informational), 2 (missing file), or 3 (HARD-STOP).
     """
     score_dir = Path(args.score_dir)
     n = args.round
-
-    def _load(r: int) -> dict[str, Any]:
-        p = score_dir / f"findings-round-{r}.json"
-        if not p.exists():
-            event("round_budget.missing_file", path=str(p))
-            return {}
-        parsed: dict[str, Any] = json.loads(p.read_text())
-        return parsed
-
-    def _count(data: dict[str, Any]) -> int:
-        reviewers: dict[str, Any] = data.get("reviewers", {})
-        return sum(int(v.get("count", 0)) for v in reviewers.values())
-
     if n < 3:
-        data_n = _load(n)
+        data_n = _load_findings(score_dir, n)
         if not data_n:
             return 2
-        c = _count(data_n)
+        c = _count_findings(data_n)
         print(json.dumps({"round": n, "count": c, "status": "informational"}, indent=2))
         return 0
-
-    # N == 3
-    data_prev = _load(n - 1)
-    data_curr = _load(n)
+    data_prev = _load_findings(score_dir, n - 1)
+    data_curr = _load_findings(score_dir, n)
     if not data_prev or not data_curr:
         return 2
-
-    c_prev = _count(data_prev)
-    c_curr = _count(data_curr)
-
+    c_prev = _count_findings(data_prev)
+    c_curr = _count_findings(data_curr)
     if c_curr >= c_prev:
-        msg = "HARD-STOP: 전략 전환 필요"
-        print(json.dumps({
-            "round": n,
-            "count_prev": c_prev,
-            "count_curr": c_curr,
-            "verdict": msg,
-        }, indent=2))
-        print(msg, file=sys.stderr)
-        return 3
-    else:
-        print(json.dumps({
-            "round": n,
-            "count_prev": c_prev,
-            "count_curr": c_curr,
-            "verdict": "round 4 = final cap",
-        }, indent=2))
-        return 0
+        return _emit_hard_stop(n, c_prev, c_curr)
+    print(json.dumps({
+        "round": n, "count_prev": c_prev, "count_curr": c_curr,
+        "verdict": "round 4 = final cap",
+    }, indent=2))
+    return 0
 
 
 _PHASE_HEADING = re.compile(r"^#{1,3}\s+Phase\b")

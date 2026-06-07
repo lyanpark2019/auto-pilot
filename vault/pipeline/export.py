@@ -190,8 +190,8 @@ def export_notebooklm(repo: Path, doc_root: Path | None = None,
     if rc == 0:
         try:
             existing_titles = {s.get("title", "") for s in json.loads(out).get("sources", [])}
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            print(f"export: failed to parse existing sources list: {type(exc).__name__}: {exc}", file=sys.stderr)
 
     added = 0
     for src in sources:
@@ -337,7 +337,8 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
         if state_file.exists():
             try:
                 source_adapter = json.loads(state_file.read_text()).get("source_adapter")
-            except Exception:
+            except Exception as exc:
+                print(f"export: failed to read source_adapter from {state_file}: {type(exc).__name__}: {exc}", file=sys.stderr)
                 source_adapter = None
     results = {}
     for d in destinations:

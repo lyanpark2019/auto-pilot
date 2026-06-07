@@ -105,7 +105,8 @@ class WorkerBackup:
         for bak in vault.rglob("*.bak.*.*"):
             try:
                 r = int(bak.name.split(".bak.")[1].split(".")[0])
-            except (IndexError, ValueError):
+            except (IndexError, ValueError) as exc:
+                print(f"worker_backup: skipping malformed backup name {bak.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
                 continue
             if r not in keep_set:
                 bak.unlink()

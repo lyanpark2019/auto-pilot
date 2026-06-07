@@ -83,6 +83,7 @@ except Exception:
 
 case "$should_gate" in
   allow_non_creator|allow_unknown)
+    printf '[hook:creation-gate] fail-open: non-creator tool/skill (%s)\n' "$should_gate" >&2
     exit 0
     ;;
   gate)

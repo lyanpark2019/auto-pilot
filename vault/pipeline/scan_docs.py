@@ -61,7 +61,8 @@ def _parse_frontmatter(text: str) -> dict[str, Any]:
         try:
             data = yaml.safe_load(raw) or {}
             return data if isinstance(data, dict) else {}
-        except yaml.YAMLError:
+        except yaml.YAMLError as exc:
+            print(f"scan_docs: failed to parse frontmatter YAML: {type(exc).__name__}: {exc}", file=sys.stderr)
             return {}
     # fallback: naive line parser
     fm: dict[str, Any] = {}

@@ -229,85 +229,82 @@ class WorktreeManager:
             timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
 
+    def _clear_stale_am_state(self) -> None:
+        """Abort any leftover `git am` state; raise StaleAmStateError if it persists."""
+        rebase_apply = self.repo_root / ".git" / "rebase-apply"
+        if rebase_apply.exists():
+            subprocess.run(
+                ["git", "-C", str(self.repo_root), "am", "--abort"],
+                capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
+            )
+            if rebase_apply.exists():
+                raise StaleAmStateError(f"could not clear {rebase_apply}")
+
+    def _extract_conflict_files(self) -> tuple[str, ...]:
+        """Parse the rebase-apply/patch file to extract conflicting file paths."""
+        rebase_apply = self.repo_root / ".git" / "rebase-apply"
+        if not rebase_apply.exists():
+            return ()
+        pf = rebase_apply / "patch"
+        if not pf.exists():
+            return ()
+        files = [
+            line[len("diff --git a/"):].split(" b/")[0]
+            for line in pf.read_text(errors="replace").splitlines()
+            if line.startswith("diff --git a/")
+        ]
+        return tuple(sorted(set(files)))
+
+    def _amend_with_trailers(self, contract: dict[str, Any], pre: str) -> ApplyResult:
+        """Amend HEAD to inject auto-pilot trailers; degrade gracefully on failure."""
+        trailers = [
+            "--trailer", f"auto-pilot-iter: {contract['iter']}",
+            "--trailer", f"auto-pilot-phase: {contract['phase']}",
+            "--trailer", f"auto-pilot-contract: {contract['id']}",
+            "--trailer", f"auto-pilot-idempotency: {contract['idempotency_token']}",
+        ]
+        amend = subprocess.run(
+            ["git", "-C", str(self.repo_root), "commit", "--amend", "--no-edit",
+             *trailers],
+            capture_output=True, text=True, timeout=_GIT_TREE_TIMEOUT,
+        )
+        if amend.returncode != 0:
+            # Best-effort: leave applied commit as-is (no trailer chain)
+            return ApplyResult(status="applied", main_sha=self._head_sha(),
+                               pre_apply_head=pre)
+        return ApplyResult(status="applied", main_sha=self._head_sha(),
+                           pre_apply_head=pre)
+
     def apply_to_main(self, mbox: Path, contract: dict[str, Any]) -> ApplyResult:
-        """Apply worker's patch series to main repo with trailers, under lock.
+        """Apply worker's patch series to $ROOT under flock, injecting auto-pilot trailers.
 
-        Sequence:
-          1. Acquire main-apply.lock.
-          2. Preflight: stale .git/rebase-apply → abort, raise if not recoverable.
-          3. Post-acquire: dirty main → MainTreeDirtyError.
-          4. git am --3way --keep-cr <mbox>.
-          5. Conflict → abort, return ApplyResult(status='conflict').
-          6. Success → amend HEAD to inject trailers, return ApplyResult(status='applied').
+        Sequence: lock → clear stale am-state → dirty-check → git am --3way → amend
+        trailers on success; abort + return conflict result on failure.  git am has no
+        --trailer flag, so the trailer inject is a separate amend after apply.
 
-        Note: `git am` has no --trailer flag. We apply the patch first, then
-        `git commit --amend --no-edit --trailer ...` mutates only HEAD, which IS
-        the just-applied commit (one-commit invariant enforced by collect_patches).
-
-        Raises:
-            MainTreeDirtyError: $ROOT dirty after lock acquired.
-            StaleAmStateError: `.git/rebase-apply` survives auto-abort.
-            subprocess.TimeoutExpired: a git op stalls past 60 s. Propagation is
-                safe — the `_main_apply_lock()` context manager releases the
-                flock in its `finally`, so a stall does not leak the lock; the
-                caller already treats this method as raising.
+        Raises MainTreeDirtyError, StaleAmStateError, or subprocess.TimeoutExpired.
+        TimeoutExpired propagates safely — flock is released in _main_apply_lock finally.
         """
         with self._main_apply_lock():
-            rebase_apply = self.repo_root / ".git" / "rebase-apply"
-            if rebase_apply.exists():
-                subprocess.run(
-                    ["git", "-C", str(self.repo_root), "am", "--abort"],
-                    capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
-                )
-                if rebase_apply.exists():
-                    raise StaleAmStateError(f"could not clear {rebase_apply}")
-
+            self._clear_stale_am_state()
             dirty = self._is_dirty()
             if dirty.strip():
                 raise MainTreeDirtyError(dirty)
-
             pre = self._head_sha()
-            # am has no --trailer; amend HEAD to inject after successful apply
             am = subprocess.run(
                 ["git", "-C", str(self.repo_root), "am", "--3way", "--keep-cr",
                  str(mbox)],
                 capture_output=True, text=True, timeout=_GIT_TREE_TIMEOUT,
             )
             if am.returncode != 0:
-                conflict_files: tuple[str, ...] = ()
-                if rebase_apply.exists():
-                    pf = rebase_apply / "patch"
-                    if pf.exists():
-                        files = [
-                            line[len("diff --git a/"):].split(" b/")[0]
-                            for line in pf.read_text(errors="replace").splitlines()
-                            if line.startswith("diff --git a/")
-                        ]
-                        conflict_files = tuple(sorted(set(files)))
+                conflict_files = self._extract_conflict_files()
                 subprocess.run(
                     ["git", "-C", str(self.repo_root), "am", "--abort"],
                     capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
                 )
                 return ApplyResult(status="conflict", pre_apply_head=pre,
                                    conflict_files=conflict_files)
-
-            trailers = [
-                "--trailer", f"auto-pilot-iter: {contract['iter']}",
-                "--trailer", f"auto-pilot-phase: {contract['phase']}",
-                "--trailer", f"auto-pilot-contract: {contract['id']}",
-                "--trailer", f"auto-pilot-idempotency: {contract['idempotency_token']}",
-            ]
-            amend = subprocess.run(
-                ["git", "-C", str(self.repo_root), "commit", "--amend", "--no-edit",
-                 *trailers],
-                capture_output=True, text=True, timeout=_GIT_TREE_TIMEOUT,
-            )
-            if amend.returncode != 0:
-                # Best-effort: leave applied commit as-is (no trailer chain)
-                return ApplyResult(status="applied", main_sha=self._head_sha(),
-                                   pre_apply_head=pre)
-            return ApplyResult(status="applied", main_sha=self._head_sha(),
-                               pre_apply_head=pre)
+            return self._amend_with_trailers(contract, pre)
 
     def cleanup(self, handle: WorktreeHandle, *, prune_branch: bool) -> None:
         """Idempotent: tolerate missing worktree, branch, sentinel.

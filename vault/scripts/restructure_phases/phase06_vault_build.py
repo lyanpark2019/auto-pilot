@@ -99,7 +99,8 @@ class VaultBuildPerDomainPhase(Phase):
                 return None
             data = json.loads(state.read_text())
             return int(round(float(data.get("total", 0))))
-        except Exception:
+        except Exception as exc:
+            print(f"phase06: _score_vault failed for {vault}: {type(exc).__name__}: {exc}", file=sys.stderr)
             return None
 
     def _score_from_verify_report(self, project_path: Path) -> int | None:
@@ -112,8 +113,8 @@ class VaultBuildPerDomainPhase(Phase):
             m = _SCORE_PAT.search(text)
             if m:
                 return int(round(float(m.group(1))))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"phase06: _score_from_verify_report failed for {report}: {type(exc).__name__}: {exc}", file=sys.stderr)
         return None
 
     def _score_from_stdout(self, stdout_tail: str) -> int | None:
@@ -130,16 +131,16 @@ class VaultBuildPerDomainPhase(Phase):
         if m:
             try:
                 return int(round(float(m.group(1))))
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as exc:
+                print(f"phase06: failed to convert score match '{m.group(1)}': {type(exc).__name__}: {exc}", file=sys.stderr)
         for pat in (_GAP_PAT, _GAP_PAT_REV):
             m = pat.search(stdout_tail)
             if m:
                 try:
                     gap = float(m.group(1))
                     return int(round(100 - gap))
-                except (TypeError, ValueError):
-                    pass
+                except (TypeError, ValueError) as exc:
+                    print(f"phase06: failed to convert gap match '{m.group(1)}': {type(exc).__name__}: {exc}", file=sys.stderr)
         return None
 
     def _execute_one(self, claude_bin: str, entry: dict) -> dict:
@@ -196,7 +197,8 @@ class VaultBuildPerDomainPhase(Phase):
         try:
             prior = json.loads(self.ctx.state_path.read_text())
             prior_state = prior.get("phases", {}).get("6_vault_build_per_domain", {}).get("entries", {}) or {}
-        except Exception:
+        except Exception as exc:
+            print(f"phase06: failed to load prior state from {self.ctx.state_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
             prior_state = {}
 
         entry_state: dict[str, dict] = {}

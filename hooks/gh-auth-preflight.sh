@@ -78,7 +78,7 @@ print(m.group(1) if m else "")
 ' 2>/dev/null || echo "")
 
 if [[ -z "$owner" ]]; then
-  # Cannot determine — allow
+  printf '[hook:gh-auth-preflight] fail-open: cannot determine repo owner from remote URL\n' >&2
   exit 0
 fi
 
@@ -111,7 +111,7 @@ if [[ -z "$active_user" ]]; then
 fi
 
 if [[ -z "$active_user" ]]; then
-  # gh not available or not authenticated — allow (let gh command fail naturally)
+  printf '[hook:gh-auth-preflight] fail-open: gh not available or not authenticated\n' >&2
   exit 0
 fi
 

@@ -37,7 +37,8 @@ class NotebookLMCreatePhase(Phase):
             else:
                 notebooks = []
             return {nb.get("title", nb.get("name", "")) for nb in notebooks if isinstance(nb, dict)}
-        except Exception:
+        except Exception as exc:
+            print(f"phase07: _existing_notebooks query failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return set()
 
     def _planned_notebooks(self) -> list[dict]:

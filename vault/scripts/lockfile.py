@@ -44,7 +44,8 @@ class VaultLock:
         if self.lock_path.exists():
             try:
                 held = json.loads(self.lock_path.read_text())
-            except Exception:
+            except Exception as exc:
+                print(f"lockfile: corrupt lock file {self.lock_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
                 held = {}
             held_pid = held.get("pid")
             if held_pid and self._pid_alive(held_pid):
@@ -66,8 +67,8 @@ class VaultLock:
             held = json.loads(self.lock_path.read_text())
             if held.get("pid") == os.getpid():
                 self.lock_path.unlink()
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            print(f"lockfile: release skipped for {self.lock_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
         self._acquired = False
 
     def _write_lock(self) -> None:

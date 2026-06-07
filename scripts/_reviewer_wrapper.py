@@ -151,6 +151,124 @@ def _hard_kill(proc: subprocess.Popen[bytes], role: str) -> None:
         proc.wait()
 
 
+def _poll_retry_handle(
+    role: str,
+    retrying: dict[str, SpawnHandle],
+    retry_started: dict[str, float],
+    remaining: set[str],
+    failures: list[ReviewerFailure],
+    hard_kill_sec: int,
+    now: float,
+) -> None:
+    """Advance one poll tick for an in-flight retry handle."""
+    retry_h = retrying[role]
+    if (retry_h.output_dir / "done.marker").exists():
+        remaining.discard(role)
+        retrying.pop(role, None)
+        return
+    retry_exited = retry_h.poll() is not None
+    if retry_exited:
+        time.sleep(0.05)
+        if (retry_h.output_dir / "done.marker").exists():
+            remaining.discard(role)
+            retrying.pop(role, None)
+            return
+        failures.append(ReviewerFailure(role=role, reason=f"retry-exit-{retry_h.poll()}"))
+        remaining.discard(role)
+        retrying.pop(role, None)
+        return
+    if now - retry_started.get(role, now) > hard_kill_sec:
+        _hard_kill(retry_h.proc, role)
+        failures.append(ReviewerFailure(role=role, reason="retry-hard-kill"))
+        remaining.discard(role)
+        retrying.pop(role, None)
+
+
+def _poll_original_handle(
+    role: str,
+    h: SpawnHandle,
+    by_role: dict[str, SpawnHandle],
+    killed: set[str],
+    warned: set[str],
+    retrying: dict[str, SpawnHandle],
+    retry_started: dict[str, float],
+    remaining: set[str],
+    hard_kill_deadline: float,
+    soft_warn_deadline: float,
+    start: float,
+    soft_warn_sec: int,
+    now: float,
+) -> None:
+    """Advance one poll tick for an original (non-retry) handle."""
+    marker = h.output_dir / "done.marker"
+    if marker.exists():
+        remaining.discard(role)
+        return
+    exited = h.poll() is not None
+    if now > hard_kill_deadline and role not in killed:
+        if not exited:
+            _hard_kill(h.proc, role)
+        killed.add(role)
+        logger.warning("watchdog: respawning reviewer %s after hard kill", role)
+        retry_h = _respawn(by_role[role])
+        retrying[role] = retry_h
+        retry_started[role] = time.time()
+        return
+    if now > soft_warn_deadline and role not in warned and role not in killed:
+        logger.warning(
+            "watchdog: reviewer %s lagging (%.0fs elapsed, soft-warn threshold=%ds)",
+            role, now - start, soft_warn_sec,
+        )
+        warned.add(role)
+    if exited and not marker.exists():
+        remaining.discard(role)
+
+
+def _drain_remaining(
+    remaining: set[str],
+    retrying: dict[str, SpawnHandle],
+    by_role: dict[str, SpawnHandle],
+    deadline: float,
+) -> None:
+    """Kill orphan subprocesses and raise SpawnTimeoutError for outstanding roles."""
+    roles = list(remaining)
+    for role in roles:
+        candidate: SpawnHandle | None
+        for candidate in (retrying.get(role), by_role.get(role)):
+            if candidate is not None and candidate.poll() is None:
+                proc = getattr(candidate, "proc", None)
+                if proc is not None:
+                    _hard_kill(proc, role)
+    raise SpawnTimeoutError(f"timed out waiting for done.marker from {roles}")
+
+
+def _tick_all_roles(
+    remaining: set[str],
+    by_role: dict[str, SpawnHandle],
+    retrying: dict[str, SpawnHandle],
+    retry_started: dict[str, float],
+    killed: set[str],
+    warned: set[str],
+    failures: list[ReviewerFailure],
+    hard_kill_sec: int,
+    hard_kill_deadline: float,
+    soft_warn_deadline: float,
+    start: float,
+    soft_warn_sec: int,
+) -> None:
+    """Advance one poll tick for all remaining roles."""
+    now = time.time()
+    for role in list(remaining):
+        if role in retrying:
+            _poll_retry_handle(role, retrying, retry_started, remaining,
+                               failures, hard_kill_sec, now)
+            continue
+        _poll_original_handle(role, by_role[role], by_role, killed, warned,
+                               retrying, retry_started, remaining,
+                               hard_kill_deadline, soft_warn_deadline,
+                               start, soft_warn_sec, now)
+
+
 def wait_all(
     handles: list[SpawnHandle],
     *,
@@ -160,128 +278,31 @@ def wait_all(
 ) -> list[ReviewerFailure]:
     """Poll done.marker for every handle until all present, or timeout.
 
-    Implements the two-tier watchdog:
-      - soft warning at ``soft_warn_sec`` (default 300 s): logs per-laggard warning,
-        process continues running — no kill.
-      - hard kill at ``hard_kill_sec`` (default 480 s): terminate → grace → kill →
-        ONE retry respawn; retry failure → :class:`ReviewerFailure` appended to
-        return list.
+    Two-tier watchdog: soft warning at ``soft_warn_sec`` (log only); hard kill
+    at ``hard_kill_sec`` (terminate→grace→kill→one retry); retry failure →
+    :class:`ReviewerFailure` in the return list.  ``timeout_sec`` is the outer
+    wall-clock cap; unhandled remaining handles raise :class:`SpawnTimeoutError`.
 
-    The original ``timeout_sec`` parameter becomes the outer wall-clock cap after
-    which any still-remaining handles that were NOT already hard-killed raise
-    :class:`SpawnTimeoutError` (same semantics as before for non-watchdog consumers).
-
-    Returns:
-        List of :class:`ReviewerFailure` for reviewers that failed after retry.
-        Empty list = all reviewers completed successfully.
-
-    Raises:
-        SpawnTimeoutError: if ``timeout_sec`` elapses for handles not yet
-            handled by the hard-kill/retry path.
+    Returns empty list on success. Raises SpawnTimeoutError on timeout.
     """
     start = time.time()
     deadline = start + timeout_sec
     soft_warn_deadline = start + soft_warn_sec
     hard_kill_deadline = start + hard_kill_sec
-
-    # Track per-handle state
     warned: set[str] = set()
     killed: set[str] = set()
-    retrying: dict[str, SpawnHandle] = {}  # role → retry handle
-    retry_started: dict[str, float] = {}   # role → respawn wall-clock
+    retrying: dict[str, SpawnHandle] = {}
+    retry_started: dict[str, float] = {}
     failures: list[ReviewerFailure] = []
-    # Map role → original handle (roles must be unique)
     by_role: dict[str, SpawnHandle] = {h.role: h for h in handles}
     remaining: set[str] = set(by_role.keys())
-
     while remaining:
-        now = time.time()
-
-        for role in list(remaining):
-            # ── retry handle path (takes priority over original) ──────────
-            if role in retrying:
-                retry_h = retrying[role]
-                if (retry_h.output_dir / "done.marker").exists():
-                    remaining.discard(role)
-                    retrying.pop(role, None)
-                    continue
-                retry_exited = retry_h.poll() is not None
-                if retry_exited:
-                    # Give a brief poll for a late-written marker
-                    time.sleep(0.05)
-                    if (retry_h.output_dir / "done.marker").exists():
-                        remaining.discard(role)
-                        retrying.pop(role, None)
-                        continue
-                    # Retry truly failed without a marker
-                    failures.append(
-                        ReviewerFailure(role=role, reason=f"retry-exit-{retry_h.poll()}")
-                    )
-                    remaining.discard(role)
-                    retrying.pop(role, None)
-                    continue
-                # Bound the retry like the original (review r1: an unbounded hung
-                # retry leaked an orphan subprocess and surfaced as the outer
-                # SpawnTimeoutError instead of a structured failure).
-                if now - retry_started.get(role, now) > hard_kill_sec:
-                    _hard_kill(retry_h.proc, role)
-                    failures.append(ReviewerFailure(role=role, reason="retry-hard-kill"))
-                    remaining.discard(role)
-                    retrying.pop(role, None)
-                continue  # skip original handle checks while retry is live
-
-            # ── original handle ───────────────────────────────────────────
-            h = by_role[role]
-            marker = h.output_dir / "done.marker"
-
-            if marker.exists():
-                remaining.discard(role)
-                continue
-
-            exited = h.poll() is not None
-
-            # ── hard-kill window ──────────────────────────────────────────
-            if now > hard_kill_deadline and role not in killed:
-                if not exited:
-                    _hard_kill(h.proc, role)
-                killed.add(role)
-                # Attempt one retry respawn
-                logger.warning("watchdog: respawning reviewer %s after hard kill", role)
-                retry_h = _respawn(by_role[role])
-                retrying[role] = retry_h
-                retry_started[role] = time.time()
-                continue
-
-            # ── soft-warn window ─────────────────────────────────────────
-            if now > soft_warn_deadline and role not in warned and role not in killed:
-                logger.warning(
-                    "watchdog: reviewer %s lagging (%.0fs elapsed, soft-warn threshold=%ds)",
-                    role, now - start, soft_warn_sec,
-                )
-                warned.add(role)
-
-            # ── exited without marker (before hard-kill window) ──────────
-            if exited and not marker.exists():
-                # Original wait_all semantics: proc exited without marker = done
-                remaining.discard(role)
-                continue
-
+        _tick_all_roles(remaining, by_role, retrying, retry_started, killed,
+                        warned, failures, hard_kill_sec, hard_kill_deadline,
+                        soft_warn_deadline, start, soft_warn_sec)
         if not remaining:
             break
         if time.time() > deadline:
-            roles = list(remaining)
-            # Kill anything still alive before raising — never leave orphans.
-            # (getattr: test fakes may expose poll() without a real proc)
-            for role in roles:
-                candidate: SpawnHandle | None
-                for candidate in (retrying.get(role), by_role.get(role)):
-                    if candidate is not None and candidate.poll() is None:
-                        proc = getattr(candidate, "proc", None)
-                        if proc is not None:
-                            _hard_kill(proc, role)
-            raise SpawnTimeoutError(
-                f"timed out waiting for done.marker from {roles}"
-            )
+            _drain_remaining(remaining, retrying, by_role, deadline)
         time.sleep(0.1)
-
     return failures

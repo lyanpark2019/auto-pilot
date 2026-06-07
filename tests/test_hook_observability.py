@@ -151,6 +151,48 @@ class TestGhAuthPreflightFailOpen:
         # Cache file must still exist (gh auth status is not a switch)
         assert cache.exists(), "cache was incorrectly purged on gh auth status"
 
+    def test_no_git_remote_exits_zero_with_marker(self, tmp_path: Path) -> None:
+        """When repo has no git remote, owner is empty → fail-open with marker."""
+        # Init a bare git repo with no remote so git remote get-url origin fails
+        subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
+        r = _run_hook(
+            self._hook(),
+            {"tool_input": {"command": "gh repo view"}},
+            cwd=tmp_path,
+            env={"TMPDIR": str(tmp_path)},
+        )
+        assert r.returncode == 0
+        assert "[hook:gh-auth-preflight] fail-open:" in r.stderr
+
+    def test_gh_unavailable_exits_zero_with_marker(self, tmp_path: Path) -> None:
+        """When gh is not authenticated (returns empty), hook fails open with marker."""
+        # Stub gh to exit 1 (simulates unauthenticated / unavailable)
+        fake_bin = tmp_path / "fake_bin"
+        fake_bin.mkdir()
+        fake_gh = fake_bin / "gh"
+        fake_gh.write_text("#!/usr/bin/env bash\nexit 1\n")
+        fake_gh.chmod(0o755)
+
+        # Use a remote URL that resolves owner so we pass the owner check
+        git_dir = tmp_path / "myrepo"
+        git_dir.mkdir()
+        subprocess.run(["git", "init", str(git_dir)], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(git_dir), "remote", "add", "origin",
+             "https://github.com/lyanpark2019/some-repo.git"],
+            check=True,
+            capture_output=True,
+        )
+
+        r = _run_hook(
+            self._hook(),
+            {"tool_input": {"command": "gh repo view", "cwd": str(git_dir)}},
+            cwd=git_dir,
+            env={"TMPDIR": str(tmp_path), "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+        )
+        assert r.returncode == 0
+        assert "[hook:gh-auth-preflight] fail-open:" in r.stderr
+
 
 # ─── creation-gate.sh ────────────────────────────────────────────────────────
 
@@ -165,6 +207,16 @@ class TestCreationGateFailOpen:
 
     def test_unparseable_stdin_emits_fail_open_marker(self, tmp_path: Path) -> None:
         r = _run_hook_raw(self._hook(), "not json {{{", cwd=tmp_path)
+        assert "[hook:creation-gate] fail-open:" in r.stderr
+
+    def test_non_creator_skill_exits_zero_with_marker(self, tmp_path: Path) -> None:
+        """Non-creator Skill tool → allow_non_creator branch exits 0 with marker."""
+        r = _run_hook(
+            self._hook(),
+            {"tool_name": "Skill", "tool_input": {"skill": "auto-pilot"}},
+            cwd=tmp_path,
+        )
+        assert r.returncode == 0
         assert "[hook:creation-gate] fail-open:" in r.stderr
 
 

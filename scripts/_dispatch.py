@@ -86,46 +86,27 @@ def _check_contract_check_artifact(contract_dir: Path) -> None:
         )
 
 
-def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
-    """Preflight gate (ⓓ-9): reject dispatch when preflight is absent, stale,
-    wrong-phase, or the recorded head_sha does not match current HEAD.
+def _locate_repo_root(contract_dir: Path) -> Path:
+    """Walk up from contract_dir until .git or .planning is found.
 
-    The preflight artifact lives at:
-      .planning/auto-pilot/preflight/phase-<N>.json
-    relative to the repo root (two parents above contract_dir structure, or
-    derived from contract_dir / ".." traversal — we use the repo root heuristic:
-    walk up from contract_dir until a .git or .planning dir is found, then
-    anchor to <repo_root>/.planning/auto-pilot/preflight/phase-<N>.json).
-
-    Raises PreflightError with a descriptive message.
+    Raises PreflightError if neither anchor is found within 20 levels.
     """
-    # Locate repo root: walk up from contract_dir
     candidate = contract_dir
-    repo_root: Path | None = None
-    for _ in range(20):  # guard against infinite loops
+    for _ in range(20):
         if (candidate / ".git").exists() or (candidate / ".planning").exists():
-            repo_root = candidate
-            break
+            return candidate
         parent = candidate.parent
         if parent == candidate:
             break
         candidate = parent
-    if repo_root is None:
-        raise PreflightError(
-            f"Cannot locate repo root from contract_dir={contract_dir}; "
-            "preflight check skipped but gate requires it"
-        )
+    raise PreflightError(
+        f"Cannot locate repo root from contract_dir={contract_dir}; "
+        "preflight check skipped but gate requires it"
+    )
 
-    preflight_path = repo_root / ".planning" / "auto-pilot" / "preflight" / f"phase-{phase}.json"
-    if not preflight_path.exists():
-        raise PreflightError(
-            f"Preflight artifact missing: {preflight_path}; "
-            "run `bash scripts/pm_preflight.sh` first"
-        )
 
-    preflight = json.loads(preflight_path.read_text())
-
-    # TTL check
+def _check_preflight_ttl(preflight: dict[str, Any]) -> None:
+    """Raise PreflightError if preflight artifact is expired or has invalid timestamp."""
     generated_ts_str = preflight.get("generated_ts", "")
     try:
         generated_dt = datetime.fromisoformat(generated_ts_str)
@@ -140,15 +121,12 @@ def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
             f"Preflight artifact has invalid generated_ts: {generated_ts_str!r}"
         ) from exc
 
-    # Phase key check
-    artifact_phase = preflight.get("phase")
-    if artifact_phase != phase:
-        raise PreflightError(
-            f"Preflight artifact phase mismatch: artifact.phase={artifact_phase!r}, "
-            f"expected {phase}"
-        )
 
-    # HEAD sha check
+def _check_preflight_head_sha(preflight: dict[str, Any], repo_root: Path) -> None:
+    """Raise PreflightError if preflight head_sha does not match current HEAD.
+
+    Silently skips on git timeout or non-git environment.
+    """
     try:
         current_head = subprocess.check_output(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
@@ -159,7 +137,6 @@ def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
         print(f"_dispatch: git rev-parse timed out (>{_GIT_QUICK_TIMEOUT}s), skipping HEAD check", file=sys.stderr)
         return
     except subprocess.CalledProcessError:
-        # If git fails, skip HEAD check (non-git environment)
         return
     artifact_head = preflight.get("head_sha", "")
     if current_head != artifact_head:
@@ -167,6 +144,37 @@ def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
             f"Preflight head_sha mismatch: artifact={artifact_head!r}, "
             f"current HEAD={current_head!r}; re-run `bash scripts/pm_preflight.sh`"
         )
+
+
+def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
+    """Preflight gate (ⓓ-9): reject dispatch when preflight is absent, stale,
+    wrong-phase, or the recorded head_sha does not match current HEAD.
+
+    The preflight artifact lives at:
+      .planning/auto-pilot/preflight/phase-<N>.json
+    relative to the repo root (two parents above contract_dir structure, or
+    derived from contract_dir / ".." traversal — we use the repo root heuristic:
+    walk up from contract_dir until a .git or .planning dir is found, then
+    anchor to <repo_root>/.planning/auto-pilot/preflight/phase-<N>.json).
+
+    Raises PreflightError with a descriptive message.
+    """
+    repo_root = _locate_repo_root(contract_dir)
+    preflight_path = repo_root / ".planning" / "auto-pilot" / "preflight" / f"phase-{phase}.json"
+    if not preflight_path.exists():
+        raise PreflightError(
+            f"Preflight artifact missing: {preflight_path}; "
+            "run `bash scripts/pm_preflight.sh` first"
+        )
+    preflight = json.loads(preflight_path.read_text())
+    _check_preflight_ttl(preflight)
+    artifact_phase = preflight.get("phase")
+    if artifact_phase != phase:
+        raise PreflightError(
+            f"Preflight artifact phase mismatch: artifact.phase={artifact_phase!r}, "
+            f"expected {phase}"
+        )
+    _check_preflight_head_sha(preflight, repo_root)
 
 
 def prepare_subagent_ticket(

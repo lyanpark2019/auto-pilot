@@ -49,7 +49,8 @@ def _load_rubric() -> dict[str, Any]:
         return {}
     try:
         return yaml.safe_load(RUBRIC_PATH.read_text()) or {}
-    except Exception:
+    except Exception as exc:
+        print(f"cost_tracker: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}", file=sys.stderr)
         return {}
 
 
@@ -131,7 +132,8 @@ class CostTracker:
                 continue
             try:
                 yield json.loads(line)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                print(f"cost_tracker: skipping corrupt JSONL line in {self.log_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
                 continue
 
 

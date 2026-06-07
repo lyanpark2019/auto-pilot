@@ -235,7 +235,8 @@ def main() -> int:
             continue
         try:
             req = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            print(f"mcp_vault_server: skipping malformed JSON line: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
         handle(req)
     return 0

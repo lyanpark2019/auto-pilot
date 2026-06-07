@@ -40,7 +40,8 @@ def _source_count(nid: str) -> int:
                        capture_output=True, text=True, timeout=30)
     try:
         return len(json.loads(r.stdout).get("sources", []))
-    except Exception:
+    except Exception as exc:
+        print(f"migrate/pm: _source_count JSON parse failed for {nid}: {type(exc).__name__}: {exc}", file=sys.stderr)
         return -1
 
 

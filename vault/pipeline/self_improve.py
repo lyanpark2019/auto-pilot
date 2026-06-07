@@ -45,7 +45,8 @@ def load_memory(path: Path) -> dict:
         return _default_memory()
     try:
         payload = json.loads(path.read_text(errors="replace"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"self_improve: failed to load memory {path}: {type(exc).__name__}: {exc}", file=sys.stderr)
         return _default_memory()
     if not isinstance(payload, dict):
         return _default_memory()
@@ -76,7 +77,8 @@ def parse_real_eval_report(vault: Path) -> dict[str, float]:
         if task_id and match:
             try:
                 scores[task_id] = float(match.group(1))
-            except ValueError:
+            except ValueError as exc:
+                print(f"self_improve: failed to parse score for {task_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
                 continue
     return scores
 

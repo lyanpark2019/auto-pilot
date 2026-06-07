@@ -207,7 +207,8 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
         doc_path = doc_root / doc
         try:
             body = doc_path.read_text(errors="replace")
-        except OSError:
+        except OSError as exc:
+            print(f"drift: failed to read {doc_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
         for m in SIG_IN_DOC_RE.finditer(body):
             name, args_str = m.group(1), m.group(2).strip()

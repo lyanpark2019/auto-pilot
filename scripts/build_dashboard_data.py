@@ -148,27 +148,13 @@ def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_architecture_html(
-    assets: list[dict[str, str]],
-    counts: dict[str, int],
-    head: str,
-    branch: str,
-    generated: str,
-) -> str:
-    # Asset counts per subsystem
-    sub_counts: dict[str, int] = {}
-    for a in assets:
-        sub = subsystem_of(a["name"])
-        sub_counts[sub] = sub_counts.get(sub, 0) + 1
-
-    total = sum(counts.values())
-
-    pillar_cards = ""
+def _render_pillar_cards(sub_counts: dict[str, int]) -> str:
+    """Build HTML for the 4-pillar cards block."""
+    html = ""
     for label, pillar_id, desc, color in PILLARS:
-        # collect subsystems that map to this pillar
         subs = [s for s, p in SUBSYSTEM_PILLAR.items() if p == pillar_id]
         count = sum(sub_counts.get(s, 0) for s in subs)
-        pillar_cards += (
+        html += (
             f'<div class="card" style="border-top:3px solid {_esc(color)}">'
             f'<div class="pill" style="background:rgba(0,0,0,.2);border:1px solid {_esc(color)};color:{_esc(color)}">'
             f"{_esc(label)}</div>"
@@ -176,100 +162,135 @@ def build_architecture_html(
             f'<div class="count-badge">{count} assets</div>'
             f"</div>\n"
         )
+    return html
 
-    asset_rows_html = ""
+
+def _render_asset_rows(assets: list[dict[str, str]]) -> str:
+    """Build HTML table rows for the asset→pillar mapping table."""
+    html = ""
     for a in sorted(assets, key=lambda x: (x["type"], x["name"])):
         sub = subsystem_of(a["name"])
         pillar_id = SUBSYSTEM_PILLAR.get(sub, "safety")
         pillar_color = next((c for _, pid, _, c in PILLARS if pid == pillar_id), "#8b949e")
-        asset_rows_html += (
+        html += (
             f'<tr><td><code>{_esc(a["name"])}</code></td>'
             f'<td class="dim">{_esc(a["type"])}</td>'
             f'<td class="dim">{_esc(sub)}</td>'
             f'<td><span style="color:{_esc(pillar_color)};font-size:10.5px">{_esc(pillar_id)}</span></td></tr>\n'
         )
+    return html
 
-    contract_rows = ""
+
+def _render_contract_rows() -> str:
+    """Build HTML table rows for the binding contracts table."""
+    html = ""
     for name, file_, desc in BINDING_CONTRACTS:
-        contract_rows += (
+        html += (
             f"<tr><td><b>{_esc(name)}</b></td>"
             f"<td><code>{_esc(file_)}</code></td>"
             f"<td class=\"dim\">{_esc(desc)}</td></tr>\n"
         )
+    return html
 
-    count_badges = "".join(
+
+def _render_count_badges(counts: dict[str, int]) -> str:
+    """Build HTML count-badge divs for the asset counts section."""
+    return "".join(
         f'<div class="cb"><span class="n">{v}</span><span class="t">{k}</span></div>'
         for k, v in sorted(counts.items())
     )
 
-    return f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>auto-pilot — Architecture</title>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:#0d1117;color:#e6edf3;font-family:-apple-system,Pretendard,sans-serif;padding:28px;line-height:1.5}}
-h1{{font-size:20px;margin-bottom:4px}}
-h2{{font-size:14px;margin:24px 0 8px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:4px}}
-.sub{{color:#8b949e;font-size:11.5px;margin-bottom:18px}}
-code{{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:0 5px;font-size:10.5px;color:#56d4dd}}
-.pillars{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}}
-.card{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px}}
-.pill{{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;margin-bottom:6px;font-weight:600}}
-.desc{{font-size:11px;color:#8b949e;margin-top:4px}}
-.count-badge{{margin-top:8px;font-size:11px;color:#8b949e}}
-table{{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}}
-th,td{{border:1px solid #30363d;padding:5px 8px;text-align:left;vertical-align:top}}
-th{{background:#1c2230;font-size:10.5px}}
-.dim{{color:#8b949e}}
-.counts{{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}}
-.cb{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 12px;text-align:center}}
-.cb .n{{display:block;font-size:18px;font-weight:700}}
-.cb .t{{display:block;font-size:9.5px;color:#8b949e}}
-.process{{font-family:monospace;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;font-size:11.5px;white-space:pre;line-height:1.7;color:#e6edf3;margin-top:6px}}
-footer{{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d;padding-top:8px}}
-@media(max-width:900px){{.pillars{{grid-template-columns:repeat(2,1fr)}}}}
-</style>
-</head>
-<body>
-<h1>auto-pilot — Architecture</h1>
-<div class="sub">branch <code>{_esc(branch)}</code> · commit <code>{_esc(head)}</code> · generated {_esc(generated)} · SoT: <code>docs/architecture.md</code> + <code>scripts/build_dashboard_data.collect_assets()</code></div>
 
-<h2>Asset counts</h2>
-<div class="counts">{count_badges}<div class="cb"><span class="n">{total}</span><span class="t">total</span></div></div>
+_ARCH_CSS = (
+    "*{box-sizing:border-box;margin:0;padding:0}"
+    "body{background:#0d1117;color:#e6edf3;font-family:-apple-system,Pretendard,sans-serif;padding:28px;line-height:1.5}"
+    "h1{font-size:20px;margin-bottom:4px}"
+    "h2{font-size:14px;margin:24px 0 8px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:4px}"
+    ".sub{color:#8b949e;font-size:11.5px;margin-bottom:18px}"
+    "code{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:0 5px;font-size:10.5px;color:#56d4dd}"
+    ".pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}"
+    ".card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px}"
+    ".pill{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;margin-bottom:6px;font-weight:600}"
+    ".desc{font-size:11px;color:#8b949e;margin-top:4px}"
+    ".count-badge{margin-top:8px;font-size:11px;color:#8b949e}"
+    "table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}"
+    "th,td{border:1px solid #30363d;padding:5px 8px;text-align:left;vertical-align:top}"
+    "th{background:#1c2230;font-size:10.5px}"
+    ".dim{color:#8b949e}"
+    ".counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}"
+    ".cb{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 12px;text-align:center}"
+    ".cb .n{display:block;font-size:18px;font-weight:700}"
+    ".cb .t{display:block;font-size:9.5px;color:#8b949e}"
+    ".process{font-family:monospace;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;font-size:11.5px;white-space:pre;line-height:1.7;color:#e6edf3;margin-top:6px}"
+    "footer{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363d;padding-top:8px}"
+    "@media(max-width:900px){.pillars{grid-template-columns:repeat(2,1fr)}}"
+)
 
-<h2>4-Pillar purpose (모든 자산은 ≥1 pillar 에 역할 정의 의무)</h2>
-<div class="pillars">{pillar_cards}</div>
 
-<h2>Coding-loop process (SoT: agents/pm-orchestrator.md)</h2>
-<div class="process">PM (code-edit 0)
-  → phase plan + tech-critic gate
-  → contract 발행  [⛓ contract.schema.json · snapshot_shas SHA-pin · idempotency_token]
-  → worker dispatch  (Sonnet 1M · worktree isolation)
-  → diff + verify-log  [⛓ SHA-256 mandatory — missing = bounce]
-  → dual review  [⛓ Codex read-only + cold Claude · PM-frozen diff]
-  → fixer commit + re-review
-  → merge (human checkpoint)
-  → retro → memory  [⛓ vault gotchas + .claude/insights.md]</div>
+def _render_arch_body(
+    head: str, branch: str, generated: str, total: int,
+    count_badges: str, pillar_cards: str, contract_rows: str, asset_rows_html: str,
+) -> str:
+    """Render the HTML body section for the architecture page."""
+    process_text = (
+        "PM (code-edit 0)\n"
+        "  → phase plan + tech-critic gate\n"
+        "  → contract 발행  [⛓ contract.schema.json · snapshot_shas SHA-pin · idempotency_token]\n"
+        "  → worker dispatch  (Sonnet 1M · worktree isolation)\n"
+        "  → diff + verify-log  [⛓ SHA-256 mandatory — missing = bounce]\n"
+        "  → dual review  [⛓ Codex read-only + cold Claude · PM-frozen diff]\n"
+        "  → fixer commit + re-review\n"
+        "  → merge (human checkpoint)\n"
+        "  → retro → memory  [⛓ vault gotchas + .claude/insights.md]"
+    )
+    return (
+        f'<h1>auto-pilot — Architecture</h1>\n'
+        f'<div class="sub">branch <code>{_esc(branch)}</code> · commit <code>{_esc(head)}</code>'
+        f' · generated {_esc(generated)} · SoT: <code>docs/architecture.md</code>'
+        f' + <code>scripts/build_dashboard_data.collect_assets()</code></div>\n\n'
+        f'<h2>Asset counts</h2>\n'
+        f'<div class="counts">{count_badges}<div class="cb"><span class="n">{total}</span>'
+        f'<span class="t">total</span></div></div>\n\n'
+        f'<h2>4-Pillar purpose (모든 자산은 ≥1 pillar 에 역할 정의 의무)</h2>\n'
+        f'<div class="pillars">{pillar_cards}</div>\n\n'
+        f'<h2>Coding-loop process (SoT: agents/pm-orchestrator.md)</h2>\n'
+        f'<div class="process">{process_text}</div>\n\n'
+        f'<h2>Binding contracts</h2>\n'
+        f'<table>\n<tr><th>Contract</th><th>File</th><th>Constraint</th></tr>\n{contract_rows}</table>\n\n'
+        f'<h2>Asset → pillar mapping (live, from collect_assets())</h2>\n'
+        f'<table>\n<tr><th>Asset</th><th>Type</th><th>Subsystem</th><th>Pillar</th></tr>\n{asset_rows_html}</table>\n\n'
+        f'<footer>Generated by <code>scripts/build_dashboard_data.py</code>'
+        f' — HEAD {_esc(head)}. Stale when code changes without re-run.</footer>\n'
+    )
 
-<h2>Binding contracts</h2>
-<table>
-<tr><th>Contract</th><th>File</th><th>Constraint</th></tr>
-{contract_rows}
-</table>
 
-<h2>Asset → pillar mapping (live, from collect_assets())</h2>
-<table>
-<tr><th>Asset</th><th>Type</th><th>Subsystem</th><th>Pillar</th></tr>
-{asset_rows_html}
-</table>
-
-<footer>Generated by <code>scripts/build_dashboard_data.py</code> — HEAD {_esc(head)}. Stale when code changes without re-run.</footer>
-</body>
-</html>
-"""
+def build_architecture_html(
+    assets: list[dict[str, str]],
+    counts: dict[str, int],
+    head: str,
+    branch: str,
+    generated: str,
+) -> str:
+    sub_counts: dict[str, int] = {}
+    for a in assets:
+        sub = subsystem_of(a["name"])
+        sub_counts[sub] = sub_counts.get(sub, 0) + 1
+    total = sum(counts.values())
+    body = _render_arch_body(
+        head, branch, generated, total,
+        _render_count_badges(counts),
+        _render_pillar_cards(sub_counts),
+        _render_contract_rows(),
+        _render_asset_rows(assets),
+    )
+    return (
+        '<!DOCTYPE html>\n<html lang="ko">\n<head>\n'
+        '<meta charset="UTF-8">\n'
+        '<meta name="viewport" content="width=device-width,initial-scale=1.0">\n'
+        '<title>auto-pilot — Architecture</title>\n'
+        f'<style>{_ARCH_CSS}</style>\n'
+        f'</head>\n<body>\n{body}</body>\n</html>\n'
+    )
 
 
 def main() -> None:

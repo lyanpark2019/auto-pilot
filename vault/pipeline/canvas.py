@@ -19,7 +19,8 @@ def emit_graph_canvas(vault: Path, max_nodes: int = 80) -> Path | None:
         return None
     try:
         graph = json.loads(graph_path.read_text(errors="replace"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"canvas: failed to load {graph_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
         return None
     if not isinstance(graph, dict):
         return None

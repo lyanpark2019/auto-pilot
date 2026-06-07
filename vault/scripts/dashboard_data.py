@@ -51,7 +51,8 @@ def collect(vault: Path) -> dict:
             if line.strip():
                 try:
                     entries.append(json.loads(line))
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as exc:
+                    print(f"dashboard_data: skipping corrupt JSONL line in {cost_log}: {type(exc).__name__}: {exc}", file=sys.stderr)
                     continue
         out["cost_log"] = entries
 
