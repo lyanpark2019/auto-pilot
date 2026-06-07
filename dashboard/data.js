@@ -1,11 +1,11 @@
 window.DASHBOARD_DATA = {
  "branch": "main",
- "commit": "cc6aef8",
+ "commit": "ceb6252",
  "counts": {
   "skill": 11,
-  "agent": 19,
-  "command": 10,
-  "hook": 19,
+  "agent": 16,
+  "command": 7,
+  "hook": 20,
   "codex-skill": 12
  },
  "assets": [
@@ -73,21 +73,6 @@ window.DASHBOARD_DATA = {
    "type": "agent",
    "name": "auto-pilot-codex-reviewer",
    "subsystem": "core-loop"
-  },
-  {
-   "type": "agent",
-   "name": "harness-evaluator",
-   "subsystem": "harness"
-  },
-  {
-   "type": "agent",
-   "name": "harness-generator",
-   "subsystem": "harness"
-  },
-  {
-   "type": "agent",
-   "name": "harness-planner",
-   "subsystem": "harness"
   },
   {
    "type": "agent",
@@ -163,21 +148,6 @@ window.DASHBOARD_DATA = {
    "type": "command",
    "name": "auto-pilot-server",
    "subsystem": "core-loop"
-  },
-  {
-   "type": "command",
-   "name": "auto-pilot",
-   "subsystem": "core-loop"
-  },
-  {
-   "type": "command",
-   "name": "harness-ops",
-   "subsystem": "harness"
-  },
-  {
-   "type": "command",
-   "name": "harness",
-   "subsystem": "harness"
   },
   {
    "type": "command",
@@ -302,6 +272,11 @@ window.DASHBOARD_DATA = {
   {
    "type": "hook",
    "name": "ruff-import-integrity.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "subagent-deliverable-check.sh",
    "subsystem": "other"
   },
   {
