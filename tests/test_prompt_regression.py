@@ -32,8 +32,8 @@ def _all_fixtures() -> list[Path]:
 
 def test_fixtures_directory_has_minimum_cases():
     cases = _all_fixtures()
-    assert len(cases) >= 10, (
-        f"prompt regression suite needs >=10 fixtures, found {len(cases)}"
+    assert len(cases) >= 20, (
+        f"prompt regression suite needs >=20 fixtures, found {len(cases)}"
     )
 
 

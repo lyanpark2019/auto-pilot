@@ -10,8 +10,9 @@ local dev hardware (Apple M-series, Python 3.13).
 | `orchestrator status` | < 50 ms | called every loop iteration; user-visible |
 | `orchestrator phase-start` | < 50 ms | called once per phase transition |
 | `orchestrator phase-end` | < 50 ms | same |
-| `orchestrator pivot-check` | < 50 ms | called per finding within a round |
-| pytest suite (`tests/`) | < 5 s | dev feedback loop |
+| `orchestrator pivot-check` (`risk_assess.assess`) | < 50 ms | called per finding within a round; measured ~0.03 ms locally |
+| pytest suite (`tests/`) | < 45 s | measured ~22 s locally on M-series; CI runner has higher overhead |
+| peak RSS (assess 200 paths × 50 runs) | < 200 MB | `test_rss_under_ceiling` in `tests/test_perf.py` |
 
 ## How budgets are enforced
 
@@ -21,6 +22,17 @@ local dev hardware (Apple M-series, Python 3.13).
 ```
 pytest tests/test_perf.py --benchmark-only -v
 ```
+
+The `test_rss_under_ceiling` test (non-benchmark) checks peak RSS of the
+`risk_assess.assess` hot path after a representative call sequence. It runs
+with the normal `pytest tests/ -q` invocation (not `--benchmark-only`).
+
+The pytest suite takes ~22 s locally on an M-series Mac (504+ tests including
+benchmark overhead). The `< 5 s` target in earlier versions was aspirational and
+unmeasured; the honest ceiling is **< 45 s** to cover CI runner variance without
+over-constraining parallelism. No automated session-duration gate is in-tree —
+the benchmark assertions (`<50 ms` absolute, `<=baseline` regression) are the
+primary latency guards. Suite wall-time is monitored informally via CI duration.
 
 If the assertion fails, either:
 - Inspect the regression with `--benchmark-compare` (requires a prior baseline run).

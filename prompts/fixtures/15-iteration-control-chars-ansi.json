@@ -1,0 +1,17 @@
+{
+  "_doc": "Adversarial: control chars and ANSI escape sequences in a template var. ESC (\u001b) and NUL (\u0000) are injected via JSON \\u-escapes which json.loads decodes to the actual chars. render() passes them through unchanged \u2014 no sanitization at the template layer.",
+  "prompt": "iteration",
+  "vars": {
+    "iter_n": "\u001b[31mred\u001b[0m \u0000null",
+    "phase": 1
+  },
+  "expects_substring": [
+    "\u001b[31mred\u001b[0m",
+    "\u0000null",
+    "auto-pilot-phase: 1"
+  ],
+  "expects_not": [
+    "{iter_n}",
+    "{phase}"
+  ]
+}

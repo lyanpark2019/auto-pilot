@@ -1,0 +1,10 @@
+{
+  "_doc": "Adversarial: empty string and None-like values. render() converts None to the string 'None' via str.format_map (Python's default __format__ for NoneType). Empty string resolves the placeholder to an empty token — verify 'Iteration ,' with a comma adjacent to a comma (the template has no comma; just check empty is rendered).",
+  "prompt": "iteration",
+  "vars": {"iter_n": "", "phase": "None"},
+  "expects_substring": [
+    "auto-pilot-iter: ",
+    "auto-pilot-phase: None"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}
