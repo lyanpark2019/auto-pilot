@@ -11,7 +11,7 @@
       "name": "auto-pilot",
       "source": "./",
       "description": "Unified automated AI coding system — autonomous loop, dual adversarial review, quality lift, harness bootstrap, graphify-native doc management, swarm parallel backend, SHA-pin deploy, codex conductor, vault export.",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "category": "automation",
       "tags": [
         "autonomous",

@@ -1,6 +1,6 @@
 {
   "name": "auto-pilot",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Unified automated AI coding system: autonomous PM-Worker-Reviewer loop (Opus PM, parallel Sonnet workers, phase gates) · dual adversarial review (Codex + cold Claude until both APPROVE) · quality lift (13-dim big-tech rubric) · harness bootstrap (setup-harness) · graphify-native doc management (doc-management — REBUILD/MAINTAIN/AUDIT keeps docs matching code) · swarm tmux parallel execution backend · SHA-pin deploy standard · codex conductor mode · vault export (Obsidian/NotebookLM) · goal intake + retro agents. Full auto, no confirms.",
   "author": {
     "name": "lyan",
