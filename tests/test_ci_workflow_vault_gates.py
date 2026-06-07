@@ -23,6 +23,14 @@ def test_ci_runs_vault_pytest_suite() -> None:
     assert "cd vault && python -m pytest tests/ -q" in text
 
 
+def test_ci_runs_script_style_hook_selftests() -> None:
+    text = _ci_text()
+
+    assert "python3 hooks/test_guard_destructive.py" in text
+    assert "python3 hooks/test_codex_conductor_guard.py" in text
+    assert "python3 hooks/test_notebooklm_delete_gate.py" in text
+
+
 def test_ci_installs_vault_pytest_dependencies() -> None:
     requirements = REQUIREMENTS_DEV.read_text(encoding="utf-8")
 
