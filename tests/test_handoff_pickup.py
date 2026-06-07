@@ -27,6 +27,11 @@ def _run_hook(
     env: dict | None = None,
 ) -> subprocess.CompletedProcess[str]:
     full_env = os.environ.copy()
+    # Strip subagent signals that would cause preflight-path to skip pickup,
+    # unless the caller intentionally passes them to test the skip behaviour.
+    for _sig in ("AUTO_PILOT_SUBAGENT_ROLE", "AUTO_PILOT_OUTPUT_DIR"):
+        if env is None or _sig not in env:
+            full_env.pop(_sig, None)
     if env:
         full_env.update(env)
     return subprocess.run(
@@ -143,6 +148,32 @@ class TestHandoffPickup:
         assert r.returncode == 0
         data = json.loads(r.stdout)
         assert len(data["hookSpecificOutput"]["additionalContext"]) <= 6000
+
+    def test_subagent_role_env_skips_pickup(self, hooks_dir, tmp_path):
+        """AUTO_PILOT_SUBAGENT_ROLE set → handoff untouched, skip marker on stderr."""
+        f = _write_handoff(tmp_path)
+        before = f.read_text()
+        r = _run_hook(
+            self._hook(hooks_dir), {}, cwd=tmp_path,
+            env={"AUTO_PILOT_SUBAGENT_ROLE": "codex-reviewer"},
+        )
+        assert r.returncode == 0
+        assert r.stdout.strip() == ""
+        assert f.read_text() == before
+        assert "[hook:preflight-path] skip: subagent session" in r.stderr
+
+    def test_subagent_output_dir_env_skips_pickup(self, hooks_dir, tmp_path):
+        """AUTO_PILOT_OUTPUT_DIR set → handoff untouched, skip marker on stderr."""
+        f = _write_handoff(tmp_path)
+        before = f.read_text()
+        r = _run_hook(
+            self._hook(hooks_dir), {}, cwd=tmp_path,
+            env={"AUTO_PILOT_OUTPUT_DIR": "/tmp/fake-output"},
+        )
+        assert r.returncode == 0
+        assert r.stdout.strip() == ""
+        assert f.read_text() == before
+        assert "[hook:preflight-path] skip: subagent session" in r.stderr
 
 
 def _make_vault(tmp_path: Path) -> Path:

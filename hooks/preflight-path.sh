@@ -40,6 +40,12 @@ fi
 #   - emit first 6000 chars as SessionStart additionalContext JSON on stdout
 #   - flip frontmatter to status: consumed + consumed_at: <ISO>
 # Stale (>7d), consumed, or malformed → silent skip. Fail-open everywhere.
+# Subagent sessions (reviewers dispatched by _reviewer_wrapper or Agent tool)
+# must not consume the handoff — only the PM main session should.
+if [[ -n "${AUTO_PILOT_SUBAGENT_ROLE:-}" || -n "${AUTO_PILOT_OUTPUT_DIR:-}" ]]; then
+  echo "[hook:preflight-path] skip: subagent session" >&2
+  exit 0
+fi
 handoff_file=""
 walk_dir="$cwd"
 while :; do
