@@ -46,7 +46,7 @@ Why 층 위치는 프로젝트 선택: vault `intent/`(PickL 방식) 또는 repo
 `rebuild-phases.md` 7-phase 가 실행 사양. 요지:
 
 0. **진단 게이트** — rot 은 가설이지 사실 아님. 병렬 read-only 감사 (모순 스캔/구조 건강/git-lag) → `disciplined` 면 부분 정리로 끝, `patchwork` 만 전면 재구축.
-1. **code-only 그래프**: `graphify update .`(AST-only, 키 불필요) → graph.json 필터: `file_type=="code"` **AND** 언어 확장자 AND tests/scratch 경로 제외 (file_type 단독 불충분 — json/sh/test 도 달림) → canonical 레이아웃 (`<dir>/graphify-out/graph.json`) → `cluster-only` → **도메인 질의로 필터 검증** (fixture 가 나오면 실패).
+1. **code-only 그래프**: `graphify update . --force`(AST-only, 키 불필요, 삭제 후 graph shrink 허용) → graph.json 필터: `file_type=="code"` **AND** 언어 확장자 AND tests/scratch 경로 제외 (file_type 단독 불충분 — json/sh/test 도 달림) → canonical 레이아웃 (`<dir>/graphify-out/graph.json`) → `cluster-only` → **도메인 질의로 필터 검증** (fixture 가 나오면 실패).
 2. **vault workbench**: `_graph/` + `intent/` harvest (출처 인용 강제).
 3. **그래프-기반 authoring**: 서브시스템당 에이전트 1 — 질의 → **실소스 정독** (이 단계가 stale fact 를 잡음) → `file:line` 인용 + Why 직조.
 4. **repo 재작성** + 클린-슬레이트 옵션: 재작성+리뷰 통과분만 live, **나머지 전부 `_archive/`** (= 추후 검증-추출 소스). root 문서(README/CLAUDE.md/AGENTS.md/OVERVIEW/docs-index)도 새 구조 기준 fresh. 예외 2종만 live 잔류: GENERATED (OpenAPI export 류) + **machine-read docs** (게이트 스크립트가 파싱하는 문서 — 탐색: `rg -l 'docs/.*\.md' <scripts> --type py`; PickL 선례 `check_module_size.py:26` → `modularization.md`). ops-필수 문서는 **같은 세션/커밋에서** 검증 후 기존 경로 fresh 복원 (frontmatter `verified:` + `source_commit`) — 공백기 금지.
@@ -91,8 +91,8 @@ Why 층 위치는 프로젝트 선택: vault `intent/`(PickL 방식) 또는 repo
 | `file_type=="code"` 단독 불충분 | + 확장자 + tests/scratch 경로 제외 |
 | graph.json edge 키 = `links` (networkx) | 양쪽 키 처리 |
 | `cluster-only` 는 `<dir>/graphify-out/graph.json` 레이아웃 요구 | canonical 레이아웃으로 기록 |
-| 첫 full 빌드만 LLM 키 필요 | `graphify update` = AST-only |
-| `graphify update --force` | 코드 삭제 후 그래프 축소 거부 시 |
+| full semantic 빌드는 별도 | `graphify extract . --mode deep` |
+| code graph 갱신 | `graphify update . --force` = AST-only + 삭제 후 graph shrink 허용 |
 | vault-상대 인용(`intent/...`)·`[[wikilink]]` 는 repo 포팅 시 dangle | repo-상대 경로 + 표준 링크로 변환 |
 | 줄번호 인용은 구조변경 즉시 rot | 심볼앵커/섹션명 인용 |
 | Why 는 그래프에 없음 | 삭제 전 harvest |

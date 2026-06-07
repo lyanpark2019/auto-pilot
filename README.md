@@ -4,6 +4,8 @@ Unified automated AI coding system for Claude Code. Core: a self-driving develop
 
 Built from `/insights` friction analysis on 381 sessions — every recurring failure mode is hardcoded as a guard.
 
+New developer or AI agent? Start at `docs/onboarding/README.md`, then use `docs/README.md` for the docs map.
+
 ## Routing table — task → ONE entry point
 
 Anti-trigger-competition map. Each job has exactly one owner; satellites are listed with their owner, not as alternatives.
@@ -169,7 +171,7 @@ For each phase in the spec:
 
 ## File layout
 
-See `docs/architecture.md`.
+Start with `docs/onboarding/README.md` for the AI/developer onboarding path, then see `docs/architecture.md` for the full layout.
 
 ## License
 

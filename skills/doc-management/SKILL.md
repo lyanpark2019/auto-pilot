@@ -27,8 +27,9 @@ historical (doesn't rot), and the repo's generated mirror goes live only through
 gates.
 
 Canonical system spec: `references/doc-management-system.md` — the 3-layer model,
-frontmatter contract, automation table (L1/L2/L3), and known limits. Read it before
-changing how any mode works. This SKILL.md is the executable entry.
+frontmatter contract, automation table (L1/L2/L3), and known limits. Onboarding output
+contract: `references/onboarding-hub.md`. Read both before changing how any mode works.
+This SKILL.md is the executable entry.
 
 ## Mode routing — pick first
 
@@ -58,7 +59,7 @@ That file is the source of truth; nothing here duplicates it.
 |-------|-----------------|---------------|
 | **What** — modules, calls, deps | code graph (graphify Tree-sitter AST, **code-only filter**); consume via `graphify query/explain` | regenerated from code; post-commit hook |
 | **Why** — decisions, incidents, gotchas, governance | `intent/` layer (ADR/gotcha/history/governance), faithful-extraction-only, every entry cites a source, unknown = `(why not documented)` | inherently historical — doesn't rot |
-| **Generated mirror** — repo `.claude/design/`, rules, nav, docs | generated from the two layers above with `file:line`/symbol-anchor cites; live only after dual review | L2 guard (mechanical) + L3 SHA freshness (auto-detect) + AUDIT (semantic) |
+| **Generated mirror** — repo `.claude/design/`, rules, nav, docs, onboarding hub | generated from the two layers above with `file:line`/symbol-anchor cites; live only after dual review | L2 guard (mechanical) + L3 SHA freshness (auto-detect) + AUDIT (semantic) |
 
 Forbidden patterns: per-module structure pages (the rot machine) · hand-mirroring
 structure facts (query the graph instead) · governance restated in N pages (single SoT
@@ -79,7 +80,7 @@ Full procedure (the proven 7-phase, end-to-end-verified on PickL-API):
    `patchwork` verdict. Only `patchwork` unlocks Phases 1–7; `disciplined` exits to
    targeted cleanup (often: delete scratch, collapse a duplicated fact, distill plans
    → ADR, fix dead refs — then STOP).
-1. **Code-only product graph** — `graphify update .` (AST-only) → filter graph.json
+1. **Code-only product graph** — `graphify update . --force` (AST-only) → filter graph.json
    (file_type AND extension AND path excludes) → repo-rooted
    `.graphify/code-only/graphify-out/graph.json` → `cluster-only` → validate with a
    domain query (fixtures returned = filter failed).
@@ -89,8 +90,8 @@ Full procedure (the proven 7-phase, end-to-end-verified on PickL-API):
    per-module): query → READ the actual source surfaced → write with cites + Why.
 4. **Rewrite the repo trees, clean-slate** — only rewritten+reviewed docs go live;
    everything else → `_archive/` (frozen, guard-exempt, future verified-extraction
-   source). Root docs (README / CLAUDE.md / AGENTS.md / OVERVIEW / docs-index) get a
-   fresh rewrite against the new structure. Live exceptions: GENERATED artifacts +
+   source). Root docs (README / CLAUDE.md / AGENTS.md / OVERVIEW / docs-index) and the
+   AI/developer onboarding hub get a fresh rewrite against the new structure. Live exceptions: GENERATED artifacts +
    `<MACHINE_READ_DOCS>` (gate-parsed docs never move). Ops-essential docs:
    verify-restore at the original path in the SAME commit. Dangling-ref sweep.
 5. **Dual adversarial review** — Codex-adversarial + cold Claude in parallel; open
@@ -133,6 +134,8 @@ block / `DOC_FRESHNESS_PATH_PREFIXES` env) — out-of-allowlist cites silently r
 fresh, so extend the list when a repo grows a new source tree.
 
 **Per-doc refresh, for each STALE doc:**
+0. If docs structure or first-read paths are affected, update the onboarding hub using
+   `references/onboarding-hub.md` before reporting completion.
 1. Re-query the graph for the doc's topic (`graphify query`/`explain` against
    `.graphify/code-only/...`) — find what structurally changed, including sibling
    modules whose shared pages may also be stale.
@@ -225,6 +228,8 @@ itself needs maintenance.
   contracts, automation table, known limits). The Why behind every rule here.
 - `references/gotchas.md` — 17 incident-backed gotcha→mitigation rows (single
   source; read before running any mode).
+- `references/onboarding-hub.md` — AI / Developer onboarding hub contract distilled
+  from the shared Graphify docs-drift workflow.
 - `references/rebuild-phases.md` — full REBUILD procedure (7 phases, discovery slots,
   code-only filter snippet, red-flag table).
 - `references/audit-methodology.md` — full AUDIT methodology (auditor prompt template,

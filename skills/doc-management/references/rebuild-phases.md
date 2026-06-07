@@ -49,10 +49,10 @@ Filter to code:
 
 ```bash
 # 1. build or refresh the graph — AST-only, no LLM key needed:
-graphify update .          # re-extracts code files; works with zero API keys
-# (a FIRST-ever full build `graphify .` runs semantic LLM passes and needs an API key —
-#  for this mode the AST layer from `update` is sufficient; reuse graphify-out/ if present.
-#  If graphify refuses to shrink the graph after code deletions: `graphify update --force`.)
+graphify update . --force  # re-extracts code files and permits graph shrink after deletions
+# A full semantic rebuild is separate and headless:
+# graphify extract . --mode deep
+# For this mode the AST layer from update is sufficient; reuse graphify-out/ if present.
 
 # 2. filter graph.json: keep ONLY product code.
 #    file_type=="code" is NECESSARY but NOT SUFFICIENT (json/sh/test nodes carry it too)

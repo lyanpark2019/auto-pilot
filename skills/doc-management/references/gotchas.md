@@ -8,7 +8,7 @@ SKILL.md only points here; do not duplicate rows back into it.
 | graphify full corpus ingests `.md` → stale docs bleed INTO the graph | always filter to code-only for the structure SoT (REBUILD Phase 1 snippet) |
 | `file_type=="code"` alone insufficient — json/sh/test nodes carry it too | also filter by language extension + exclude tests/scratch paths |
 | graph.json edge key is `links` (networkx), not `edges` | filter snippet handles both |
-| `graphify .` first-build needs an LLM key; `cluster-only` needs `<dir>/graphify-out/graph.json` layout | use `graphify update` (AST-only, key-free) + write the canonical layout |
+| Full semantic rebuild and code-only refresh are different operations; `cluster-only` needs `<dir>/graphify-out/graph.json` layout | use `graphify update . --force` for AST-only refresh; use `graphify extract . --mode deep` only for full semantic rebuild |
 | Hard-coding the filtered graph under `/tmp` | repo-rooted `.graphify/code-only/` — survives reboots, MAINTAIN diffs against it later; gitignore it |
 | Vault-relative cites (`intent/...`) and `[[wikilinks]]` dangle when ported into the repo | repoint to repo-relative paths; convert to standard `[text](path)` links |
 | Line-number cites rot the moment a file is restructured | symbol anchors (`` `file.py` → `SYMBOL` ``) for churn-prone files; section names for `.md`→`.md` |
