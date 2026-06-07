@@ -1,3 +1,10 @@
+---
+type: generated-mirror
+topic: auto-pilot docs map
+source_commit: 128e95ba77c0867913d5db48c739e2c39da120b3
+manual_edit: false
+---
+
 # auto-pilot docs
 
 This directory is the source-of-truth map for humans and AI agents working on the auto-pilot plugin.

@@ -18,8 +18,8 @@ resolve in THIS order:
    against the existing graph. Staleness check first: the graph's built commit vs
    `git rev-parse HEAD`; a `needs_update` marker (written by
    `hooks/doc-sync-update.sh`) means rebuild before trusting it (step 3).
-3. **Build the code-only graph** — `graphify update .` (AST-only, key-free), then
-   query it. Code-only filter rules: `skills/doc-management/references/rebuild-phases.md`
+3. **Build the code-only graph** — `graphify update . --force` (AST-only, key-free,
+   permits graph shrink after deletions), then query it. Code-only filter rules: `skills/doc-management/references/rebuild-phases.md`
    Phase 1 (single source — do not re-derive).
 4. **Raw source scan** — last resort only. Record WHY steps 1–3 missed (no vault?
    stale graph? graph lacks the answer?) so the gap gets fixed (vault export /

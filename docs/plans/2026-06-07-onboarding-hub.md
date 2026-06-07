@@ -1,3 +1,10 @@
+---
+type: plan
+topic: graphify-backed AI / Developer onboarding hub
+source_commit: fcebef1dce49d8cfe4d854f65dd9406986629f12
+manual_edit: true
+---
+
 # AI / Developer Onboarding Hub Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

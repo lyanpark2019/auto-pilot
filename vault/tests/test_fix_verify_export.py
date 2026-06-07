@@ -136,3 +136,22 @@ def test_export_graphify_skips_when_binary_missing(tmp_path: Path, monkeypatch) 
     monkeypatch.setattr(export, "GRAPHIFY_BIN", "/nonexistent/graphify")
     result = export.export_graphify(repo)
     assert result.get("skipped") is True
+
+
+def test_auto_graphify_update_forces_existing_graph_refresh(tmp_path: Path, monkeypatch) -> None:
+    repo = _mk_project(tmp_path)
+    graph = repo / "graphify-out" / "graph.json"
+    graph.parent.mkdir()
+    graph.write_text("{}")
+    commands: list[list[str]] = []
+
+    def fake_run(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
+        commands.append(cmd)
+        return 0, "ok", ""
+
+    monkeypatch.setattr(export, "GRAPHIFY_BIN", "/bin/echo")
+    monkeypatch.setattr(export, "_run", fake_run)
+
+    export.auto_graphify_update(repo, merge_global=False)
+
+    assert commands[0] == ["/bin/echo", "update", str(repo.resolve()), "--force"]

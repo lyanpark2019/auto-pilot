@@ -9,7 +9,7 @@ Destinations (all upsert — update existing, create if missing):
 Each exporter is idempotent:
 - Obsidian: copies docs/, adds wikilinks/frontmatter, preserves existing manual_edit pages
 - NotebookLM: looks up existing notebook by name; creates if absent; syncs sources
-- graphify: runs `graphify build` on docs/ → reuses existing graph if up-to-date
+- graphify: runs `graphify extract <docs> --no-cluster --out <repo>/.vault-builder`
 """
 from __future__ import annotations
 
@@ -333,7 +333,7 @@ def auto_graphify_update(repo: Path, global_tag: str | None = None,
     """Run graphify update on repo + optional global graph merge.
 
     Returns a dict describing each step's rc. Skips silently when graphify CLI
-    is unavailable. Always uses the current `update`/`extract`/`global add`
+    is unavailable. Always uses the current `update --force`/`extract`/`global add`
     contract (not the removed `build`).
     """
     repo = repo.expanduser().resolve()
@@ -342,7 +342,7 @@ def auto_graphify_update(repo: Path, global_tag: str | None = None,
                 "reason": f"graphify not found: {GRAPHIFY_BIN}"}
     graph_json = repo / "graphify-out" / "graph.json"
     if graph_json.exists():
-        rc, out, err = _run([GRAPHIFY_BIN, "update", str(repo)], timeout=600)
+        rc, out, err = _run([GRAPHIFY_BIN, "update", str(repo), "--force"], timeout=600)
     else:
         rc, out, err = _run([GRAPHIFY_BIN, "extract", str(repo), "--no-cluster"], timeout=1800)
     result = {"step": "auto-graphify", "rc": rc,
@@ -414,7 +414,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Source adapter that built the vault (e.g. notebooklm). When set, "
                          "the matching destination is auto-skipped to avoid reverse push.")
     ap.add_argument("--auto-graphify", action="store_true",
-                    help="run graphify update + global add after exports")
+                    help="run graphify update <repo> --force + global add after exports")
     ap.add_argument("--global-tag", default=None,
                     help="repo tag for graphify global graph (default: repo dir name)")
     ap.add_argument("--no-global", action="store_true",

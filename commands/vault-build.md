@@ -25,7 +25,7 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
 /vault-build /path/to/project                   # explicit project path
 /vault-build --export obsidian,notebooklm       # subset of destinations
 /vault-build --export obsidian,bases,canvas     # kepano dashboards + graph canvas
-/vault-build --auto-graphify                    # post-export: graphify update + global add
+/vault-build --auto-graphify                    # post-export: graphify update <repo> --force + global add
 /vault-build --auto-graphify --no-global        # auto-graphify but skip global merge
 /vault-build --global-tag <tag>                 # rename project in global graph
 /vault-build --doc-root ./alt-docs              # docs live elsewhere
@@ -52,7 +52,7 @@ allowed-tools: [Bash, Read, Write, Edit, Grep, Glob, Task]
                    - graphify   → <project>/.vault-builder/graphify-out/
                    - bases      → <vault>/meta/bases/{sources,concepts,entities,manual-edited}.base
                    - canvas     → <vault>/meta/graph-hub.canvas (top 80 god_nodes)
-                   (+ optional --auto-graphify: graphify update + global add)
+                   (+ optional --auto-graphify: graphify update <repo> --force + global add)
 ```
 
 **Opt-in `--fix-repo-docs` (RETIRED doc-purpose path — kept for legacy/vault-internal use only, never the default):**
@@ -99,7 +99,7 @@ In `<vault>/meta/graph-hub.canvas` (when `--export` includes `canvas`):
 - JSON Canvas: top 80 god_nodes in a grid + every edge connecting two top-N nodes.
 
 When `--auto-graphify` is set:
-- Runs `graphify update <repo>` (or `graphify extract --no-cluster` for first run).
+- Runs `graphify update <repo> --force` (or `graphify extract <repo> --no-cluster` for first run).
 - Then `graphify global add <repo>/graphify-out/graph.json --as <tag>` (skip with
   `--no-global`). `<tag>` defaults to the repo directory name; override `--global-tag`.
 

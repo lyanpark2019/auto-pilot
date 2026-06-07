@@ -1,3 +1,10 @@
+---
+type: generated-mirror
+topic: AI / Developer onboarding hub
+source_commit: 128e95ba77c0867913d5db48c739e2c39da120b3
+manual_edit: false
+---
+
 # AI / Developer onboarding hub
 
 Use this page when you are new to auto-pilot or when an AI agent needs project context before changing anything.
