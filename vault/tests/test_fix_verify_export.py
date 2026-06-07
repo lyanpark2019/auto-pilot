@@ -9,7 +9,7 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from pipeline import fix, verify, export
+from pipeline import fix, verify, export  # noqa: E402
 
 
 def _mk_project(tmp_path: Path) -> Path:

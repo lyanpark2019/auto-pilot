@@ -20,7 +20,7 @@ import uuid
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Optional, Callable
 
 
 class TicketStatus(str, Enum):
@@ -55,7 +55,7 @@ class Ticket:
             f"**Worker type**: {self.worker_type}",
             f"**Retry**: {self.retry_count}",
             "",
-            f"## Contract",
+            "## Contract",
             f"**Goal**: {self.contract.get('goal','')}",
             f"**Acceptance criteria**: {self.contract.get('acceptance','')}",
             f"**Inputs**: {', '.join(self.contract.get('inputs', []))}",
@@ -65,7 +65,7 @@ class Ticket:
         if self.feedback and self.retry_count > 0:
             ctx += [
                 "",
-                f"## Previous attempt feedback (FIX THESE)",
+                "## Previous attempt feedback (FIX THESE)",
                 self.feedback,
             ]
         return "\n".join(ctx)
@@ -174,7 +174,6 @@ class TicketBoard:
 
 if __name__ == "__main__":
     # Demo
-    import sys
     board = TicketBoard(Path("/tmp/ticket-demo.json"))
     t = board.issue(round_num=1, worker_type="vault-structure-curator", contract={
         "goal": "Label 41 communities with real 2-5 word names",

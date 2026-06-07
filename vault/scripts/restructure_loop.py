@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """Autonomous Obsidian restructure loop.
 
 Runs phases 1-7 in order. Idempotent + resume-safe via state file at
@@ -18,7 +19,6 @@ Each phase:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path

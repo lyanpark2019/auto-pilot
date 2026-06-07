@@ -130,7 +130,7 @@ def _detect_gaps(
             })
 
 
-def _build_fs_index(repo: Path, code_paths: set[str]) -> tuple[set[str], set[str], str]:
+def _build_fs_index(repo: Path, code_paths: set[str]) -> tuple[set[str], set[str], str, set[str]]:
     fs_paths: set[str] = set()
     fs_stems: set[str] = set()
     for p in repo.rglob("*"):
@@ -146,7 +146,7 @@ def _build_fs_index(repo: Path, code_paths: set[str]) -> tuple[set[str], set[str
         max(scanned_exts, key=lambda e: sum(1 for p in code_paths if Path(p).suffix == e))
         if scanned_exts else ".py"
     )
-    return fs_paths, fs_stems, dominant_ext
+    return fs_paths, fs_stems, dominant_ext, scanned_exts
 
 
 def _is_orphan_ref(
@@ -177,8 +177,7 @@ def _detect_orphans(
     report: DriftReport,
 ) -> None:
     code_paths = set(code.keys())
-    fs_paths, fs_stems, dominant_ext = _build_fs_index(repo, code_paths)
-    scanned_exts = {Path(p).suffix for p in code_paths}
+    fs_paths, fs_stems, dominant_ext, scanned_exts = _build_fs_index(repo, code_paths)
     for doc, info in docs.items():
         if info.get("manual_edit"):
             continue
@@ -282,7 +281,6 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
 def main(argv: list[str]) -> int:
     import argparse
     import json
-    import sys
     ap = argparse.ArgumentParser()
     ap.add_argument("repo", type=Path)
     ap.add_argument("--doc-root", type=Path, default=None)

@@ -52,7 +52,7 @@ class Sportic365MergePhase(Phase):
             if dst.exists():
                 self.ctx.trace(f"  skip (target exists): {dst}")
             else:
-                self.ctx.trace(f"  mv SporTic365 → _sub-projects/sportic365-content")
+                self.ctx.trace("  mv SporTic365 → _sub-projects/sportic365-content")
                 shutil.move(str(sportic365), str(dst))
                 moved.append("SporTic365→_sub-projects/sportic365-content")
 
@@ -75,9 +75,9 @@ class Sportic365MergePhase(Phase):
             wiki_dst = self.target / "kbo-reference"
             if wiki_src.is_dir():
                 if any(wiki_dst.iterdir()):
-                    self.ctx.trace(f"  skip wiki (kbo-reference non-empty)")
+                    self.ctx.trace("  skip wiki (kbo-reference non-empty)")
                 else:
-                    self.ctx.trace(f"  mv Sportic/wiki/* → kbo-reference/")
+                    self.ctx.trace("  mv Sportic/wiki/* → kbo-reference/")
                     for child in list(wiki_src.iterdir()):
                         shutil.move(str(child), str(wiki_dst / child.name))
                     wiki_src.rmdir()
@@ -97,13 +97,13 @@ class Sportic365MergePhase(Phase):
                 sportic.rmdir()
                 moved.append("rmdir Sportic")
             except OSError:
-                self.ctx.trace(f"  Sportic not empty after move — leaving in place")
+                self.ctx.trace("  Sportic not empty after move — leaving in place")
 
         return PhaseResult(status="completed", detail=f"{len(moved)} ops", artifacts={"moves": moved})
 
     def verify(self) -> tuple[bool, str]:
         if not self.target.is_dir():
-            return False, f"sportic365-Vault missing"
+            return False, "sportic365-Vault missing"
         # Either _sub-projects has at least one entry or both sources are gone
         sportic = self.ctx.obsidian_root / "Sportic"
         sportic365 = self.ctx.obsidian_root / "SporTic365"

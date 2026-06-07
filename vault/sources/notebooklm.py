@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from sources._adapter import SourceAdapter, SourceItem, TicketPlanEntry, register
+from sources._adapter import SourceItem, TicketPlanEntry, register
 
 SUBS = ("concepts", "entities", "decisions", "flows", "components", "research", "sources", "archive")
 

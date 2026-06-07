@@ -14,7 +14,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from sources._adapter import SourceAdapter, SourceItem, TicketPlanEntry, register
+from sources._adapter import SourceItem, TicketPlanEntry, register
 from sources._excludes import is_excluded
 
 CODE_EXTS = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".kt", ".rb", ".sql")

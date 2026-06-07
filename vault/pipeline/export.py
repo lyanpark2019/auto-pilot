@@ -105,7 +105,7 @@ def _write_index(vault: Path, project_name: str) -> None:
         return
     lines = [
         "---",
-        f"type: index",
+        "type: index",
         f"project: {project_name}",
         f"auto-generated: {time.strftime('%Y-%m-%d')}",
         "---",
@@ -237,8 +237,9 @@ def export_notebooklm(repo: Path, doc_root: Path | None = None,
     notebook, created, err_msg = _resolve_or_create_notebook(project_name)
     if err_msg is not None:
         return {"destination": "notebooklm", "error": err_msg, "skipped": True}
+    assert notebook is not None
 
-    nb_id = notebook["id"]  # type: ignore[index]
+    nb_id = notebook["id"]
     sources = _collect_sources(repo, doc_root, max_sources)
     added = _sync_sources(nb_id, sources, repo)
 

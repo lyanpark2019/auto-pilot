@@ -40,11 +40,6 @@ def _write_graph(path: Path, nodes: list, edges: list, hyperedges: list | None =
     path.write_text(json.dumps(data))
 
 
-def _make_md(path: Path, text: str = "# page\n") -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
-
-
 # ---------------------------------------------------------------------------
 # Fixture: richly-populated single-category vault (maximises most dims)
 # ---------------------------------------------------------------------------
@@ -204,7 +199,7 @@ class TestRichVault:
         # density = 6/4 = 1.5 → full 10 + hyperedge full 5 → 15
         assert state["scores"]["graph_density"] == 15.0
 
-    def test_confidence_balance_in_band(self, rich_vault: Path) -> None:
+    def test_confidence_balance_high_inferred_share_out_of_band(self, rich_vault: Path) -> None:
         # EXTRACTED=1/6≈0.17, INFERRED=5/6≈0.83 → inf > 0.80 → NOT in band
         # (0.83 > 0.80 upper bound)
         state = score_vault(rich_vault)
@@ -215,7 +210,7 @@ class TestRichVault:
         state = score_vault(rich_vault)
         assert state["scores"]["concept_entity_depth"] == 10.0
 
-    def test_adr_pages_full(self, rich_vault: Path) -> None:
+    def test_adr_pages_single_category_partial(self, rich_vault: Path) -> None:
         state = score_vault(rich_vault)
         # 1 cat with ≥2 ADRs → min(10, 10 * 1/3) = 3.3
         assert state["scores"]["adr_pages"] == pytest.approx(3.3, abs=0.1)
@@ -237,7 +232,7 @@ class TestRichVault:
         state = score_vault(rich_vault)
         assert state["scores"]["bases"] == 5.0
 
-    def test_backlinks_full_coverage(self, rich_vault: Path) -> None:
+    def test_backlinks_half_coverage_when_one_source_is_weak(self, rich_vault: Path) -> None:
         # source-a has 2 inbound links, source-b has 1 → source-b weak
         state = score_vault(rich_vault)
         # source-b only has 1 inbound → weak; source-a has 2 → ok

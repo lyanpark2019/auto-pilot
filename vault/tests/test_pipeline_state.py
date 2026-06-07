@@ -8,7 +8,7 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from pipeline import state as st
+from pipeline import state as st  # noqa: E402
 
 
 def test_load_creates_default(tmp_path: Path) -> None:

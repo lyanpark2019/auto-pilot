@@ -1,14 +1,13 @@
 """Tests for source adapter registry + code adapter (no external CLI needed)."""
 from __future__ import annotations
 
-import importlib
 import sys
 from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from sources import _adapter
+from sources import _adapter  # noqa: E402
 
 
 def setup_module(module):

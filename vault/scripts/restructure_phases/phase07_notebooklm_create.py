@@ -10,7 +10,6 @@ import json
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 from ._base import Phase, PhaseResult
 from ._mapping import NBM_NEW_NOTEBOOKS

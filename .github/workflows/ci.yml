@@ -42,7 +42,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
 
       - name: ruff
-        run: python -m ruff check scripts/ tests/
+        run: python -m ruff check scripts/ tests/ vault/
 
       - name: doc reference integrity (file:line citations in docs)
         run: python3 scripts/docs/check_doc_reference_integrity.py
@@ -55,6 +55,9 @@ jobs:
         # measured scripts-wide coverage 81.33% at activation. Devs keep running
         # plain `pytest` locally — the gate is CI-only.
         run: python -m pytest tests/ -q --cov=scripts --cov-fail-under=75
+
+      - name: pytest vault export layer
+        run: cd vault && python -m pytest tests/ -q
 
       - name: pytest-benchmark (perf budget + baseline gate)
         run: python -m pytest tests/test_perf.py --benchmark-only -v

@@ -54,7 +54,7 @@ def _load_categories(vault_root: Path) -> list[str]:
 
 
 def _score_graph_density(vault_root: Path, cats: list[str]) -> tuple[float, str]:
-    total_nodes = total_edges = total_files = 0
+    total_nodes = total_edges = 0
     hyperedge_cats = 0
     per_cat_dens: list[float] = []
     for c in cats:
@@ -62,13 +62,11 @@ def _score_graph_density(vault_root: Path, cats: list[str]) -> tuple[float, str]
         if not gpath.exists():
             continue
         g = json.loads(gpath.read_text())
-        n_files = len(list((vault_root / c / "raw").glob("*.md")))
         n_nodes = len(g.get("nodes", []))
         edges = g.get("links", g.get("edges", []))
         n_edges = len(edges)
         total_nodes += n_nodes
         total_edges += n_edges
-        total_files += n_files
         per_cat_dens.append(n_edges / max(n_nodes, 1))
         if g.get("hyperedges"):
             hyperedge_cats += 1

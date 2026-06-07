@@ -10,7 +10,7 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from pipeline.dispatch import DispatchBoard, TicketStatus
+from pipeline.dispatch import DispatchBoard, TicketStatus  # noqa: E402
 
 
 def _seed_plan(project: Path) -> None:

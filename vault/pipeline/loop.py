@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """PM loop driver.
 
 Pure orchestration — no source-specific logic. Reads adapter, runs phases:
