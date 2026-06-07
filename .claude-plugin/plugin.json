@@ -1,7 +1,7 @@
 {
   "name": "auto-pilot",
-  "version": "0.7.1",
-  "description": "Unified automated AI coding system: autonomous PM-Worker-Reviewer loop (Opus PM, parallel Sonnet workers, phase gates) \u00b7 dual adversarial review (Codex + cold Claude until both APPROVE) \u00b7 quality lift (13-dim big-tech rubric) \u00b7 harness bootstrap (setup-harness) \u00b7 graphify-native doc management (doc-management \u2014 REBUILD/MAINTAIN/AUDIT keeps docs matching code) \u00b7 swarm tmux parallel execution backend \u00b7 SHA-pin deploy standard \u00b7 codex conductor mode \u00b7 vault export (Obsidian/NotebookLM) \u00b7 goal intake + retro agents. Full auto, no confirms.",
+  "version": "0.8.0",
+  "description": "Unified automated AI coding system: autonomous PM-Worker-Reviewer loop (Opus PM, parallel Sonnet workers, phase gates) · dual adversarial review (Codex + cold Claude until both APPROVE) · quality lift (13-dim big-tech rubric) · harness bootstrap (setup-harness) · graphify-native doc management (doc-management — REBUILD/MAINTAIN/AUDIT keeps docs matching code) · swarm tmux parallel execution backend · SHA-pin deploy standard · codex conductor mode · vault export (Obsidian/NotebookLM) · goal intake + retro agents. Full auto, no confirms.",
   "author": {
     "name": "lyan",
     "email": "art5@fyqro.com"
