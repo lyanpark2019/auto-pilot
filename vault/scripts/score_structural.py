@@ -35,7 +35,6 @@ def _load_max_pts() -> dict[str, int]:
         dims = (data.get("structural") or {}).get("dimensions") or {}
         out = {name: int(cfg.get("max", _FALLBACK_MAX_PTS.get(name, 10)))
                for name, cfg in dims.items()}
-        # Backfill any missing dim
         for k, v in _FALLBACK_MAX_PTS.items():
             out.setdefault(k, v)
         return out
@@ -44,23 +43,21 @@ def _load_max_pts() -> dict[str, int]:
         return dict(_FALLBACK_MAX_PTS)
 
 
-def score_vault(vault_root: Path) -> dict:
+def _load_categories(vault_root: Path) -> list[str]:
     cats_path = vault_root / "meta" / "categories.json"
     if cats_path.exists():
-        CATS = json.loads(cats_path.read_text())
-    else:
-        # discover from directory structure
-        CATS = [d.name for d in vault_root.iterdir()
-                if d.is_dir() and (d / "raw").exists() and not d.name.startswith(".")]
+        return json.loads(cats_path.read_text())
+    return [
+        d.name for d in vault_root.iterdir()
+        if d.is_dir() and (d / "raw").exists() and not d.name.startswith(".")
+    ]
 
-    scores: dict[str, float] = {}
-    details: dict[str, str] = {}
 
-    # 1. Graph extraction (15pt — density + hyperedges)
-    total_nodes = total_edges = total_amb = total_files = 0
+def _score_graph_density(vault_root: Path, cats: list[str]) -> tuple[float, str]:
+    total_nodes = total_edges = total_files = 0
     hyperedge_cats = 0
-    per_cat_dens = []
-    for c in CATS:
+    per_cat_dens: list[float] = []
+    for c in cats:
         gpath = vault_root / c / "raw" / "graphify-out" / "graph.json"
         if not gpath.exists():
             continue
@@ -69,28 +66,27 @@ def score_vault(vault_root: Path) -> dict:
         n_nodes = len(g.get("nodes", []))
         edges = g.get("links", g.get("edges", []))
         n_edges = len(edges)
-        n_amb = sum(1 for e in edges if e.get("confidence") == "AMBIGUOUS")
         total_nodes += n_nodes
         total_edges += n_edges
-        total_amb += n_amb
         total_files += n_files
         per_cat_dens.append(n_edges / max(n_nodes, 1))
         if g.get("hyperedges"):
             hyperedge_cats += 1
     overall_dens = total_edges / max(total_nodes, 1)
     cats_above_15 = sum(1 for d in per_cat_dens if d >= 1.5)
-    score = 0
+    score = 0.0
     score += 10 if overall_dens >= 1.5 else 6 * overall_dens / 1.5
-    score += 5 if hyperedge_cats == len(CATS) else 3 * hyperedge_cats / max(len(CATS), 1)
-    scores["graph_density"] = round(min(15, score), 1)
-    details["graph_density"] = (
+    score += 5 if hyperedge_cats == len(cats) else 3 * hyperedge_cats / max(len(cats), 1)
+    detail = (
         f"{total_nodes}n/{total_edges}e dens={overall_dens:.2f} "
-        f"hyper={hyperedge_cats}/{len(CATS)} cats≥1.5: {cats_above_15}/{len(CATS)}"
+        f"hyper={hyperedge_cats}/{len(cats)} cats≥1.5: {cats_above_15}/{len(cats)}"
     )
+    return round(min(15, score), 1), detail
 
-    # 2. Confidence balance (10pt)
+
+def _score_confidence_balance(vault_root: Path, cats: list[str]) -> tuple[float, str]:
     in_band_cats = 0
-    for c in CATS:
+    for c in cats:
         gpath = vault_root / c / "raw" / "graphify-out" / "graph.json"
         if not gpath.exists():
             continue
@@ -104,70 +100,70 @@ def score_vault(vault_root: Path) -> dict:
         amb = conf.get("AMBIGUOUS", 0) / len(edges)
         if ext >= 0.10 and 0.40 <= inf <= 0.80 and amb <= 0.15:
             in_band_cats += 1
-    scores["confidence_balance"] = round(10 * in_band_cats / max(len(CATS), 1), 1)
-    details["confidence_balance"] = f"{in_band_cats}/{len(CATS)} in band"
+    score = round(10 * in_band_cats / max(len(cats), 1), 1)
+    return score, f"{in_band_cats}/{len(cats)} in band"
 
-    # 3. Concept/Entity depth (10pt)
+
+def _score_concept_entity_depth(vault_root: Path, cats: list[str]) -> tuple[float, str]:
     depth_ok = 0
-    for c in CATS:
+    for c in cats:
         con = len([f for f in (vault_root / c / "concepts").glob("*.md") if f.name != "_index.md"]) \
               if (vault_root / c / "concepts").exists() else 0
         ent = len([f for f in (vault_root / c / "entities").glob("*.md") if f.name != "_index.md"]) \
               if (vault_root / c / "entities").exists() else 0
         if con >= 3 and ent >= 3:
             depth_ok += 1
-    scores["concept_entity_depth"] = round(10 * depth_ok / max(len(CATS), 1), 1)
-    details["concept_entity_depth"] = f"{depth_ok}/{len(CATS)} cats ≥3 concepts & entities"
+    score = round(10 * depth_ok / max(len(cats), 1), 1)
+    return score, f"{depth_ok}/{len(cats)} cats ≥3 concepts & entities"
 
-    # 4. ADR (10pt — sportic/pickl/agri or any 3 cats)
+
+def _score_adr_pages(vault_root: Path, cats: list[str]) -> tuple[float, str]:
     adr_cats = 0
-    for c in CATS:
+    for c in cats:
         dec = vault_root / c / "decisions"
         if not dec.exists():
             continue
         adrs = [f for f in dec.glob("adr-*.md") if f.name != "_index.md"]
         if len(adrs) >= 2:
             adr_cats += 1
-    scores["adr_pages"] = round(min(10, 10 * adr_cats / 3), 1)  # 3 cats with ADRs = full
-    details["adr_pages"] = f"{adr_cats} cats have ≥2 ADRs"
+    score = round(min(10, 10 * adr_cats / 3), 1)
+    return score, f"{adr_cats} cats have ≥2 ADRs"
 
-    # 5. Cross-vault wikilinks (10pt)
+
+def _score_cross_vault(vault_root: Path) -> tuple[float, str]:
     cv_path = vault_root / "meta" / "cross-vault-links.md"
-    if cv_path.exists():
-        cv = cv_path.read_text()
-        # count [[../../<Vault>/wiki/...]] entries
-        real_links = re.findall(r"\[\[\.\./\.\./[A-Za-z][^\]|#]+", cv)
-        # verify file existence (sample)
-        verified = 0
-        for link in real_links[:30]:
-            rel = link[2:]
-            target = (cv_path.parent / rel).resolve()
-            # try .md
-            if target.with_suffix(".md").exists() or target.exists():
-                verified += 1
-        scores["cross_vault"] = round(10 * verified / max(min(30, len(real_links)), 1), 1) if real_links else 0
-        details["cross_vault"] = f"{verified}/{min(30, len(real_links))} cross-vault links verified ({len(real_links)} total)"
-    else:
-        scores["cross_vault"] = 0
-        details["cross_vault"] = "cross-vault-links.md missing"
+    if not cv_path.exists():
+        return 0.0, "cross-vault-links.md missing"
+    cv = cv_path.read_text()
+    real_links = re.findall(r"\[\[\.\./\.\./[A-Za-z][^\]|#]+", cv)
+    verified = 0
+    for link in real_links[:30]:
+        rel = link[2:]
+        target = (cv_path.parent / rel).resolve()
+        if target.with_suffix(".md").exists() or target.exists():
+            verified += 1
+    score = round(10 * verified / max(min(30, len(real_links)), 1), 1) if real_links else 0.0
+    detail = f"{verified}/{min(30, len(real_links))} cross-vault links verified ({len(real_links)} total)"
+    return score, detail
 
-    # 6. Hot cache (10pt)
+
+def _score_hot_cache(vault_root: Path, cats: list[str]) -> tuple[float, str]:
+    sections = ["God Nodes", "Cross-bridges", "Source Files", "Quick Questions", "Cross-vault"]
     hot_filled = 0
-    for c in CATS:
+    for c in cats:
         hpath = vault_root / c / "hot.md"
         if not hpath.exists():
             continue
         text = hpath.read_text()
-        sections = ["God Nodes", "Cross-bridges", "Source Files", "Quick Questions", "Cross-vault"]
         if sum(1 for s in sections if s in text) >= 4:
             hot_filled += 1
-    scores["hot_cache"] = round(10 * hot_filled / max(len(CATS), 1), 1)
-    details["hot_cache"] = f"{hot_filled}/{len(CATS)} hot.md structured"
+    score = round(10 * hot_filled / max(len(cats), 1), 1)
+    return score, f"{hot_filled}/{len(cats)} hot.md structured"
 
-    # 7. Wiki community articles (10pt)
-    pass_articles = 0
-    total_articles = 0
-    for c in CATS:
+
+def _score_wiki_articles(vault_root: Path, cats: list[str]) -> tuple[float, str]:
+    pass_articles = total_articles = 0
+    for c in cats:
         wiki_dir = vault_root / c / "raw" / "graphify-out" / "wiki"
         if not wiki_dir.exists():
             continue
@@ -181,20 +177,18 @@ def score_vault(vault_root: Path) -> dict:
             has_rel = "## Relationships" in text
             if src_count >= 3 and has_rel:
                 pass_articles += 1
-    scores["wiki_articles"] = round(10 * pass_articles / max(total_articles, 1), 1) if total_articles else 0
-    details["wiki_articles"] = f"{pass_articles}/{total_articles} articles pass"
+    score = round(10 * pass_articles / max(total_articles, 1), 1) if total_articles else 0.0
+    return score, f"{pass_articles}/{total_articles} articles pass"
 
-    # 8. Obsidian Bases (5pt)
+
+def _score_bases(vault_root: Path) -> tuple[float, str]:
     bases = list(vault_root.rglob("*.base"))
-    scores["bases"] = 5 if len(bases) >= 5 else round(5 * len(bases) / 5, 1)
-    details["bases"] = f"{len(bases)} .base files"
+    score = 5.0 if len(bases) >= 5 else round(5 * len(bases) / 5, 1)
+    return score, f"{len(bases)} .base files"
 
-    # 9. Backlinks coverage (10pt) — sample 15 source pages
-    authored_md = [
-        f for f in vault_root.rglob("*.md")
-        if "graphify-out" not in str(f) and "/raw/" not in str(f) and f.name != "_index.md"
-    ]
-    inbound = {f.stem: 0 for f in authored_md}
+
+def _build_inbound_map(authored_md: list[Path]) -> dict[str, int]:
+    inbound: dict[str, int] = {f.stem: 0 for f in authored_md}
     for f in authored_md:
         for m in re.finditer(r"\[\[([^\]|#]+)", f.read_text()):
             t = m.group(1).split("/")[-1].strip()
@@ -202,20 +196,29 @@ def score_vault(vault_root: Path) -> dict:
                 t = t[:-3]
             if t in inbound:
                 inbound[t] += 1
+    return inbound
+
+
+def _score_backlinks(vault_root: Path) -> tuple[float, str]:
+    authored_md = [
+        f for f in vault_root.rglob("*.md")
+        if "graphify-out" not in str(f) and "/raw/" not in str(f) and f.name != "_index.md"
+    ]
+    inbound = _build_inbound_map(authored_md)
     source_pages = [
         f.stem for f in vault_root.rglob("sources/*.md")
         if f.name != "_index.md"
     ]
     weak = sum(1 for s in source_pages if inbound.get(s, 0) < 2)
     coverage = 1 - weak / max(len(source_pages), 1)
-    scores["backlinks"] = round(10 * coverage, 1)
-    details["backlinks"] = f"{len(source_pages) - weak}/{len(source_pages)} sources ≥2 inbound"
+    score = round(10 * coverage, 1)
+    return score, f"{len(source_pages) - weak}/{len(source_pages)} sources ≥2 inbound"
 
-    # 10. Conflict/dup (10pt) — duplicate stems WITHIN the same category only.
-    # Cross-category same-stem files (e.g. concepts/auth.md per cat) are legitimate.
+
+def _score_conflict_dup(vault_root: Path, cats: list[str]) -> tuple[float, str]:
     scaffolding = {"index", "hot", "log", "overview"}
     spurious_dups: dict[str, int] = {}
-    for cat in CATS:
+    for cat in cats:
         cat_root = vault_root / cat
         if not cat_root.is_dir():
             continue
@@ -226,24 +229,37 @@ def score_vault(vault_root: Path) -> dict:
         for stem, count in Counter(cat_stems).items():
             if count > 1 and stem not in scaffolding:
                 spurious_dups[f"{cat}/{stem}"] = count
-    if not spurious_dups:
-        scores["conflict_dup"] = 10
-    else:
-        scores["conflict_dup"] = max(0, 10 - len(spurious_dups))
-    details["conflict_dup"] = f"{len(spurious_dups)} spurious dup stems"
+    score = 10.0 if not spurious_dups else max(0, 10 - len(spurious_dups))
+    return score, f"{len(spurious_dups)} spurious dup stems"
+
+
+def score_vault(vault_root: Path) -> dict:
+    cats = _load_categories(vault_root)
+
+    scores: dict[str, float] = {}
+    details: dict[str, str] = {}
+
+    scores["graph_density"], details["graph_density"] = _score_graph_density(vault_root, cats)
+    scores["confidence_balance"], details["confidence_balance"] = _score_confidence_balance(vault_root, cats)
+    scores["concept_entity_depth"], details["concept_entity_depth"] = _score_concept_entity_depth(vault_root, cats)
+    scores["adr_pages"], details["adr_pages"] = _score_adr_pages(vault_root, cats)
+    scores["cross_vault"], details["cross_vault"] = _score_cross_vault(vault_root)
+    scores["hot_cache"], details["hot_cache"] = _score_hot_cache(vault_root, cats)
+    scores["wiki_articles"], details["wiki_articles"] = _score_wiki_articles(vault_root, cats)
+    scores["bases"], details["bases"] = _score_bases(vault_root)
+    scores["backlinks"], details["backlinks"] = _score_backlinks(vault_root)
+    scores["conflict_dup"], details["conflict_dup"] = _score_conflict_dup(vault_root, cats)
 
     total = min(100, sum(scores.values()))
-
-    state = {
+    return {
         "total": round(total, 1),
         "scores": scores,
         "details": details,
-        "categories": CATS,
+        "categories": cats,
     }
-    return state
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: score_structural.py <vault-path>", file=sys.stderr)
         sys.exit(1)

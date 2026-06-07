@@ -107,30 +107,30 @@ def _module_referenced_in_docs(module_path: str, doc_scan: dict[str, dict]) -> b
     return False
 
 
-def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
-    repo = repo.expanduser().resolve()
-    doc_root = (doc_root or repo).expanduser().resolve()
+_SIG_IN_DOC_RE = re.compile(r"`([a-z_][a-z0-9_]+)\(([^)]*)\)`")
 
-    code = scan_code.scan_tree(repo)
-    docs = scan_docs.scan_tree(doc_root)
+_KNOWN_CODE_EXTS = frozenset((".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".sql"))
+_LANG_EXTS = frozenset((".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".py"))
 
-    report = DriftReport(repo_root=str(repo), code_modules=len(code), doc_files=len(docs))
 
-    # GAP: code without doc reference
+def _detect_gaps(
+    code: dict[str, dict],
+    docs: dict[str, dict],
+    report: DriftReport,
+) -> None:
     for mod_path, mod_info in code.items():
-        # Only flag modules with public surface area
         has_public = mod_info["public_classes"] or mod_info["public_functions"]
         if not has_public:
             continue
         if not _module_referenced_in_docs(mod_path, docs):
-            report.gap.append({"module": mod_path,
-                               "public_count": len(mod_info["public_classes"]) + len(mod_info["public_functions"]),
-                               "docstring": mod_info["docstring_first_line"]})
+            report.gap.append({
+                "module": mod_path,
+                "public_count": len(mod_info["public_classes"]) + len(mod_info["public_functions"]),
+                "docstring": mod_info["docstring_first_line"],
+            })
 
-    # ORPHAN: doc code_refs pointing to non-existent files
-    # Use filesystem (not just scan_code result) — tests/ are excluded from public-API scan
-    # but still exist on disk and should NOT be flagged orphan.
-    code_paths = set(code.keys())
+
+def _build_fs_index(repo: Path, code_paths: set[str]) -> tuple[set[str], set[str], str]:
     fs_paths: set[str] = set()
     fs_stems: set[str] = set()
     for p in repo.rglob("*"):
@@ -141,39 +141,69 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
         rel = str(p.relative_to(repo))
         fs_paths.add(rel)
         fs_stems.add(p.stem)
-
     scanned_exts = {Path(p).suffix for p in code_paths}
-    dominant_ext = max(scanned_exts, key=lambda e: sum(1 for p in code_paths if Path(p).suffix == e), default=".py") if scanned_exts else ".py"
+    dominant_ext = (
+        max(scanned_exts, key=lambda e: sum(1 for p in code_paths if Path(p).suffix == e))
+        if scanned_exts else ".py"
+    )
+    return fs_paths, fs_stems, dominant_ext
 
+
+def _is_orphan_ref(
+    ref: str,
+    fs_paths: set[str],
+    fs_stems: set[str],
+    dominant_ext: str,
+    scanned_exts: set[str],
+) -> bool:
+    ref_path = ref.split(":")[0]
+    ref_suffix = Path(ref_path).suffix
+    if ref_path in fs_paths:
+        return False
+    if "/" not in ref_path and Path(ref_path).stem in fs_stems:
+        return False
+    if ref_suffix and ref_suffix not in _KNOWN_CODE_EXTS:
+        return False
+    if ref_suffix and ref_suffix != dominant_ext and ref_suffix in _LANG_EXTS:
+        if ref_suffix not in scanned_exts:
+            return False
+    return True
+
+
+def _detect_orphans(
+    code: dict[str, dict],
+    docs: dict[str, dict],
+    repo: Path,
+    report: DriftReport,
+) -> None:
+    code_paths = set(code.keys())
+    fs_paths, fs_stems, dominant_ext = _build_fs_index(repo, code_paths)
+    scanned_exts = {Path(p).suffix for p in code_paths}
     for doc, info in docs.items():
         if info.get("manual_edit"):
             continue
         for ref in info.get("code_refs", []):
-            ref_path = ref.split(":")[0]
-            ref_suffix = Path(ref_path).suffix
-            if ref_path in fs_paths:
-                continue
-            # also accept partial matches (basename-only refs)
-            if "/" not in ref_path and Path(ref_path).stem in fs_stems:
-                continue
-            # ignore foreign extensions
-            if ref_suffix and ref_suffix not in (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".sql"):
-                continue
-            if ref_suffix and ref_suffix != dominant_ext and ref_suffix in (".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".py"):
-                if ref_suffix not in scanned_exts:
-                    continue
-            report.orphan.append({"doc": doc, "ref": ref})
+            if _is_orphan_ref(ref, fs_paths, fs_stems, dominant_ext, scanned_exts):
+                report.orphan.append({"doc": doc, "ref": ref})
 
-    # SYMBOL DRIFT: doc backtick mentions of a symbol that exists in NO code module
+
+def _build_all_symbols(code: dict[str, dict]) -> set[str]:
     all_symbols: set[str] = set()
     for mod_info in code.values():
         all_symbols.update(mod_info["public_classes"])
         all_symbols.update(mod_info["public_functions"])
+    return all_symbols
 
+
+def _detect_symbol_drift(
+    code: dict[str, dict],
+    docs: dict[str, dict],
+    all_symbols: set[str],
+    report: DriftReport,
+) -> None:
     for doc, info in docs.items():
         if info.get("manual_edit"):
             continue
-        # Source files this doc claims to cover (per frontmatter)
         fm = info.get("frontmatter", {}) or {}
         claimed = fm.get("source_files") or fm.get("sources") or []
         if isinstance(claimed, str):
@@ -184,12 +214,9 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
             if c_path in code:
                 claimed_symbols.update(code[c_path]["public_classes"])
                 claimed_symbols.update(code[c_path]["public_functions"])
-        # Only check symbol drift for docs that explicitly claim source files
-        # (otherwise too noisy — natural-language docs mention many symbols loosely)
         if not claimed_symbols:
             continue
         for sym in info.get("symbol_mentions", []):
-            # require PascalCase OR snake_case with ≥2 underscores (high-confidence identifiers)
             if not (re.match(r"^[A-Z][a-zA-Z0-9_]+$", sym) and len(sym) > 3) \
                     and not re.match(r"^[a-z]+(_[a-z0-9]+){2,}$", sym):
                 continue
@@ -198,9 +225,18 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
             if sym not in claimed_symbols:
                 report.symbol_drift.append({"doc": doc, "symbol": sym, "claimed_files": claimed})
 
-    # CLAIM DRIFT: signature mentioned in doc differs from code
-    # Simple heuristic: scan doc body for `name(...)` patterns; compare to scan_code signatures
-    SIG_IN_DOC_RE = re.compile(r"`([a-z_][a-z0-9_]+)\(([^)]*)\)`")
+
+def _norm_args(s: str) -> str:
+    parts = [a.split(":")[0].split("=")[0].strip() for a in s.split(",") if a.strip()]
+    return ",".join(parts)
+
+
+def _detect_claim_drift(
+    code: dict[str, dict],
+    docs: dict[str, dict],
+    doc_root: Path,
+    report: DriftReport,
+) -> None:
     for doc, info in docs.items():
         if info.get("manual_edit"):
             continue
@@ -210,19 +246,13 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
         except OSError as exc:
             print(f"drift: failed to read {doc_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
-        for m in SIG_IN_DOC_RE.finditer(body):
+        for m in _SIG_IN_DOC_RE.finditer(body):
             name, args_str = m.group(1), m.group(2).strip()
-            # Find this symbol in any code module
             for mod_path, mod_info in code.items():
                 if name in mod_info["signatures"]:
                     real_sig = mod_info["signatures"][name]
-                    # Compare arg lists (simple: extract args portion)
                     real_args = real_sig[real_sig.index("(") + 1: real_sig.rindex(")")].strip()
-                    # Strip type annotations + defaults for shallow compare
-                    def _norm(s: str) -> str:
-                        parts = [a.split(":")[0].split("=")[0].strip() for a in s.split(",") if a.strip()]
-                        return ",".join(parts)
-                    if _norm(args_str) != _norm(real_args):
+                    if _norm_args(args_str) != _norm_args(real_args):
                         report.claim_drift.append({
                             "doc": doc, "symbol": name,
                             "doc_says": f"{name}({args_str})",
@@ -230,6 +260,21 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
                             "module": mod_path,
                         })
                     break
+
+
+def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
+    repo = repo.expanduser().resolve()
+    doc_root = (doc_root or repo).expanduser().resolve()
+
+    code = scan_code.scan_tree(repo)
+    docs = scan_docs.scan_tree(doc_root)
+
+    report = DriftReport(repo_root=str(repo), code_modules=len(code), doc_files=len(docs))
+
+    _detect_gaps(code, docs, report)
+    _detect_orphans(code, docs, repo, report)
+    _detect_symbol_drift(code, docs, _build_all_symbols(code), report)
+    _detect_claim_drift(code, docs, doc_root, report)
 
     return report
 

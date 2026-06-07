@@ -43,6 +43,85 @@ def _run(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
 # ──── Obsidian exporter ───────────────────────────────────────────────────────
 
 
+def _bootstrap_obsidian_dir(vault: Path) -> None:
+    obsidian_dir = vault / ".obsidian"
+    if obsidian_dir.exists():
+        return
+    obsidian_dir.mkdir(parents=True, exist_ok=True)
+    (obsidian_dir / "app.json").write_text("{}")
+    (obsidian_dir / "appearance.json").write_text("{}")
+    (obsidian_dir / "core-plugins.json").write_text(
+        '["file-explorer","global-search","switcher","graph","backlink",'
+        '"canvas","outgoing-link","tag-pane","page-preview","daily-notes",'
+        '"templates","outline","word-count","file-recovery"]'
+    )
+
+
+def _copy_docs(doc_root: Path, vault: Path) -> tuple[int, int]:
+    """Copy docs from doc_root into vault, skipping manual_edit pages."""
+    copied = 0
+    skipped_manual = 0
+    if not doc_root.exists():
+        return copied, skipped_manual
+    for src in doc_root.rglob("*.md"):
+        rel = src.relative_to(doc_root)
+        tgt = vault / rel
+        tgt.parent.mkdir(parents=True, exist_ok=True)
+        if tgt.exists():
+            existing = tgt.read_text(errors="replace")
+            fm_match = re.match(r"^---\n(.*?)\n---\n", existing, re.DOTALL)
+            if fm_match and re.search(r"manual_edit:\s*true", fm_match.group(1), re.IGNORECASE):
+                skipped_manual += 1
+                continue
+        shutil.copy2(src, tgt)
+        copied += 1
+    return copied, skipped_manual
+
+
+def _copy_top_level_files(repo: Path, vault: Path) -> tuple[int, int]:
+    """Copy well-known top-level files into vault root, skipping manual_edit ones."""
+    copied = 0
+    skipped_manual = 0
+    for name in ("README.md", "CLAUDE.md", "AGENTS.md", "ARCHITECTURE.md", "CHANGELOG.md"):
+        src = repo / name
+        if not src.exists():
+            continue
+        tgt = vault / name
+        if tgt.exists() and re.search(
+            r"manual_edit:\s*true", tgt.read_text(errors="replace") or "", re.IGNORECASE
+        ):
+            skipped_manual += 1
+            continue
+        shutil.copy2(src, tgt)
+        copied += 1
+    return copied, skipped_manual
+
+
+def _write_index(vault: Path, project_name: str) -> None:
+    pages = [p.relative_to(vault) for p in vault.rglob("*.md")
+             if not str(p.relative_to(vault)).startswith(".")]
+    index_path = vault / "index.md"
+    if index_path.exists() and "auto-generated" not in index_path.read_text(errors="replace"):
+        return
+    lines = [
+        "---",
+        f"type: index",
+        f"project: {project_name}",
+        f"auto-generated: {time.strftime('%Y-%m-%d')}",
+        "---",
+        "",
+        f"# {project_name}",
+        "",
+        f"## Pages ({len(pages)})",
+        "",
+    ]
+    for p in sorted(pages):
+        if p.name == "index.md":
+            continue
+        lines.append(f"- [[{str(p)[:-3]}]]")
+    index_path.write_text("\n".join(lines))
+
+
 def export_obsidian(repo: Path, vault_root: Path | None = None,
                     doc_root: Path | None = None, project_name: str | None = None) -> dict:
     """Upsert docs into Obsidian vault.
@@ -58,70 +137,14 @@ def export_obsidian(repo: Path, vault_root: Path | None = None,
 
     created = not vault.exists()
     vault.mkdir(parents=True, exist_ok=True)
+    _bootstrap_obsidian_dir(vault)
 
-    # Bootstrap .obsidian/ config so Obsidian app recognizes folder as a vault
-    obsidian_dir = vault / ".obsidian"
-    if not obsidian_dir.exists():
-        obsidian_dir.mkdir(parents=True, exist_ok=True)
-        # Minimal config — Obsidian populates the rest on first open
-        (obsidian_dir / "app.json").write_text("{}")
-        (obsidian_dir / "appearance.json").write_text("{}")
-        (obsidian_dir / "core-plugins.json").write_text(
-            '["file-explorer","global-search","switcher","graph","backlink",'
-            '"canvas","outgoing-link","tag-pane","page-preview","daily-notes",'
-            '"templates","outline","word-count","file-recovery"]'
-        )
+    copied, skipped_manual = _copy_docs(doc_root, vault)
+    top_copied, top_skipped = _copy_top_level_files(repo, vault)
+    copied += top_copied
+    skipped_manual += top_skipped
 
-    copied = 0
-    skipped_manual = 0
-    if doc_root.exists():
-        for src in doc_root.rglob("*.md"):
-            rel = src.relative_to(doc_root)
-            tgt = vault / rel
-            tgt.parent.mkdir(parents=True, exist_ok=True)
-            if tgt.exists():
-                # preserve manual_edit pages
-                existing = tgt.read_text(errors="replace")
-                fm_match = re.match(r"^---\n(.*?)\n---\n", existing, re.DOTALL)
-                if fm_match and re.search(r"manual_edit:\s*true", fm_match.group(1), re.IGNORECASE):
-                    skipped_manual += 1
-                    continue
-            shutil.copy2(src, tgt)
-            copied += 1
-
-    # Also copy top-level docs (README.md, CLAUDE.md, etc) to vault root
-    for top in ("README.md", "CLAUDE.md", "AGENTS.md", "ARCHITECTURE.md", "CHANGELOG.md"):
-        src = repo / top
-        if src.exists():
-            tgt = vault / top
-            if tgt.exists() and re.search(r"manual_edit:\s*true", tgt.read_text(errors="replace") or "", re.IGNORECASE):
-                skipped_manual += 1
-                continue
-            shutil.copy2(src, tgt)
-            copied += 1
-
-    # Generate or refresh index.md
-    pages = [p.relative_to(vault) for p in vault.rglob("*.md")
-             if not str(p.relative_to(vault)).startswith(".")]
-    index_path = vault / "index.md"
-    if not index_path.exists() or "auto-generated" in index_path.read_text(errors="replace"):
-        lines = [
-            "---",
-            f"type: index",
-            f"project: {project_name}",
-            f"auto-generated: {time.strftime('%Y-%m-%d')}",
-            "---",
-            "",
-            f"# {project_name}",
-            "",
-            f"## Pages ({len(pages)})",
-            "",
-        ]
-        for p in sorted(pages):
-            if p.name == "index.md":
-                continue
-            lines.append(f"- [[{str(p)[:-3]}]]")
-        index_path.write_text("\n".join(lines))
+    _write_index(vault, project_name)
 
     return {
         "destination": "obsidian",
@@ -135,6 +158,71 @@ def export_obsidian(repo: Path, vault_root: Path | None = None,
 # ──── NotebookLM exporter ─────────────────────────────────────────────────────
 
 
+def _resolve_or_create_notebook(project_name: str) -> tuple[dict | None, bool, str | None]:
+    """Return (notebook_dict, created, error_msg). On error, notebook is None."""
+    rc, out, err = _run(["notebooklm", "list", "--json"])
+    if rc < 0:
+        return None, False, f"notebooklm CLI unavailable: {err}"
+    if rc != 0:
+        return None, False, f"list failed: {err}"
+    try:
+        notebooks = json.loads(out).get("notebooks", [])
+    except json.JSONDecodeError as e:
+        return None, False, f"parse failed: {e}"
+
+    notebook = next((nb for nb in notebooks if nb.get("title") == project_name), None)
+    if notebook is not None:
+        return notebook, False, None
+
+    rc, out, err = _run(["notebooklm", "create", "--title", project_name, "--json"])
+    if rc != 0:
+        return None, False, f"create failed: {err}"
+    try:
+        notebook = json.loads(out).get("notebook") or json.loads(out)
+    except json.JSONDecodeError:
+        notebook = None
+    if not notebook:
+        return None, False, "create returned no notebook"
+    return notebook, True, None
+
+
+def _collect_sources(repo: Path, doc_root: Path, max_sources: int) -> list[Path]:
+    sources: list[Path] = []
+    for name in ("README.md", "CLAUDE.md", "AGENTS.md", "ARCHITECTURE.md"):
+        p = repo / name
+        if p.exists():
+            sources.append(p)
+    if doc_root.exists():
+        sources.extend(sorted(doc_root.rglob("*.md")))
+    return sources[:max_sources]
+
+
+def _sync_sources(nb_id: str, sources: list[Path], repo: Path) -> int:
+    rc, out, _ = _run(["notebooklm", "source", "list", "--notebook", nb_id, "--json"])
+    existing_titles: set[str] = set()
+    if rc == 0:
+        try:
+            existing_titles = {s.get("title", "") for s in json.loads(out).get("sources", [])}
+        except json.JSONDecodeError as exc:
+            print(
+                f"export: failed to parse existing sources list: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+    added = 0
+    for src in sources:
+        title = str(src.relative_to(repo))
+        if title in existing_titles:
+            continue
+        rc, _, _err = _run(
+            ["notebooklm", "source", "add", "--notebook", nb_id,
+             "--title", title, "--file", str(src)],
+            timeout=60,
+        )
+        if rc == 0:
+            added += 1
+    return added
+
+
 def export_notebooklm(repo: Path, doc_root: Path | None = None,
                       project_name: str | None = None, max_sources: int = 50) -> dict:
     """Upsert NotebookLM notebook.
@@ -146,62 +234,13 @@ def export_notebooklm(repo: Path, doc_root: Path | None = None,
     doc_root = (doc_root or (repo / "docs")).expanduser().resolve()
     project_name = project_name or repo.name
 
-    # List existing notebooks
-    rc, out, err = _run(["notebooklm", "list", "--json"])
-    if rc < 0:
-        return {"destination": "notebooklm", "error": f"notebooklm CLI unavailable: {err}", "skipped": True}
-    if rc != 0:
-        return {"destination": "notebooklm", "error": f"list failed: {err}", "skipped": True}
+    notebook, created, err_msg = _resolve_or_create_notebook(project_name)
+    if err_msg is not None:
+        return {"destination": "notebooklm", "error": err_msg, "skipped": True}
 
-    try:
-        notebooks = json.loads(out).get("notebooks", [])
-    except json.JSONDecodeError as e:
-        return {"destination": "notebooklm", "error": f"parse failed: {e}", "skipped": True}
-
-    notebook = next((nb for nb in notebooks if nb.get("title") == project_name), None)
-    created = False
-    if notebook is None:
-        rc, out, err = _run(["notebooklm", "create", "--title", project_name, "--json"])
-        if rc != 0:
-            return {"destination": "notebooklm", "error": f"create failed: {err}", "skipped": True}
-        try:
-            notebook = json.loads(out).get("notebook") or json.loads(out)
-        except json.JSONDecodeError:
-            notebook = None
-        if not notebook:
-            return {"destination": "notebooklm", "error": "create returned no notebook", "skipped": True}
-        created = True
-
-    nb_id = notebook["id"]
-
-    # Collect candidate source files (top-level + docs/)
-    sources: list[Path] = []
-    for top in ("README.md", "CLAUDE.md", "AGENTS.md", "ARCHITECTURE.md"):
-        p = repo / top
-        if p.exists():
-            sources.append(p)
-    if doc_root.exists():
-        sources.extend(sorted(doc_root.rglob("*.md")))
-    sources = sources[:max_sources]
-
-    # Get existing sources
-    rc, out, _ = _run(["notebooklm", "source", "list", "--notebook", nb_id, "--json"])
-    existing_titles = set()
-    if rc == 0:
-        try:
-            existing_titles = {s.get("title", "") for s in json.loads(out).get("sources", [])}
-        except json.JSONDecodeError as exc:
-            print(f"export: failed to parse existing sources list: {type(exc).__name__}: {exc}", file=sys.stderr)
-
-    added = 0
-    for src in sources:
-        title = str(src.relative_to(repo))
-        if title in existing_titles:
-            continue
-        rc, _, err = _run(["notebooklm", "source", "add", "--notebook", nb_id,
-                           "--title", title, "--file", str(src)], timeout=60)
-        if rc == 0:
-            added += 1
+    nb_id = notebook["id"]  # type: ignore[index]
+    sources = _collect_sources(repo, doc_root, max_sources)
+    added = _sync_sources(nb_id, sources, repo)
 
     return {
         "destination": "notebooklm",
@@ -361,7 +400,7 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
     return results
 
 
-def main(argv: list[str]) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("repo", type=Path)
     ap.add_argument("--export", default="obsidian,notebooklm,graphify",
@@ -380,10 +419,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-global", action="store_true",
                     help="skip global graph merge when --auto-graphify set")
     ap.add_argument("--out", type=Path, default=None)
-    args = ap.parse_args(argv[1:])
+    return ap
 
-    dests = [d.strip() for d in args.export.split(",") if d.strip()]
-    opts = {}
+
+def _build_opts(args: argparse.Namespace) -> dict:
+    opts: dict = {}
     if args.doc_root:
         opts["doc_root"] = args.doc_root
     if args.obsidian_path:
@@ -392,23 +432,19 @@ def main(argv: list[str]) -> int:
         opts["project_name"] = args.project_name
     if args.source:
         opts["source_adapter"] = args.source
+    return opts
 
-    results = export_all(args.repo, dests, **opts)
-    if args.auto_graphify:
-        results["auto_graphify"] = auto_graphify_update(
-            args.repo,
-            global_tag=args.global_tag,
-            merge_global=not args.no_global,
-        )
-    content = json.dumps({"repo": str(args.repo.resolve()), "exports": results}, indent=2, ensure_ascii=False)
-    if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(content)
-        print(f"wrote {args.out}")
+
+def _write_output(content: str, out_path: Path | None) -> None:
+    if out_path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(content)
+        print(f"wrote {out_path}")
     else:
         print(content)
-    # Surface real failures (exceptions / unknown destinations) as a non-zero
-    # exit; graceful skips (missing CLI / inputs, marked "skipped") stay rc=0.
+
+
+def _check_failures(results: dict) -> int:
     failed = sorted(
         d for d, r in results.items()
         if isinstance(r, dict) and (r.get("failed") or (r.get("error") and not r.get("skipped")))
@@ -417,6 +453,26 @@ def main(argv: list[str]) -> int:
         print(f"EXPORT FAILED for destination(s): {', '.join(failed)} — see report above", file=sys.stderr)
         return 1
     return 0
+
+
+def main(argv: list[str]) -> int:
+    ap = _build_parser()
+    args = ap.parse_args(argv[1:])
+
+    dests = [d.strip() for d in args.export.split(",") if d.strip()]
+    opts = _build_opts(args)
+
+    results = export_all(args.repo, dests, **opts)
+    if args.auto_graphify:
+        results["auto_graphify"] = auto_graphify_update(
+            args.repo,
+            global_tag=args.global_tag,
+            merge_global=not args.no_global,
+        )
+
+    content = json.dumps({"repo": str(args.repo.resolve()), "exports": results}, indent=2, ensure_ascii=False)
+    _write_output(content, args.out)
+    return _check_failures(results)
 
 
 if __name__ == "__main__":
