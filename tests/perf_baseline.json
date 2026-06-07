@@ -12,6 +12,10 @@
     {
       "fullname": "tests/test_perf.py::test_phase_end_within_budget",
       "stats": {"mean": 0.025}
+    },
+    {
+      "fullname": "tests/test_perf.py::test_pivot_check_within_budget",
+      "stats": {"mean": 0.025}
     }
   ]
 }

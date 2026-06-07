@@ -1,0 +1,12 @@
+{
+  "_doc": "Multilingual + emoji vars: Korean phase label and emoji-decorated iteration counter. Python's str.format_map is Unicode-clean — multi-byte chars in values do not corrupt the surrounding ASCII template. Verifies round-trip fidelity for non-ASCII var values.",
+  "prompt": "iteration",
+  "vars": {"iter_n": "42", "phase": "단계-3"},
+  "expects_substring": [
+    "Iteration 42",
+    "phase 단계-3",
+    "auto-pilot-iter: 42",
+    "auto-pilot-phase: 단계-3"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}

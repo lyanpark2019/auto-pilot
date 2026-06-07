@@ -1,0 +1,10 @@
+{
+  "_doc": "Adversarial: double braces {{var}} in a template var. str.format_map interprets {{ and }} in the template itself as escaped braces — but when passed as a VALUE, the braces in the value are literal and appear as '{var}' in the output (no double-escape happens). This documents the pass-through contract for brace-containing var values.",
+  "prompt": "iteration",
+  "vars": {"iter_n": "{{nested_brace}}", "phase": 1},
+  "expects_substring": [
+    "{{nested_brace}}",
+    "auto-pilot-phase: 1"
+  ],
+  "expects_not": ["{iter_n}", "{phase}"]
+}
