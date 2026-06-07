@@ -22,12 +22,25 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TextIO
 
 if __package__ in (None, ""):  # script mode (python3 vault/pipeline/export.py …)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DEFAULT_OBSIDIAN_ROOT = Path(os.environ.get("VB_OBSIDIAN_ROOT", str(Path.home() / "Documents" / "Obsidian")))
 GRAPHIFY_BIN = os.environ.get("GRAPHIFY_BIN", str(Path.home() / ".local" / "bin" / "graphify"))
+
+
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
 
 
 def _run(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
@@ -204,10 +217,7 @@ def _sync_sources(nb_id: str, sources: list[Path], repo: Path) -> int:
         try:
             existing_titles = {s.get("title", "") for s in json.loads(out).get("sources", [])}
         except json.JSONDecodeError as exc:
-            print(
-                f"export: failed to parse existing sources list: {type(exc).__name__}: {exc}",
-                file=sys.stderr,
-            )
+            _warn(f"export: failed to parse existing sources list: {type(exc).__name__}: {exc}")
     added = 0
     for src in sources:
         title = str(src.relative_to(repo))
@@ -377,8 +387,8 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
         if state_file.exists():
             try:
                 source_adapter = json.loads(state_file.read_text()).get("source_adapter")
-            except Exception as exc:
-                print(f"export: failed to read source_adapter from {state_file}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            except (OSError, json.JSONDecodeError) as exc:
+                _warn(f"export: failed to read source_adapter from {state_file}: {type(exc).__name__}: {exc}")
                 source_adapter = None
     results = {}
     for d in destinations:
@@ -396,7 +406,7 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
         try:
             results[d] = fn(repo, **{k: v for k, v in opts.items() if k in fn.__code__.co_varnames})
         except Exception as e:
-            print(f"export: destination={d} error_type={type(e).__name__}: {e}", file=sys.stderr)
+            _warn(f"export: destination={d} error_type={type(e).__name__}: {e}")
             results[d] = {"destination": d, "error": str(e), "failed": True}
     return results
 
@@ -440,9 +450,9 @@ def _write_output(content: str, out_path: Path | None) -> None:
     if out_path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(content)
-        print(f"wrote {out_path}")
+        _emit(f"wrote {out_path}")
     else:
-        print(content)
+        _emit(content)
 
 
 def _check_failures(results: dict) -> int:
@@ -451,7 +461,7 @@ def _check_failures(results: dict) -> int:
         if isinstance(r, dict) and (r.get("failed") or (r.get("error") and not r.get("skipped")))
     )
     if failed:
-        print(f"EXPORT FAILED for destination(s): {', '.join(failed)} — see report above", file=sys.stderr)
+        _warn(f"EXPORT FAILED for destination(s): {', '.join(failed)} — see report above")
         return 1
     return 0
 

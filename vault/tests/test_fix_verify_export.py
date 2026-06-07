@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 
@@ -95,6 +97,21 @@ def test_export_all_handles_unknown_destination(tmp_path: Path) -> None:
     results = export.export_all(repo, ["bogus"])
     assert "error" in results["bogus"]
     assert results["bogus"]["failed"] is True
+
+
+def test_export_all_does_not_swallow_unexpected_state_parser_errors(tmp_path: Path, monkeypatch) -> None:
+    repo = _mk_project(tmp_path)
+    state_file = repo / ".vault-builder" / "state.json"
+    state_file.parent.mkdir()
+    state_file.write_text("{}", encoding="utf-8")
+
+    def broken_loads(raw: str) -> object:
+        raise RuntimeError("parser bug")
+
+    monkeypatch.setattr(export.json, "loads", broken_loads)
+
+    with pytest.raises(RuntimeError, match="parser bug"):
+        export.export_all(repo, [])
 
 
 def test_export_script_mode_bases_canvas(tmp_path: Path) -> None:
