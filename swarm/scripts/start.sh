@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # auto-pilot swarm: bootstrap tmux session inside CURRENT terminal.
 # Reads .planning/autopilot/config.json (created by /auto-pilot:swarm init).
+# --no-attach: start detached (headless callers, e.g. bench.sh --auto-start).
 set -euo pipefail
+
+ATTACH=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-attach) ATTACH=0;;
+  esac
+done
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/auto-pilot}"
 PROJECT="$(pwd)"
@@ -98,7 +106,7 @@ new_pane_with_cmd() {
 }
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
-  echo "[start] session '$SESSION' exists. Attaching."
+  echo "[start] session '$SESSION' exists."
 else
   # window 1: pane 0 = PM
   tmux new-session -d -s "$SESSION" -n auto -c "$PROJECT"
@@ -134,4 +142,7 @@ else
 fi
 
 echo "swarm online: $SESSION, $N workers"
-exec tmux attach -t "$SESSION"
+if [ "$ATTACH" -eq 1 ]; then
+  exec tmux attach -t "$SESSION"
+fi
+echo "[start] detached (--no-attach); observe with: tmux attach -t $SESSION"

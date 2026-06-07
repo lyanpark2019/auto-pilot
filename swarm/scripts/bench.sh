@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 # Benchmark: same task on swarm vs claude-solo vs codex-solo.
-# usage: bench.sh "<task>" [--repeats N] [--swarm-timeout SEC]
+# usage: bench.sh "<task>" [--repeats N] [--swarm-timeout SEC] [--auto-start]
 # --repeats N: run each arm N times; report median wall-time per arm.
+# --auto-start: if no swarm session, launch one (detached) for arm A and
+#   stop it again after arm A completes. Without it, arm A is skipped.
 set -euo pipefail
 TASK="${1:?task required}"; shift
 REPEATS=1
 SWARM_TIMEOUT=1200
+AUTO_START=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repeats) REPEATS="$2"; shift 2;;
     --swarm-timeout) SWARM_TIMEOUT="$2"; shift 2;;
+    --auto-start) AUTO_START=1; shift;;
     *) shift;;
   esac
 done
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PROJECT="$(pwd)"
 BASE="$(basename "$PROJECT")"
@@ -98,7 +103,16 @@ run_arm_swarm() {
 # Run each arm REPEATS times
 # ---------------------------------------------------------------------------
 
-# Arm A: swarm
+# Arm A: swarm (optionally self-started, then self-stopped)
+STARTED_SWARM=0
+if ! tmux has-session -t "$SESSION" 2>/dev/null && [ "$AUTO_START" -eq 1 ]; then
+  echo "[bench] --auto-start: launching swarm detached"
+  if bash "$SCRIPT_DIR/start.sh" --no-attach; then
+    STARTED_SWARM=1
+  else
+    echo "[bench] auto-start failed — arm-a will be skipped"
+  fi
+fi
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   for rep in $(seq 1 "$REPEATS"); do
     echo "[bench] arm-a: swarm (rep $rep/$REPEATS)"
@@ -107,6 +121,10 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
 else
   echo "[bench] swarm not running — skipping arm-a (solo arms still run)"
   echo "n/a (swarm not running)" > "$DIR/arm-a/skipped"
+fi
+if [ "$STARTED_SWARM" -eq 1 ]; then
+  echo "[bench] --auto-start: stopping self-started swarm"
+  bash "$SCRIPT_DIR/stop.sh" || true
 fi
 
 # Arm B: claude opus solo

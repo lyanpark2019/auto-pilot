@@ -299,12 +299,21 @@ when no swarm is up.
 - `$ARGUMENTS` after `bench` keyword = task description (everything before flags).
 - `--repeats N` (default 1): run each arm N times for variance.
 - `--swarm-timeout SEC` (default 1200): cap how long arm A waits for the PM verdict.
+- `--auto-start`: if no swarm session is up, launch one detached (`start.sh
+  --no-attach`) for arm A, then stop it (`stop.sh`) after arm A completes.
+  A swarm that was already running is never stopped by bench.
 
 ### Steps
 
 1. **Detect swarm.** Solo arms (B, C) run regardless. Arm A is skipped with a
    logged warning if `tmux has-session -t "autopilot-$(basename "$PWD")"` returns
-   non-zero (`bench.sh` writes `arm-a/skipped` and still runs B/C).
+   non-zero (`bench.sh` writes `arm-a/skipped` and still runs B/C) — unless
+   `--auto-start` is given, in which case bench launches the swarm detached,
+   runs arm A, and stops the self-started swarm before arms B/C.
+   ⚠️ A live swarm pushes worker branches / opens PRs when `gh` + an `origin`
+   remote exist (`run-worker.sh` auto-PR) and the PM cherry-picks merge-verdict
+   commits into the default branch (`pm-ledger.md`). For a side-effect-free
+   bench, run in a scratch clone without `origin`.
 2. **Benchmark dir** is created by the script at
    `<cwd>/.planning/autopilot/bench/<epoch>/` with `arm-a/`, `arm-b/`, `arm-c/`.
 3. **Run the harness**:
