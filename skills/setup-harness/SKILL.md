@@ -23,7 +23,7 @@ bash .claude/scripts/drift-scan.sh
 TARGET=95 MAX_ITERATIONS=15 bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-harness/scripts/harness-loop.sh
 ```
 
-Detects stack → copies 24 hook/automation scripts → merges 8 hooks (6 events) via `(event,matcher,command)` tuple dedupe → scaffolds root CLAUDE.md (≤50 lines) + folder-level CLAUDE.md (dense/layer folders) + ADR + .gitignore + PROGRESS.json. Re-running never doubles. See `README.md` for the file tree.
+Detects stack → copies 24 hook/automation scripts → merges 9 base hook entries (6 events) via `(event,matcher,command)` tuple dedupe → scaffolds root CLAUDE.md (≤50 lines) + folder-level CLAUDE.md (dense/layer folders) + ADR + .gitignore + PROGRESS.json. Browser projects get one optional extra Stop hook. Re-running never doubles. See `README.md` for the file tree.
 
 ## Autonomous score+loop+verify orchestrator
 
@@ -49,7 +49,7 @@ See `@~/.claude/docs/harness-engineering.md` (sections "Shared rules" + "Anti-pa
 ## Execution Flow
 
 ```
-1. Scan → 2. CLAUDE.md (pointer-style) → 3. Hooks (8 hooks / 6 events) → 4. Drift Detection
+1. Scan → 2. CLAUDE.md (pointer-style) → 3. Hooks (9 base hook entries / 6 events, plus optional browser Stop hook) → 4. Drift Detection
 → 5. MCP → 6. Agents/Commands → 7. Sandbox + Security → 8. Verify
 ```
 
@@ -235,9 +235,9 @@ Fewer than 5 source files? Stick to framework-safe defaults (git safety, secrets
 
 If `.codex/` exists or project ships AGENTS.md, add `@AGENTS.md` at top of CLAUDE.md. AGENTS.md (AAIF/Linux Foundation) is read natively by Codex/Cursor/Devin/Copilot. CLAUDE.md stays Claude Code specific (Hooks, Plan Mode).
 
-## Step 3: Hooks (8 hooks across 6 events)
+## Step 3: Hooks (9 base hook entries across 6 events)
 
-Hooks are where the harness actually enforces. Six Claude Code hook events are wired (PreToolUse and PostToolUse each carry two matchers → 8 hook entries total):
+Hooks are where the harness actually enforces. Six Claude Code hook events are wired in the base install (PreToolUse 3, PostToolUse 2, Stop/UserPromptSubmit/SessionStart/PreCompact one each → 9 hook entries total; browser projects add an optional Stop entry):
 
 | Event | Pattern | Script | Bypass behavior |
 |-------|---------|--------|-----------------|

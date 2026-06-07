@@ -48,7 +48,7 @@ Runtime roles (easy to confuse):
 - **PR3** reviewer sandbox — 4-layer; the PreToolUse hook + post-check are the real walls
 - **PR4** state lock + crash-safe resume + cost cap + dogfood gates
 - **PR5** verify-cleanup — regex fix, `_budget` extract, dedupe, dead-code prune
-- 199 tests, mypy + ruff clean
+- Test suite, mypy, and ruff were clean at merge time; do not duplicate collected test counts here (pytest output is the SoT).
 
 ### Not yet proven (honest gaps)
 - **Live e2e loop NEVER run** with real subagents — dogfood gate is assertions only.
@@ -60,7 +60,7 @@ Runtime roles (easy to confuse):
 Dual adversarial review (Codex + cold Claude) found the original "graphify first" plan unsound: P0×5, P1×3, P2×3. Two contradictions are fatal and must be resolved before any code — see §6. The corrected sequence proves the core loop live **before** layering graphify.
 
 ### Step 0 — prove the bare loop live (was P0-b, now FIRST)
-The loop has never run with real subagents; all 16 `test_headless_loop.py` tests mock `run_claude_session`. So:
+The loop has never run with real subagents; `test_headless_loop.py` coverage still mocks `run_claude_session` (count with `pytest --collect-only`, do not duplicate here). So:
 1. **Skill-fire smoke:** `claude -p "Run the auto-pilot skill: print state.json status and exit"` — confirm the skill auto-loads in non-interactive `-p` (prose trigger vs explicit `/auto-pilot` — record which works).
 2. **Bare e2e:** a trivial 1-phase / 1-contract **brownfield** spec that EDITS one existing file (not creates a new one — the current `dogfood-smoke.md` is greenfield-shaped). Run live with the **current** bundle (spec + CLAUDE.md only). Get one real `claude -p` → worker → dual-review → verify → merge → commit cycle green. Capture exactly what breaks. This is the only validation the markdown loop has.
 
@@ -111,7 +111,7 @@ Integration targets must point at the canonical, current skill — verified on d
 | `doc-drift-audit` (May 29) | ⚠️ absorbed into `doc-management` (AUDIT mode, 2026-06-06) | use `doc-management` for post-merge doc sync (P1) |
 | `graphify` v0.8.14 | ✅ current, but **duplicate install**: canonical `~/.claude/skills/graphify` + orphan `~/.agents/skills/graphify` (older) | clean the orphan to avoid future drift; graphify provides `GRAPH_REPORT.md` + `--update` but NO `.build-commit` — auto-pilot owns that marker |
 
-Also: `scripts/headless-loop.py:14` comment says the session runs `/auto-pilot start --phase N`, but `prompts/iteration.md` actually sends a **prose** "Run the auto-pilot skill" (no explicit slash). Doc↔code drift; the Step-0 skill-fire smoke must record which trigger form actually works in `claude -p`.
+Also: the headless loop docstring now names the prose trigger form used by `prompts/iteration.md` ("Run the auto-pilot skill", no explicit slash). Step-0 skill-fire smoke still must record whether that trigger works in live `claude -p`.
 
 ## 7. Cost model
 - **Interactive subscription (this user):** token $ is irrelevant — global rule is *speed > token cost*. graphify regen is gated on latency + redundancy only, never $.

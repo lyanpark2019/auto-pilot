@@ -96,7 +96,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 8 commands · 17 hooks · 12 codex-skills = 64 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 20 hooks · 12 codex-skills = 66 assets total.
 
 ```
 auto-pilot/
@@ -125,9 +125,9 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (17 scripts, P④)
-│   ├── hooks.json + preflight-path.sh + pre-{edit-composition-root,bash-guard,reviewer-write}.sh
-│   ├── post-deploy-verify.sh + doc-sync-update.sh + notebooklm_delete_gate.sh + pm_final_report.sh
+├── hooks/  (20 scripts, P④; hooks/hooks.json is wiring SoT)
+│   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
+│   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   └── guard-destructive.py + codex-conductor-guard.py + test_*.py (self-tests)
 ├── schemas/                           # PR1: contract/ticket/review/preflight JSON Schema 2020-12
 ├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers, build_dashboard_data.py

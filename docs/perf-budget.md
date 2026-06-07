@@ -27,11 +27,12 @@ The `test_rss_under_ceiling` test (non-benchmark) checks peak RSS of the
 `risk_assess.assess` hot path after a representative call sequence. It runs
 with the normal `pytest tests/ -q` invocation (not `--benchmark-only`).
 
-The pytest suite takes ~22 s locally on an M-series Mac (504+ tests including
-benchmark overhead). The `< 5 s` target in earlier versions was aspirational and
+The pytest suite takes tens of seconds locally on an M-series Mac, including
+benchmark overhead. The `< 5 s` target in earlier versions was aspirational and
 unmeasured; the honest ceiling is **< 45 s** to cover CI runner variance without
-over-constraining parallelism. No automated session-duration gate is in-tree —
-the benchmark assertions (`<50 ms` absolute, `<=baseline` regression) are the
+over-constraining parallelism. Do not duplicate collected test counts here —
+pytest output is the SoT. No automated session-duration gate is in-tree; the
+benchmark assertions (`<50 ms` absolute, `<=baseline` regression) are the
 primary latency guards. Suite wall-time is monitored informally via CI duration.
 
 If the assertion fails, either:

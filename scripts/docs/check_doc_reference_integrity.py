@@ -20,8 +20,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
@@ -43,6 +45,21 @@ _SYMBOL_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
 
 # Paths to skip (version-control or build artefacts).
 _SKIP_PATH_PREFIXES = ("node_modules/", ".git/", "__pycache__/", ".planning/")
+
+_ASSET_COUNT_RE = re.compile(
+    r"(?<![<≤>≥=])\b(?P<num>\d+)\s+"
+    r"(?P<kind>codex[- ]skills?|skills?|agents?|commands?|hooks?|assets?)\b",
+    re.IGNORECASE,
+)
+_CANONICAL_ASSET_RE = re.compile(r"\b(?:canonical|registry at)\s+(?P<num>\d+)\b", re.IGNORECASE)
+_HISTORICAL_RE = re.compile(
+    r"\b(historical|snapshot|recorded|before consolidation|legacy|retired|removed|"
+    r"deleted|absorbed|prior|round-[0-9]+)\b",
+    re.IGNORECASE,
+)
+_SOURCE_COMMENT_RE = re.compile(r"^\s*(#|//|/\*|\*)")
+_SOURCE_COMMENT_ROOTS = ("scripts", "hooks", "swarm", "vault")
+_SOURCE_COMMENT_EXTS = frozenset({".py", ".sh", ".mjs", ".js", ".ts"})
 
 IGNORE_MARKER = "<!-- cite-ignore -->"
 
@@ -93,6 +110,105 @@ def _is_skipped_path(raw_path: str) -> bool:
     return any(raw_path.startswith(pfx) for pfx in _SKIP_PATH_PREFIXES)
 
 
+def _asset_counts_from_assets(assets: Iterable[Mapping[str, object]]) -> dict[str, int]:
+    counts = {"skills": 0, "agents": 0, "commands": 0, "hooks": 0, "codex-skills": 0}
+    shells = 0
+    for asset in assets:
+        typ = str(asset.get("type", ""))
+        if typ == "skill":
+            counts["skills"] += 1
+        elif typ == "skill-shell":
+            shells += 1
+        elif typ == "agent":
+            counts["agents"] += 1
+        elif typ == "command":
+            counts["commands"] += 1
+        elif typ == "hook":
+            counts["hooks"] += 1
+        elif typ == "codex-skill":
+            counts["codex-skills"] += 1
+    counts["assets"] = sum(counts.values()) + shells
+    return counts
+
+
+def _collect_assets_via_dashboard(repo_root: Path) -> list[dict[str, object]] | None:
+    module_path = repo_root / "scripts" / "build_dashboard_data.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("_auto_pilot_build_dashboard_data", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    collect = getattr(module, "collect_assets", None)
+    if not callable(collect):
+        return None
+    loaded = collect()
+    return loaded if isinstance(loaded, list) else None
+
+
+def _collect_asset_counts(repo_root: Path) -> dict[str, int]:
+    assets = _collect_assets_via_dashboard(repo_root)
+    if assets is not None:
+        return _asset_counts_from_assets(assets)
+    fallback: list[dict[str, object]] = []
+    skills_dir = repo_root / "skills"
+    if skills_dir.is_dir():
+        fallback.extend({"type": "skill", "name": p.parent.name} for p in skills_dir.glob("*/SKILL.md"))
+        fallback.extend({"type": "skill-shell", "name": p.name}
+                        for p in skills_dir.iterdir() if p.is_dir() and not (p / "SKILL.md").exists())
+    for sub, typ in (("agents", "agent"), ("commands", "command")):
+        base = repo_root / sub
+        if base.is_dir():
+            fallback.extend({"type": typ, "name": p.stem} for p in base.glob("*.md"))
+    hooks_dir = repo_root / "hooks"
+    if hooks_dir.is_dir():
+        fallback.extend({"type": "hook", "name": p.name} for p in hooks_dir.iterdir()
+                        if p.suffix in {".py", ".sh"} and not p.name.startswith("test_"))
+    codex_dir = repo_root / "codex" / "skills"
+    if codex_dir.is_dir():
+        fallback.extend({"type": "codex-skill", "name": p.name} for p in codex_dir.iterdir() if p.is_dir())
+    return _asset_counts_from_assets(fallback)
+
+
+def _asset_kind(raw_kind: str) -> str:
+    kind = raw_kind.lower().replace(" ", "-")
+    if kind in {"skill", "skills"}:
+        return "skills"
+    if kind in {"agent", "agents"}:
+        return "agents"
+    if kind in {"command", "commands"}:
+        return "commands"
+    if kind in {"hook", "hooks"}:
+        return "hooks"
+    if kind in {"codex-skill", "codex-skills"}:
+        return "codex-skills"
+    return "assets"
+
+
+def _has_asset_count_context(raw_line: str) -> bool:
+    lower = raw_line.lower()
+    if _HISTORICAL_RE.search(raw_line):
+        return False
+    return (
+        "live asset counts" in lower
+        or "collect_assets" in lower
+        or "build_dashboard_data" in lower
+        or ("assets total" in lower and "=" in lower)
+    )
+
+
+def _asset_count_claims(raw_line: str) -> list[tuple[str, int, str]]:
+    claims = [
+        (_asset_kind(m.group("kind")), int(m.group("num")), m.group(0))
+        for m in _ASSET_COUNT_RE.finditer(raw_line)
+    ]
+    if "collect_assets" in raw_line or "build_dashboard_data" in raw_line:
+        claims.extend(("assets", int(m.group("num")), m.group(0))
+                      for m in _CANONICAL_ASSET_RE.finditer(raw_line))
+    return claims
+
+
 def _doc_files(repo_root: Path) -> list[Path]:
     """Collect doc files to scan."""
     targets: list[Path] = []
@@ -114,6 +230,42 @@ def _doc_files(repo_root: Path) -> list[Path]:
                 targets.append(p)
 
     return targets
+
+
+def _source_comment_files(repo_root: Path) -> list[Path]:
+    targets: list[Path] = []
+    for root_name in _SOURCE_COMMENT_ROOTS:
+        root = repo_root / root_name
+        if not root.is_dir():
+            continue
+        for p in root.rglob("*"):
+            if not p.is_file() or p.suffix not in _SOURCE_COMMENT_EXTS:
+                continue
+            if any(part in {"tests", "__pycache__"} for part in p.parts):
+                continue
+            targets.append(p)
+    return targets
+
+
+def _check_asset_count_line(
+    counts: dict[str, int],
+    doc_rel: str,
+    doc_lineno_0: int,
+    raw_line: str,
+) -> list[Violation]:
+    if not _has_asset_count_context(raw_line):
+        return []
+    violations: list[Violation] = []
+    for kind, said, citation in _asset_count_claims(raw_line):
+        actual = counts[kind]
+        if said == actual:
+            continue
+        violations.append(_violation(
+            doc_rel, doc_lineno_0, citation,
+            f"asset count mismatch: {kind}: said {said}, actual {actual}",
+            "update the claim from current asset inventory or mark it historical",
+        ))
+    return violations
 
 
 class _FileCache:
@@ -263,6 +415,7 @@ def check_citations(repo_root: Path) -> list[Violation]:
     """Run all citation checks; return a list of violations."""
     violations: list[Violation] = []
     cache = _FileCache()
+    asset_counts = _collect_asset_counts(repo_root)
 
     for doc_path in _doc_files(repo_root):
         doc_lines = cache.get_lines(doc_path)
@@ -273,6 +426,9 @@ def check_citations(repo_root: Path) -> list[Violation]:
         for lineno_0, raw_line in enumerate(doc_lines):
             if IGNORE_MARKER in raw_line:
                 continue
+            violations.extend(_check_asset_count_line(
+                asset_counts, doc_rel, lineno_0, raw_line,
+            ))
 
             for m in _CITE_RE.finditer(raw_line):
                 raw_path = m.group(1)
@@ -289,6 +445,18 @@ def check_citations(repo_root: Path) -> list[Violation]:
                 )
                 if v is not None:
                     violations.append(v)
+
+    for source_path in _source_comment_files(repo_root):
+        source_lines = cache.get_lines(source_path)
+        if source_lines is None:
+            continue
+        source_rel = str(source_path.relative_to(repo_root))
+        for lineno_0, raw_line in enumerate(source_lines):
+            if IGNORE_MARKER in raw_line or not _SOURCE_COMMENT_RE.search(raw_line):
+                continue
+            violations.extend(_check_asset_count_line(
+                asset_counts, source_rel, lineno_0, raw_line,
+            ))
 
     return violations
 

@@ -53,7 +53,7 @@ Codex catches what Claude misses, Claude catches Codex false positives, both cat
 
 ## Helpers (bash, tested)
 
-- All shell logic lives in `scripts/arl-helpers.sh` (unit-tested: 38 tests across `tests/arl-helpers.bats` + `tests/arl-orchestration.bats`).
+- All shell logic lives in `scripts/arl-helpers.sh` (unit-tested by `tests/arl-helpers.bats` + `tests/arl-orchestration.bats`; count with `rg -c '^@test ' tests/*.bats`).
 - **Always invoke under bash** (the helpers use bash arrays; sourcing into zsh — the macOS default — breaks them). Two ways: pure fns → `bash "$SKILL_DIR/scripts/arl-helpers.sh" <fn> <args>`; a chain that needs the worktree cwd → `bash -c '. "$SKILL_DIR/scripts/arl-helpers.sh"; arl_worktree_ensure <slug> origin/main && codex exec ... "<worker_prompt>"'`.
 - Call helpers by NAME with real args — do NOT inline shell in this runbook. `{slug}`/`{iteration}`/`{src_dir}` are agent-substituted before the call.
 - Verify helpers anytime: `bats "$SKILL_DIR/tests/arl-helpers.bats" "$SKILL_DIR/tests/arl-orchestration.bats"` (green = shell layer correct).
