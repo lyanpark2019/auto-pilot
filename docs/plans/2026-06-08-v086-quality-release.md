@@ -1,4 +1,7 @@
 ---
+type: plan
+topic: v0.8.6 quality release
+source_commit: 5ab85ba758b1ff695d7649653dc3d2578af487cd
 manual_edit: true
 ---
 
