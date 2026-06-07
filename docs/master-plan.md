@@ -1,7 +1,14 @@
+---
+type: plan
+topic: auto-pilot-master-plan
+source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+manual_edit: false
+---
+
 # auto-pilot — master plan & status
 
 > **Single context entry point.** Read this first to grasp purpose, what's done, what's next.
-> Loop design detail: [`architecture.md`](architecture.md). Per-change design specs: [`superpowers/specs/`](superpowers/specs/).
+> Loop design detail: [`architecture.md`](architecture.md). Per-change design specs: [`specs/`](specs/).
 
 ---
 
@@ -27,7 +34,7 @@ Each loop stage routes to a skill/agent. This is the "system that integrates var
 | Pre-dispatch scope gate | `tech-critic-lead` (internal agent) | ✅ built |
 | Implementation | `worker` subagent (Sonnet 4.6, 1M) | ✅ built |
 | Adversarial review | `codex` + cold `claude` reviewers | ✅ built |
-| TDD / security gates | `tdd-enforcer`, `security-reviewer` | ✅ built |
+| TDD / security gates | `review-gatekeeper` (`tdd-gate` + `security` modes) | ✅ built |
 | Verify / scoring | project verify cmds (+ `adversarial-review-loop` codebase mode, optional) | ✅ / 🔜 |
 | Doc sync | `doc-management` (MAINTAIN/AUDIT modes) | 🔜 planned |
 | Progress / decisions log | `PROGRESS.md` + `decisions.md` writer | 🔜 (Q2) |
@@ -38,7 +45,7 @@ A **plugin** (container) bundling: skills, commands, agents, hooks, schemas, Pyt
 
 Runtime roles (easy to confuse):
 - **PM** = the main Opus session itself, reading `agents/pm-orchestrator.md` as its contract. **Never dispatched as a subagent.**
-- **Workers / reviewers** = dispatched subagents via the `Agent` tool.
+- **Workers** = dispatched via the `Agent` tool; **reviewers** = hardened reviewer agents, with `scripts/_reviewer_wrapper.py` used for parallel `claude -p` subprocess dispatch when env isolation is required. PM contract is the SoT.
 
 ## 4. Progress
 

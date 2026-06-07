@@ -1,7 +1,6 @@
 <!-- Shared contract: project-context resolution order (system heart ①).
-     SoT for the 4-step order = docs/specs/2026-06-06-unified-coding-system-design.md
-     "System heart" section. This file is the wire-in copy agents read; it cites,
-     never re-derives. Lives under skills/auto-pilot/references/ (NOT agents/ —
+     This file is the wire-in SoT agents read; docs/architecture.md cites it
+     instead of restating the order. Lives under skills/auto-pilot/references/ (NOT agents/ —
      recursive agent auto-discovery would surface it as a ghost agent, the
      review-core.md defect). -->
 

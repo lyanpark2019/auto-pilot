@@ -1,3 +1,10 @@
+---
+type: history
+topic: setup-harness-changelog
+source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+manual_edit: true
+---
+
 # setup-harness — distilled changelog
 
 Distilled from `skills/setup-harness/CHANGELOG.md` (deleted) and `README.md` (deleted) on 2026-06-06.

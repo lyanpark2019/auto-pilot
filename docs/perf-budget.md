@@ -1,3 +1,10 @@
+---
+type: runbook
+topic: auto-pilot-performance-budget
+source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+manual_edit: false
+---
+
 # auto-pilot performance budget
 
 Targets for the orchestrator CLI helper. Measured with `pytest-benchmark` on
@@ -11,7 +18,7 @@ local dev hardware (Apple M-series, Python 3.13).
 | `orchestrator phase-start` | < 50 ms | called once per phase transition |
 | `orchestrator phase-end` | < 50 ms | same |
 | `orchestrator pivot-check` (`risk_assess.assess`) | < 50 ms | called per finding within a round; measured ~0.03 ms locally |
-| pytest suite (`tests/`) | < 45 s | measured ~22 s locally on M-series; CI runner has higher overhead |
+| pytest suite (`tests/`) | informally monitored | no in-tree wall-time gate; pytest output and CI duration are the live SoT |
 | peak RSS (assess 200 paths × 50 runs) | < 200 MB | `test_rss_under_ceiling` in `tests/test_perf.py` |
 
 ## How budgets are enforced
@@ -29,11 +36,11 @@ with the normal `pytest tests/ -q` invocation (not `--benchmark-only`).
 
 The pytest suite takes tens of seconds locally on an M-series Mac, including
 benchmark overhead. The `< 5 s` target in earlier versions was aspirational and
-unmeasured; the honest ceiling is **< 45 s** to cover CI runner variance without
-over-constraining parallelism. Do not duplicate collected test counts here —
-pytest output is the SoT. No automated session-duration gate is in-tree; the
-benchmark assertions (`<50 ms` absolute, `<=baseline` regression) are the
-primary latency guards. Suite wall-time is monitored informally via CI duration.
+unmeasured. Do not duplicate collected test counts or wall-time ceilings here —
+pytest output and CI duration are the SoT. No automated session-duration gate is
+in-tree; the benchmark assertions (`<50 ms` absolute, `<=baseline` regression)
+are the primary latency guards. Suite wall-time is monitored informally via CI
+duration.
 
 If the assertion fails, either:
 - Inspect the regression with `--benchmark-compare` (requires a prior baseline run).

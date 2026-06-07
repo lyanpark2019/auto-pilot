@@ -1,6 +1,13 @@
+---
+type: runbook
+topic: auto-pilot-7-phase-fallback
+source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+manual_edit: false
+---
+
 # 7-Phase fallback template
 
-When auto-pilot is invoked on a repo whose spec has NO `## Phase N` headers, PM falls back to this Superpowers-derived 7-phase template, mapping the spec body into each phase's scope.
+When auto-pilot is invoked on a repo whose spec has NO `## Phase N` headers, the `auto-pilot` skill tells the PM to fall back to this Superpowers-derived 7-phase template, mapping the spec body into each phase's scope. This is a PM/skill instruction template, not a separate Python phase-expansion helper.
 
 ## Phases
 
@@ -34,7 +41,7 @@ For each contract, dispatch a worker whose ONLY job is to write the failing test
 - Failing test files only — no implementation
 - Worker explicitly verifies `pnpm test` / `pytest` fails for the new tests
 
-Verify gate: tdd-enforcer confirms tests exist for every contract behavior + test suite is RED at the new tests.
+Verify gate: `review-gatekeeper` in `tdd-gate` mode confirms tests exist for every contract behavior + test suite is RED at the new tests.
 
 ### Phase 4 — Subagent Dev (Build)
 
@@ -61,15 +68,9 @@ Verify gate: all of `pnpm test && pnpm lint && pnpm typecheck && pnpm build` gre
 
 ## How PM detects which template applies
 
-```python
-def detect_phase_mode(spec_path: Path) -> str:
-    text = spec_path.read_text()
-    if re.search(r"^##\s*Phase\s+\d", text, re.M):
-        return "spec-defined"  # use spec's own phases
-    return "7-phase-fallback"
-```
+The PM-level rule lives in `skills/auto-pilot/SKILL.md`: if the spec has `## Phase N` headers, use those phases; otherwise use this template. The deterministic helper currently does less: `scripts/orchestrator.py` counts `#`/`##`/`### Phase` headings outside fenced code and floors at 1 via `_count_phases()`. Therefore this document must not imply a separate Python `detect_phase_mode()` implementation exists.
 
-In `7-phase-fallback`, PM populates phases 0-6 from this template; in `spec-defined`, PM uses the spec's `## Phase N` headers and ignores this template entirely.
+In `7-phase-fallback`, PM treats this template as the phase recipe; in `spec-defined`, PM uses the spec's own phase headers and ignores this template.
 
 ## Mapping to existing skills
 

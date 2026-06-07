@@ -34,7 +34,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 - `swarm/` — parallel execution backend: `scripts/`, `schemas/`, `tests/`, `docs/`
 - `codex/` — 12 codex skill forks (repo = SoT) + `sync-to-codex.sh`; `deploy/` — sha-deploy templates; `dashboard/` — scorecard dashboard; `evals/` — eval harness
 - `docs/architecture.md` — loop + design (canonical)
-- `docs/specs/` — PR-input specs (e.g. `2026-06-06-unified-coding-system-design.md`); shipped plan/spec docs get distilled into `docs/architecture.md` then deleted (`docs/superpowers/` retired this way 2026-06-07 — disposal step owned by `agents/retro.md`)
+- `docs/specs/` — active PR-input / dogfood specs (currently `2026-05-28-dogfood-smoke.md`); shipped plan/spec docs get distilled into `docs/architecture.md` then deleted (`2026-06-06-unified-coding-system-design.md` retired this way 2026-06-07; disposal step owned by `agents/retro.md`)
 
 ## Python helper modules
 

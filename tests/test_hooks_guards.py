@@ -128,7 +128,7 @@ class TestPreEditHumanOnly:
         r = _run_hook(
             self._hook(hooks_dir),
             {"tool_input": {"file_path": str(
-                REPO_ROOT / "docs/specs/2026-06-06-unified-coding-system-design.md"
+                REPO_ROOT / "docs/architecture.md"
             )}},
             cwd=repo,
             env={"AUTO_PILOT_ALLOW_CORE_EDIT": ""},

@@ -15,7 +15,7 @@ set -euo pipefail
 TIER2_PREFIXES=(
   "schemas/"
   "hooks/guard-"
-  "docs/specs/2026-06-06-unified-coding-system-design.md"
+  "docs/architecture.md"
   "skills/doc-management/references/doc-management-system.md"
 )
 

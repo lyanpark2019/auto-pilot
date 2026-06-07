@@ -1,7 +1,7 @@
 ---
 type: architecture
 topic: unified-coding-system
-source_commit: 494f67ca2f595e0674af78a4aa05a8fd815c8a29
+source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
 manual_edit: false
 ---
 
@@ -67,7 +67,7 @@ Full contract schemas and enforcement contracts: see README "Binding contracts i
 - **multi-agent**: PM-Worker pool with activation gates
 
 **(b) Self-improvement loop** — round-N SCORE → … → dual review (plugin targets itself):
-retro appends round outputs to `vault/insights` → next round input. Converges via same stopping rule as product loop (same finding ≥2 rounds = escalation).
+retro appends evidence-cited gotchas to vault `intent/gotchas/` when a vault exists and to repo `.claude/insights.md` as the always-present memory surface. Converges via same stopping rule as product loop (same finding ≥2 rounds = escalation).
 
 ### Memory 3-layer
 

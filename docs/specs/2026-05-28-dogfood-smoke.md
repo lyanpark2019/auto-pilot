@@ -1,3 +1,10 @@
+---
+type: spec
+topic: dogfood-smoke
+source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+manual_edit: true
+---
+
 # Dogfood Smoke — 2-phase
 
 **Date**: 2026-05-28
