@@ -33,6 +33,7 @@ payload=$(cat)
 
 # Parse payload — check if parseable
 if ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+  printf '[hook:creation-gate] fail-open: unparseable stdin\n' >&2
   exit 0  # unparseable → allow
 fi
 
@@ -88,6 +89,7 @@ case "$should_gate" in
     # Continue to artifact check
     ;;
   *)
+    printf '[hook:creation-gate] fail-open: unexpected should_gate value: %s\n' "$should_gate" >&2
     exit 0
     ;;
 esac

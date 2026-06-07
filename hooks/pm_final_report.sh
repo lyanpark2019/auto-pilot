@@ -52,7 +52,7 @@ else
 fi
 report="$report_dir/pm-final-report-$(date +%Y%m%d-%H%M%S).md"
 
-python3 - <<PY > "$report" 2>/dev/null || exit 0
+python3 - <<PY > "$report" || exit 0
 import json, datetime, os, sys
 from pathlib import Path
 

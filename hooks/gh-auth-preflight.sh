@@ -31,6 +31,7 @@ except Exception:
 
 # Unparseable → allow
 if [[ -z "$cmd" ]] && ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+  printf '[hook:gh-auth-preflight] fail-open: unparseable stdin\n' >&2
   exit 0
 fi
 
@@ -43,8 +44,13 @@ if ! printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]'; then
 fi
 
 # Skip `gh auth` commands (those are maintenance commands, not repo operations)
+# When the command is `gh auth switch`, purge the owner cache files so the next
+# gh command re-validates against the newly active user (cache invalidation).
 # shellcheck disable=SC2016 # regex literal — backtick/$( are pattern chars, expansion not wanted
 if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]+auth[[:space:]]'; then
+  if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]+auth[[:space:]]+switch'; then
+    rm -f "${TMPDIR:-/tmp}"/gh-auth-*.cache 2>/dev/null || true
+  fi
   exit 0
 fi
 

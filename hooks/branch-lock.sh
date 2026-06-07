@@ -26,6 +26,7 @@ except Exception:
 
 # Unparseable → allow
 if [[ -z "$cmd" ]] && ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+  printf '[hook:branch-lock] fail-open: unparseable stdin\n' >&2
   exit 0
 fi
 
