@@ -29,7 +29,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 - `agents/` — 16 contracts: core loop (pm-orchestrator, worker, retro), review (`auto-pilot-{codex,claude}-reviewer.md` hardened pair — legacy codex-adversarial/claude-reviewer deleted 2026-06-07, tech-critic-lead, review-gatekeeper (tdd-enforcer + security-reviewer merged 2026-06-07), specialist-pool; code-perfector retired 2026-06-07 → residue-audit/ARL), swarm-{explorer,monitor,verifier}, vault set (vault-pm-orchestrator + vault-{edge-curator,graph-enricher,knowledge-author,structure-curator} — the 4 merged 2026-06 round-2, 25 legacy vault agents removed; harness-{planner,generator,evaluator} deleted 2026-06-07 — 1:1 duplicate of auto-pilot loop); shared review substance lives in `skills/adversarial-review-loop/references/review-core.md`; goal-{scout,judge,worker} live in global `~/.claude/agents/` (not bundled)
 - `hooks/*.sh|*.py` + `hooks.json` — preflight, composition-root guard, bash guard, post-deploy, `pre-reviewer-write.sh` (PR3), guard-destructive, codex-conductor-guard, `doc-sync-update.sh` (merged graph-freshness watcher: code graph stale-flag + vault raw/sources .md eager graphify update), `notebooklm_delete_gate.sh` (confirm-gated deletes, Bash + MCP shapes), `pm_final_report.sh`, + 7 round-2 enforcement hooks (`pre-edit-human-only`, `branch-lock`, `deletion-diff-guard`, `gh-auth-preflight`, `ruff-import-integrity`, `dispatch-contract-gate`, `creation-gate`) + round-3 additions (`context-watch`, `artifact-ledger`, `subagent-deliverable-check` — SubagentStop advisory) — full wiring SoT = `hooks/hooks.json` (20 scripts)
 - `schemas/` — `contract|ticket|review.schema.json` (PR1, JSON Schema 2020-12); swarm's ticket/score/verify/plugin schemas live in `swarm/schemas/`
-- `scripts/` — `orchestrator.py`, `headless-loop.py`, PR1-PR5 modules listed below, `build_dashboard_data.py`, `quality/` gates
+- `scripts/` — `orchestrator.py`, `headless-loop.py`, PR1-PR5 modules listed below, `build_dashboard_data.py`, `quality/` gates, `docs/check_doc_reference_integrity.py` (file:line citation guard, CI-wired)
 - `vault/` — export layer (vault-builder absorbed): `pipeline/`, `sources/`, `scripts/`, `rubrics/`, `templates/`, `dashboard/`, `tests/`
 - `swarm/` — parallel execution backend: `scripts/`, `schemas/`, `tests/`, `docs/`
 - `codex/` — 12 codex skill forks (repo = SoT) + `sync-to-codex.sh`; `deploy/` — sha-deploy templates; `dashboard/` — scorecard dashboard; `evals/` — eval harness
@@ -80,6 +80,9 @@ python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_gu
 
 # module-size gate (≤500 lines, exceptions in scripts/quality/module_size_budget.txt)
 bash scripts/quality/check-module-size.sh
+
+# doc citation integrity (file:line in docs/ + CLAUDE.md resolve; CI-wired)
+python3 scripts/docs/check_doc_reference_integrity.py
 
 # Smoke: orchestrator helper
 python3 scripts/orchestrator.py init --spec docs/architecture.md --max-workers 4
