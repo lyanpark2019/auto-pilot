@@ -37,6 +37,7 @@ except Exception:
 
 # Unparseable → allow
 if [[ -z "$prompt" ]] && ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+  printf '[hook:dispatch-contract-gate] fail-open: unparseable stdin\n' >&2
   exit 0
 fi
 
@@ -118,6 +119,7 @@ except Exception:
 
 if [[ -z "$phase" ]]; then
   # No phase info — skip preflight check (allow)
+  printf '[hook:dispatch-contract-gate] fail-open: no phase in contract, skipping preflight check\n' >&2
   exit 0
 fi
 
