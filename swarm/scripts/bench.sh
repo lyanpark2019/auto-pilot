@@ -65,15 +65,22 @@ run_arm_solo() {
 run_arm_swarm() {
   local rep=$1
   # inject a manual ticket and wait for its score
-  local id="bench-$TS-r$rep"
-  local target_worker
+  # id MUST match ticket.schema.json pattern ^T-[0-9]{8}-[0-9]{6}$ —
+  # validate-ticket.sh rejects anything else before the worker runs.
+  local id
+  id="$(date +%Y%m%d-%H%M%S)"
+  local target_worker engine role
   target_worker="$(jq -r '.workers[0].id' "$CONFIG")"
+  engine="$(jq -r '.workers[0].engine' "$CONFIG")"
+  role="$(jq -r '.workers[0].role // "general"' "$CONFIG")"
   jq -n \
     --arg id "T-$id" \
     --arg prompt "$TASK" \
+    --arg engine "$engine" \
+    --arg role "$role" \
     --arg issued_at "$(date -u +%FT%TZ)" \
     --arg worktree "../$BASE-worker-$target_worker" \
-    '{id:$id,title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:["task addressed"],issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
+    '{id:$id,topic:"bench",title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:["task addressed"],engine_hint:$engine,role:$role,difficulty:1,issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
     > "$ROOT/inbox/worker-$target_worker/T-$id.json"
   local t0 t1 t_now
   t0=$(date +%s)

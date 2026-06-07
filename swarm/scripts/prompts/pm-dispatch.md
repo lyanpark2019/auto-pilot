@@ -38,7 +38,6 @@ Schema:
   "id": "T-YYYYMMDD-HHMMSS",
   "topic": "<from topics.json>",
   "milestone": "<roadmap milestone or 'maintenance'>",
-  "axis": "interface | deep-module | file-split | clean-arch | tests | docs | security | bugfix",
   "title": "<imperative ≤80 chars, used as PR title when gh available>",
   "prompt": "<self-contained instructions; reference absolute paths; mention engine constraints>",
   "knowledge_refs": ["knowledge/...","external:..."],
@@ -55,6 +54,11 @@ Schema:
 
 ## Rules
 
+- The JSON above is EXACT — `validate-ticket.sh` enforces
+  `swarm/schemas/ticket.schema.json` with `additionalProperties: false`.
+  Any extra field (e.g. `axis`), an `id` not matching `T-YYYYMMDD-HHMMSS`,
+  or a title over 80 chars gets the ticket REJECTED unread and your
+  dispatch call wasted.
 - Prompt MUST be self-contained (worker has no chat history).
 - Each `acceptance[]` entry must be a runnable bash one-liner whose exit 0 = pass.
 - `scope_paths` max 1–3 concrete files. Never a bare directory (no `src/`).
