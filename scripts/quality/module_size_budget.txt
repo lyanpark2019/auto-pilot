@@ -20,10 +20,3 @@ codex/skills/migrate-to-codex/scripts/cli.py|920
 # absorbed pm-quality-harness-loop orchestrator) was folded in 2026-06-07;
 # same single-load-contract rationale as the other SKILL.md entries.
 skills/adversarial-review-loop/SKILL.md|640
-#
-# Hook/beta subprocess test suites — registered 2026-06-07 to unblock CI
-# (band-aid, acknowledged): both are flat test collections that grew with
-# round-2 (+86 tests). Proper fix = split by hook/feature group; tracked as
-# round-3 residual. Caps are current-size + small headroom, not license to grow.
-tests/test_hooks.py|1800
-tests/test_beta_items.py|900
