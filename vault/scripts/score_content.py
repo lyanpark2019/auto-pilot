@@ -46,7 +46,8 @@ def _load_max_pts() -> dict[str, int]:
         for k, v in _FALLBACK_MAX_PTS.items():
             out.setdefault(k, v)
         return out
-    except Exception:
+    except Exception as exc:
+        print(f"score_content: failed to load rubric {RUBRIC_PATH}: {exc}", file=sys.stderr)
         return dict(_FALLBACK_MAX_PTS)
 
 

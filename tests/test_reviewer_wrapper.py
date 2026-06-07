@@ -67,6 +67,33 @@ def test_wait_all_returns_when_all_done_markers_appear(monkeypatch, tmp_path):
     assert failures == []
 
 
+def test_spawn_redacts_denylist_secrets(monkeypatch, tmp_path):
+    """Spawned subprocess env must not contain denylist entries."""
+    import _reviewer_wrapper as rw
+
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "SENTINEL_SECRET_VALUE")
+    monkeypatch.setenv("GITHUB_TOKEN", "gh_SENTINEL")
+
+    captured_env: dict = {}
+
+    def fake_popen(cmd, env, **kwargs):
+        captured_env.update(env)
+        class P:
+            def poll(self): return 0
+            def terminate(self): pass
+        return P()
+
+    monkeypatch.setattr(rw.subprocess, "Popen", fake_popen)
+
+    rw.spawn(role="codex-reviewer", ticket=tmp_path / "t.json",
+             output_dir=tmp_path / "o", allowed_tools="Read",
+             disallowed_tools="WebFetch")
+
+    assert "AWS_SECRET_ACCESS_KEY" not in captured_env, "denylist secret leaked into subprocess env"
+    assert "GITHUB_TOKEN" not in captured_env, "denylist secret leaked into subprocess env"
+    assert captured_env.get("AUTO_PILOT_SUBAGENT_ROLE") == "codex-reviewer"
+
+
 def test_wait_all_times_out(tmp_path):
     import _reviewer_wrapper as rw
 

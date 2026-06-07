@@ -157,7 +157,12 @@ def _get_head_sha() -> str:
             cwd=str(REPO_ROOT),
             text=True,
             stderr=subprocess.DEVNULL,
+            timeout=30,
         ).strip()
+    except subprocess.TimeoutExpired:
+        import sys
+        print("asset_registry_check: git rev-parse timed out, returning empty sha", file=sys.stderr)
+        return ""
     except Exception:
         return ""
 

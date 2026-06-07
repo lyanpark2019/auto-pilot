@@ -102,6 +102,24 @@ def test_freeze_diff_writes_diff_and_sha(tmp_path):
     assert sha_path.read_text().strip() == expected
 
 
+def test_freeze_diff_raises_on_timeout(monkeypatch, tmp_path):
+    """freeze_diff_for_review must propagate TimeoutExpired — not swallow it."""
+    import _dispatch
+
+    def _slow_check_output(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(_dispatch.subprocess, "check_output", _slow_check_output)
+
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        _dispatch.freeze_diff_for_review(wt, "deadbeef", contract_dir)
+
+
 REVIEW_SCHEMA_PATH = ROOT / "schemas" / "review.schema.json"
 
 

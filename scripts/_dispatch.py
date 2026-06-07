@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 import time as _time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -33,6 +34,10 @@ from typing import Any, cast
 import jsonschema
 
 import _contract
+
+# Matches _worktree.py timeout budget convention.
+_GIT_QUICK_TIMEOUT = 30  # rev-parse, status plumbing
+_GIT_TREE_TIMEOUT = 60   # diff across potentially large trees
 
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 TICKET_SCHEMA_PATH = SCHEMAS_DIR / "ticket.schema.json"
@@ -148,7 +153,11 @@ def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
         current_head = subprocess.check_output(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
             text=True, stderr=subprocess.DEVNULL,
+            timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
+    except subprocess.TimeoutExpired:
+        print(f"_dispatch: git rev-parse timed out (>{_GIT_QUICK_TIMEOUT}s), skipping HEAD check", file=sys.stderr)
+        return
     except subprocess.CalledProcessError:
         # If git fails, skip HEAD check (non-git environment)
         return
@@ -242,7 +251,8 @@ def freeze_diff_for_review(worktree: Path, base_sha: str, contract_dir: Path) ->
     review_input = contract_dir / "review-input"
     review_input.mkdir(parents=True, exist_ok=True)
     diff_bytes = subprocess.check_output(
-        ["git", "-C", str(worktree), "diff", base_sha, "HEAD"]
+        ["git", "-C", str(worktree), "diff", base_sha, "HEAD"],
+        timeout=_GIT_TREE_TIMEOUT,
     )
     diff_path = review_input / "frozen.diff"
     diff_path.write_bytes(diff_bytes)
@@ -387,6 +397,7 @@ def assert_reviewer_was_scoped(repo_root: Path, worktree: Path,
         result = subprocess.run(
             ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
             capture_output=True, text=True, check=True,
+            timeout=_GIT_QUICK_TIMEOUT,
         )
         if result.stdout.strip():
             raise ScopeViolation(

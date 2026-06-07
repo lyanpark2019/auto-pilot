@@ -99,6 +99,7 @@ def assert_trailer_chain(repo_root: Path, expected_phases: int) -> list[str]:
         cwd=str(repo_root),
         capture_output=True,
         text=True,
+        timeout=30,
     )
     if res.returncode != 0:
         return [f"git log failed: {res.stderr.strip()}"]

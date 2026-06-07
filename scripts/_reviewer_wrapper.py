@@ -90,11 +90,31 @@ def spawn(*, role: str, ticket: Path, output_dir: Path,
     that constrain tool surface for this invocation only.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Allowlist approach considered but rejected: `claude` and `codex` consume opaque
+    # vendor env vars (CLAUDE_*, ANTHROPIC_*, OPENAI_*, model-router vars) that are not
+    # fully enumerated in any public contract.  Maintaining an allowlist would silently
+    # break spawned reviewers whenever a new vendor var is introduced.
+    # Decision: denylist of secrets that reviewer subprocesses provably do not need.
+    # Residual risk: secrets added outside this list still pass through — see module docstring.
+    _ENV_DENYLIST = frozenset({
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "GCP_SERVICE_ACCOUNT_KEY",
+        "GITHUB_TOKEN",
+        "NPM_TOKEN",
+        "PYPI_TOKEN",
+        "SLACK_TOKEN",
+        "STRIPE_SECRET_KEY",
+        "DATABASE_URL",
+        "POSTGRES_PASSWORD",
+        "MYSQL_PASSWORD",
+        "REDIS_URL",
+    })
     env = {
-        **os.environ,
-        "AUTO_PILOT_SUBAGENT_ROLE": role,
-        "AUTO_PILOT_OUTPUT_DIR": str(output_dir),
+        k: v for k, v in os.environ.items() if k not in _ENV_DENYLIST
     }
+    env["AUTO_PILOT_SUBAGENT_ROLE"] = role
+    env["AUTO_PILOT_OUTPUT_DIR"] = str(output_dir)
     prompt = f"TICKET={ticket}\nRead ticket. Refuse if ticket_sha mismatch."
     cmd = [
         "claude", "-p",

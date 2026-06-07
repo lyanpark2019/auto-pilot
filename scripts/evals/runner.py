@@ -44,12 +44,14 @@ def run_case(
         subprocess.run(
             ["git", "clone", "--local", str(repo), str(clone)],
             check=True, capture_output=True, text=True,
+            timeout=120,  # local clone; 2 min cap catches stalled NFS/APFS
         )
         spec = clone / "evals" / "cases" / case_id / "spec.md"
         subprocess.run(
             ["python3", _INIT, "init", "--spec", str(spec), "--force",
              "--max-workers", "2"],
             cwd=str(clone), check=True, capture_output=True, text=True,
+            timeout=60,
         )
         subprocess.run(
             ["python3", _LOOP, "--max-iter", str(max_iter),
@@ -58,6 +60,7 @@ def run_case(
             cwd=str(clone),
             check=False,  # non-zero exit is expected (budget-cap, pivot-needed); oracle decides pass/fail
             capture_output=True, text=True,
+            timeout=3600,  # headless loop is budget-capped; wall-clock ceiling prevents orphan
         )
         run = _read_run_result(clone)
         oracle = load_case_oracle(case_id)

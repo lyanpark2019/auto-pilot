@@ -48,7 +48,8 @@ def _existing_titles(dst: str) -> set[str]:
     """Titles already in dst — for idempotent skip."""
     try:
         return {s.get("title", "") for s in _list_sources(dst)}
-    except Exception:
+    except Exception as exc:
+        log(f"  ! _existing_titles failed for {dst}: {exc}")
         return set()
 
 
@@ -75,7 +76,8 @@ def _add_source(dst: str, source: dict, prefix: str) -> str | None:
                               capture_output=True, text=True, timeout=60)
         try:
             text = json.loads(full.stdout).get("content", "")
-        except Exception:
+        except Exception as exc:
+            log(f"  ! fulltext JSON parse failed for source {source.get('id','?')}: {exc}")
             text = ""
         if not text:
             log(f"  ! skip (no content, no url): {title[:60]}")
@@ -89,7 +91,8 @@ def _add_source(dst: str, source: dict, prefix: str) -> str | None:
     try:
         data = json.loads(r.stdout)
         return data.get("id") or data.get("source", {}).get("id")
-    except Exception:
+    except Exception as exc:
+        log(f"  ! add-source JSON parse failed for {title[:60]}: {exc}")
         return None
 
 

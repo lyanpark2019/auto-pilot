@@ -275,9 +275,9 @@ footer{{margin-top:24px;font-size:10px;color:#8b949e;border-top:1px solid #30363
 def main() -> None:
     import datetime
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
-                          capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True, timeout=30).stdout.strip()
     branch = subprocess.run(["git", "-C", str(ROOT), "branch", "--show-current"],
-                            capture_output=True, text=True).stdout.strip()
+                             capture_output=True, text=True, timeout=30).stdout.strip()
     assets = collect_assets()
     rounds = load_rounds()
     for rnd in rounds:
