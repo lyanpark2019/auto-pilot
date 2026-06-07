@@ -15,3 +15,5 @@ __pycache__/
 .DS_Store
 .coverage
 .claude/worktrees/
+scheduled_tasks.lock
+.claude/scheduled_tasks.lock
