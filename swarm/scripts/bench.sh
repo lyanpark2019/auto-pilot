@@ -1,23 +1,46 @@
 #!/usr/bin/env bash
 # Benchmark: same task on swarm vs claude-solo vs codex-solo.
 # usage: bench.sh "<task>" [--repeats N] [--swarm-timeout SEC] [--auto-start]
+#        [--acceptance "<cmd>"] (repeatable; each appends one acceptance entry)
 # --repeats N: run each arm N times; report median wall-time per arm.
 # --auto-start: if no swarm session, launch one (detached) for arm A and
 #   stop it again after arm A completes. Without it, arm A is skipped.
+# --acceptance: shell command that exits 0 when the task succeeded.
+#   Repeatable; omit to use the default non-empty-diff check.
 set -euo pipefail
 TASK="${1:?task required}"; shift
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=swarm/scripts/lib/bench-acceptance.sh
+. "$SCRIPT_DIR/lib/bench-acceptance.sh"
+
 REPEATS=1
 SWARM_TIMEOUT=1200
 AUTO_START=0
+ACCEPTANCE_JSON='[]'
+ACCEPTANCE_COUNT=0
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    --repeats) REPEATS="$2"; shift 2;;
-    --swarm-timeout) SWARM_TIMEOUT="$2"; shift 2;;
-    --auto-start) AUTO_START=1; shift;;
+    --repeats)        REPEATS="$2"; shift 2;;
+    --swarm-timeout)  SWARM_TIMEOUT="$2"; shift 2;;
+    --auto-start)     AUTO_START=1; shift;;
+    --acceptance)
+      if [ $# -lt 2 ]; then
+        printf 'bench: --acceptance requires a value\n' >&2
+        printf 'usage: bench.sh "<task>" [--repeats N] [--swarm-timeout SEC] [--auto-start] [--acceptance "<cmd>"]\n' >&2
+        exit 1
+      fi
+      ACCEPTANCE_JSON="$(acceptance_append "$ACCEPTANCE_JSON" "$2")" || exit 1
+      ACCEPTANCE_COUNT=$((ACCEPTANCE_COUNT + 1))
+      shift 2;;
+    --*)
+      printf 'bench: unknown flag: %s\n' "$1" >&2
+      printf 'usage: bench.sh "<task>" [--repeats N] [--swarm-timeout SEC] [--auto-start] [--acceptance "<cmd>"]\n' >&2
+      exit 1;;
     *) shift;;
   esac
 done
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PROJECT="$(pwd)"
 BASE="$(basename "$PROJECT")"
@@ -28,20 +51,27 @@ mkdir -p "$DIR"/{arm-a,arm-b,arm-c}
 CONFIG="$ROOT/config.json"
 SESSION="autopilot-$BASE"
 
+if [ "$ACCEPTANCE_COUNT" -gt 0 ]; then
+  acceptance_json="$ACCEPTANCE_JSON"
+else
+  acceptance_json="$(build_acceptance_json)"
+fi
+
 # ---------------------------------------------------------------------------
 # median <val1> <val2> ... — prints integer median of space-separated values
 # ---------------------------------------------------------------------------
 median() {
   local sorted
-  # sort numerically, pick middle element (lower-middle for even N)
   sorted=$(printf '%s\n' "$@" | sort -n)
-  local count; count=$(printf '%s\n' "$@" | wc -l | tr -d ' ')
-  local mid=$(( (count + 1) / 2 ))
+  local count
+  count=$(printf '%s\n' "$@" | wc -l | tr -d ' ')
+  local mid
+  mid=$(( (count + 1) / 2 ))
   printf '%s\n' "$sorted" | sed -n "${mid}p"
 }
 
 run_arm_solo() {
-  local arm=$1; local engine=$2; local model=$3; local rep=$4
+  local arm="$1" engine="$2" model="$3" rep="$4"
   local wt="$PROJECT/../$BASE-bench-$arm-$TS-r$rep"
   git -C "$PROJECT" worktree add -B "bench/$arm/$TS/r$rep" "$wt" HEAD >/dev/null
   local t0 t1
@@ -63,8 +93,7 @@ run_arm_solo() {
 }
 
 run_arm_swarm() {
-  local rep=$1
-  # inject a manual ticket and wait for its score
+  local rep="$1"
   # id MUST match ticket.schema.json pattern ^T-[0-9]{8}-[0-9]{6}$ —
   # validate-ticket.sh rejects anything else before the worker runs.
   local id
@@ -73,6 +102,7 @@ run_arm_swarm() {
   target_worker="$(jq -r '.workers[0].id' "$CONFIG")"
   engine="$(jq -r '.workers[0].engine' "$CONFIG")"
   role="$(jq -r '.workers[0].role // "general"' "$CONFIG")"
+
   jq -n \
     --arg id "T-$id" \
     --arg prompt "$TASK" \
@@ -80,14 +110,15 @@ run_arm_swarm() {
     --arg role "$role" \
     --arg issued_at "$(date -u +%FT%TZ)" \
     --arg worktree "../$BASE-worker-$target_worker" \
-    '{id:$id,topic:"bench",title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:["task addressed"],engine_hint:$engine,role:$role,difficulty:1,issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
+    --argjson acceptance "$acceptance_json" \
+    '{id:$id,topic:"bench",title:"BENCH",prompt:$prompt,scope_paths:["."],acceptance:$acceptance,engine_hint:$engine,role:$role,difficulty:1,issued_at:$issued_at,issued_by:"bench",worktree:$worktree}' \
     > "$ROOT/inbox/worker-$target_worker/T-$id.json"
   local t0 t1 t_now
   t0=$(date +%s)
   while [ ! -f "$ROOT/scores/T-$id.json" ]; do
     t_now=$(date +%s)
     local elapsed=$((t_now - t0))
-    if [ $elapsed -ge "$SWARM_TIMEOUT" ]; then
+    if [ "$elapsed" -ge "$SWARM_TIMEOUT" ]; then
       echo "timeout" > "$DIR/arm-a/skipped-r$rep"
       echo "$elapsed" >> "$DIR/arm-a/wall_seconds_all"
       return 0
@@ -102,7 +133,6 @@ run_arm_swarm() {
   cp "$ROOT/scores/T-$id.json" "$DIR/arm-a/score-r$rep.json"
   cp -r "$ROOT/results/T-$id" "$DIR/arm-a/result-r$rep" 2>/dev/null || true
   echo "$((t1-t0))" >> "$DIR/arm-a/wall_seconds_all"
-  # keep latest score.json for report backwards compat
   cp "$ROOT/scores/T-$id.json" "$DIR/arm-a/score.json"
 }
 
@@ -110,7 +140,6 @@ run_arm_swarm() {
 # Run each arm REPEATS times
 # ---------------------------------------------------------------------------
 
-# Arm A: swarm (optionally self-started, then self-stopped)
 STARTED_SWARM=0
 if ! tmux has-session -t "$SESSION" 2>/dev/null && [ "$AUTO_START" -eq 1 ]; then
   echo "[bench] --auto-start: launching swarm detached"
@@ -171,12 +200,10 @@ MED_A=$(arm_median a)
 MED_B=$(arm_median b)
 MED_C=$(arm_median c)
 
-# Store single-value wall_seconds for tools that read it
 [ "$MED_A" != "n/a" ] && echo "$MED_A" > "$DIR/arm-a/wall_seconds"
 [ "$MED_B" != "n/a" ] && echo "$MED_B" > "$DIR/arm-b/wall_seconds"
 [ "$MED_C" != "n/a" ] && echo "$MED_C" > "$DIR/arm-c/wall_seconds"
 
-# Final report
 cat > "$DIR/report.md" <<EOF
 # Bench $TS
 
