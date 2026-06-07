@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 CI = Path(".github/workflows/ci.yml")
+REQUIREMENTS_DEV = Path("requirements-dev.txt")
 
 
 def _ci_text() -> str:
@@ -20,3 +21,9 @@ def test_ci_runs_vault_pytest_suite() -> None:
     text = _ci_text()
 
     assert "cd vault && python -m pytest tests/ -q" in text
+
+
+def test_ci_installs_vault_pytest_dependencies() -> None:
+    requirements = REQUIREMENTS_DEV.read_text(encoding="utf-8")
+
+    assert "PyYAML" in requirements
