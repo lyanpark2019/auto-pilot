@@ -84,6 +84,9 @@ bash scripts/quality/check-module-size.sh
 # doc citation integrity (file:line in docs/ + CLAUDE.md resolve; CI-wired)
 python3 scripts/docs/check_doc_reference_integrity.py
 
+# graphify Obsidian vault loop: rerun query regression, compact symbol notes, validate links/canvas/counts
+python3 scripts/graphify_vault_loop.py --vault /Users/lyan/Documents/Knowledge/wiki/projects/auto-pilot --compact --max-iterations 2
+
 # Smoke: orchestrator helper
 python3 scripts/orchestrator.py init --spec docs/architecture.md --max-workers 4
 python3 scripts/orchestrator.py status

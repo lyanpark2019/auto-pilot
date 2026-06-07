@@ -1,0 +1,141 @@
+{
+  "tests": [
+    {
+      "name": "explain-worktree-manager",
+      "cmd": ["graphify", "explain", "WorktreeManager", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["WorktreeManager", ".apply_to_main()", "._main_apply_lock()"]
+    },
+    {
+      "name": "explain-apply-to-main",
+      "cmd": ["graphify", "explain", ".apply_to_main()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["Apply worker", "._main_apply_lock()", "MainTreeDirtyError"]
+    },
+    {
+      "name": "explain-stash-if-dirty",
+      "cmd": ["graphify", "explain", "stash_if_dirty()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["stash_if_dirty()", "_push_stash()", "recoverable label"]
+    },
+    {
+      "name": "path-export-index",
+      "cmd": ["graphify", "path", "export_obsidian()", "_write_index()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["Shortest path", "export_obsidian()", "_write_index()"]
+    },
+    {
+      "name": "query-worktree-flow",
+      "cmd": ["graphify", "query", "WorktreeManager apply_to_main collect_patches cleanup main_apply_lock", "--graph", "graphify-out/graph.json", "--budget", "1400"],
+      "must_contain": ["WorktreeManager", ".apply_to_main()", ".collect_patches()", "._main_apply_lock()"]
+    },
+    {
+      "name": "query-failure-recovery",
+      "cmd": ["graphify", "query", "headless_loop stash_if_dirty status failed timeout reset hard", "--graph", "graphify-out/graph.json", "--budget", "1400"],
+      "must_contain": ["stash_if_dirty()", "_handle_timeout()", "_push_stash()"]
+    },
+    {
+      "name": "query-state-save",
+      "cmd": ["graphify", "query", "save_state _state_write_lock atomic state file", "--graph", "graphify-out/graph.json", "--budget", "1400"],
+      "must_contain": ["save_state()", "_state_write_lock()", "_state.py"]
+    },
+    {
+      "name": "query-dispatch-review",
+      "cmd": ["graphify", "query", "collect_round_outcome read_review done marker schema validate", "--graph", "graphify-out/graph.json", "--budget", "1400"],
+      "must_contain": ["collect_round_outcome()", "read_review()", "done.marker"]
+    },
+    {
+      "name": "known-limitation-path-worktree-apply",
+      "kind": "known-limitation",
+      "cmd": ["graphify", "path", "WorktreeManager", ".apply_to_main()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["No path found", "ambiguous"]
+    },
+    {
+      "name": "explain-orchestrator-phase-start",
+      "cmd": ["graphify", "explain", "cmd_phase_start()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["cmd_phase_start()", "save_state()", "phase"]
+    },
+    {
+      "name": "explain-orchestrator-phase-end",
+      "cmd": ["graphify", "explain", "cmd_phase_end()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["cmd_phase_end()", "save_state()", "status"]
+    },
+    {
+      "name": "query-orchestrator-state-machine",
+      "cmd": ["graphify", "query", "cmd_phase_start cmd_phase_end cmd_pivot_check save_state load_state", "--graph", "graphify-out/graph.json", "--budget", "1600"],
+      "must_contain": ["cmd_phase_start()", "cmd_phase_end()", "cmd_pivot_check()", "save_state()"]
+    },
+    {
+      "name": "explain-reviewer-wait-all",
+      "cmd": ["graphify", "explain", "wait_all()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["wait_all()", "_drain_remaining()", "_tick_all_roles()"]
+    },
+    {
+      "name": "explain-reviewer-tick-all-roles",
+      "cmd": ["graphify", "explain", "_tick_all_roles()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["_tick_all_roles()", "_poll_original_handle()", "_poll_retry_handle()"]
+    },
+    {
+      "name": "query-reviewer-timeout-flow",
+      "cmd": ["graphify", "query", "wait_all _poll_original_handle _hard_kill done marker timeout", "--graph", "graphify-out/graph.json", "--budget", "1600"],
+      "must_contain": ["wait_all()", "_poll_original_handle()", "_hard_kill()"]
+    },
+    {
+      "name": "explain-risk-assess",
+      "cmd": ["graphify", "explain", "assess()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["assess()", "Assessment", "classify_path()"]
+    },
+    {
+      "name": "query-risk-policy",
+      "cmd": ["graphify", "query", "risk_assess assess classify_path changed_files_from_git Assessment to_json", "--graph", "graphify-out/graph.json", "--budget", "1600"],
+      "must_contain": ["risk_assess.py", "assess()", "classify_path()", "Assessment"]
+    },
+    {
+      "name": "explain-budget-caps",
+      "cmd": ["graphify", "explain", "check_caps()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["check_caps()", "count_claude_pids()", "cost-cap"]
+    },
+    {
+      "name": "query-budget-usage",
+      "cmd": ["graphify", "query", "check_caps parse_session_usage count_claude_pids token budget pid", "--graph", "graphify-out/graph.json", "--budget", "1600"],
+      "must_contain": ["check_caps()", "parse_session_usage()", "count_claude_pids()"]
+    },
+    {
+      "name": "explain-doc-reference-integrity",
+      "cmd": ["graphify", "explain", "check_doc_reference_integrity", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["check_citations()", "_check_citation()", "_check_asset_count_line()"]
+    },
+    {
+      "name": "query-doc-reference-integrity",
+      "cmd": ["graphify", "query", "check_doc_reference_integrity check_citations asset count line bounds citation", "--graph", "graphify-out/graph.json", "--budget", "1600"],
+      "must_contain": ["check_citations()", "_check_citation()", "_check_asset_count_line()"]
+    },
+    {
+      "name": "explain-vault-export-all",
+      "cmd": ["graphify", "explain", "export_all()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["export_all()", "export.py", "main()"]
+    },
+    {
+      "name": "query-vault-export-flow",
+      "cmd": ["graphify", "query", "export_all export_obsidian _copy_docs _write_index DESTINATIONS", "--graph", "graphify-out/graph.json", "--budget", "1800"],
+      "must_contain": ["export_all()", "export_obsidian()", "_copy_docs()", "_write_index()"]
+    },
+    {
+      "name": "query-vault-graphify-update",
+      "cmd": ["graphify", "query", "auto_graphify_update export_graphify graphify extract update global add", "--graph", "graphify-out/graph.json", "--budget", "1600"],
+      "must_contain": ["auto_graphify_update()", "export_graphify()", "graphify"]
+    },
+    {
+      "name": "explain-guard-scrub-text",
+      "cmd": ["graphify", "explain", "scrub_text_arguments()", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["scrub_text_arguments()", "guard-destructive.py", "commit message"]
+    },
+    {
+      "name": "query-hook-protection",
+      "cmd": ["graphify", "query", "guard_destructive scrub_text_arguments respond_and_exit branch-lock pre-bash-guard artifact-ledger", "--graph", "graphify-out/graph.json", "--budget", "1800"],
+      "must_contain": ["guard-destructive.py", "scrub_text_arguments()", "respond_and_exit()"]
+    },
+    {
+      "name": "expected-gap-review-gatekeeper-prose",
+      "kind": "expected-gap",
+      "cmd": ["graphify", "explain", "review-gatekeeper", "--graph", "graphify-out/graph.json"],
+      "must_contain": ["No node matching"]
+    }
+  ]
+}

@@ -17,3 +17,4 @@ __pycache__/
 .claude/worktrees/
 scheduled_tasks.lock
 .claude/scheduled_tasks.lock
+graphify-out/
