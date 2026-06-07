@@ -145,7 +145,13 @@ class CodeAdapter:
                     f"## Public API\n\n## Examples\n\n## Cross-links\n"
                 )
 
-    def plan_tickets(self, vault: Path, round_num: int, score_state: dict, **opts: Any) -> list[TicketPlanEntry]:
+    def plan_tickets(
+        self,
+        vault: Path,
+        round_num: int,
+        score_state: dict[str, Any],
+        **opts: Any,
+    ) -> list[TicketPlanEntry]:
         """One ticket per category for vault-knowledge-author to fill stubs."""
         plan = []
         cats = json.loads((vault / "meta" / "categories.json").read_text())
