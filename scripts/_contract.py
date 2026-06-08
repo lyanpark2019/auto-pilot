@@ -243,7 +243,7 @@ def _verify_claude_chain(bundle: Path, expected_chain: list[str]) -> None:
 
 def _verify_project_context(bundle: Path, expected_ctx: str | None) -> None:
     if expected_ctx is None:
-        print("verify_snapshots: ran context-blind (no project_context sha declared)", file=sys.stderr)
+        sys.stderr.write("verify_snapshots: ran context-blind (no project_context sha declared)\n")
         return
     ctx_file = bundle / "project-context.md"
     if not ctx_file.exists():

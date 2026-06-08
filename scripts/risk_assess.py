@@ -230,13 +230,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             paths.extend(changed_files_from_git(args.diff_range))
         except (RuntimeError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
-            print(f"risk_assess: {exc}", file=sys.stderr)
+            sys.stderr.write(f"risk_assess: {exc}\n")
             return 1
     elif not paths and not sys.stdin.isatty():
         paths = [line.strip() for line in sys.stdin if line.strip()]
 
     result = assess(paths, extra_risk=args.extra_risk)
-    print(result.to_json())
+    sys.stdout.write(result.to_json() + "\n")
 
     if args.fail_on is not None and _TIER_RANK[result.tier] >= _TIER_RANK[args.fail_on]:
         return 2

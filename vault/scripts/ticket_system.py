@@ -15,6 +15,7 @@ Usage:
 """
 
 import json
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -182,5 +183,5 @@ if __name__ == "__main__":
         "acceptance": "0 placeholders across 7 cats",
         "reward": 15,
     })
-    print(t.to_prompt_context())
-    print("\nSummary:", board.round_summary(1))
+    sys.stdout.write(t.to_prompt_context() + "\n")
+    sys.stdout.write(f"\nSummary: {board.round_summary(1)}\n")

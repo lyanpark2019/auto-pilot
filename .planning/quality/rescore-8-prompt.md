@@ -1,11 +1,11 @@
-You are an independent adversarial quality evaluator for auto-pilot v0.8.7 iteration 8 / wave 6.
+You are an independent adversarial quality evaluator for auto-pilot v0.8.7 iteration 8 / wave 7.
 
 Repo: /Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90
 Current HEAD: evaluate the live checkout with `git rev-parse HEAD` (this prompt file may be committed later; do not reject solely for prompt SHA mismatch).
 Baseline: v0.8.6 shipped score was 84.40/100 after local gates + hosted CI green.
 Rubric SoT: skills/quality-eval/SKILL.md and skills/quality-eval/references/rubric-dims.md.
 
-Task: rescore conservatively after commits 73127ae..HEAD plus the current Wave 6 working tree if this prompt is evaluated before commit. Do not claim release completion. Penalize inflation. Any +5 or larger dimension lift needs concrete evidence from files/metrics/commits below.
+Task: rescore conservatively after commits 73127ae..HEAD plus the current Wave 7 working tree if this prompt is evaluated before commit. Do not claim release completion. Penalize inflation. Any +5 or larger dimension lift needs concrete evidence from files/metrics/commits below.
 
 Evidence from v0.8.7 branch:
 - Commits through HEAD before this prompt update:
@@ -26,24 +26,22 @@ cb1f5bb refactor: address codex v087 quality rejection
 ff8b23d chore(quality): record v087 rescore block
 9c074b4 docs(quality): note ci coverage floor lift
 985cc6e refactor: add wave five quality evidence gates
-- Wave 6 implementation evidence:
-  - scripts/_dispatch.py split prepare_subagent_ticket into _validate_ticket_inputs/_enforce_ticket_gates/_ticket_body/_write_ticket and collect_round_outcome into marker/status/review/specialist helpers.
-  - scripts/_worktree.py split create/collect_patches/reap_orphans into branch/worktree/handle/patch/reap helpers.
-  - scripts/_reviewer_wrapper.py split spawn env/cmd and shortened wait_all init.
-  - vault/sources/code.py split bootstrap category/root writers.
-  - scripts/docs/check_doc_reference_integrity.py split doc/source citation loops and remains at 500 lines (module-size pass).
-  - scripts/_contract.py split verify_snapshots into spec/CLAUDE-chain/project-context helpers.
-  - vault/scripts/selftest.py split agent frontmatter validation helpers.
-  - Broad exception handlers narrowed in _contract, _dogfood_gate, eval runner, vault export, MCP vault server, and restructure loop.
-  - Graphify query suite updated for the new helper graph and rerun 27/27; previous path limitation WorktreeManager -> .apply_to_main() is now a passing path test.
+dd2e41b refactor: eliminate wave six quality debt metrics
+- Wave 6 evidence:
+  - long_functions_gt40=0 and broad_exceptions=0 after core helper extraction in dispatch, worktree, reviewer wrapper, source adapter bootstrap, doc citation loop, snapshot verification, selftest, and narrowed exception tuples in _contract, _dogfood_gate, eval runner, export, MCP server, and restructure loop.
+  - Graphify query suite updated and rerun 27/27; WorktreeManager -> .apply_to_main() path limitation became a passing path test.
+- Wave 7 evidence:
+  - production raw print_calls=0 after converting remaining CLI/report outputs to sys.stdout/sys.stderr stream writes while preserving stdout/stderr contracts.
+  - pytest parametrize markers increased 9 -> 12 via metric snapshot scope/subprocess/shell parametrization tests.
 - Metrics from scripts/quality/metric_snapshot.py (production scope: excludes tests/, __pycache__, and test_*.py hook selftests):
   - baseline v0.8.6 detailed metric: long_functions_gt40=34, broad_exceptions=30, print_calls=168, scripts coverage 80.06%, root pytest 595 passed, vault pytest 91 passed, strict vault mypy pilots=2, event() calls=37, pytest parametrize markers=6.
   - wave5: long_functions_gt40=11, broad_exceptions=8, print_calls=37, subprocess_without_timeout=0, shell_true_calls=0, event_calls=55, scripts coverage 87.58%, root pytest 613 passed, vault pytest 106 passed, strict mypy source files=51, strict vault mypy pilots=16.
-  - final wave6: long_functions_gt40=0, broad_exceptions=0, print_calls=37, subprocess_without_timeout=0, shell_true_calls=0, event_calls=55, scripts coverage 87.75%, root pytest 613 passed, vault pytest 106 passed, strict mypy source files=51, strict vault mypy pilots=16, Graphify query_passed=27/query_total=27.
-- Local verification at Wave 6:
-  - python3 -m pytest tests/ -q => 613 passed.
+  - wave6: long_functions_gt40=0, broad_exceptions=0, print_calls=37, subprocess_without_timeout=0, shell_true_calls=0, event_calls=55, scripts coverage 87.75%, root pytest 613 passed, vault pytest 106 passed, strict mypy source files=51, strict vault mypy pilots=16, Graphify query_passed=27/query_total=27.
+  - final wave7: long_functions_gt40=0, broad_exceptions=0, print_calls=0, subprocess_without_timeout=0, shell_true_calls=0, event_calls=55, scripts coverage 87.80%, root pytest 622 passed, vault pytest 106 passed, strict mypy source files=51, strict vault mypy pilots=16, pytest parametrize markers=12, Graphify query_passed=27/query_total=27.
+- Local verification at Wave 7:
+  - python3 -m pytest tests/ -q => 622 passed.
   - (cd vault && python3 -m pytest tests/ -q) => 106 passed.
-  - python3 -m pytest tests/ -q --cov=scripts --cov-fail-under=80 => 613 passed, scripts coverage 87.75%.
+  - python3 -m pytest tests/ -q --cov=scripts --cov-fail-under=80 => 622 passed, scripts coverage 87.80%.
   - python3 -m mypy => Success: no issues found in 51 source files.
   - python3 -m ruff check scripts/ tests/ hooks/ vault/ => All checks passed.
   - python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py && python3 hooks/test_notebooklm_delete_gate.py => 13/13, 9/9, 9/9 passed.

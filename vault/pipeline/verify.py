@@ -197,9 +197,9 @@ def main(argv: list[str]) -> int:
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(content)
-        print(f"wrote {args.out}")
+        sys.stdout.write(f"wrote {args.out}\n")
     else:
-        print(content)
+        sys.stdout.write(content + "\n")
     return 0
 
 

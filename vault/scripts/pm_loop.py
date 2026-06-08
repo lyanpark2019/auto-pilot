@@ -129,7 +129,7 @@ def stop_check(scores: dict, rubric: dict) -> tuple[bool, str]:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: pm_loop.py <vault-path>", file=sys.stderr)
+        sys.stderr.write("Usage: pm_loop.py <vault-path>\n")
         sys.exit(1)
     vault = Path(sys.argv[1]).expanduser().resolve()
     # Vault-subsystem root: <plugin_root>/vault when CLAUDE_PLUGIN_ROOT is set
@@ -145,7 +145,7 @@ def main():
     c_total = scores.get("content", {}).get("total", 0) if scores.get("content") else 0
     combined = s_total + c_total
 
-    print(json.dumps({
+    sys.stdout.write(json.dumps({
         "scores": {
             "structural": s_total,
             "content": c_total,
@@ -158,7 +158,7 @@ def main():
             rubric["safety"]["delta_watchdog"]["consecutive_rounds"],
             rubric["safety"]["delta_watchdog"]["min_delta"]
         ),
-    }, ensure_ascii=False, indent=2))
+    }, ensure_ascii=False, indent=2) + "\n")
 
 
 if __name__ == "__main__":

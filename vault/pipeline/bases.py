@@ -175,10 +175,10 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     vault = args.vault.expanduser().resolve()
     if not (vault / "wikitree").exists():
-        print(f"[bases] missing {vault}/wikitree", file=sys.stderr)
+        sys.stderr.write(f"[bases] missing {vault}/wikitree\n")
         return 2
     for path in generate_bases(vault):
-        print(f"[bases] wrote {path}")
+        sys.stdout.write(f"[bases] wrote {path}\n")
     return 0
 
 

@@ -235,7 +235,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = loop_once(args.vault, args.manifest, compact=args.compact)
         if result.ok:
             break
-    print(json.dumps({"ok": result.ok, "issues": result.issues, "metrics": result.metrics}, indent=2))
+    sys.stdout.write(json.dumps({"ok": result.ok, "issues": result.issues, "metrics": result.metrics}, indent=2) + "\n")
     return 0 if result.ok else 1
 
 

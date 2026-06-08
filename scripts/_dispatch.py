@@ -139,7 +139,7 @@ def _check_preflight_head_sha(preflight: dict[str, Any], repo_root: Path) -> Non
             timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
     except subprocess.TimeoutExpired:
-        print(f"_dispatch: git rev-parse timed out (>{_GIT_QUICK_TIMEOUT}s), skipping HEAD check", file=sys.stderr)
+        sys.stderr.write(f"_dispatch: git rev-parse timed out (>{_GIT_QUICK_TIMEOUT}s), skipping HEAD check\n")
         return
     except subprocess.CalledProcessError:
         return

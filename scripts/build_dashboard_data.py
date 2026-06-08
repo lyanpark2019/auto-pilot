@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -318,14 +319,14 @@ def main() -> None:
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("window.DASHBOARD_DATA = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n")
-    print(f"wrote {OUT} — {len(assets)} assets, {len(rounds)} round(s), HEAD {head}")
+    sys.stdout.write(f"wrote {OUT} — {len(assets)} assets, {len(rounds)} round(s), HEAD {head}\n")
 
     # Emit architecture.html
     generated = datetime.date.today().isoformat()
     html = build_architecture_html(assets, counts, head, branch, generated)
     ARCH_HTML_OUT.write_text(html)
     size = ARCH_HTML_OUT.stat().st_size
-    print(f"wrote {ARCH_HTML_OUT} — {size:,} bytes")
+    sys.stdout.write(f"wrote {ARCH_HTML_OUT} — {size:,} bytes\n")
 
 
 if __name__ == "__main__":

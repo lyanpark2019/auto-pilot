@@ -65,7 +65,7 @@ def _parse_frontmatter(text: str) -> dict[str, Any]:
             data = yaml.safe_load(raw) or {}
             return data if isinstance(data, dict) else {}
         except yaml.YAMLError as exc:
-            print(f"scan_docs: failed to parse frontmatter YAML: {type(exc).__name__}: {exc}", file=sys.stderr)
+            sys.stderr.write(f"scan_docs: failed to parse frontmatter YAML: {type(exc).__name__}: {exc}\n")
             return {}
     # fallback: naive line parser
     fm: dict[str, Any] = {}
@@ -123,10 +123,10 @@ def main(argv: list[str]) -> int:
     import json
     import sys
     if len(argv) < 2:
-        print("usage: scan_docs.py <repo>", file=sys.stderr)
+        sys.stderr.write("usage: scan_docs.py <repo>\n")
         return 1
     result = scan_tree(Path(argv[1]))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    sys.stdout.write(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
     return 0
 
 

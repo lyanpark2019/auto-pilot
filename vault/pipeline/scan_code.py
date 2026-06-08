@@ -103,10 +103,10 @@ def main(argv: list[str]) -> int:
     import json
     import sys
     if len(argv) < 2:
-        print("usage: scan_code.py <repo>", file=sys.stderr)
+        sys.stderr.write("usage: scan_code.py <repo>\n")
         return 1
     result = scan_tree(Path(argv[1]))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    sys.stdout.write(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
     return 0
 
 

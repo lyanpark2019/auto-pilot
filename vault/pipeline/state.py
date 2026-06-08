@@ -59,13 +59,13 @@ def migrate_legacy(vault: Path) -> dict[str, Any]:
             try:
                 state["scores"][key] = json.loads(lf.read_text())
             except json.JSONDecodeError as exc:
-                print(f"state: failed to migrate legacy {lf}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                sys.stderr.write(f"state: failed to migrate legacy {lf}: {type(exc).__name__}: {exc}\n")
     ts = meta / "ticket-state.json"
     if ts.exists():
         try:
             legacy_tickets = json.loads(ts.read_text()).get("tickets", {})
             state.setdefault("tickets", {}).update(legacy_tickets)
         except json.JSONDecodeError as exc:
-            print(f"state: failed to migrate legacy {ts}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            sys.stderr.write(f"state: failed to migrate legacy {ts}: {type(exc).__name__}: {exc}\n")
     save(vault, state)
     return state

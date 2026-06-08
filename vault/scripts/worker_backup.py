@@ -105,7 +105,7 @@ class WorkerBackup:
             try:
                 r = int(bak.name.split(".bak.")[1].split(".")[0])
             except (IndexError, ValueError) as exc:
-                print(f"worker_backup: skipping malformed backup name {bak.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                sys.stderr.write(f"worker_backup: skipping malformed backup name {bak.name}: {type(exc).__name__}: {exc}\n")
                 continue
             if r not in keep_set:
                 bak.unlink()
@@ -115,19 +115,19 @@ class WorkerBackup:
 
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
-        print("usage: worker_backup.py <vault> {rollback-ticket <id>|purge [keep_rounds]}", file=sys.stderr)
+        sys.stderr.write("usage: worker_backup.py <vault> {rollback-ticket <id>|purge [keep_rounds]}\n")
         return 1
     vault = Path(argv[1])
     cmd = argv[2]
     if cmd == "rollback-ticket" and len(argv) > 3:
-        print(json.dumps(WorkerBackup.rollback_ticket(vault, argv[3]), indent=2))
+        sys.stdout.write(json.dumps(WorkerBackup.rollback_ticket(vault, argv[3]), indent=2) + "\n")
         return 0
     if cmd == "purge":
         keep = int(argv[3]) if len(argv) > 3 else 2
         n = WorkerBackup.purge_older_than_rounds(vault, keep)
-        print(json.dumps({"purged": n, "keep_rounds": keep}))
+        sys.stdout.write(json.dumps({"purged": n, "keep_rounds": keep}) + "\n")
         return 0
-    print(f"unknown cmd: {cmd}", file=sys.stderr)
+    sys.stderr.write(f"unknown cmd: {cmd}\n")
     return 1
 
 

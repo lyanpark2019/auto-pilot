@@ -204,7 +204,7 @@ def _main() -> int:
     args = p.parse_args()
     report = (run_tier1 if args.tier == 1 else run_tier2)(args.repo_root, args.phases)
     payload = {"tier": report.tier, "passed": report.passed, "failures": report.failures}
-    print(json.dumps(payload, indent=2))
+    sys.stdout.write(json.dumps(payload, indent=2) + "\n")
     return 0 if report.passed else 1
 
 

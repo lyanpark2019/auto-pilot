@@ -10,4 +10,4 @@ def event(name: str, **kv: Any) -> None:
     parts = [f"event={name}"]
     for k, v in kv.items():
         parts.append(f"{k}={v}")
-    print(" ".join(parts), file=sys.stderr)
+    sys.stderr.write(" ".join(parts) + "\n")

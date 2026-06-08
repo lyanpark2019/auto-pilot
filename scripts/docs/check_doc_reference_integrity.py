@@ -305,10 +305,9 @@ def _warn_symbols(
         return
     missing = _find_symbol_in_window(code_lines, cited_lineno - 1, nearby)
     if missing:
-        print(
+        sys.stderr.write(
             f"WARN {doc_rel}:{doc_lineno_0 + 1}: symbol(s) "
-            f"{missing} not found near {raw_path}:{cited_lineno}",
-            file=sys.stderr,
+            f"{missing} not found near {raw_path}:{cited_lineno}\n"
         )
 
 
@@ -484,15 +483,15 @@ def main(argv: list[str] | None = None) -> int:
     violations = check_citations(repo_root)
 
     if violations:
-        print(f"doc-reference-integrity: {len(violations)} violation(s) found\n")
+        sys.stdout.write(f"doc-reference-integrity: {len(violations)} violation(s) found\n\n")
         for v in violations:
-            print(f"  {v.doc_file}:{v.doc_line}  [{v.citation}]")
-            print(f"    reason: {v.reason}")
+            sys.stdout.write(f"  {v.doc_file}:{v.doc_line}  [{v.citation}]\n")
+            sys.stdout.write(f"    reason: {v.reason}\n")
             if v.suggestion:
-                print(f"    suggestion: {v.suggestion}")
+                sys.stdout.write(f"    suggestion: {v.suggestion}\n")
         return 1
 
-    print("doc-reference-integrity: OK (0 violations)")
+    sys.stdout.write("doc-reference-integrity: OK (0 violations)\n")
     return 0
 
 

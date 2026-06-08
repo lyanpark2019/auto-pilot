@@ -69,7 +69,7 @@ def main() -> int:
     out = args.out or (vault / "meta" / "wiki-ingest-plan.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2, ensure_ascii=False))
-    print(json.dumps({"plan": str(out), "dispatches": plan["total"]}))
+    sys.stdout.write(json.dumps({"plan": str(out), "dispatches": plan["total"]}) + "\n")
     return 0
 
 
