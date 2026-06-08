@@ -32,5 +32,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: pending
-- residual risk: defer core orchestration refactors if behavior coverage is not strong enough.
+- metric delta: long functions 34 -> 25 after splitting destructive/conductor hooks, restructure loop, phase03/phase06 restructure phases, and score_content edge sampling
+- residual risk: 25 long functions remain, led by core scripts `_dispatch.py`, `orchestrator.py`, `_worktree.py`, and vault source adapters; defer core orchestration refactors until stronger characterization coverage exists.

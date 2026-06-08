@@ -24,6 +24,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Mapping
+from typing import Any, cast
 
 MARKER = ".codex-conductor"
 
@@ -71,57 +73,65 @@ def find_marker_root(start: str) -> str | None:
         cur = parent
 
 
-def main() -> None:
+def _load_payload(raw: str) -> Mapping[str, Any] | None:
     try:
-        data = json.loads(sys.stdin.read() or "{}")
+        data = json.loads(raw or "{}")
     except json.JSONDecodeError:
-        sys.exit(0)
+        return None
+    if not isinstance(data, Mapping):
+        return None
+    return cast(Mapping[str, Any], data)
 
-    tool = data.get("tool_name", "")
-    if tool not in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-        sys.exit(0)
 
-    ti = data.get("tool_input") or {}
-    fpath = ti.get("file_path") or ti.get("notebook_path") or ""
-    if not fpath:
-        sys.exit(0)
+def _target_path(data: Mapping[str, Any]) -> str | None:
+    if data.get("tool_name", "") not in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        return None
+    tool_input = data.get("tool_input") or {}
+    if not isinstance(tool_input, Mapping):
+        return None
+    value = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+    return value if isinstance(value, str) and value else None
 
-    # Enforcement only applies in a repo that opted in via the marker. Search
-    # from the target file's directory (falls back to cwd).
-    search_root = os.path.dirname(os.path.abspath(fpath)) or data.get("cwd") or os.getcwd()
-    marker_root = find_marker_root(search_root)
-    if not marker_root:
-        sys.exit(0)
 
-    base = os.path.basename(fpath)
-    ext = os.path.splitext(fpath)[1].lower()
+def _marker_root(data: Mapping[str, Any], fpath: str) -> str | None:
+    cwd = data.get("cwd")
+    fallback = cwd if isinstance(cwd, str) else os.getcwd()
+    search_root = os.path.dirname(os.path.abspath(fpath)) or fallback
+    return find_marker_root(search_root)
 
-    # Always-allowed: the marker, docs/text, and `plans/` artifacts INSIDE the
-    # marker repo. `plans` as an ancestor of the repo (e.g. `~/plans/myrepo/`)
-    # must NOT bypass enforcement — that was the old bug.
-    if base == MARKER or ext in DOC_EXTS:
-        sys.exit(0)
+
+def _repo_rel_parts(fpath: str, marker_root: str) -> list[str]:
     try:
         rel = os.path.relpath(os.path.abspath(fpath), marker_root)
     except ValueError:
-        rel = ""
-    rel_parts = rel.split(os.sep) if rel else []
-    if rel_parts and rel_parts[0] == "plans":
-        sys.exit(0)
+        return []
+    return rel.split(os.sep) if rel else []
 
-    if ext in CODE_EXTS:
+
+def _always_allowed(fpath: str, marker_root: str) -> bool:
+    base = os.path.basename(fpath)
+    ext = os.path.splitext(fpath)[1].lower()
+    if base == MARKER or ext in DOC_EXTS:
+        return True
+    rel_parts = _repo_rel_parts(fpath, marker_root)
+    return bool(rel_parts and rel_parts[0] == "plans")
+
+
+def main() -> None:
+    data = _load_payload(sys.stdin.read())
+    if data is None:
+        sys.exit(0)
+    fpath = _target_path(data)
+    if fpath is None:
+        sys.exit(0)
+    marker_root = _marker_root(data, fpath)
+    if not marker_root or _always_allowed(fpath, marker_root):
+        sys.exit(0)
+    if os.path.splitext(fpath)[1].lower() in CODE_EXTS:
         respond_and_exit(
             "deny",
-            (
-                f"Conductor mode active ({MARKER} present): Claude must not write "
-                f"implementation/test code itself. Delegate this edit to Codex via "
-                f"/codex-orchestra (Codex writes code through `codex-companion task "
-                f"--write`; you plan, review, and gate). To disable enforcement for "
-                f"this repo, delete the {MARKER} marker."
-            ),
+            f"Conductor mode active ({MARKER} present): Claude must not write implementation/test code itself. Delegate this edit to Codex via /codex-orchestra (Codex writes code through `codex-companion task --write`; you plan, review, and gate). To disable enforcement for this repo, delete the {MARKER} marker.",
         )
-
-    # Non-code, non-doc files (configs, data, etc.) pass through.
     sys.exit(0)
 
 

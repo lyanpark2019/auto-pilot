@@ -64,13 +64,21 @@ def _load_max_pts() -> dict[str, int]:
         return dict(_FALLBACK_MAX_PTS)
 
 
-def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, int, list]:
-    """Sample N edges, check both label tokens appear in same raw source md."""
-    rng = random.Random(42)
+def _label_tokens(label: str) -> list[str]:
+    out = []
+    for w in re.split(r"[\s\-/_·,()\[\]]+", label.lower()):
+        if not w:
+            continue
+        is_cjk = any("一" <= ch <= "鿿" or "぀" <= ch <= "ヿ" or "가" <= ch <= "힯" for ch in w)
+        if is_cjk and len(w) >= 2:
+            out.append(w)
+        elif not is_cjk and len(w) > 2:
+            out.append(w)
+    return out
+
+
+def _edge_candidates(vault: Path, cats: list, per_cat: int, rng: random.Random) -> list:
     sampled = []
-    if not cats:
-        return 0, 0, []
-    per_cat = max(1, sample_n // len(cats) + 1)
     for c in cats:
         gpath = vault / c / "raw" / "graphify-out" / "graph.json"
         if not gpath.exists():
@@ -79,50 +87,39 @@ def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, 
         label = {n["id"]: n["label"] for n in g["nodes"]}
         edges = g.get("links", [])
         rng.shuffle(edges)
-        # take INFERRED + AMBIGUOUS for verification (EXTRACTED already grounded)
         candidates = [e for e in edges if e.get("confidence") in ("INFERRED", "AMBIGUOUS")]
-        sampled += [(c, e, label.get(e["source"], ""), label.get(e["target"], ""))
-                    for e in candidates[:per_cat]]
-    sampled = sampled[:sample_n]
+        sampled += [(c, e, label.get(e["source"], ""), label.get(e["target"], "")) for e in candidates[:per_cat]]
+    return sampled
 
-    # cache raw text per cat
-    raw_text = {}
-    for c in cats:
-        raw_text[c] = " ".join(
-            f.read_text().lower() for f in (vault / c / "raw").glob("*.md")
-        )
 
-    def _tokens(label: str) -> list[str]:
-        out = []
-        for w in re.split(r"[\s\-/_·,()\[\]]+", label.lower()):
-            if not w:
-                continue
-            is_cjk = any(
-                "一" <= ch <= "鿿"  # CJK Unified Ideographs
-                or "぀" <= ch <= "ヿ"  # Hiragana + Katakana
-                or "가" <= ch <= "힯"  # Hangul Syllables
-                for ch in w
-            )
-            if is_cjk and len(w) >= 2:
-                out.append(w)
-            elif not is_cjk and len(w) > 2:
-                out.append(w)
-        return out
+def _raw_text_by_category(vault: Path, cats: list) -> dict:
+    return {c: " ".join(f.read_text().lower() for f in (vault / c / "raw").glob("*.md")) for c in cats}
 
+
+def _edge_grounded(raw_text: dict, category: str, source_label: str, target_label: str) -> bool:
+    s_tokens = _label_tokens(source_label)
+    t_tokens = _label_tokens(target_label)
+    text = raw_text.get(category, "")
+    s_hit = any(tok in text for tok in s_tokens) if s_tokens else False
+    t_hit = any(tok in text for tok in t_tokens) if t_tokens else False
+    return s_hit and t_hit
+
+
+def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, int, list]:
+    """Sample N edges, check both label tokens appear in same raw source md."""
+    if not cats:
+        return 0, 0, []
+    rng = random.Random(42)
+    sampled = _edge_candidates(vault, cats, max(1, sample_n // len(cats) + 1), rng)[:sample_n]
+    raw_text = _raw_text_by_category(vault, cats)
     passed = 0
     failed_examples = []
-    for c, e, s_lbl, t_lbl in sampled:
-        s_tokens = _tokens(s_lbl)
-        t_tokens = _tokens(t_lbl)
-        text = raw_text.get(c, "")
-        s_hit = any(tok in text for tok in s_tokens) if s_tokens else False
-        t_hit = any(tok in text for tok in t_tokens) if t_tokens else False
-        if s_hit and t_hit:
+    for c, _e, s_lbl, t_lbl in sampled:
+        if _edge_grounded(raw_text, c, s_lbl, t_lbl):
             passed += 1
         elif len(failed_examples) < 5:
             failed_examples.append(f"{c}: {s_lbl} -X-> {t_lbl}")
     return passed, len(sampled), failed_examples
-
 
 def concept_accuracy(vault: Path, cats: list, sample_n: int = 14) -> tuple[int, int]:
     """Sample concept pages, check summary tokens appear in cited source files."""

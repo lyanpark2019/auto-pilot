@@ -143,14 +143,8 @@ class VaultBuildPerDomainPhase(Phase):
                     print(f"phase06: failed to convert gap match '{m.group(1)}': {type(exc).__name__}: {exc}", file=sys.stderr)
         return None
 
-    def _execute_one(self, claude_bin: str, entry: dict) -> dict:
-        """Dispatch /vault-build for this domain via headless claude.
-
-        Use natural-language prompt because `claude -p '/literal-cmd'` treats slash
-        commands as unknown native commands; phrasing it as a directive lets the
-        plugin's command (resolved via --plugin-dir) be invoked through the Agent.
-        """
-        prompt = (
+    def _build_prompt(self, entry: dict) -> str:
+        return (
             f"Run the vault-builder plugin's /vault-build command to document a project.\n\n"
             f"Project path: {entry['input_repo']}\n"
             f"Obsidian vault target: {entry['vault']}\n"
@@ -161,6 +155,8 @@ class VaultBuildPerDomainPhase(Phase):
             f"After it finishes, report the final structural score (NN/100), round count, "
             f"and per-dim breakdown."
         )
+
+    def _build_claude_cmd(self, claude_bin: str, prompt: str) -> list[str]:
         cmd = [
             claude_bin,
             "-p", prompt,
@@ -168,13 +164,17 @@ class VaultBuildPerDomainPhase(Phase):
             "--dangerously-skip-permissions",
             "--output-format", "text",
         ]
-        # --max-budget-usd only works with API-key billing. For subscription mode,
-        # omit the flag entirely (plan quota governs).
         if PER_DOMAIN_BUDGET_USD > 0:
             cmd.extend(["--max-budget-usd", str(PER_DOMAIN_BUDGET_USD)])
+        return cmd
+
+    def _trace_execute_mode(self, entry: dict) -> None:
+        if PER_DOMAIN_BUDGET_USD > 0:
             self.ctx.trace(f"  exec: claude -p (vault-build {entry['key']}) --max-budget {PER_DOMAIN_BUDGET_USD}")
         else:
             self.ctx.trace(f"  exec: claude -p (vault-build {entry['key']}) [subscription mode]")
+
+    def _run_claude_cmd(self, cmd: list[str]) -> dict:
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=PER_DOMAIN_TIMEOUT_SEC)
             return {
@@ -185,77 +185,80 @@ class VaultBuildPerDomainPhase(Phase):
         except subprocess.TimeoutExpired:
             return {"rc": -1, "stdout_tail": "", "stderr_tail": f"timeout after {PER_DOMAIN_TIMEOUT_SEC}s"}
 
-    def run(self) -> PhaseResult:
-        manifest = self._build_manifest()
-        manifest_path = self.ctx.state_path.parent / "obsidian-restructure-build-manifest.json"
-        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
-        self.ctx.trace(f"  build manifest → {manifest_path}")
+    def _execute_one(self, claude_bin: str, entry: dict) -> dict:
+        self._trace_execute_mode(entry)
+        return self._run_claude_cmd(self._build_claude_cmd(claude_bin, self._build_prompt(entry)))
 
-        # Load prior entry_state from state file so completed/partial entries persist
-        # across runs (idempotency). New entries get pending; missing entries unchanged.
-        prior_state = {}
+    def _load_prior_entry_state(self) -> dict:
         try:
             prior = json.loads(self.ctx.state_path.read_text())
-            prior_state = prior.get("phases", {}).get("6_vault_build_per_domain", {}).get("entries", {}) or {}
-        except Exception as exc:
+            entries = prior.get("phases", {}).get("6_vault_build_per_domain", {}).get("entries", {})
+            return entries if isinstance(entries, dict) else {}
+        except (OSError, json.JSONDecodeError) as exc:
             print(f"phase06: failed to load prior state from {self.ctx.state_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            prior_state = {}
+            return {}
 
-        entry_state: dict[str, dict] = {}
-        for entry in manifest:
-            key = entry["key"]
-            existing = prior_state.get(key, {})
-            entry_state[key] = {
-                "domain": entry["domain"],
-                "sub_project": entry["sub_project"],
-                "score_before": existing.get("score_before"),
-                "score": existing.get("score"),
-                "score_source": existing.get("score_source"),
-                "status": existing.get("status", "pending" if entry["input_repo_exists"] else "skipped"),
-                "rounds": existing.get("rounds", 0),
-                "max_rounds": MAX_VAULT_BUILD_ROUNDS,
-                "command": entry["command"],
-                "input_repo_exists": entry["input_repo_exists"],
-                "skip_reason": None if entry["input_repo_exists"] else "input_repo missing",
-                "last_exec": existing.get("last_exec"),
-            }
+    def _entry_state(self, entry: dict, prior_state: dict) -> dict:
+        key = entry["key"]
+        existing = prior_state.get(key, {})
+        return {
+            "domain": entry["domain"],
+            "sub_project": entry["sub_project"],
+            "score_before": existing.get("score_before"),
+            "score": existing.get("score"),
+            "score_source": existing.get("score_source"),
+            "status": existing.get("status", "pending" if entry["input_repo_exists"] else "skipped"),
+            "rounds": existing.get("rounds", 0),
+            "max_rounds": MAX_VAULT_BUILD_ROUNDS,
+            "command": entry["command"],
+            "input_repo_exists": entry["input_repo_exists"],
+            "skip_reason": None if entry["input_repo_exists"] else "input_repo missing",
+            "last_exec": existing.get("last_exec"),
+        }
 
-        # Execute mode
-        if getattr(self.ctx, "execute_builds", False):
-            claude_bin = shutil.which("claude")
-            if not claude_bin:
-                self.ctx.trace("  ! claude CLI not on PATH; cannot execute. Manifest emitted only.")
-            else:
-                pending = [e for e in manifest if entry_state[e["key"]]["status"] == "pending"]
-                only = getattr(self.ctx, "only_domain", None)
-                if only:
-                    allowed = {s.strip() for s in only.split(",") if s.strip()}
-                    pending = [e for e in pending if e["domain"] in allowed]
-                    self.ctx.trace(f"  filter: only_domain={sorted(allowed)}")
-                self.ctx.trace(f"  {len(pending)} pending entry(ies) to dispatch via headless claude")
-                for entry in pending:
-                    key = entry["key"]
-                    result = self._execute_one(claude_bin, entry)
-                    entry_state[key]["last_exec"] = result
-                    # Canonical score source: verify-report.md (written by vault-build Phase 4).
-                    # Fallbacks: parse stdout (regex) → None.
-                    project = Path(entry["input_repo"])
-                    score = self._score_from_verify_report(project)
-                    source = "verify-report.md"
-                    if score is None:
-                        score = self._score_from_stdout(result.get("stdout_tail", ""))
-                        source = "vault-build stdout" if score is not None else "unknown"
-                    entry_state[key]["score"] = score
-                    entry_state[key]["score_source"] = source
-                    entry_state[key]["rounds"] += 1
-                    if score is not None and score >= PASS_THRESHOLD:
-                        entry_state[key]["status"] = "completed"
-                    elif result["rc"] != 0:
-                        entry_state[key]["status"] = "failed"
-                    else:
-                        entry_state[key]["status"] = "partial"
-                    self.ctx.trace(f"  {key:36s} score={score} ({source}) rc={result['rc']} → {entry_state[key]['status']}")
+    def _pending_entries(self, manifest: list[dict], entry_state: dict[str, dict]) -> list[dict]:
+        pending = [e for e in manifest if entry_state[e["key"]]["status"] == "pending"]
+        only = getattr(self.ctx, "only_domain", None)
+        if not only:
+            return pending
+        allowed = {s.strip() for s in only.split(",") if s.strip()}
+        self.ctx.trace(f"  filter: only_domain={sorted(allowed)}")
+        return [e for e in pending if e["domain"] in allowed]
 
+    def _score_execution(self, entry: dict, result: dict) -> tuple[int | None, str]:
+        project = Path(entry["input_repo"])
+        score = self._score_from_verify_report(project)
+        if score is not None:
+            return score, "verify-report.md"
+        score = self._score_from_stdout(result.get("stdout_tail", ""))
+        return score, "vault-build stdout" if score is not None else "unknown"
+
+    def _record_execution(self, entry: dict, entry_state: dict[str, dict], result: dict) -> None:
+        key = entry["key"]
+        score, source = self._score_execution(entry, result)
+        entry_state[key]["last_exec"] = result
+        entry_state[key]["score"] = score
+        entry_state[key]["score_source"] = source
+        entry_state[key]["rounds"] += 1
+        if score is not None and score >= PASS_THRESHOLD:
+            entry_state[key]["status"] = "completed"
+        elif result["rc"] != 0:
+            entry_state[key]["status"] = "failed"
+        else:
+            entry_state[key]["status"] = "partial"
+        self.ctx.trace(f"  {key:36s} score={score} ({source}) rc={result['rc']} → {entry_state[key]['status']}")
+
+    def _execute_pending_entries(self, manifest: list[dict], entry_state: dict[str, dict]) -> None:
+        claude_bin = shutil.which("claude")
+        if not claude_bin:
+            self.ctx.trace("  ! claude CLI not on PATH; cannot execute. Manifest emitted only.")
+            return
+        pending = self._pending_entries(manifest, entry_state)
+        self.ctx.trace(f"  {len(pending)} pending entry(ies) to dispatch via headless claude")
+        for entry in pending:
+            self._record_execution(entry, entry_state, self._execute_one(claude_bin, entry))
+
+    def _phase_result(self, entry_state: dict[str, dict], manifest_path: Path) -> PhaseResult:
         completed = sum(1 for d in entry_state.values() if d["status"] == "completed")
         skipped = sum(1 for d in entry_state.values() if d["status"] == "skipped")
         total = len(entry_state)
@@ -265,6 +268,18 @@ class VaultBuildPerDomainPhase(Phase):
             detail=f"{completed}/{total - skipped} sub-projects pass (skipped {skipped})",
             artifacts={"entries": entry_state, "manifest": str(manifest_path)},
         )
+
+    def run(self) -> PhaseResult:
+        manifest = self._build_manifest()
+        manifest_path = self.ctx.state_path.parent / "obsidian-restructure-build-manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+        self.ctx.trace(f"  build manifest → {manifest_path}")
+
+        prior_state = self._load_prior_entry_state()
+        entry_state = {entry["key"]: self._entry_state(entry, prior_state) for entry in manifest}
+        if getattr(self.ctx, "execute_builds", False):
+            self._execute_pending_entries(manifest, entry_state)
+        return self._phase_result(entry_state, manifest_path)
 
     def verify(self) -> tuple[bool, str]:
         manifest_path = self.ctx.state_path.parent / "obsidian-restructure-build-manifest.json"
