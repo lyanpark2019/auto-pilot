@@ -4,10 +4,10 @@
   "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "CI_MYPY_STUB_FIX_READY",
+  "current_state": "CI_FIX_PUSH_READY",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
-  "head_sha": "d7f19d387ef90fc947c81416f286b57678aaa2f1",
+  "head_sha": "d968ab1",
   "baseline_weighted_score": 84.4,
   "weighted_score": 90.04,
   "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Hosted CI/release still pending.",
@@ -100,13 +100,14 @@
     "codex_wave11": ".planning/quality/codex-8-wave11/last-message.md => weighted_total=90.04, MEETS_90_TARGET",
     "claude_wave11": ".planning/quality/claude-8-wave11/raw.md => weighted_total=90.04, MEETS_90_TARGET",
     "hosted_ci_pr22_r1": "GitHub Actions run 27138064053 failed in python gates at mypy: missing stubs for yaml; root cause requirements-dev.txt lacked types-PyYAML on hosted runner.",
-    "ci_stub_fix": "Added types-PyYAML>=6.0 and test guard; targeted pytest passed; mypy 51 files passed; ruff target passed."
+    "ci_stub_fix": "Added types-PyYAML>=6.0 and test guard; targeted pytest passed; mypy 51 files passed; ruff target passed.",
+    "ci_stub_fix_local_gates": "after d968ab1: root pytest 702 passed; vault pytest 106 passed; full ruff clean; mypy 51 files passed (pre-commit targeted)."
   },
   "residual_risks": [
     "Hosted CI rerun after types-PyYAML fix pending.",
     "No v0.8.7 tag/release/plugin update performed."
   ],
-  "decision": "Push CI stub fix and rerun PR hosted CI before release.",
+  "decision": "Push d968ab1 and wait for hosted CI rerun; release remains blocked until CI green.",
   "codex_wave9_r2_weighted_score": 89.93,
   "codex_wave9_r2_verdict": "BELOW_90",
   "wave10_focus": "Low-risk closure of Codex 89.93 blockers: prompt-output sanitizer/budget cap and perf cold-start CI gate.",
