@@ -184,7 +184,7 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
         The subprocess return code on normal exit, or ``124`` when the timer
         fired (mirroring coreutils ``timeout``).
     """
-    full_prompt = HEADLESS_PROMPT_PREAMBLE + prompt
+    full_prompt = _prompts.sanitize_for_llm(HEADLESS_PROMPT_PREAMBLE + prompt)
     cmd = [CLAUDE_BIN, "-p", "--dangerously-skip-permissions", full_prompt]
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -266,7 +266,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     event("iter.start", n=iter_n, phase=phase, pre_head=pre_head[:8])
 
     log = LOG_DIR / f"iter-{iter_n:04d}-phase-{phase}.log"
-    prompt = _prompts.render("iteration", iter_n=iter_n, phase=phase)
+    prompt = _prompts.render_for_llm("iteration", iter_n=iter_n, phase=phase)
     rc = run_claude_session(prompt, log, args.timeout_build)
 
     state_after = load_state() or state

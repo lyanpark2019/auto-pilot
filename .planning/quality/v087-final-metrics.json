@@ -1,0 +1,495 @@
+{
+  "long_functions_gt40": 20,
+  "broad_exceptions": 14,
+  "print_calls": 77,
+  "long_function_hits": [
+    {
+      "path": "scripts/_dispatch.py",
+      "line": 185,
+      "name": "prepare_subagent_ticket",
+      "lines": 69
+    },
+    {
+      "path": "scripts/orchestrator.py",
+      "line": 88,
+      "name": "cmd_phase_start",
+      "lines": 61
+    },
+    {
+      "path": "scripts/_worktree.py",
+      "line": 350,
+      "name": "reap_orphans",
+      "lines": 56
+    },
+    {
+      "path": "vault/sources/code.py",
+      "line": 75,
+      "name": "bootstrap",
+      "lines": 56
+    },
+    {
+      "path": "scripts/_dispatch.py",
+      "line": 339,
+      "name": "collect_round_outcome",
+      "lines": 55
+    },
+    {
+      "path": "scripts/orchestrator.py",
+      "line": 255,
+      "name": "cmd_dispatch_contract_check",
+      "lines": 55
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 206,
+      "name": "main",
+      "lines": 53
+    },
+    {
+      "path": "scripts/evals/runner.py",
+      "line": 24,
+      "name": "run_case",
+      "lines": 52
+    },
+    {
+      "path": "scripts/orchestrator.py",
+      "line": 411,
+      "name": "main",
+      "lines": 50
+    },
+    {
+      "path": "scripts/_reviewer_wrapper.py",
+      "line": 103,
+      "name": "spawn",
+      "lines": 49
+    },
+    {
+      "path": "scripts/_worktree.py",
+      "line": 153,
+      "name": "collect_patches",
+      "lines": 48
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 414,
+      "name": "check_citations",
+      "lines": 48
+    },
+    {
+      "path": "scripts/evals/cli.py",
+      "line": 25,
+      "name": "main",
+      "lines": 47
+    },
+    {
+      "path": "scripts/_contract.py",
+      "line": 222,
+      "name": "verify_snapshots",
+      "lines": 46
+    },
+    {
+      "path": "scripts/_worktree.py",
+      "line": 108,
+      "name": "create",
+      "lines": 44
+    },
+    {
+      "path": "scripts/_reviewer_wrapper.py",
+      "line": 294,
+      "name": "wait_all",
+      "lines": 43
+    },
+    {
+      "path": "scripts/orchestrator.py",
+      "line": 151,
+      "name": "cmd_phase_end",
+      "lines": 43
+    },
+    {
+      "path": "vault/sources/notebooklm.py",
+      "line": 209,
+      "name": "materialize",
+      "lines": 43
+    },
+    {
+      "path": "vault/pipeline/fix.py",
+      "line": 40,
+      "name": "build_plan",
+      "lines": 42
+    },
+    {
+      "path": "vault/scripts/selftest.py",
+      "line": 112,
+      "name": "_check_agents",
+      "lines": 42
+    }
+  ],
+  "broad_exception_hits": [
+    {
+      "path": "scripts/_contract.py",
+      "line": 100
+    },
+    {
+      "path": "scripts/_dogfood_gate.py",
+      "line": 86
+    },
+    {
+      "path": "scripts/_dogfood_gate.py",
+      "line": 91
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 165
+    },
+    {
+      "path": "scripts/evals/runner.py",
+      "line": 68
+    },
+    {
+      "path": "vault/pipeline/export.py",
+      "line": 408
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 161
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 175
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 224
+    },
+    {
+      "path": "vault/scripts/restructure_loop.py",
+      "line": 91
+    },
+    {
+      "path": "vault/scripts/restructure_loop.py",
+      "line": 98
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 102
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 116
+    },
+    {
+      "path": "vault/scripts/selftest.py",
+      "line": 301
+    }
+  ],
+  "print_call_hits": [
+    {
+      "path": "hooks/test_codex_conductor_guard.py",
+      "line": 150
+    },
+    {
+      "path": "hooks/test_codex_conductor_guard.py",
+      "line": 153
+    },
+    {
+      "path": "hooks/test_guard_destructive.py",
+      "line": 129
+    },
+    {
+      "path": "hooks/test_guard_destructive.py",
+      "line": 131
+    },
+    {
+      "path": "hooks/test_guard_destructive.py",
+      "line": 132
+    },
+    {
+      "path": "hooks/test_guard_destructive.py",
+      "line": 140
+    },
+    {
+      "path": "hooks/test_notebooklm_delete_gate.py",
+      "line": 61
+    },
+    {
+      "path": "hooks/test_notebooklm_delete_gate.py",
+      "line": 63
+    },
+    {
+      "path": "hooks/test_notebooklm_delete_gate.py",
+      "line": 64
+    },
+    {
+      "path": "hooks/test_notebooklm_delete_gate.py",
+      "line": 71
+    },
+    {
+      "path": "hooks/test_preflight_handoff.py",
+      "line": 90
+    },
+    {
+      "path": "hooks/test_preflight_handoff.py",
+      "line": 92
+    },
+    {
+      "path": "hooks/test_preflight_handoff.py",
+      "line": 173
+    },
+    {
+      "path": "scripts/_contract.py",
+      "line": 255
+    },
+    {
+      "path": "scripts/_dispatch.py",
+      "line": 142
+    },
+    {
+      "path": "scripts/_dogfood_gate.py",
+      "line": 207
+    },
+    {
+      "path": "scripts/_log.py",
+      "line": 13
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 163
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 233
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 235
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 237
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 240
+    },
+    {
+      "path": "scripts/asset_registry_check.py",
+      "line": 254
+    },
+    {
+      "path": "scripts/build_dashboard_data.py",
+      "line": 321
+    },
+    {
+      "path": "scripts/build_dashboard_data.py",
+      "line": 328
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 308
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 480
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 482
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 483
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 485
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 488
+    },
+    {
+      "path": "scripts/evals/cli.py",
+      "line": 43
+    },
+    {
+      "path": "scripts/evals/cli.py",
+      "line": 50
+    },
+    {
+      "path": "scripts/evals/cli.py",
+      "line": 64
+    },
+    {
+      "path": "scripts/graphify_vault_loop.py",
+      "line": 219
+    },
+    {
+      "path": "scripts/risk_assess.py",
+      "line": 233
+    },
+    {
+      "path": "scripts/risk_assess.py",
+      "line": 239
+    },
+    {
+      "path": "vault/pipeline/bases.py",
+      "line": 178
+    },
+    {
+      "path": "vault/pipeline/bases.py",
+      "line": 181
+    },
+    {
+      "path": "vault/pipeline/dispatch.py",
+      "line": 177
+    },
+    {
+      "path": "vault/pipeline/dispatch.py",
+      "line": 183
+    },
+    {
+      "path": "vault/pipeline/dispatch.py",
+      "line": 192
+    },
+    {
+      "path": "vault/pipeline/dispatch.py",
+      "line": 198
+    },
+    {
+      "path": "vault/pipeline/drift.py",
+      "line": 246
+    },
+    {
+      "path": "vault/pipeline/drift.py",
+      "line": 294
+    },
+    {
+      "path": "vault/pipeline/drift.py",
+      "line": 296
+    },
+    {
+      "path": "vault/pipeline/fix.py",
+      "line": 96
+    },
+    {
+      "path": "vault/pipeline/scan_code.py",
+      "line": 106
+    },
+    {
+      "path": "vault/pipeline/scan_code.py",
+      "line": 109
+    },
+    {
+      "path": "vault/pipeline/scan_docs.py",
+      "line": 68
+    },
+    {
+      "path": "vault/pipeline/scan_docs.py",
+      "line": 126
+    },
+    {
+      "path": "vault/pipeline/scan_docs.py",
+      "line": 129
+    },
+    {
+      "path": "vault/pipeline/state.py",
+      "line": 62
+    },
+    {
+      "path": "vault/pipeline/state.py",
+      "line": 69
+    },
+    {
+      "path": "vault/pipeline/verify.py",
+      "line": 200
+    },
+    {
+      "path": "vault/pipeline/verify.py",
+      "line": 202
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 162
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 176
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 225
+    },
+    {
+      "path": "vault/scripts/mcp_vault_server.py",
+      "line": 242
+    },
+    {
+      "path": "vault/scripts/pm_loop.py",
+      "line": 132
+    },
+    {
+      "path": "vault/scripts/pm_loop.py",
+      "line": 148
+    },
+    {
+      "path": "vault/scripts/restructure_phases/_base.py",
+      "line": 60
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 103
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 117
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 135
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 143
+    },
+    {
+      "path": "vault/scripts/restructure_phases/phase06_vault_build.py",
+      "line": 198
+    },
+    {
+      "path": "vault/scripts/ticket_system.py",
+      "line": 185
+    },
+    {
+      "path": "vault/scripts/ticket_system.py",
+      "line": 186
+    },
+    {
+      "path": "vault/scripts/wiki_ingest_chain.py",
+      "line": 72
+    },
+    {
+      "path": "vault/scripts/worker_backup.py",
+      "line": 108
+    },
+    {
+      "path": "vault/scripts/worker_backup.py",
+      "line": 118
+    },
+    {
+      "path": "vault/scripts/worker_backup.py",
+      "line": 123
+    },
+    {
+      "path": "vault/scripts/worker_backup.py",
+      "line": 128
+    },
+    {
+      "path": "vault/scripts/worker_backup.py",
+      "line": 130
+    },
+    {
+      "path": "vault/sources/notebooklm.py",
+      "line": 249
+    }
+  ]
+}

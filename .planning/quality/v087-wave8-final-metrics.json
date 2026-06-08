@@ -1,0 +1,30 @@
+{
+  "long_functions_gt40": 0,
+  "broad_exceptions": 0,
+  "print_calls": 0,
+  "subprocess_without_timeout": 0,
+  "shell_true_calls": 0,
+  "event_calls": 55,
+  "long_function_hits": [],
+  "broad_exception_hits": [],
+  "print_call_hits": [],
+  "subprocess_without_timeout_hits": [],
+  "shell_true_hits": [],
+  "public_api_total": 265,
+  "public_api_with_docstring": 263,
+  "public_api_docstring_coverage_pct": 99.25,
+  "public_api_missing_docstring_hits": [
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 67,
+      "name": "Violation",
+      "lines": 6
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 470,
+      "name": "main",
+      "lines": 26
+    }
+  ]
+}

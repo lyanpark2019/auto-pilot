@@ -29,6 +29,7 @@ _GIT_TREE_TIMEOUT = 60  # worktree add/remove, am, format-patch, commit --amend 
 
 @dataclass(frozen=True)
 class WorktreeHandle:
+    """Represent WorktreeHandle data for this module."""
     path: Path
     branch: str
     base_sha: str
@@ -92,6 +93,7 @@ class StaleAmStateError(Exception):
 
 @dataclass(frozen=True)
 class ApplyResult:
+    """Represent ApplyResult data for this module."""
     status: str  # "applied" | "conflict"
     main_sha: str | None = None
     pre_apply_head: str | None = None
@@ -105,23 +107,7 @@ class WorktreeManager:
         self.repo_root = repo_root
         self.worktree_base = worktree_base
 
-    def create(self, contract: dict[str, Any], *, contract_dir: Path) -> WorktreeHandle:
-        """Create a worktree on the canonical branch derived from contract.id.
-
-        1. Validate branch name via `git check-ref-format`.
-        2. `git -C $ROOT worktree add <wt_path> -b <branch> <base_sha>`.
-        3. Write `.auto-pilot-worktree` sentinel containing contract.id inside wt.
-        4. Persist WorktreeHandle to `<contract_dir>/worktree-handle.json`.
-
-        Raises:
-            InvalidBranchNameError: branch name fails `git check-ref-format`.
-            subprocess.CalledProcessError: `git worktree add` exits non-zero.
-            subprocess.TimeoutExpired: a git op stalls past its timeout
-                (30 s for ref-check, 60 s for `worktree add`). One-shot caller;
-                a stalled create is a hard failure, not a degrade case.
-        """
-        contract_id = contract["id"]
-        branch = f"auto-pilot/{contract_id}"
+    def _validate_branch(self, branch: str) -> None:
         refcheck = subprocess.run(
             ["git", "check-ref-format", f"refs/heads/{branch}"],
             capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
@@ -129,17 +115,17 @@ class WorktreeManager:
         if refcheck.returncode != 0:
             raise InvalidBranchNameError(f"{branch!r}: {refcheck.stderr.strip()}")
 
-        wt_path = self.worktree_base / contract_id
+    def _add_worktree(self, wt_path: Path, branch: str, base_sha: str) -> None:
         wt_path.parent.mkdir(parents=True, exist_ok=True)
-
-        base_sha = contract["snapshot_shas"]["base_sha"]
         subprocess.run(
             ["git", "-C", str(self.repo_root), "worktree", "add",
              str(wt_path), "-b", branch, base_sha],
             check=True, capture_output=True, timeout=_GIT_TREE_TIMEOUT,
         )
-        (wt_path / ".auto-pilot-worktree").write_text(contract_id + "\n")
 
+    def _write_handle(self, contract_dir: Path, contract_id: str, branch: str, base_sha: str) -> WorktreeHandle:
+        wt_path = self.worktree_base / contract_id
+        (wt_path / ".auto-pilot-worktree").write_text(contract_id + "\n")
         handle = WorktreeHandle(
             path=wt_path,
             branch=branch,
@@ -150,44 +136,32 @@ class WorktreeManager:
         handle.write(contract_dir / "worktree-handle.json")
         return handle
 
-    def collect_patches(self, handle: WorktreeHandle, *, contract_dir: Path) -> PatchResult:
-        """Inspect worker's worktree HEAD vs base_sha; return one of NoOp,
-        NeedsRebase, RejectMultipleCommits, PatchSeries.
+    def create(self, contract: dict[str, Any], *, contract_dir: Path) -> WorktreeHandle:
+        """Create a worktree on the canonical branch derived from contract.id."""
+        contract_id = contract["id"]
+        branch = f"auto-pilot/{contract_id}"
+        base_sha = contract["snapshot_shas"]["base_sha"]
+        self._validate_branch(branch)
+        self._add_worktree(self.worktree_base / contract_id, branch, base_sha)
+        return self._write_handle(contract_dir, contract_id, branch, base_sha)
 
-        Raises:
-            subprocess.CalledProcessError: `rev-list`/`format-patch` exit non-zero.
-            subprocess.TimeoutExpired: a git op stalls past its timeout (30 s for
-                merge-base/rev-list plumbing, 60 s for `format-patch` which may
-                serialize a large diff). One-shot caller; not a degrade case.
-        """
-        ancestry = subprocess.run(
-            ["git", "-C", str(handle.path), "merge-base", "--is-ancestor",
-             handle.base_sha, "HEAD"],
-            capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
-        )
-        if ancestry.returncode != 0:
-            try:
-                cb = subprocess.check_output(
-                    ["git", "-C", str(handle.path), "merge-base",
-                     handle.base_sha, "HEAD"],
-                    text=True, timeout=_GIT_QUICK_TIMEOUT,
-                ).strip()
-            except subprocess.CalledProcessError:
-                cb = ""
-            return NeedsRebase(reason="HEAD does not descend from base_sha",
-                                current_base=cb)
+    def _current_merge_base(self, handle: WorktreeHandle) -> str:
+        try:
+            return subprocess.check_output(
+                ["git", "-C", str(handle.path), "merge-base", handle.base_sha, "HEAD"],
+                text=True, timeout=_GIT_QUICK_TIMEOUT,
+            ).strip()
+        except subprocess.CalledProcessError:
+            return ""
 
+    def _patch_commit_count(self, handle: WorktreeHandle) -> int:
         count_out = subprocess.check_output(
-            ["git", "-C", str(handle.path), "rev-list", "--count",
-             f"{handle.base_sha}..HEAD"],
+            ["git", "-C", str(handle.path), "rev-list", "--count", f"{handle.base_sha}..HEAD"],
             text=True, timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
-        n = int(count_out)
-        if n == 0:
-            return NoOp()
-        if n != 1:
-            return RejectMultipleCommits(count=n)
+        return int(count_out)
 
+    def _write_patch_series(self, handle: WorktreeHandle, contract_dir: Path) -> PatchSeries:
         patches_dir = contract_dir / "patches"
         patches_dir.mkdir(parents=True, exist_ok=True)
         mbox = patches_dir / "series.mbox"
@@ -198,6 +172,24 @@ class WorktreeManager:
         )
         mbox.write_bytes(diff_bytes)
         return PatchSeries(mbox=mbox)
+
+    def collect_patches(self, handle: WorktreeHandle, *, contract_dir: Path) -> PatchResult:
+        """Inspect worker's worktree HEAD vs base_sha and return the patch state."""
+        ancestry = subprocess.run(
+            ["git", "-C", str(handle.path), "merge-base", "--is-ancestor", handle.base_sha, "HEAD"],
+            capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
+        )
+        if ancestry.returncode != 0:
+            return NeedsRebase(
+                reason="HEAD does not descend from base_sha",
+                current_base=self._current_merge_base(handle),
+            )
+        n = self._patch_commit_count(handle)
+        if n == 0:
+            return NoOp()
+        if n != 1:
+            return RejectMultipleCommits(count=n)
+        return self._write_patch_series(handle, contract_dir)
 
     @contextmanager
     def _main_apply_lock(self) -> Iterator[None]:
@@ -347,18 +339,42 @@ class WorktreeManager:
             return None
         return WorktreeHandle.read(handle_path)
 
-    def reap_orphans(self, *, state_dir: Path, max_age_hours: int = 24) -> list[Path]:
-        """Reap worktrees whose contract has terminal status past age threshold.
+    def _terminal_contract_dir(self, contracts_root: Path, contract_id: str) -> Path | None:
+        contract_dir = contracts_root / contract_id
+        status_json = contract_dir / "outputs" / "worker" / "status.json"
+        done_marker = contract_dir / "outputs" / "worker" / "done.marker"
+        if not done_marker.exists() or not status_json.exists():
+            return None
+        data = json.loads(status_json.read_text())
+        try:
+            status_enum = _status.WorkerStatus(data.get("status"))
+        except ValueError:
+            return None
+        return contract_dir if status_enum in _status.TERMINAL else None
 
-        Returns list of reaped worktree paths.
-        """
+    def _remove_orphan_worktree(self, contract_dir: Path, contract_id: str, wt_path: Path) -> bool:
+        handle_path = contract_dir / "worktree-handle.json"
+        if handle_path.exists():
+            self.cleanup(WorktreeHandle.read(handle_path), prune_branch=True)
+            return True
+        try:
+            subprocess.run(
+                ["git", "-C", str(self.repo_root), "worktree", "remove", "--force", str(wt_path)],
+                capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
+            )
+            return True
+        except subprocess.TimeoutExpired as exc:
+            event("worktree.reap.timeout", contract_id=contract_id,
+                  wt_path=str(wt_path), error_type=type(exc).__name__)
+            return False
+
+    def reap_orphans(self, *, state_dir: Path, max_age_hours: int = 24) -> list[Path]:
+        """Reap worktrees whose contract has terminal status past age threshold."""
         cutoff = time.time() - max_age_hours * 3600
         reaped: list[Path] = []
         contracts_root = state_dir / "contracts"
         if not contracts_root.exists():
             return reaped
-
-        # Walk all worktrees by sentinel
         for sentinel in self.worktree_base.rglob(".auto-pilot-worktree"):
             try:
                 if sentinel.stat().st_mtime > cutoff:
@@ -366,42 +382,12 @@ class WorktreeManager:
             except FileNotFoundError:
                 continue
             contract_id = sentinel.read_text().strip()
-            contract_dir = contracts_root / contract_id
-            status_json = contract_dir / "outputs" / "worker" / "status.json"
-            done_marker = contract_dir / "outputs" / "worker" / "done.marker"
-            if not done_marker.exists():
-                continue  # in-flight or zombie; keep
-            if not status_json.exists():
-                continue
-            data = json.loads(status_json.read_text())
-            status_val = data.get("status")
-            try:
-                status_enum = _status.WorkerStatus(status_val)
-            except ValueError:
-                continue
-            if status_enum not in _status.TERMINAL:
+            contract_dir = self._terminal_contract_dir(contracts_root, contract_id)
+            if contract_dir is None:
                 continue
             wt_path = sentinel.parent
-            handle_path = contract_dir / "worktree-handle.json"
-            if handle_path.exists():
-                handle = WorktreeHandle.read(handle_path)
-                self.cleanup(handle, prune_branch=True)
-            else:
-                # Fallback: remove worktree without handle (best-effort).
-                # Degrade on stall — an uncaught TimeoutExpired would abort the
-                # reap loop and strand the remaining orphans. Skip this one and
-                # continue so the next pass can retry it.
-                try:
-                    subprocess.run(
-                        ["git", "-C", str(self.repo_root), "worktree", "remove",
-                         "--force", str(wt_path)],
-                        capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
-                    )
-                except subprocess.TimeoutExpired as exc:
-                    event("worktree.reap.timeout", contract_id=contract_id,
-                          wt_path=str(wt_path), error_type=type(exc).__name__)
-                    continue
-            reaped.append(wt_path)
+            if self._remove_orphan_worktree(contract_dir, contract_id, wt_path):
+                reaped.append(wt_path)
         return reaped
 
 

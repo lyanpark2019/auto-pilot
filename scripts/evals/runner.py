@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from _log import event
 from evals._types import CaseAttempt, OracleResult, RunResult
 from evals.oracle_api import load_case_oracle
 
@@ -21,6 +22,52 @@ _LOOP = "scripts/headless-loop.py"
 _UNCAPPED_CONCURRENCY = 10_000
 
 
+def _disk_space_error(min_free_disk_gb: float) -> CaseAttempt | None:
+    free_gb = shutil.disk_usage(tempfile.gettempdir()).free / 10**9
+    if free_gb >= min_free_disk_gb:
+        return None
+    event("eval_case.disk_insufficient", free_gb=f"{free_gb:.1f}", min_free_disk_gb=min_free_disk_gb)
+    return CaseAttempt(
+        OracleResult(outcome="error", reason=f"insufficient disk: {free_gb:.1f}GB < {min_free_disk_gb}GB"),
+        _null_run_result(Path(tempfile.gettempdir())),
+    )
+
+
+def _clone_repo(repo: Path, clone: Path) -> None:
+    subprocess.run(
+        ["git", "clone", "--local", str(repo), str(clone)],
+        check=True, capture_output=True, text=True, timeout=120,
+    )
+
+
+def _init_case(clone: Path, case_id: str) -> None:
+    spec = clone / "evals" / "cases" / case_id / "spec.md"
+    subprocess.run(
+        ["python3", _INIT, "init", "--spec", str(spec), "--force", "--max-workers", "2"],
+        cwd=str(clone), check=True, capture_output=True, text=True, timeout=60,
+    )
+
+
+def _run_headless_loop(clone: Path, max_iter: int, max_cost_usd: float) -> None:
+    subprocess.run(
+        ["python3", _LOOP, "--max-iter", str(max_iter), "--max-cost-usd", str(max_cost_usd),
+         "--max-concurrent-claude", str(_UNCAPPED_CONCURRENCY)],
+        cwd=str(clone), check=False, capture_output=True, text=True, timeout=3600,
+    )
+
+
+def _execute_case(case_id: str, repo: Path, clone: Path, max_iter: int, max_cost_usd: float) -> CaseAttempt:
+    event("eval_case.start", case_id=case_id, clone=clone)
+    _clone_repo(repo, clone)
+    _init_case(clone, case_id)
+    _run_headless_loop(clone, max_iter, max_cost_usd)
+    run = _read_run_result(clone)
+    oracle = load_case_oracle(case_id)
+    attempt = CaseAttempt(oracle(clone, run), run)
+    event("eval_case.done", case_id=case_id, outcome=attempt.oracle.outcome, status=run.status)
+    return attempt
+
+
 def run_case(
     case_id: str,
     repo: Path = _REPO,
@@ -30,43 +77,14 @@ def run_case(
     min_free_disk_gb: float = 2.0,
 ) -> CaseAttempt:
     """Run one attempt of ``case_id`` in an isolated clone. Always tears down."""
-    free_gb = shutil.disk_usage(tempfile.gettempdir()).free / 10**9
-    if free_gb < min_free_disk_gb:
-        return CaseAttempt(
-            OracleResult(
-                outcome="error",
-                reason=f"insufficient disk: {free_gb:.1f}GB < {min_free_disk_gb}GB",
-            ),
-            _null_run_result(Path(tempfile.gettempdir())),
-        )
+    disk_error = _disk_space_error(min_free_disk_gb)
+    if disk_error is not None:
+        return disk_error
     clone = Path(tempfile.mkdtemp(prefix=f"eval-{run_id}-{case_id}-"))
     try:
-        subprocess.run(
-            ["git", "clone", "--local", str(repo), str(clone)],
-            check=True, capture_output=True, text=True,
-            timeout=120,  # local clone; 2 min cap catches stalled NFS/APFS
-        )
-        spec = clone / "evals" / "cases" / case_id / "spec.md"
-        subprocess.run(
-            ["python3", _INIT, "init", "--spec", str(spec), "--force",
-             "--max-workers", "2"],
-            cwd=str(clone), check=True, capture_output=True, text=True,
-            timeout=60,
-        )
-        subprocess.run(
-            ["python3", _LOOP, "--max-iter", str(max_iter),
-             "--max-cost-usd", str(max_cost_usd),
-             "--max-concurrent-claude", str(_UNCAPPED_CONCURRENCY)],
-            cwd=str(clone),
-            check=False,  # non-zero exit is expected (budget-cap, pivot-needed); oracle decides pass/fail
-            capture_output=True, text=True,
-            timeout=3600,  # headless loop is budget-capped; wall-clock ceiling prevents orphan
-        )
-        run = _read_run_result(clone)
-        oracle = load_case_oracle(case_id)
-        return CaseAttempt(oracle(clone, run), run)
-    except Exception as exc:  # any failure, including the oracle, is bucketed as error
-        # paths in the error RunResult are nominal — `clone` is torn down in `finally`
+        return _execute_case(case_id, repo, clone, max_iter, max_cost_usd)
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        event("eval_case.error", case_id=case_id, error_type=type(exc).__name__)
         return CaseAttempt(
             OracleResult(outcome="error", reason=f"{type(exc).__name__}: {exc}"),
             _null_run_result(clone),

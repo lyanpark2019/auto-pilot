@@ -9,6 +9,7 @@ from ._mapping import DOMAINS, NBM_GENERIC_KEEP
 
 
 class NotebookLMSplitPhase(Phase):
+    """Represent NotebookLMSplitPhase data for this module."""
     name = "4_notebooklm_split"
     deps = ["3_sportic365_merge"]
 

@@ -28,13 +28,38 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, cast
+from typing import Iterator, cast
 
 import jsonschema
 
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 CONTRACT_SCHEMA_PATH = SCHEMAS_DIR / "contract.schema.json"
 _VALIDATOR: jsonschema.Draft202012Validator | None = None
+JsonObject = dict[str, object]
+
+
+def _as_str(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    raise SnapshotMismatchError(f"expected string JSON value, got {type(value).__name__}")
+
+
+def _as_object(value: object) -> JsonObject:
+    if isinstance(value, dict):
+        return cast(JsonObject, value)
+    raise SnapshotMismatchError(f"expected object JSON value, got {type(value).__name__}")
+
+
+def _as_str_list(value: object) -> list[str]:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    raise SnapshotMismatchError(f"expected string-list JSON value, got {type(value).__name__}")
+
+
+def _as_optional_str(value: object) -> str | None:
+    if value is None or isinstance(value, str):
+        return value
+    raise SnapshotMismatchError(f"expected optional string JSON value, got {type(value).__name__}")
 
 
 class ContractValidationError(Exception):
@@ -51,7 +76,7 @@ def _validator() -> jsonschema.Draft202012Validator:
     return _VALIDATOR
 
 
-def validate(c: dict[str, Any]) -> None:
+def validate(c: JsonObject) -> None:
     """Validate a contract dict against schemas/contract.schema.json.
 
     Raises:
@@ -63,7 +88,7 @@ def validate(c: dict[str, Any]) -> None:
         raise ContractValidationError(msg)
 
 
-def write_contract(c: dict[str, Any], path: Path) -> Path:
+def write_contract(c: JsonObject, path: Path) -> Path:
     """Atomic write of a validated contract to ``path``.
 
     Same-mount tempfile + fsync(fd) + rename + fsync(dir_fd). On Darwin uses
@@ -74,11 +99,11 @@ def write_contract(c: dict[str, Any], path: Path) -> Path:
     return atomic_write_text(path, json.dumps(c, indent=2, sort_keys=True) + "\n")
 
 
-def read_contract(path: Path) -> dict[str, Any]:
+def read_contract(path: Path) -> JsonObject:
     """Read + validate a contract from ``path``."""
     data = json.loads(path.read_text())
     validate(data)
-    return cast(dict[str, Any], data)
+    return cast(JsonObject, data)
 
 
 def atomic_write_text(path: Path, text: str) -> Path:
@@ -97,7 +122,7 @@ def atomic_write_text(path: Path, text: str) -> Path:
             _fsync_file(f.fileno())
         os.replace(tmp_name, path)  # atomic on same fs
         _fsync_dir(path.parent)
-    except Exception:
+    except OSError:
         try:
             os.unlink(tmp_name)
         except FileNotFoundError:
@@ -172,6 +197,7 @@ class SnapshotMismatchError(Exception):
 
 @dataclass(frozen=True)
 class SnapshotShas:
+    """Represent SnapshotShas data for this module."""
     spec: str
     claude_md_chain: list[str]
     project_context: str | None = None
@@ -219,52 +245,52 @@ def snapshot_context(dest_dir: Path, spec_path: Path,
                         project_context=context_sha)
 
 
-def verify_snapshots(contract_dir: Path) -> None:
-    """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas.
-
-    For ``project_context``:
-      - Declared sha → bundle file ``project-context.md`` must exist + match
-        (fail-closed: raises :class:`SnapshotMismatchError` on any mismatch).
-      - Absent key → logs "ran context-blind" to stderr and continues (Step-1
-        semantics: context-free runs are allowed but explicitly surfaced).
-
-    Raises SnapshotMismatchError on any mismatch.
-    """
-    import sys as _sys
-    contract = read_contract(contract_dir / "contract.json")
-    bundle = Path(contract["context_bundle_path"])
-    expected_spec = contract["snapshot_shas"]["spec"]
+def _verify_spec_sha(bundle: Path, expected_spec: str) -> None:
     actual_spec = _sha256((bundle / "spec.md").read_bytes())
     if actual_spec != expected_spec:
         raise SnapshotMismatchError(f"spec.md sha mismatch: {actual_spec!r} != {expected_spec!r}")
 
-    expected_chain = contract["snapshot_shas"]["claude_md_chain"]
-    # Discover bundle CLAUDE files in stable order: CLAUDE.md first, then CLAUDE-*.md sorted
+
+def _bundle_claude_files(bundle: Path) -> list[Path]:
     chain_files: list[Path] = []
     if (bundle / "CLAUDE.md").exists():
         chain_files.append(bundle / "CLAUDE.md")
     chain_files.extend(sorted(bundle.glob("CLAUDE-*.md")))
-    actual_chain = [_sha256(p.read_bytes()) for p in chain_files]
+    return chain_files
+
+
+def _verify_claude_chain(bundle: Path, expected_chain: list[str]) -> None:
+    actual_chain = [_sha256(p.read_bytes()) for p in _bundle_claude_files(bundle)]
     if actual_chain != expected_chain:
         raise SnapshotMismatchError(
             f"claude_md_chain sha mismatch: {actual_chain!r} != {expected_chain!r}"
         )
 
-    expected_ctx = contract["snapshot_shas"].get("project_context")
+
+def _verify_project_context(bundle: Path, expected_ctx: str | None) -> None:
     if expected_ctx is None:
-        print("verify_snapshots: ran context-blind (no project_context sha declared)",
-              file=_sys.stderr)
-    else:
-        ctx_file = bundle / "project-context.md"
-        if not ctx_file.exists():
-            raise SnapshotMismatchError(
-                "project-context.md declared in snapshot_shas but absent from bundle"
-            )
-        actual_ctx = _sha256(ctx_file.read_bytes())
-        if actual_ctx != expected_ctx:
-            raise SnapshotMismatchError(
-                f"project-context.md sha mismatch: {actual_ctx!r} != {expected_ctx!r}"
-            )
+        sys.stderr.write("verify_snapshots: ran context-blind (no project_context sha declared)\n")
+        return
+    ctx_file = bundle / "project-context.md"
+    if not ctx_file.exists():
+        raise SnapshotMismatchError(
+            "project-context.md declared in snapshot_shas but absent from bundle"
+        )
+    actual_ctx = _sha256(ctx_file.read_bytes())
+    if actual_ctx != expected_ctx:
+        raise SnapshotMismatchError(
+            f"project-context.md sha mismatch: {actual_ctx!r} != {expected_ctx!r}"
+        )
+
+
+def verify_snapshots(contract_dir: Path) -> None:
+    """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas."""
+    contract = read_contract(contract_dir / "contract.json")
+    bundle = Path(_as_str(contract["context_bundle_path"]))
+    snapshot_shas = _as_object(contract["snapshot_shas"])
+    _verify_spec_sha(bundle, _as_str(snapshot_shas["spec"]))
+    _verify_claude_chain(bundle, _as_str_list(snapshot_shas["claude_md_chain"]))
+    _verify_project_context(bundle, _as_optional_str(snapshot_shas.get("project_context")))
 
 
 def _sha256(b: bytes) -> str:

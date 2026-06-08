@@ -305,10 +305,9 @@ def _warn_symbols(
         return
     missing = _find_symbol_in_window(code_lines, cited_lineno - 1, nearby)
     if missing:
-        print(
+        sys.stderr.write(
             f"WARN {doc_rel}:{doc_lineno_0 + 1}: symbol(s) "
-            f"{missing} not found near {raw_path}:{cited_lineno}",
-            file=sys.stderr,
+            f"{missing} not found near {raw_path}:{cited_lineno}\n"
         )
 
 
@@ -411,53 +410,60 @@ def _check_citation(
     return None
 
 
+def _check_doc_lines(
+    repo_root: Path,
+    cache: _FileCache,
+    asset_counts: dict[str, int],
+    doc_path: Path,
+) -> list[Violation]:
+    violations: list[Violation] = []
+    doc_lines = cache.get_lines(doc_path)
+    if doc_lines is None:
+        return violations
+    doc_rel = str(doc_path.relative_to(repo_root))
+    for lineno_0, raw_line in enumerate(doc_lines):
+        if IGNORE_MARKER in raw_line:
+            continue
+        violations.extend(_check_asset_count_line(asset_counts, doc_rel, lineno_0, raw_line))
+        for m in _CITE_RE.finditer(raw_line):
+            raw_path = m.group(1)
+            if _is_skipped_path(raw_path) or not _is_checkable(raw_path):
+                continue
+            v = _check_citation(
+                cache, repo_root, doc_rel, doc_lines, lineno_0,
+                raw_path, m.group(2), m.group(3), m.group(0).strip("`"),
+            )
+            if v is not None:
+                violations.append(v)
+    return violations
+
+
+def _check_source_comment_lines(
+    repo_root: Path,
+    cache: _FileCache,
+    asset_counts: dict[str, int],
+    source_path: Path,
+) -> list[Violation]:
+    source_lines = cache.get_lines(source_path)
+    if source_lines is None:
+        return []
+    source_rel = str(source_path.relative_to(repo_root))
+    violations: list[Violation] = []
+    for lineno_0, raw_line in enumerate(source_lines):
+        if IGNORE_MARKER in raw_line or not _SOURCE_COMMENT_RE.search(raw_line):
+            continue
+        violations.extend(_check_asset_count_line(asset_counts, source_rel, lineno_0, raw_line))
+    return violations
+
 def check_citations(repo_root: Path) -> list[Violation]:
     """Run all citation checks; return a list of violations."""
-    violations: list[Violation] = []
     cache = _FileCache()
     asset_counts = _collect_asset_counts(repo_root)
-
+    violations: list[Violation] = []
     for doc_path in _doc_files(repo_root):
-        doc_lines = cache.get_lines(doc_path)
-        if doc_lines is None:
-            continue
-        doc_rel = str(doc_path.relative_to(repo_root))
-
-        for lineno_0, raw_line in enumerate(doc_lines):
-            if IGNORE_MARKER in raw_line:
-                continue
-            violations.extend(_check_asset_count_line(
-                asset_counts, doc_rel, lineno_0, raw_line,
-            ))
-
-            for m in _CITE_RE.finditer(raw_line):
-                raw_path = m.group(1)
-                line_str = m.group(2)
-                end_line_str = m.group(3)
-                citation = m.group(0).strip("`")
-
-                if _is_skipped_path(raw_path) or not _is_checkable(raw_path):
-                    continue
-
-                v = _check_citation(
-                    cache, repo_root, doc_rel, doc_lines,
-                    lineno_0, raw_path, line_str, end_line_str, citation,
-                )
-                if v is not None:
-                    violations.append(v)
-
+        violations.extend(_check_doc_lines(repo_root, cache, asset_counts, doc_path))
     for source_path in _source_comment_files(repo_root):
-        source_lines = cache.get_lines(source_path)
-        if source_lines is None:
-            continue
-        source_rel = str(source_path.relative_to(repo_root))
-        for lineno_0, raw_line in enumerate(source_lines):
-            if IGNORE_MARKER in raw_line or not _SOURCE_COMMENT_RE.search(raw_line):
-                continue
-            violations.extend(_check_asset_count_line(
-                asset_counts, source_rel, lineno_0, raw_line,
-            ))
-
+        violations.extend(_check_source_comment_lines(repo_root, cache, asset_counts, source_path))
     return violations
 
 
@@ -477,15 +483,15 @@ def main(argv: list[str] | None = None) -> int:
     violations = check_citations(repo_root)
 
     if violations:
-        print(f"doc-reference-integrity: {len(violations)} violation(s) found\n")
+        sys.stdout.write(f"doc-reference-integrity: {len(violations)} violation(s) found\n\n")
         for v in violations:
-            print(f"  {v.doc_file}:{v.doc_line}  [{v.citation}]")
-            print(f"    reason: {v.reason}")
+            sys.stdout.write(f"  {v.doc_file}:{v.doc_line}  [{v.citation}]\n")
+            sys.stdout.write(f"    reason: {v.reason}\n")
             if v.suggestion:
-                print(f"    suggestion: {v.suggestion}")
+                sys.stdout.write(f"    suggestion: {v.suggestion}\n")
         return 1
 
-    print("doc-reference-integrity: OK (0 violations)")
+    sys.stdout.write("doc-reference-integrity: OK (0 violations)\n")
     return 0
 
 

@@ -23,6 +23,7 @@ import re
 import sys
 import random
 from pathlib import Path
+from typing import TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = PLUGIN_ROOT / "templates" / "rubric.yaml"
@@ -34,11 +35,27 @@ _FALLBACK_MAX_PTS = {
 }
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
 def _load_max_pts() -> dict[str, int]:
     if not RUBRIC_PATH.exists():
         return dict(_FALLBACK_MAX_PTS)
     try:
         import yaml
+    except ImportError as exc:
+        _warn(f"score_content: failed to load rubric {RUBRIC_PATH}: {exc}")
+        return dict(_FALLBACK_MAX_PTS)
+    try:
         data = yaml.safe_load(RUBRIC_PATH.read_text()) or {}
         dims = (data.get("content") or {}).get("dimensions") or {}
         out = {name: int(cfg.get("max", _FALLBACK_MAX_PTS.get(name, 10)))
@@ -46,18 +63,26 @@ def _load_max_pts() -> dict[str, int]:
         for k, v in _FALLBACK_MAX_PTS.items():
             out.setdefault(k, v)
         return out
-    except Exception as exc:
-        print(f"score_content: failed to load rubric {RUBRIC_PATH}: {exc}", file=sys.stderr)
+    except (OSError, yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
+        _warn(f"score_content: failed to load rubric {RUBRIC_PATH}: {exc}")
         return dict(_FALLBACK_MAX_PTS)
 
 
-def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, int, list]:
-    """Sample N edges, check both label tokens appear in same raw source md."""
-    rng = random.Random(42)
+def _label_tokens(label: str) -> list[str]:
+    out = []
+    for w in re.split(r"[\s\-/_·,()\[\]]+", label.lower()):
+        if not w:
+            continue
+        is_cjk = any("一" <= ch <= "鿿" or "぀" <= ch <= "ヿ" or "가" <= ch <= "힯" for ch in w)
+        if is_cjk and len(w) >= 2:
+            out.append(w)
+        elif not is_cjk and len(w) > 2:
+            out.append(w)
+    return out
+
+
+def _edge_candidates(vault: Path, cats: list, per_cat: int, rng: random.Random) -> list:
     sampled = []
-    if not cats:
-        return 0, 0, []
-    per_cat = max(1, sample_n // len(cats) + 1)
     for c in cats:
         gpath = vault / c / "raw" / "graphify-out" / "graph.json"
         if not gpath.exists():
@@ -66,50 +91,39 @@ def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, 
         label = {n["id"]: n["label"] for n in g["nodes"]}
         edges = g.get("links", [])
         rng.shuffle(edges)
-        # take INFERRED + AMBIGUOUS for verification (EXTRACTED already grounded)
         candidates = [e for e in edges if e.get("confidence") in ("INFERRED", "AMBIGUOUS")]
-        sampled += [(c, e, label.get(e["source"], ""), label.get(e["target"], ""))
-                    for e in candidates[:per_cat]]
-    sampled = sampled[:sample_n]
+        sampled += [(c, e, label.get(e["source"], ""), label.get(e["target"], "")) for e in candidates[:per_cat]]
+    return sampled
 
-    # cache raw text per cat
-    raw_text = {}
-    for c in cats:
-        raw_text[c] = " ".join(
-            f.read_text().lower() for f in (vault / c / "raw").glob("*.md")
-        )
 
-    def _tokens(label: str) -> list[str]:
-        out = []
-        for w in re.split(r"[\s\-/_·,()\[\]]+", label.lower()):
-            if not w:
-                continue
-            is_cjk = any(
-                "一" <= ch <= "鿿"  # CJK Unified Ideographs
-                or "぀" <= ch <= "ヿ"  # Hiragana + Katakana
-                or "가" <= ch <= "힯"  # Hangul Syllables
-                for ch in w
-            )
-            if is_cjk and len(w) >= 2:
-                out.append(w)
-            elif not is_cjk and len(w) > 2:
-                out.append(w)
-        return out
+def _raw_text_by_category(vault: Path, cats: list) -> dict:
+    return {c: " ".join(f.read_text().lower() for f in (vault / c / "raw").glob("*.md")) for c in cats}
 
+
+def _edge_grounded(raw_text: dict, category: str, source_label: str, target_label: str) -> bool:
+    s_tokens = _label_tokens(source_label)
+    t_tokens = _label_tokens(target_label)
+    text = raw_text.get(category, "")
+    s_hit = any(tok in text for tok in s_tokens) if s_tokens else False
+    t_hit = any(tok in text for tok in t_tokens) if t_tokens else False
+    return s_hit and t_hit
+
+
+def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, int, list]:
+    """Sample N edges, check both label tokens appear in same raw source md."""
+    if not cats:
+        return 0, 0, []
+    rng = random.Random(42)
+    sampled = _edge_candidates(vault, cats, max(1, sample_n // len(cats) + 1), rng)[:sample_n]
+    raw_text = _raw_text_by_category(vault, cats)
     passed = 0
     failed_examples = []
-    for c, e, s_lbl, t_lbl in sampled:
-        s_tokens = _tokens(s_lbl)
-        t_tokens = _tokens(t_lbl)
-        text = raw_text.get(c, "")
-        s_hit = any(tok in text for tok in s_tokens) if s_tokens else False
-        t_hit = any(tok in text for tok in t_tokens) if t_tokens else False
-        if s_hit and t_hit:
+    for c, _e, s_lbl, t_lbl in sampled:
+        if _edge_grounded(raw_text, c, s_lbl, t_lbl):
             passed += 1
         elif len(failed_examples) < 5:
             failed_examples.append(f"{c}: {s_lbl} -X-> {t_lbl}")
     return passed, len(sampled), failed_examples
-
 
 def concept_accuracy(vault: Path, cats: list, sample_n: int = 14) -> tuple[int, int]:
     """Sample concept pages, check summary tokens appear in cited source files."""
@@ -252,50 +266,50 @@ def hallucination_check(vault: Path, cats: list) -> tuple[int, int]:
     return int(pct_grounded * 100), 100  # as percentage
 
 
-def score_vault(vault: Path) -> dict:
-    cats = sorted([d.name for d in vault.iterdir()
-                   if d.is_dir() and (d / "raw").exists() and not d.name.startswith(".")])
+def _vault_categories(vault: Path) -> list[str]:
+    return sorted(d.name for d in vault.iterdir() if d.is_dir() and (d / "raw").exists() and not d.name.startswith("."))
 
-    scores = {}
-    details = {}
 
-    # 1. Edge fact (30)
+def _scaled(max_points: int, passed: int, total: int) -> float:
+    return round(max_points * passed / max(total, 1), 1)
+
+
+def _score_edge_fact(vault: Path, cats: list[str], scores: dict, details: dict) -> None:
     passed, total, failures = edge_token_check(vault, cats, sample_n=30)
-    scores["edge_fact"] = round(30 * passed / max(total, 1), 1)
+    scores["edge_fact"] = _scaled(30, passed, total)
     details["edge_fact"] = f"{passed}/{total} edges grounded in raw co-occurrence"
     if failures:
         details["edge_fact"] += f" (e.g. {failures[0]})"
 
-    # 2. Concept accuracy (20)
-    passed, total = concept_accuracy(vault, cats, sample_n=14)
-    scores["concept_accuracy"] = round(20 * passed / max(total, 1), 1)
-    details["concept_accuracy"] = f"{passed}/{total} concepts grounded"
 
-    # 3. ADR fidelity (15)
-    passed, total = adr_fidelity(vault, cats)
-    scores["adr_fidelity"] = round(15 * passed / max(total, 1), 1)
-    details["adr_fidelity"] = f"{passed}/{total} ADRs grounded"
+def _score_pair(scores: dict, details: dict, key: str, max_points: int, outcome: tuple[int, int], text: str) -> None:
+    passed, total = outcome
+    scores[key] = _scaled(max_points, passed, total)
+    details[key] = text.format(passed=passed, total=total)
 
-    # 4. Community label fit (10)
-    passed, total = community_label_fit(vault, cats)
-    scores["label_fit"] = round(10 * passed / max(total, 1), 1)
-    details["label_fit"] = f"{passed}/{total} labels fit members"
 
-    # 5. Cross-vault relevance (10)
-    passed, total = cross_vault_relevance(vault)
-    scores["cross_vault_relevance"] = round(10 * passed / max(total, 1), 1)
-    details["cross_vault_relevance"] = f"{passed}/{total} real cross-vault targets exist"
-
-    # 6. Hot cache citation (5)
-    passed, total = hot_cache_citation(vault, cats)
-    scores["hot_citation"] = round(5 * passed / max(total, 1), 1)
-    details["hot_citation"] = f"{passed}/{total} hot.md cites real god nodes"
-
-    # 7. Hallucination (10) — % of concept/entity pages with source linkage
+def _score_content_dimensions(vault: Path, cats: list[str], scores: dict, details: dict) -> None:
+    _score_edge_fact(vault, cats, scores, details)
+    _score_pair(scores, details, "concept_accuracy", 20, concept_accuracy(vault, cats, sample_n=14),
+                "{passed}/{total} concepts grounded")
+    _score_pair(scores, details, "adr_fidelity", 15, adr_fidelity(vault, cats), "{passed}/{total} ADRs grounded")
+    _score_pair(scores, details, "label_fit", 10, community_label_fit(vault, cats),
+                "{passed}/{total} labels fit members")
+    _score_pair(scores, details, "cross_vault_relevance", 10, cross_vault_relevance(vault),
+                "{passed}/{total} real cross-vault targets exist")
+    _score_pair(scores, details, "hot_citation", 5, hot_cache_citation(vault, cats),
+                "{passed}/{total} hot.md cites real god nodes")
     grounded_pct, _ = hallucination_check(vault, cats)
     scores["non_hallucinated"] = round(10 * grounded_pct / 100, 1)
     details["non_hallucinated"] = f"{grounded_pct}% pages have source linkage"
 
+
+def score_vault(vault: Path) -> dict:
+    """Score vault content against the rubric."""
+    cats = _vault_categories(vault)
+    scores = {}
+    details = {}
+    _score_content_dimensions(vault, cats, scores, details)
     total = min(100, sum(scores.values()))
     return {
         "total": round(total, 1),
@@ -307,27 +321,28 @@ def score_vault(vault: Path) -> dict:
 
 
 def main():
+    """Run the score-content command-line entry point."""
     if len(sys.argv) < 2:
-        print("Usage: score_content.py <vault-path>", file=sys.stderr)
+        _warn("Usage: score_content.py <vault-path>")
         sys.exit(1)
     vault = Path(sys.argv[1]).expanduser().resolve()
     if not vault.exists():
-        print(f"Vault not found: {vault}", file=sys.stderr)
+        _warn(f"Vault not found: {vault}")
         sys.exit(1)
 
     state = score_vault(vault)
 
-    print("=" * 60)
-    print(f"Content Accuracy Score: {state['total']:.1f}/100")
-    print("=" * 60)
+    _emit("=" * 60)
+    _emit(f"Content Accuracy Score: {state['total']:.1f}/100")
+    _emit("=" * 60)
     max_pts = _load_max_pts()
     for k, v in state["scores"].items():
-        print(f"  {k:25} {v:5.1f}/{max_pts.get(k, 10):2} — {state['details'][k]}")
+        _emit(f"  {k:25} {v:5.1f}/{max_pts.get(k, 10):2} — {state['details'][k]}")
 
     out = vault / "meta" / "score-content-state.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(state, ensure_ascii=False, indent=2))
-    print(f"\nSaved {out.relative_to(vault)}")
+    _emit(f"\nSaved {out.relative_to(vault)}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """Base Phase class — uniform interface for the autonomous restructure loop."""
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 
 @dataclass
 class PhaseResult:
+    """Represent PhaseResult data for this module."""
     status: str  # completed | failed | partial
     detail: str = ""
     artifacts: dict[str, Any] = field(default_factory=dict)
@@ -57,4 +59,5 @@ class PhaseContext:
         ts = time.strftime("%H:%M:%S")
         line = f"[{ts}] {msg}"
         self.log.append(line)
-        print(line, flush=True)
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()

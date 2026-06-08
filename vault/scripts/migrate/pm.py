@@ -17,6 +17,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
@@ -30,6 +31,18 @@ from sources.notebooklm import _classify_title  # noqa: E402
 BOARD_PATH = Path.home() / ".vault-builder" / "migrate-tickets.json"
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
 def _list_notebooks() -> list[dict]:
     r = subprocess.run(["notebooklm", "list", "--json"], capture_output=True, text=True, timeout=30)
     return json.loads(r.stdout).get("notebooks", [])
@@ -40,12 +53,13 @@ def _source_count(nid: str) -> int:
                        capture_output=True, text=True, timeout=30)
     try:
         return len(json.loads(r.stdout).get("sources", []))
-    except Exception as exc:
-        print(f"migrate/pm: _source_count JSON parse failed for {nid}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except (json.JSONDecodeError, AttributeError) as exc:
+        _warn(f"migrate/pm: _source_count JSON parse failed for {nid}: {type(exc).__name__}: {exc}")
         return -1
 
 
 def cmd_issue(args) -> int:
+    """Run the issue subcommand."""
     board = TicketBoard(BOARD_PATH)
     nbs = _list_notebooks()
     targets = [nb for nb in nbs if _classify_title(nb["title"]) == args.category and nb["id"] != args.dst]
@@ -53,7 +67,7 @@ def cmd_issue(args) -> int:
         targets = targets[: args.limit]
 
     dst_baseline = _source_count(args.dst)
-    print(f"dst notebook source baseline: {dst_baseline}")
+    _emit(f"dst notebook source baseline: {dst_baseline}")
 
     issued = 0
     for nb in targets:
@@ -70,20 +84,21 @@ def cmd_issue(args) -> int:
             "acceptance": f"dst source count increases by {src_n}",
         }
         t = board.issue(round_num=1, worker_type="source-migrator", contract=contract)
-        print(f"  + {t.id}  src={nb['title'][:50]} ({src_n} sources)")
+        _emit(f"  + {t.id}  src={nb['title'][:50]} ({src_n} sources)")
         issued += 1
-    print(f"\nIssued {issued} tickets → {BOARD_PATH}")
+    _emit(f"\nIssued {issued} tickets → {BOARD_PATH}")
     return 0
 
 
 def cmd_status(args) -> int:
+    """Run the status subcommand."""
     board = TicketBoard(BOARD_PATH)
     summary = board.round_summary(1)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    _emit(json.dumps(summary, ensure_ascii=False, indent=2))
     for tid, t in board.tickets.items():
         flag = {"verified": "✓", "rejected": "✗", "delivered": "⊙", "in_progress": "▶", "pending": "·"}.get(
             t.status.value, "?")
-        print(f"  {flag} {tid}  retry={t.retry_count}  {t.contract.get('src_title','')[:50]}")
+        _emit(f"  {flag} {tid}  retry={t.retry_count}  {t.contract.get('src_title','')[:50]}")
     return 0
 
 
@@ -92,7 +107,7 @@ def cmd_verify(args) -> int:
     board = TicketBoard(BOARD_PATH)
     delivered = [t for t in board.tickets.values() if t.status == TicketStatus.DELIVERED]
     if not delivered:
-        print("No delivered tickets to verify.")
+        _emit("No delivered tickets to verify.")
         return 0
 
     dst_id = delivered[0].contract["dst_id"]
@@ -111,9 +126,9 @@ def cmd_verify(args) -> int:
     for t in delivered:
         ok = board.verify(t.id, verifier)
         mark = "✓" if ok else "✗"
-        print(f"  {mark} {t.id}  {t.verification.get('feedback','')}")
+        _emit(f"  {mark} {t.id}  {t.verification.get('feedback','')}")
 
-    print(f"\ndst source count now: {dst_now}")
+    _emit(f"\ndst source count now: {dst_now}")
     return 0
 
 
@@ -122,25 +137,27 @@ def cmd_reissue(args) -> int:
     board = TicketBoard(BOARD_PATH)
     rejected = [t for t in board.tickets.values() if t.status == TicketStatus.REJECTED]
     if not rejected:
-        print("No rejected tickets.")
+        _emit("No rejected tickets.")
         return 0
     for t in rejected:
         try:
             board.reissue(t.id, additional_feedback="Idempotent worker will skip already-migrated; retry missing.")
-            print(f"  ↺ {t.id}  retry={t.retry_count}")
+            _emit(f"  ↺ {t.id}  retry={t.retry_count}")
         except RuntimeError as e:
-            print(f"  ! {t.id}  {e}")
+            _emit(f"  ! {t.id}  {e}")
     return 0
 
 
 def cmd_reset(args) -> int:
+    """Run the reset subcommand."""
     if BOARD_PATH.exists():
         BOARD_PATH.unlink()
-        print(f"Removed {BOARD_PATH}")
+        _emit(f"Removed {BOARD_PATH}")
     return 0
 
 
 def main() -> int:
+    """Run the pm command-line entry point."""
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
 

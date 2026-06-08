@@ -46,6 +46,7 @@ def _find_contract_dirs(contracts_root: Path) -> list[Path]:
 
 
 def assert_phases_completed(state_path: Path, expected: int) -> list[str]:
+    """Assert that phases completed holds."""
     if not state_path.exists():
         return [f"state.json missing at {state_path}"]
     state = json.loads(state_path.read_text())
@@ -62,6 +63,7 @@ def assert_phases_completed(state_path: Path, expected: int) -> list[str]:
 
 
 def assert_no_active_worktrees(worktrees_dir: Path) -> list[str]:
+    """Assert that no active worktrees holds."""
     if not worktrees_dir.exists():
         return []
     leftover = [p for p in worktrees_dir.iterdir() if p.is_dir()]
@@ -71,6 +73,7 @@ def assert_no_active_worktrees(worktrees_dir: Path) -> list[str]:
 
 
 def assert_contracts_signed(contracts_root: Path) -> list[str]:
+    """Assert that contracts signed holds."""
     failures: list[str] = []
     for round_dir in _find_contract_dirs(contracts_root):
         contract = round_dir / "contract.json"
@@ -83,17 +86,18 @@ def assert_contracts_signed(contracts_root: Path) -> list[str]:
             continue
         try:
             _contract.read_contract(contract)
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, _contract.ContractValidationError) as e:
             failures.append(f"contract schema invalid at {round_dir}: {e}")
             continue
         try:
             _contract.verify_pm_signature(round_dir)
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, _contract.PMSignatureMismatchError) as e:
             failures.append(f"PM-SIGNATURE mismatch at {round_dir}: {e}")
     return failures
 
 
 def assert_trailer_chain(repo_root: Path, expected_phases: int) -> list[str]:
+    """Assert that trailer chain holds."""
     res = subprocess.run(
         ["git", "log", "--format=%H%n%B%n---END---", "-n", "20"],
         cwd=str(repo_root),
@@ -117,6 +121,7 @@ def assert_trailer_chain(repo_root: Path, expected_phases: int) -> list[str]:
 
 
 def assert_no_sandbox_violations(state_dir: Path) -> list[str]:
+    """Assert that no sandbox violations holds."""
     log = state_dir / "sandbox-violations.jsonl"
     if not log.exists():
         return []
@@ -204,7 +209,7 @@ def _main() -> int:
     args = p.parse_args()
     report = (run_tier1 if args.tier == 1 else run_tier2)(args.repo_root, args.phases)
     payload = {"tier": report.tier, "passed": report.passed, "failures": report.failures}
-    print(json.dumps(payload, indent=2))
+    sys.stdout.write(json.dumps(payload, indent=2) + "\n")
     return 0 if report.passed else 1
 
 

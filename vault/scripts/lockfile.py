@@ -18,13 +18,38 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import TextIO
 
 
 class LockHeldError(RuntimeError):
+    """Represent LockHeldError data for this module."""
     pass
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
+def _emit_json(payload: object, *, stream: TextIO = sys.stdout) -> None:
+    _write_line(stream, json.dumps(payload))
+
+
+def _load_lock(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _pid_from_lock(held: dict[str, object]) -> int | None:
+    pid = held.get("pid")
+    return pid if isinstance(pid, int) else None
+
+
 class VaultLock:
+    """Represent VaultLock data for this module."""
     def __init__(self, vault: Path, role: str = "pm-loop"):
         self.vault = Path(vault).expanduser().resolve()
         self.role = role
@@ -35,19 +60,22 @@ class VaultLock:
         self.acquire()
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.release()
 
     def acquire(self) -> None:
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         if self.lock_path.exists():
             try:
-                held = json.loads(self.lock_path.read_text())
-            except Exception as exc:
-                print(f"lockfile: corrupt lock file {self.lock_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                held = _load_lock(self.lock_path)
+            except (OSError, json.JSONDecodeError) as exc:
+                _warn(
+                    f"lockfile: corrupt lock file {self.lock_path}: "
+                    f"error_type={type(exc).__name__}: {exc}"
+                )
                 held = {}
-            held_pid = held.get("pid")
-            if held_pid and self._pid_alive(held_pid):
+            held_pid = _pid_from_lock(held)
+            if held_pid is not None and self._pid_alive(held_pid):
                 raise LockHeldError(
                     f"Vault {self.vault.name} {self.role} lock held by pid {held_pid} "
                     f"since {held.get('start_ts')} (host {held.get('host','?')})"
@@ -63,11 +91,14 @@ class VaultLock:
         if not self._acquired:
             return
         try:
-            held = json.loads(self.lock_path.read_text())
+            held = _load_lock(self.lock_path)
             if held.get("pid") == os.getpid():
                 self.lock_path.unlink()
         except (FileNotFoundError, json.JSONDecodeError) as exc:
-            print(f"lockfile: release skipped for {self.lock_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            _warn(
+                f"lockfile: release skipped for {self.lock_path}: "
+                f"error_type={type(exc).__name__}: {exc}"
+            )
         self._acquired = False
 
     def _write_lock(self) -> None:
@@ -78,7 +109,7 @@ class VaultLock:
             "start_ts": time.time(),
             "host": os.uname().nodename if hasattr(os, "uname") else "unknown",
         }
-        self.lock_path.write_text(json.dumps(payload, indent=2))
+        self.lock_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     @staticmethod
     def _pid_alive(pid: int) -> bool:
@@ -89,9 +120,39 @@ class VaultLock:
             return e.errno == errno.EPERM
 
 
+def _release_existing_lock(lock: VaultLock) -> int:
+    try:
+        held = _load_lock(lock.lock_path)
+        held_pid = _pid_from_lock(held)
+        if held_pid is None or held_pid == os.getpid() or not lock._pid_alive(held_pid):
+            lock.lock_path.unlink()
+            _emit_json({"released": True})
+            return 0
+        _emit_json({"released": False, "reason": "held by live pid"}, stream=sys.stderr)
+        return 3
+    except (OSError, json.JSONDecodeError) as exc:
+        _emit_json(
+            {"released": False, "error": str(exc), "error_type": type(exc).__name__},
+            stream=sys.stderr,
+        )
+        return 1
+
+
+def _status(lock: VaultLock) -> int:
+    if lock.lock_path.exists():
+        try:
+            _write_line(sys.stdout, lock.lock_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            _emit_json({"error": str(exc), "error_type": type(exc).__name__})
+    else:
+        _emit_json({"locked": False})
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    """Run the lockfile command-line entry point."""
     if len(argv) < 3:
-        print("usage: lockfile.py <vault> {acquire|release|status} [role]", file=sys.stderr)
+        _write_line(sys.stderr, "usage: lockfile.py <vault> {acquire|release|status} [role]")
         return 1
     vault = Path(argv[1])
     cmd = argv[2]
@@ -101,37 +162,19 @@ def main(argv: list[str]) -> int:
     if cmd == "acquire":
         try:
             lock.acquire()
-            print(json.dumps({"acquired": True, "path": str(lock.lock_path)}))
+            _emit_json({"acquired": True, "path": str(lock.lock_path)})
             return 0
         except LockHeldError as e:
-            print(json.dumps({"acquired": False, "error": str(e)}), file=sys.stderr)
+            _emit_json({"acquired": False, "error": str(e)}, stream=sys.stderr)
             return 2
     if cmd == "release":
-        # Force-release: only if our pid or stale
         if lock.lock_path.exists():
-            try:
-                held = json.loads(lock.lock_path.read_text())
-                if held.get("pid") == os.getpid() or not lock._pid_alive(held.get("pid", -1)):
-                    lock.lock_path.unlink()
-                    print(json.dumps({"released": True}))
-                    return 0
-                print(json.dumps({"released": False, "reason": "held by live pid"}), file=sys.stderr)
-                return 3
-            except Exception as e:
-                print(json.dumps({"released": False, "error": str(e)}), file=sys.stderr)
-                return 1
-        print(json.dumps({"released": True, "note": "no lock"}))
+            return _release_existing_lock(lock)
+        _emit_json({"released": True, "note": "no lock"})
         return 0
     if cmd == "status":
-        if lock.lock_path.exists():
-            try:
-                print(lock.lock_path.read_text())
-            except Exception as e:
-                print(json.dumps({"error": str(e)}))
-        else:
-            print(json.dumps({"locked": False}))
-        return 0
-    print(f"unknown cmd: {cmd}", file=sys.stderr)
+        return _status(lock)
+    _write_line(sys.stderr, f"unknown cmd: {cmd}")
     return 1
 
 

@@ -21,6 +21,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, TextIO
 
 MEMORY_VERSION = 2
 
@@ -30,7 +31,19 @@ DEFAULT_MEMORY_PATH = Path(os.environ.get(
 ))
 
 
-def _default_memory() -> dict:
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
+def _default_memory() -> dict[str, Any]:
     return {
         "version": MEMORY_VERSION,
         "quality_history": [],
@@ -40,13 +53,14 @@ def _default_memory() -> dict:
     }
 
 
-def load_memory(path: Path) -> dict:
+def load_memory(path: Path) -> dict[str, Any]:
+    """Load memory data."""
     if not path.exists():
         return _default_memory()
     try:
         payload = json.loads(path.read_text(errors="replace"))
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"self_improve: failed to load memory {path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        _warn(f"self_improve: failed to load memory {path}: {type(exc).__name__}: {exc}")
         return _default_memory()
     if not isinstance(payload, dict):
         return _default_memory()
@@ -57,7 +71,8 @@ def load_memory(path: Path) -> dict:
     return base
 
 
-def save_memory(path: Path, payload: dict) -> None:
+def save_memory(path: Path, payload: dict[str, Any]) -> None:
+    """Save memory data atomically."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -65,6 +80,7 @@ def save_memory(path: Path, payload: dict) -> None:
 
 
 def parse_real_eval_report(vault: Path) -> dict[str, float]:
+    """Provide the public parse real eval report API."""
     report = vault / "meta" / "real-eval.md"
     if not report.exists():
         return {}
@@ -78,12 +94,13 @@ def parse_real_eval_report(vault: Path) -> dict[str, float]:
             try:
                 scores[task_id] = float(match.group(1))
             except ValueError as exc:
-                print(f"self_improve: failed to parse score for {task_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                _warn(f"self_improve: failed to parse score for {task_id}: {type(exc).__name__}: {exc}")
                 continue
     return scores
 
 
 def extract_real_eval_section(report_text: str, qid: str) -> str:
+    """Provide the public extract real eval section API."""
     if not report_text or not qid:
         return ""
     pattern = re.compile(rf"^## {re.escape(qid)} — .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
@@ -117,7 +134,8 @@ def write_weak_q_tickets(vault: Path, weak: list[str], scores: dict[str, float])
     return out
 
 
-def record_run(memory: dict, vault: Path, scores: dict[str, float], threshold: float, weak: list[str]) -> None:
+def record_run(memory: dict[str, Any], vault: Path, scores: dict[str, float], threshold: float, weak: list[str]) -> None:
+    """Provide the public record run API."""
     mean = sum(scores.values()) / len(scores) if scores else 0.0
     entry = {
         "vault": str(vault),
@@ -128,10 +146,13 @@ def record_run(memory: dict, vault: Path, scores: dict[str, float], threshold: f
         "per_q": {q: round(s, 1) for q, s in sorted(scores.items())},
         "weak_qs": weak,
     }
-    memory.setdefault("quality_history", []).append(entry)
+    history = memory.setdefault("quality_history", [])
+    if isinstance(history, list):
+        history.append(entry)
 
 
 def main(argv: list[str]) -> int:
+    """Run the self-improve command-line entry point."""
     parser = argparse.ArgumentParser(prog="self-improve")
     parser.add_argument("vault", type=Path)
     parser.add_argument("--threshold", type=float, default=95.0)
@@ -143,21 +164,21 @@ def main(argv: list[str]) -> int:
     vault = args.vault.expanduser().resolve()
     scores = parse_real_eval_report(vault)
     if not scores:
-        print(f"[self-improve] no real-eval report at {vault}/meta/real-eval.md", file=sys.stderr)
+        _warn(f"[self-improve] no real-eval report at {vault}/meta/real-eval.md")
         return 2
     mean = sum(scores.values()) / len(scores)
     weak = sorted(q for q, s in scores.items() if s < args.threshold)
-    print(f"[self-improve] mean={mean:.2f} threshold={args.threshold} weak={weak}")
+    _emit(f"[self-improve] mean={mean:.2f} threshold={args.threshold} weak={weak}")
 
     memory_path = args.memory.expanduser().resolve()
     memory = load_memory(memory_path)
     record_run(memory, vault, scores, args.threshold, weak)
     save_memory(memory_path, memory)
-    print(f"[self-improve] memory: {memory_path}")
+    _emit(f"[self-improve] memory: {memory_path}")
 
     if args.emit_tickets and weak:
         ticket_path = write_weak_q_tickets(vault, weak, scores)
-        print(f"[self-improve] tickets: {ticket_path}")
+        _emit(f"[self-improve] tickets: {ticket_path}")
     return 0
 
 

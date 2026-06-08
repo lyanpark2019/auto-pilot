@@ -5,6 +5,7 @@ from enum import Enum
 
 
 class WorkerStatus(str, Enum):
+    """Represent WorkerStatus data for this module."""
     DONE       = "DONE"
     DONE_NOOP  = "DONE_NOOP"
     BLOCKED    = "BLOCKED"

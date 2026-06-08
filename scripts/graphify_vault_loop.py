@@ -11,9 +11,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
+from _log import event
+
 
 @dataclass(frozen=True)
 class QuerySpec:
+    """Represent QuerySpec data for this module."""
     name: str
     cmd: list[str]
     must_contain: list[str]
@@ -22,6 +25,7 @@ class QuerySpec:
 
 @dataclass(frozen=True)
 class QueryResult:
+    """Represent QueryResult data for this module."""
     name: str
     cmd: str
     returncode: int
@@ -33,6 +37,7 @@ class QueryResult:
 
 @dataclass(frozen=True)
 class QuerySuiteResult:
+    """Represent QuerySuiteResult data for this module."""
     total: int
     passed: int
     failed: list[QueryResult]
@@ -45,6 +50,7 @@ class QuerySuiteResult:
 
 @dataclass(frozen=True)
 class ValidationResult:
+    """Represent ValidationResult data for this module."""
     ok: bool
     issues: list[str]
     metrics: dict[str, int] = field(default_factory=dict)
@@ -52,12 +58,14 @@ class ValidationResult:
 
 @dataclass(frozen=True)
 class CompactResult:
+    """Represent CompactResult data for this module."""
     removed_files: int
     preserved_files: int
     canvas_nodes: int
 
 
 Runner = Callable[[list[str]], tuple[int, str, str]]
+QUERY_TIMEOUT_SEC = 120
 
 
 REQUIRED_VAULT_FILES = (
@@ -82,6 +90,7 @@ CURATED_MARKDOWN = {
 
 
 def load_query_manifest(path: Path) -> list[QuerySpec]:
+    """Load query manifest data."""
     data = json.loads(path.read_text(encoding="utf-8"))
     specs = data.get("tests", data)
     return [
@@ -96,8 +105,22 @@ def load_query_manifest(path: Path) -> list[QuerySpec]:
 
 
 def default_runner(cmd: list[str]) -> tuple[int, str, str]:
-    proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    return proc.returncode, proc.stdout, proc.stderr
+    """Provide the public default runner API."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=QUERY_TIMEOUT_SEC,
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+    except subprocess.TimeoutExpired as exc:
+        event("graphify_query.timeout", timeout_sec=QUERY_TIMEOUT_SEC, error_type="TimeoutExpired")
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return 124, stdout, f"timeout after {QUERY_TIMEOUT_SEC}s\n{stderr}".strip()
 
 
 def run_query_suite(
@@ -106,9 +129,11 @@ def run_query_suite(
     runner: Runner = default_runner,
     out_dir: Path | None = None,
 ) -> QuerySuiteResult:
+    """Run run query suite workflow."""
     results: list[QueryResult] = []
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
+    event("graphify_query_suite.start", total=len(specs))
     for spec in specs:
         returncode, stdout, stderr = runner(spec.cmd)
         combined = stdout + (("\nSTDERR:\n" + stderr) if stderr else "")
@@ -125,6 +150,7 @@ def run_query_suite(
             artifact=artifact,
         )
         results.append(result)
+        event("graphify_query_suite.result", query_name=spec.name, ok=ok, returncode=returncode)
         if out_dir:
             _write_query_artifacts(out_dir, result, combined)
     suite = QuerySuiteResult(
@@ -135,10 +161,12 @@ def run_query_suite(
     )
     if out_dir:
         _write_query_summary(out_dir, suite)
+    event("graphify_query_suite.done", passed=suite.passed, total=suite.total)
     return suite
 
 
 def validate_graphify_vault(vault: Path) -> ValidationResult:
+    """Provide the public validate graphify vault API."""
     vault = vault.expanduser().resolve()
     graphify = vault / "graphify"
     issues: list[str] = []
@@ -162,6 +190,7 @@ def validate_graphify_vault(vault: Path) -> ValidationResult:
 
 
 def compact_graphify_vault(vault: Path) -> CompactResult:
+    """Provide the public compact graphify vault API."""
     vault = vault.expanduser().resolve()
     graphify = vault / "graphify"
     community_files = sorted(graphify.glob("_COMMUNITY_*.md"))
@@ -185,6 +214,7 @@ def compact_graphify_vault(vault: Path) -> CompactResult:
 
 
 def copy_query_artifacts(source_dir: Path, vault: Path) -> None:
+    """Provide the public copy query artifacts API."""
     target = vault.expanduser().resolve() / "graphify" / "query-tests"
     if target.exists():
         shutil.rmtree(target)
@@ -192,6 +222,7 @@ def copy_query_artifacts(source_dir: Path, vault: Path) -> None:
 
 
 def loop_once(vault: Path, manifest: Path, *, compact: bool = False) -> ValidationResult:
+    """Provide the public loop once API."""
     specs = load_query_manifest(manifest)
     out_dir = Path("graphify-out") / "query-tests"
     suite = run_query_suite(specs, out_dir=out_dir)
@@ -205,6 +236,7 @@ def loop_once(vault: Path, manifest: Path, *, compact: bool = False) -> Validati
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the graphify-vault-loop command-line entry point."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--vault", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, default=Path("scripts/graphify_query_suite.json"))
@@ -216,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = loop_once(args.vault, args.manifest, compact=args.compact)
         if result.ok:
             break
-    print(json.dumps({"ok": result.ok, "issues": result.issues, "metrics": result.metrics}, indent=2))
+    sys.stdout.write(json.dumps({"ok": result.ok, "issues": result.issues, "metrics": result.metrics}, indent=2) + "\n")
     return 0 if result.ok else 1
 
 
@@ -270,7 +302,7 @@ def _read_json(path: Path, issues: list[str]) -> dict[str, Any]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError) as exc:
         issues.append(f"json-parse: {path}: {type(exc).__name__}: {exc}")
         return {}
     return data if isinstance(data, dict) else {}

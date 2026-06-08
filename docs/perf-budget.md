@@ -20,27 +20,31 @@ local dev hardware (Apple M-series, Python 3.13).
 | `orchestrator pivot-check` (`risk_assess.assess`) | < 50 ms | called per finding within a round; measured ~0.03 ms locally |
 | pytest suite (`tests/`) | informally monitored | no in-tree wall-time gate; pytest output and CI duration are the live SoT |
 | peak RSS (assess 200 paths × 50 runs) | < 200 MB | `test_rss_under_ceiling` in `tests/test_perf.py` |
+| CLI import cold start | < 2 s | `test_cli_import_cold_start_under_budget` in `tests/test_perf.py` |
 
 ## How budgets are enforced
 
 `tests/test_perf.py` runs each command under `pytest-benchmark` and asserts
-`stats["mean"] * 1000 < 50.0`. Run locally with:
+`stats["mean"] * 1000 < 50.0`; when sample data is available it also asserts
+p95 sample latency stays below 50 ms. Run locally with:
 
 ```
 pytest tests/test_perf.py --benchmark-only -v
 ```
 
 The `test_rss_under_ceiling` test (non-benchmark) checks peak RSS of the
-`risk_assess.assess` hot path after a representative call sequence. It runs
-with the normal `pytest tests/ -q` invocation (not `--benchmark-only`).
+`risk_assess.assess` hot path after a representative call sequence. The
+`test_cli_import_cold_start_under_budget` test measures a fresh Python process
+importing the CLI hot modules. CI runs both explicitly beside the normal
+`pytest tests/ -q` coverage run.
 
 The pytest suite takes tens of seconds locally on an M-series Mac, including
 benchmark overhead. The `< 5 s` target in earlier versions was aspirational and
 unmeasured. Do not duplicate collected test counts or wall-time ceilings here —
 pytest output and CI duration are the SoT. No automated session-duration gate is
-in-tree; the benchmark assertions (`<50 ms` absolute, `<=baseline` regression)
-are the primary latency guards. Suite wall-time is monitored informally via CI
-duration.
+in-tree; the benchmark assertions (`<50 ms` mean/p95, `<=baseline` regression),
+RSS ceiling, and cold-start ceiling are the primary perf guards. Suite wall-time
+is monitored informally via CI duration.
 
 If the assertion fails, either:
 - Inspect the regression with `--benchmark-compare` (requires a prior baseline run).
@@ -52,7 +56,7 @@ If the assertion fails, either:
 
 In addition to the 50 ms ceiling, each `test_*_within_budget` test asserts the
 measured mean is `<=` a committed baseline (`tests/perf_baseline.json`). The
-absolute budget (`<50 ms`) is the primary gate; this baseline assertion is the
+absolute mean/p95 budget (`<50 ms`) is the primary gate; this baseline assertion is the
 secondary smoke catching catastrophic regressions.
 
 Baseline values are sized to tolerate shared-runner variance:

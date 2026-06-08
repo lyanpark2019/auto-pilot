@@ -1,4 +1,4 @@
-"""Regression suite for prompts/ — fixture-driven, >=10 cases covering iteration + headless prompts.
+"""Regression suite for prompts/ — fixture-driven, >=20 cases covering iteration + headless prompts.
 
 Each fixture under prompts/fixtures/*.json declares:
   - prompt: name passed to _prompts.load() or _prompts.render()
@@ -20,10 +20,13 @@ import json
 from pathlib import Path
 
 import pytest
+import jsonschema
 
 import _prompts  # type: ignore[import-not-found]
 
-FIXTURES_DIR = Path(__file__).resolve().parent.parent / "prompts" / "fixtures"
+ROOT = Path(__file__).resolve().parent.parent
+FIXTURES_DIR = ROOT / "prompts" / "fixtures"
+PROMPT_FIXTURE_SCHEMA = ROOT / "schemas" / "prompt-fixture.schema.json"
 
 
 def _all_fixtures() -> list[Path]:
@@ -35,6 +38,16 @@ def test_fixtures_directory_has_minimum_cases():
     assert len(cases) >= 20, (
         f"prompt regression suite needs >=20 fixtures, found {len(cases)}"
     )
+
+
+def test_prompt_fixture_schema_is_valid_jsonschema() -> None:
+    jsonschema.Draft202012Validator.check_schema(json.loads(PROMPT_FIXTURE_SCHEMA.read_text()))
+
+
+@pytest.mark.parametrize("fixture_path", _all_fixtures(), ids=lambda p: p.stem)
+def test_fixture_shape_matches_schema(fixture_path: Path) -> None:
+    schema = json.loads(PROMPT_FIXTURE_SCHEMA.read_text())
+    jsonschema.Draft202012Validator(schema).validate(json.loads(fixture_path.read_text()))
 
 
 @pytest.mark.parametrize("fixture_path", _all_fixtures(), ids=lambda p: p.stem)
@@ -61,6 +74,31 @@ def test_fixture_render_matches_expectations(fixture_path: Path) -> None:
         )
 
 
+def test_prompt_regression_has_adversarial_fixture_set() -> None:
+    adversarial = [
+        json.loads(path.read_text()).get("adversarial", False)
+        for path in _all_fixtures()
+    ]
+
+    assert sum(1 for value in adversarial if value) >= 5
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "08-iteration-prompt-injection.json",
+        "14-iteration-unicode-confusables.json",
+        "15-iteration-control-chars-ansi.json",
+        "18-iteration-markdown-breaking.json",
+        "19-iteration-json-in-var.json",
+    ],
+)
+def test_named_adversarial_prompt_fixture_exists(fixture_name: str) -> None:
+    data = json.loads((FIXTURES_DIR / fixture_name).read_text())
+
+    assert data["adversarial"] is True
+
+
 def test_iteration_prompt_has_commit_trailer_markers() -> None:
     """Downstream loop parses commits for these literal trailer keys."""
     rendered = _prompts.render("iteration", iter_n=1, phase=1)
@@ -82,3 +120,43 @@ def test_headless_render_raises_keyerror() -> None:
     """
     with pytest.raises(KeyError):
         _prompts.render("headless")
+
+
+def test_render_for_llm_redacts_secret_like_prompt_output() -> None:
+    rendered = _prompts.render_for_llm(
+        "iteration",
+        iter_n="api_key=sk-live-secret-token-123456",
+        phase=1,
+    )
+
+    assert "sk-live-secret-token-123456" not in rendered
+    assert "api_key=<redacted>" in rendered
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        'token="secret-value-123456"',
+        '{"api_key": "secret-value-123456"}',
+        "Authorization: Bearer abcdefgh123456",
+    ],
+)
+def test_render_for_llm_redacts_quoted_json_and_bearer_forms(payload: str) -> None:
+    rendered = _prompts.render_for_llm("iteration", iter_n=payload, phase=1)
+
+    assert "secret-value-123456" not in rendered
+    assert "abcdefgh123456" not in rendered
+    assert "<redacted>" in rendered
+
+
+def test_render_for_llm_strips_ansi_and_control_chars() -> None:
+    rendered = _prompts.render_for_llm("iteration", iter_n="\x1b[31m5\x00", phase=1)
+
+    assert "\x1b" not in rendered
+    assert "\x00" not in rendered
+    assert "Iteration 5" in rendered
+
+
+def test_render_for_llm_enforces_prompt_budget() -> None:
+    with pytest.raises(_prompts.PromptBudgetError):
+        _prompts.render_for_llm("iteration", iter_n="x" * 2_000, phase=1, max_chars=500)

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
+CONFIG_DOC = REPO / "docs" / "configuration.md"
 sys.path.insert(0, str(REPO / "scripts"))
 
 import _config  # noqa: E402
@@ -113,3 +114,23 @@ def test_preflight_ttl_dispatch_module_reads_same_env(monkeypatch):
     # Restore: reload without env var so other tests are not poisoned
     monkeypatch.delenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", raising=False)
     importlib.reload(_dispatch)
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "CLAUDE_BIN",
+        "AUTO_PILOT_PREFLIGHT_TTL_SEC",
+        "default_max_iter",
+        "default_sleep_sec",
+        "default_timeout_build_sec",
+        "default_max_cost_usd",
+        "default_max_tokens",
+        "default_per_iter_cost_estimate_usd",
+        "default_max_concurrent_claude",
+    ],
+)
+def test_configuration_doc_mentions_public_settings(token: str) -> None:
+    text = CONFIG_DOC.read_text(encoding="utf-8")
+
+    assert token in text

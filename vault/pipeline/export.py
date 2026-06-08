@@ -267,6 +267,7 @@ def export_notebooklm(repo: Path, doc_root: Path | None = None,
 
 
 def export_graphify(repo: Path, doc_root: Path | None = None) -> dict:
+    """Export graphify artifacts."""
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or (repo / "docs")).expanduser().resolve()
     out_dir = repo / ".vault-builder" / "graphify-out"
@@ -381,6 +382,7 @@ DESTINATIONS = {
 
 
 def export_all(repo: Path, destinations: list[str], **opts) -> dict:
+    """Export all artifacts."""
     source_adapter = opts.pop("source_adapter", None)
     if source_adapter is None:
         state_file = Path(repo) / ".vault-builder" / "state.json"
@@ -405,7 +407,7 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
             continue
         try:
             results[d] = fn(repo, **{k: v for k, v in opts.items() if k in fn.__code__.co_varnames})
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as e:
             _warn(f"export: destination={d} error_type={type(e).__name__}: {e}")
             results[d] = {"destination": d, "error": str(e), "failed": True}
     return results
@@ -467,6 +469,7 @@ def _check_failures(results: dict) -> int:
 
 
 def main(argv: list[str]) -> int:
+    """Run the export command-line entry point."""
     ap = _build_parser()
     args = ap.parse_args(argv[1:])
 

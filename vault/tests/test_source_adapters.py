@@ -4,10 +4,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 
 from sources import _adapter  # noqa: E402
+from sources.notebooklm import _classify_title  # noqa: E402
 
 
 def setup_module(module):
@@ -23,6 +26,24 @@ def test_get_unknown_raises():
     import pytest
     with pytest.raises(ValueError, match="unknown source adapter"):
         _adapter.get("nonexistent")
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("team_mlb_dodgers_2026", "match-analysis"),
+        ("농식품 비관세 장벽", "agri-trade"),
+        ("로또 확률", "lotto"),
+        ("PickL Architecture", "pickl-projects"),
+        ("sportic365 auth envelope", "sportic-projects"),
+        ("temp-check", "archive"),
+        ("Claude Code prompt harness", "ai-libraries"),
+        ("OpenAI schema output control", "llm-research"),
+        ("unmatched notebook", "uncategorized"),
+    ],
+)
+def test_notebooklm_title_classifier_examples(title: str, expected: str) -> None:
+    assert _classify_title(title) == expected
 
 
 def test_code_adapter_discover(tmp_path: Path) -> None:

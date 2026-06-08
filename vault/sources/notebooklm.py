@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -20,59 +21,89 @@ from sources._adapter import SourceItem, TicketPlanEntry, register
 SUBS = ("concepts", "entities", "decisions", "flows", "components", "research", "sources", "archive")
 
 
+def _is_match_analysis(title: str, lowered: str) -> bool:
+    return (
+        bool(re.match(r"team_(mlb|laliga|kbo|npb|nba|kbl|kleague|epl|j[12])_", lowered))
+        or bool(re.match(r"league_brief_", lowered))
+        or (bool(re.match(r"team\s+", lowered)) and "2026-05" in lowered)
+        or any(k in title for k in ["사이넷", "경쟁사", "승부예측"])
+        or "라이브스코어" in lowered
+    )
+
+
+def _project_category(lowered: str) -> str | None:
+    prefixes = {
+        "pickl": "pickl-projects",
+        "fyqro": "fyqro-projects",
+        "agitrade": "agitrade-projects",
+    }
+    for prefix, category in prefixes.items():
+        if lowered.startswith(prefix) or f"{prefix}-" in lowered:
+            return category
+    if lowered.startswith("clai") or "clai-" in lowered or "clai " in lowered:
+        return "clai-projects"
+    if any(k in lowered for k in [
+        "sportic365", "스포틱365", "proto", "hermes", "syndicator", "session architecture",
+        "reload loop", "team id unification", "auth envelope", "cag", "sportic-server", "ga4-collector",
+    ]):
+        return "sportic-projects"
+    return None
+
+
+def _is_archive(title: str, lowered: str) -> bool:
+    return (
+        lowered.startswith("temp-")
+        or lowered == "temp-check"
+        or "gemma" in lowered
+        or "옥션" in title
+        or "m5 gpu" in lowered
+        or "html to markdown" in lowered
+        or any(k in lowered for k in ["paperclip", "mythos", "death of", "blueprint", "claude peers",
+                                      "cloudfront", "supabase vector"])
+        or lowered in ("code", "design")
+        or "tutorial" in lowered
+        or "학습" in title
+        or "eval-test" in lowered
+        or "claude code documentation" in lowered
+        or "5가지 에이전트" in title
+        or lowered.startswith("job")
+        or lowered == "business model"
+    )
+
+
+def _is_ai_library(lowered: str) -> bool:
+    return any(k in lowered for k in [
+        "symphony", "harness", "archon", "karpathy", "second brain", "voice agent",
+        "cli anything", "마케팅 기술", "claude code", "obsidian", "prompt", "ai 자동화",
+        "프롬프트", "하네스", "클로드 코드", "코덱스",
+    ])
+
+
+def _is_llm_research(lowered: str) -> bool:
+    return any(k in lowered for k in [
+        "vs sonnet", "vs opus", "vs haiku", "vs gpt", "model selection", "output control",
+        "chat model", "ai engineering", "ibm ai", "ai·llm", "비개발자", "claude opus",
+        "claude sonnet", "claude haiku", "llm", "openai", "schema",
+    ])
+
+
 def _classify_title(title: str) -> str:
-    """Heuristic mapping title → category. Keep in one place; override via --classifier-yaml."""
-    t = title.lower()
-    if re.match(r"team_(mlb|laliga|kbo|npb|nba|kbl|kleague|epl|j[12])_", t):
+    """Heuristic mapping title → category."""
+    lowered = title.lower()
+    if _is_match_analysis(title, lowered):
         return "match-analysis"
-    if re.match(r"league_brief_", t):
-        return "match-analysis"
-    if re.match(r"team\s+", t) and "2026-05" in t:
-        return "match-analysis"
-    if any(k in title for k in ["사이넷", "경쟁사", "승부예측"]) or "라이브스코어" in t:
-        return "match-analysis"
-    if any(k in title for k in ["농식품", "비관세"]) or any(k in t for k in ["fta", "sps", "cbam", "fda"]):
+    if any(k in title for k in ["농식품", "비관세"]) or any(k in lowered for k in ["fta", "sps", "cbam", "fda"]):
         return "agri-trade"
     if "로또" in title or "연금복권" in title:
         return "lotto"
-    if t.startswith("pickl") or "pickl-" in t:
-        return "pickl-projects"
-    if t.startswith("fyqro") or "fyqro-" in t:
-        return "fyqro-projects"
-    if t.startswith("agitrade") or "agitrade-" in t:
-        return "agitrade-projects"
-    if t.startswith("clai") or "clai-" in t or "clai " in t:
-        return "clai-projects"
-    if any(k in t for k in ["sportic365", "스포틱365", "proto", "hermes", "syndicator", "session architecture",
-                             "reload loop", "team id unification", "auth envelope", "cag",
-                             "sportic-server", "ga4-collector"]):
-        return "sportic-projects"
-    if t.startswith("temp-") or t == "temp-check":
+    category = _project_category(lowered)
+    if category:
+        return category
+    if _is_archive(title, lowered):
         return "archive"
-    if "gemma" in t or "옥션" in title or "m5 gpu" in t or "html to markdown" in t:
-        return "archive"
-    if any(k in t for k in ["paperclip", "mythos", "death of", "blueprint", "claude peers",
-                             "cloudfront", "supabase vector"]):
-        return "archive"
-    if t in ("code", "design") or "tutorial" in t or "학습" in title or "eval-test" in t:
-        return "archive"
-    if "claude code documentation" in t or "5가지 에이전트" in title:
-        return "archive"
-    if t.startswith("job") or t == "business model":
-        return "archive"
-    # ai-libraries: specific tools/frameworks/harness (checked first to win boundary cases).
-    # E.g. "OpenAI Symphony" (agent paradigm) → ai-libraries, not llm-research.
-    if any(k in t for k in ["symphony", "harness", "archon", "karpathy", "second brain",
-                             "voice agent", "cli anything", "마케팅 기술", "claude code",
-                             "obsidian", "prompt", "ai 자동화", "프롬프트", "하네스",
-                             "클로드 코드", "코덱스"]):
+    if _is_ai_library(lowered):
         return "ai-libraries"
-    # llm-research: model comparison / fundamentals / output / schema (WHAT).
-    if any(k in t for k in ["vs sonnet", "vs opus", "vs haiku", "vs gpt",
-                             "model selection", "output control", "chat model",
-                             "ai engineering", "ibm ai", "ai·llm", "비개발자",
-                             "claude opus", "claude sonnet", "claude haiku",
-                             "llm", "openai", "schema"]):
+    if _is_llm_research(lowered):
         return "llm-research"
     return "uncategorized"
 
@@ -90,11 +121,11 @@ def _clean_slug(title: str) -> str:
     return re.sub(r"-+", "-", s).strip("-").lower()[:60]
 
 
-def _parse_frontmatter(text: str) -> dict:
+def _parse_frontmatter(text: str) -> dict[str, str]:
     m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
     if not m:
         return {}
-    fm = {}
+    fm: dict[str, str] = {}
     for line in m.group(1).split("\n"):
         if ":" in line:
             k, v = line.split(":", 1)
@@ -114,6 +145,7 @@ def _run(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
 
 @register
 class NotebookLMAdapter:
+    """Represent NotebookLMAdapter data for this module."""
     name = "notebooklm"
     default_rubric = "notebooklm.yaml"
 
@@ -176,48 +208,60 @@ class NotebookLMAdapter:
         root_idx.write_text(f"---\ntype: index\ncreated: {today}\n---\n\n# {vault.name}\n\n"
                             + "\n".join(f"- [[{c}/index|{c}]]" for c in cats))
 
+    def _source_list(self, nid: str) -> tuple[list[dict[str, Any]] | None, str]:
+        rc, src_json, err = _run(["notebooklm", "source", "list", "--notebook", nid, "--json"])
+        if rc != 0:
+            return None, err[:120]
+        try:
+            data = json.loads(src_json)
+        except json.JSONDecodeError:
+            return None, "parse"
+        sources = data.get("sources", []) if isinstance(data, dict) else []
+        return [s for s in sources if isinstance(s, dict)], ""
+
+    def _notebook_archive_parts(self, cat: str, nb: dict[str, Any], sources: list[dict[str, Any]]) -> list[str]:
+        nid, title = nb["id"], nb["title"]
+        parts = ["---", "type: notebook-archive", f"notebook_id: {nid}",
+                 f"title: {json.dumps(title, ensure_ascii=False)}", f"created_at: {nb.get('created_at', '')}",
+                 f"category: {cat}", f"source_count: {len(sources)}", "---", "", f"# {title}", "", "## Sources", ""]
+        for source in sources:
+            parts.append(f"- {source.get('title', '?')} (`{source['id'][:8]}`)")
+        parts += ["", "## Fulltext", ""]
+        return parts
+
+    def _append_fulltext(self, parts: list[str], nid: str, sources: list[dict[str, Any]]) -> None:
+        for source in sources:
+            rc, st, _ = _run(["notebooklm", "source", "fulltext", source["id"], "-n", nid, "--json"], timeout=60)
+            try:
+                content = json.loads(st).get("content", "") if rc == 0 else "(fetch failed)"
+            except json.JSONDecodeError:
+                content = "(parse error)"
+            parts += [f"### {source.get('title', '?')}", "", content[:200_000], ""]
+
+    def _materialize_one(self, vault: Path, cat: str, nb: dict[str, Any]) -> str:
+        nid, title = nb["id"], nb["title"]
+        slug = _slugify(title) or nid[:8]
+        out = vault / cat / "raw" / f"{slug}.md"
+        if out.exists() and out.stat().st_size > 200:
+            return f"SKIP {cat}/{slug}"
+        sources, err = self._source_list(nid)
+        if sources is None:
+            return f"FAIL {'parse' if err == 'parse' else 'src-list'} {nid[:8]}{': ' + err if err != 'parse' else ''}"
+        parts = self._notebook_archive_parts(cat, nb, sources)
+        self._append_fulltext(parts, nid, sources)
+        out.write_text("\n".join(parts))
+        return f"OK {cat}/{slug} ({len(sources)} sources)"
+
     def materialize(self, vault: Path, buckets: dict[str, list[SourceItem]], **opts: Any) -> None:
         vault = vault.expanduser().resolve()
         preserve = {c: v for c, v in buckets.items() if c not in ("archive", "uncategorized")}
         jobs = [(c, it.payload) for c, items in preserve.items() for it in items]
         parallel = opts.get("parallel", 6)
-
-        def process(cat, nb):
-            nid, title = nb["id"], nb["title"]
-            slug = _slugify(title) or nid[:8]
-            out = vault / cat / "raw" / f"{slug}.md"
-            if out.exists() and out.stat().st_size > 200:
-                return f"SKIP {cat}/{slug}"
-            rc, src_json, err = _run(["notebooklm", "source", "list", "--notebook", nid, "--json"])
-            if rc != 0:
-                return f"FAIL src-list {nid[:8]}: {err[:120]}"
-            try:
-                sources = json.loads(src_json).get("sources", [])
-            except json.JSONDecodeError:
-                return f"FAIL parse {nid[:8]}"
-            parts = ["---", "type: notebook-archive", f"notebook_id: {nid}",
-                     f"title: {json.dumps(title, ensure_ascii=False)}",
-                     f"created_at: {nb.get('created_at', '')}",
-                     f"category: {cat}", f"source_count: {len(sources)}", "---", "",
-                     f"# {title}", "", "## Sources", ""]
-            for s in sources:
-                parts.append(f"- {s.get('title', '?')} (`{s['id'][:8]}`)")
-            parts += ["", "## Fulltext", ""]
-            for s in sources:
-                rc, st, _ = _run(["notebooklm", "source", "fulltext", s["id"], "-n", nid, "--json"], timeout=60)
-                try:
-                    content = json.loads(st).get("content", "") if rc == 0 else "(fetch failed)"
-                except json.JSONDecodeError:
-                    content = "(parse error)"
-                parts += [f"### {s.get('title', '?')}", "", content[:200_000], ""]
-            out.write_text("\n".join(parts))
-            return f"OK {cat}/{slug} ({len(sources)} sources)"
-
         with ThreadPoolExecutor(max_workers=parallel) as ex:
-            futs = {ex.submit(process, c, nb): (c, nb) for c, nb in jobs}
+            futs = {ex.submit(self._materialize_one, vault, c, nb): (c, nb) for c, nb in jobs}
             for i, f in enumerate(as_completed(futs), 1):
-                print(f"[{i}/{len(jobs)}] {f.result()}", flush=True)
-
+                sys.stdout.write(f"[{i}/{len(jobs)}] {f.result()}\n")
+                sys.stdout.flush()
         self._restructure(vault)
 
     def _restructure(self, vault: Path) -> None:
@@ -256,7 +300,7 @@ class NotebookLMAdapter:
                 lines.append(f"| {cr} | {ti} | `{i8}` | {sc} | [[{cr}_{sl}_{i8}]] |")
             (src / "_index.md").write_text("\n".join(lines))
 
-    def plan_tickets(self, vault: Path, round_num: int, score_state: dict, **opts: Any) -> list[TicketPlanEntry]:
+    def plan_tickets(self, vault: Path, round_num: int, score_state: dict[str, Any], **opts: Any) -> list[TicketPlanEntry]:
         """Map low-scoring dims to worker tickets. PM uses this as starting plan."""
         plan = []
         scores = score_state.get("scores", {})

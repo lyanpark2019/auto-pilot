@@ -1,8 +1,9 @@
 """Performance baseline for orchestrator CLI commands.
 
-Two-layer gate per test:
-  1. Absolute budget: mean < 50ms (the hard ceiling).
-  2. Regression gate: mean <= committed baseline (tests/perf_baseline.json).
+Three-layer gate per benchmark:
+  1. Absolute mean budget: mean < 50ms.
+  2. Tail budget: p95 < 50ms when pytest-benchmark sample data is available.
+  3. Regression gate: mean <= committed baseline (tests/perf_baseline.json).
 
 Run with: pytest tests/test_perf.py --benchmark-only
 Baseline refresh procedure: see docs/perf-budget.md.
@@ -11,7 +12,9 @@ from __future__ import annotations
 
 import json
 import resource
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -20,7 +23,9 @@ import orchestrator  # type: ignore[import-not-found]
 import risk_assess  # type: ignore[import-not-found]
 
 
-BUDGET_MS = 50.0  # per-command ceiling
+BUDGET_MS = 50.0  # per-command mean and p95 ceiling
+COLD_START_BUDGET_SEC = 2.0
+ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = Path(__file__).parent / "perf_baseline.json"
 
 # Peak RSS ceiling for a representative hot-path call sequence (assess 200 paths).
@@ -39,6 +44,28 @@ def _baseline_mean(fullname: str) -> float:
     raise KeyError(f"no baseline for {fullname}")
 
 
+def _p95_seconds(samples: list[float]) -> float | None:
+    """Return p95 seconds for pytest-benchmark samples, or None when unavailable."""
+    if not samples:
+        return None
+    ordered = sorted(samples)
+    index = min(int(round((len(ordered) - 1) * 0.95)), len(ordered) - 1)
+    return ordered[index]
+
+
+def _assert_benchmark_budget(benchmark, fullname: str, label: str) -> None:
+    """Assert absolute mean, p95, and committed-baseline budgets for one benchmark."""
+    mean = benchmark.stats["mean"]
+    assert mean * 1000 < BUDGET_MS, f"{label} exceeded {BUDGET_MS}ms mean budget"
+    p95 = _p95_seconds(list(getattr(benchmark.stats, "data", []) or []))
+    if p95 is not None:
+        assert p95 * 1000 < BUDGET_MS, f"{label} exceeded {BUDGET_MS}ms p95 budget"
+    baseline = _baseline_mean(fullname)
+    assert mean <= baseline, (
+        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms"
+    )
+
+
 @pytest.fixture()
 def initialized_state(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -54,12 +81,7 @@ def test_status_within_budget(benchmark, initialized_state, capsys):
         capsys.readouterr()  # drain to avoid memory growth
 
     benchmark(_run)
-    mean = benchmark.stats["mean"]
-    assert mean * 1000 < BUDGET_MS, f"cmd_status exceeded {BUDGET_MS}ms budget"
-    baseline = _baseline_mean("test_status_within_budget")
-    assert mean <= baseline, (
-        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms"
-    )
+    _assert_benchmark_budget(benchmark, "test_status_within_budget", "cmd_status")
 
 
 def test_phase_start_within_budget(benchmark, initialized_state, capsys):
@@ -68,12 +90,7 @@ def test_phase_start_within_budget(benchmark, initialized_state, capsys):
         capsys.readouterr()
 
     benchmark.pedantic(_run, rounds=20, warmup_rounds=2)
-    mean = benchmark.stats["mean"]
-    assert mean * 1000 < BUDGET_MS, f"cmd_phase_start exceeded {BUDGET_MS}ms budget"
-    baseline = _baseline_mean("test_phase_start_within_budget")
-    assert mean <= baseline, (
-        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms"
-    )
+    _assert_benchmark_budget(benchmark, "test_phase_start_within_budget", "cmd_phase_start")
 
 
 def test_phase_end_within_budget(benchmark, initialized_state, capsys):
@@ -86,12 +103,7 @@ def test_phase_end_within_budget(benchmark, initialized_state, capsys):
         capsys.readouterr()
 
     benchmark.pedantic(_run, rounds=20, warmup_rounds=2)
-    mean = benchmark.stats["mean"]
-    assert mean * 1000 < BUDGET_MS, f"cmd_phase_end exceeded {BUDGET_MS}ms budget"
-    baseline = _baseline_mean("test_phase_end_within_budget")
-    assert mean <= baseline, (
-        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms"
-    )
+    _assert_benchmark_budget(benchmark, "test_phase_end_within_budget", "cmd_phase_end")
 
 
 def test_pivot_check_within_budget(benchmark) -> None:
@@ -124,10 +136,29 @@ def test_pivot_check_within_budget(benchmark) -> None:
     ]
 
     benchmark(risk_assess.assess, paths)
-    mean = benchmark.stats["mean"]
-    assert mean * 1000 < BUDGET_MS, (
-        f"pivot_check (risk_assess.assess) exceeded {BUDGET_MS}ms budget: "
-        f"{mean * 1000:.3f}ms mean"
+    _assert_benchmark_budget(benchmark, "test_pivot_check_within_budget", "pivot_check")
+
+
+def test_cli_import_cold_start_under_budget() -> None:
+    """Cold-start import budget for CLI modules loaded by subprocess entrypoints."""
+    start = time.perf_counter()
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.path.insert(0, 'scripts'); import orchestrator, risk_assess",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=COLD_START_BUDGET_SEC + 0.5,
+        check=False,
+    )
+    elapsed = time.perf_counter() - start
+
+    assert proc.returncode == 0, proc.stderr
+    assert elapsed < COLD_START_BUDGET_SEC, (
+        f"CLI import cold-start {elapsed:.3f}s exceeds {COLD_START_BUDGET_SEC:.1f}s"
     )
 
 

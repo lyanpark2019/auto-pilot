@@ -27,7 +27,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, TextIO, cast
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -36,7 +36,16 @@ if __package__ in (None, ""):
 MAX_STRIKES = 3
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit_json(payload: Any, *, indent: int | None = None) -> None:
+    _write_line(sys.stdout, json.dumps(payload, indent=indent))
+
+
 class TicketStatus(str, Enum):
+    """Represent TicketStatus data for this module."""
     PENDING = "pending"
     DISPATCHED = "dispatched"
     DELIVERED = "delivered"
@@ -47,17 +56,19 @@ class TicketStatus(str, Enum):
 
 @dataclass
 class TicketRecord:
+    """Represent TicketRecord data for this module."""
     id: str
     worker_type: str
-    contract: dict
+    contract: dict[str, Any]
     status: str = TicketStatus.PENDING.value
     deliverable_paths: list[str] = field(default_factory=list)
     retry_count: int = 0
     feedback: str = ""
-    history: list[dict] = field(default_factory=list)
+    history: list[dict[str, Any]] = field(default_factory=list)
 
 
 class DispatchBoard:
+    """Represent DispatchBoard data for this module."""
     def __init__(self, project_root: Path):
         self.root = project_root.expanduser().resolve()
         self.vb_dir = self.root / ".vault-builder"
@@ -69,12 +80,12 @@ class DispatchBoard:
 
     def _load(self) -> None:
         if self.state_path.exists():
-            data = json.loads(self.state_path.read_text())
+            data = cast(dict[str, Any], json.loads(self.state_path.read_text()))
             self.round_num = data.get("round", 0)
             for t in data.get("tickets", []):
                 self.tickets[t["id"]] = TicketRecord(**t)
         elif self.plan_path.exists():
-            plan = json.loads(self.plan_path.read_text())
+            plan = cast(dict[str, Any], json.loads(self.plan_path.read_text()))
             for t in plan.get("tickets", []):
                 tr = TicketRecord(id=t["id"], worker_type=t["worker_type"], contract=t["contract"])
                 tr.history.append({"event": "issued", "at": time.time()})
@@ -137,8 +148,8 @@ class DispatchBoard:
         self._save()
         return t
 
-    def summary(self) -> dict:
-        counts: dict = {}
+    def summary(self) -> dict[str, Any]:
+        counts: dict[str, int] = {}
         for t in self.tickets.values():
             counts[t.status] = counts.get(t.status, 0) + 1
         return {
@@ -156,16 +167,18 @@ def _verify_drift_fixed(t: TicketRecord, project_root: Path) -> tuple[bool, str]
     else:
         from pipeline import drift as drift_mod
 
-    drift_type = t.contract.get("drift_type")
+    drift_type = str(t.contract.get("drift_type", ""))
     items_before = len(t.contract.get("items", []))
     report = drift_mod.detect(project_root)
-    items_now = len(report.to_dict().get(drift_type, []))
+    report_data = cast(dict[str, Any], report.to_dict())
+    items_now = len(report_data.get(drift_type, []))
     if items_now < items_before:
         return True, f"{drift_type}: {items_before} → {items_now} (improved)"
     return False, f"{drift_type}: still {items_now} entries (was {items_before})"
 
 
 def main(argv: list[str]) -> int:
+    """Run the dispatch command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("project_root", type=Path)
     ap.add_argument("cmd", choices=["list-pending", "summary", "verify-all", "load-plan"])
@@ -174,13 +187,13 @@ def main(argv: list[str]) -> int:
     board = DispatchBoard(args.project_root)
     if args.cmd == "list-pending":
         pending = board.pending_tickets()
-        print(json.dumps([{
+        _emit_json([{
             "id": t.id, "worker_type": t.worker_type,
             "drift_type": t.contract.get("drift_type"),
             "item_count": len(t.contract.get("items", []))
-        } for t in pending], indent=2))
+        } for t in pending], indent=2)
     elif args.cmd == "summary":
-        print(json.dumps(board.summary(), indent=2))
+        _emit_json(board.summary(), indent=2)
     elif args.cmd == "verify-all":
         from functools import partial
         verifier = partial(_verify_drift_fixed, project_root=args.project_root)
@@ -189,13 +202,13 @@ def main(argv: list[str]) -> int:
             if t.status == TicketStatus.DELIVERED.value:
                 passed, msg = board.verify(t.id, verifier)
                 results.append({"id": t.id, "passed": passed, "msg": msg})
-        print(json.dumps(results, indent=2))
+        _emit_json(results, indent=2)
     elif args.cmd == "load-plan":
         # Force reload from fix-plan.json (resets state)
         board.state_path.unlink(missing_ok=True)
         board.tickets.clear()
         board._load()
-        print(json.dumps(board.summary(), indent=2))
+        _emit_json(board.summary(), indent=2)
     return 0
 
 

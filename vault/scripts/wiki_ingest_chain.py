@@ -31,6 +31,7 @@ from pathlib import Path
 
 
 def build_plan(vault: Path, skip_existing: bool = True) -> dict:
+    """Build plan artifacts."""
     dispatches = []
     for cat_dir in sorted(p for p in vault.iterdir() if p.is_dir() and not p.name.startswith(".")):
         sources_idx = cat_dir / "sources" / "_index.md"
@@ -57,6 +58,7 @@ def build_plan(vault: Path, skip_existing: bool = True) -> dict:
 
 
 def main() -> int:
+    """Run the wiki-ingest-chain command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("vault", type=Path)
     ap.add_argument("--no-skip-existing", action="store_true",
@@ -69,7 +71,7 @@ def main() -> int:
     out = args.out or (vault / "meta" / "wiki-ingest-plan.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2, ensure_ascii=False))
-    print(json.dumps({"plan": str(out), "dispatches": plan["total"]}))
+    sys.stdout.write(json.dumps({"plan": str(out), "dispatches": plan["total"]}) + "\n")
     return 0
 
 

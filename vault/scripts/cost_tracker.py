@@ -16,7 +16,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 try:
     import yaml
@@ -34,6 +34,18 @@ DEFAULT_PRICES = {
 }
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
 def _data_dir(vault: Path) -> Path:
     env = os.environ.get("CLAUDE_PLUGIN_DATA")
     if env:
@@ -49,12 +61,13 @@ def _load_rubric() -> dict[str, Any]:
         return {}
     try:
         return yaml.safe_load(RUBRIC_PATH.read_text()) or {}
-    except Exception as exc:
-        print(f"cost_tracker: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except (OSError, yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
+        _warn(f"cost_tracker: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}")
         return {}
 
 
 class CostTracker:
+    """Represent CostTracker data for this module."""
     def __init__(self, vault: Path):
         self.vault = vault
         self.log_path = _data_dir(vault) / "cost-log.jsonl"
@@ -133,28 +146,29 @@ class CostTracker:
             try:
                 yield json.loads(line)
             except json.JSONDecodeError as exc:
-                print(f"cost_tracker: skipping corrupt JSONL line in {self.log_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                _warn(f"cost_tracker: skipping corrupt JSONL line in {self.log_path}: {type(exc).__name__}: {exc}")
                 continue
 
 
 def main(argv: list[str]) -> int:
+    """Run the cost-tracker command-line entry point."""
     if len(argv) < 2:
-        print("usage: cost_tracker.py <vault_path> [report|round N|check N]", file=sys.stderr)
+        _warn("usage: cost_tracker.py <vault_path> [report|round N|check N]")
         return 1
     vault = Path(argv[1]).expanduser().resolve()
     tracker = CostTracker(vault)
     cmd = argv[2] if len(argv) > 2 else "report"
 
     if cmd == "report":
-        print(json.dumps(tracker.report(), indent=2))
+        _emit(json.dumps(tracker.report(), indent=2))
     elif cmd == "round" and len(argv) > 3:
-        print(json.dumps({"round": int(argv[3]), "cost_usd": tracker.round_cost(int(argv[3]))}, indent=2))
+        _emit(json.dumps({"round": int(argv[3]), "cost_usd": tracker.round_cost(int(argv[3]))}, indent=2))
     elif cmd == "check" and len(argv) > 3:
         over, msg = tracker.over_budget(int(argv[3]))
-        print(json.dumps({"over_budget": over, "msg": msg}, indent=2))
+        _emit(json.dumps({"over_budget": over, "msg": msg}, indent=2))
         return 2 if over else 0
     else:
-        print(f"unknown cmd: {cmd}", file=sys.stderr)
+        _warn(f"unknown cmd: {cmd}")
         return 1
     return 0
 

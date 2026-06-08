@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 # Support running both as `python3 -m pipeline.scan_code` and `python3 pipeline/scan_code.py`
 if __package__ in (None, ""):
@@ -37,12 +37,20 @@ _API_EXCLUDES = (
 )
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
 def _sig(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Render function signature as `name(args) -> ret`."""
     try:
         sig_inner = ast.unparse(node.args)
-    except Exception as exc:
-        print(f"scan_code: failed to unparse args for {node.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except (AttributeError, RecursionError, TypeError, ValueError) as exc:
+        _warn(f"scan_code: failed to unparse args for {node.name}: error_type={type(exc).__name__}: {exc}")
         sig_inner = "..."
     ret = f" -> {ast.unparse(node.returns)}" if node.returns else ""
     prefix = "async " if isinstance(node, ast.AsyncFunctionDef) else ""
@@ -50,6 +58,7 @@ def _sig(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 
 
 def scan_module(path: Path) -> dict[str, Any]:
+    """Scan module inputs into structured data."""
     try:
         tree = ast.parse(path.read_text())
     except (SyntaxError, UnicodeDecodeError):
@@ -78,6 +87,7 @@ def scan_module(path: Path) -> dict[str, Any]:
 
 
 def scan_tree(root: Path, extras: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    """Scan tree inputs into structured data."""
     root = root.expanduser().resolve()
     extras = extras or []
     out: dict[str, dict[str, Any]] = {}
@@ -92,13 +102,14 @@ def scan_tree(root: Path, extras: list[str] | None = None) -> dict[str, dict[str
 
 
 def main(argv: list[str]) -> int:
+    """Run the scan-code command-line entry point."""
     import json
     import sys
     if len(argv) < 2:
-        print("usage: scan_code.py <repo>", file=sys.stderr)
+        sys.stderr.write("usage: scan_code.py <repo>\n")
         return 1
     result = scan_tree(Path(argv[1]))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    sys.stdout.write(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
     return 0
 
 

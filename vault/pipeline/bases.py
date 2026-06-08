@@ -158,6 +158,7 @@ BASES = {
 
 
 def generate_bases(vault: Path) -> list[Path]:
+    """Provide the public generate bases API."""
     vault = vault.expanduser().resolve()
     out_dir = vault / "meta" / "bases"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -170,15 +171,16 @@ def generate_bases(vault: Path) -> list[Path]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the bases command-line entry point."""
     parser = argparse.ArgumentParser(prog="bases")
     parser.add_argument("vault", type=Path)
     args = parser.parse_args(argv[1:])
     vault = args.vault.expanduser().resolve()
     if not (vault / "wikitree").exists():
-        print(f"[bases] missing {vault}/wikitree", file=sys.stderr)
+        sys.stderr.write(f"[bases] missing {vault}/wikitree\n")
         return 2
     for path in generate_bases(vault):
-        print(f"[bases] wrote {path}")
+        sys.stdout.write(f"[bases] wrote {path}\n")
     return 0
 
 

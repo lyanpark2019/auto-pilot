@@ -10,6 +10,7 @@ SCHEMA_VERSION = 1
 
 
 def load(state_path: Path) -> dict[str, Any]:
+    """Load load data."""
     if not state_path.exists():
         return _seed()
     try:
@@ -24,6 +25,7 @@ def load(state_path: Path) -> dict[str, Any]:
 
 
 def save(state_path: Path, data: dict[str, Any]) -> None:
+    """Save save data atomically."""
     state_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = state_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
@@ -51,6 +53,7 @@ def _seed() -> dict[str, Any]:
 
 
 def mark_phase(state: dict, phase_name: str, status: str, **extra) -> None:
+    """Provide the public mark phase API."""
     p = state["phases"].setdefault(phase_name, {})
     p["status"] = status
     p["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -59,6 +62,7 @@ def mark_phase(state: dict, phase_name: str, status: str, **extra) -> None:
 
 
 def append_error(state: dict, phase_name: str, error: str) -> None:
+    """Provide the public append error API."""
     state["errors"].append(
         {
             "phase": phase_name,

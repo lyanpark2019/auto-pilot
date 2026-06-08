@@ -28,7 +28,9 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Mapping
 from datetime import datetime
+from typing import Any, cast
 
 # (regex, human-readable reason). Each regex is matched case-insensitively
 # against the full Bash command string.
@@ -152,79 +154,84 @@ def scrub_text_arguments(command: str) -> str:
     return command
 
 
-def main() -> None:
-    # Fail OPEN on bad input — never block workflow because the hook crashed.
+def _load_payload(raw: str) -> Mapping[str, Any] | None:
     try:
-        raw = sys.stdin.read()
         data = json.loads(raw) if raw else {}
     except (json.JSONDecodeError, ValueError):
-        sys.exit(0)
+        return None
+    if not isinstance(data, Mapping):
+        return None
+    return cast(Mapping[str, Any], data)
 
-    if not isinstance(data, dict):
-        sys.exit(0)
 
+def _bash_command(data: Mapping[str, Any]) -> str | None:
     if data.get("tool_name") != "Bash":
-        sys.exit(0)
-
+        return None
     tool_input = data.get("tool_input") or {}
+    if not isinstance(tool_input, Mapping):
+        return None
     command = tool_input.get("command", "")
-    if not isinstance(command, str) or not command:
-        sys.exit(0)
+    return command if isinstance(command, str) and command else None
 
-    # Strip commit message bodies (heredoc + -m "...") before scanning,
-    # so documentation of destructive patterns in commit messages doesn't
-    # trigger the guard. SQL inside mcpl/psql call args is preserved.
-    scanned = scrub_text_arguments(command)
 
-    # Hour-rotated evidence marker (in tmpdir, no persistence beyond an hour).
-    now = datetime.now()
-    marker = os.path.join(
+def _approval_marker(now: datetime) -> str:
+    return os.path.join(
         tempfile.gettempdir(),
         f"claude-destructive-approved-{now.strftime('%Y%m%d-%H')}.marker",
     )
 
-    # Validate marker mtime: only honor markers whose mtime falls within the
-    # current calendar hour.  Pre-created future-hour markers (batch runs that
-    # touch markers for every hour) must NOT be honored when their hour
-    # arrives — the marker must have been created during the current hour.
-    def _marker_valid(path: str) -> bool:
-        try:
-            mtime = datetime.fromtimestamp(os.path.getmtime(path))
-            return (
-                mtime.year == now.year
-                and mtime.month == now.month
-                and mtime.day == now.day
-                and mtime.hour == now.hour
-            )
-        except OSError:
-            return False
 
+def _marker_valid(path: str, now: datetime) -> bool:
+    try:
+        mtime = datetime.fromtimestamp(os.path.getmtime(path))
+        return (
+            mtime.year == now.year
+            and mtime.month == now.month
+            and mtime.day == now.day
+            and mtime.hour == now.hour
+        )
+    except OSError:
+        return False
+
+
+def _respond_to_match(reason: str, marker: str, now: datetime) -> None:
+    if os.path.isfile(marker) and _marker_valid(marker, now):
+        respond_and_exit(
+            "allow",
+            f"destructive pattern matched ({reason}) but evidence marker present at {marker} — proceeding.",
+        )
+    respond_and_exit(
+        "deny",
+        (
+            f"BLOCKED: {reason}. "
+            f"Per CLAUDE.md §Destructive Action Protocol, verify the target "
+            f"first (read the file, SELECT COUNT(*), check the branch). "
+            f"After explicit user approval, override with: touch {marker}"
+        ),
+    )
+
+
+def _scan_destructive_patterns(scanned: str, marker: str, now: datetime) -> None:
     for pattern, reason in DESTRUCTIVE_PATTERNS:
         try:
-            if re.search(pattern, scanned, re.IGNORECASE):
-                if os.path.isfile(marker) and _marker_valid(marker):
-                    respond_and_exit(
-                        "allow",
-                        (
-                            f"destructive pattern matched ({reason}) but evidence "
-                            f"marker present at {marker} — proceeding."
-                        ),
-                    )
-                respond_and_exit(
-                    "deny",
-                    (
-                        f"BLOCKED: {reason}. "
-                        f"Per CLAUDE.md §Destructive Action Protocol, verify the target "
-                        f"first (read the file, SELECT COUNT(*), check the branch). "
-                        f"After explicit user approval, override with: "
-                        f"touch {marker}"
-                    ),
-                )
+            matched = re.search(pattern, scanned, re.IGNORECASE)
         except re.error:
-            # Regex compile error — skip this pattern, don't crash the hook.
             continue
+        if matched:
+            _respond_to_match(reason, marker, now)
 
-    # No pattern matched — silent allow.
+
+def main() -> None:
+    """Run the guard-destructive command-line entry point."""
+    payload = _load_payload(sys.stdin.read())
+    if payload is None:
+        sys.exit(0)
+    command = _bash_command(payload)
+    if command is None:
+        sys.exit(0)
+    now = datetime.now()
+    scanned = scrub_text_arguments(command)
+    _scan_destructive_patterns(scanned, _approval_marker(now), now)
     sys.exit(0)
 
 

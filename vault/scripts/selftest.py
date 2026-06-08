@@ -22,6 +22,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any, TextIO
 
 import yaml
 
@@ -38,7 +39,16 @@ VAULT_COMMANDS = frozenset({
 })
 
 
+def _write_line(stream: TextIO, message: str = "") -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str = "") -> None:
+    _write_line(sys.stdout, message)
+
+
 class Check:
+    """Represent Check data for this module."""
     def __init__(self, name: str):
         self.name = name
         self.failures: list[str] = []
@@ -98,6 +108,44 @@ def _check_marketplace() -> Check:
 
 
 ALLOWED_MODELS = {"opus", "sonnet", "haiku", "inherit"}
+FM_PATTERN = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+
+
+def _agent_files(agents_dir: Path) -> list[Path]:
+    return [
+        f for f in agents_dir.glob("*.md")
+        if not f.name.startswith("_") and f.stem in VAULT_AGENTS
+    ]
+
+
+def _agent_frontmatter(path: Path, c: Check) -> dict[str, Any] | None:
+    m = FM_PATTERN.match(path.read_text())
+    if not m:
+        c.fail(f"{path.name}: missing frontmatter")
+        return None
+    try:
+        fm = yaml.safe_load(m.group(1))
+    except yaml.YAMLError as e:
+        c.fail(f"{path.name}: invalid YAML frontmatter: {e}")
+        return None
+    if not isinstance(fm, dict):
+        c.fail(f"{path.name}: frontmatter not a dict")
+        return None
+    return fm
+
+
+def _validate_agent_frontmatter(path: Path, fm: dict[str, Any], c: Check) -> None:
+    for k in ("name", "description"):
+        if k not in fm:
+            c.fail(f"{path.name}: missing field '{k}'")
+    if fm.get("name") and fm["name"] != path.stem:
+        c.fail(f"{path.name}: name '{fm['name']}' != stem '{path.stem}'")
+    tools = fm.get("tools")
+    if tools is not None and not isinstance(tools, (str, list)):
+        c.fail(f"{path.name}: tools must be CSV string or list")
+    model = fm.get("model")
+    if model is not None and model not in ALLOWED_MODELS:
+        c.fail(f"{path.name}: model '{model}' not in {ALLOWED_MODELS}")
 
 
 def _check_agents() -> Check:
@@ -106,41 +154,16 @@ def _check_agents() -> Check:
     if not agents_dir.exists():
         c.fail("agents/ missing")
         return c
-    agent_files = [f for f in agents_dir.glob("*.md")
-                   if not f.name.startswith("_") and f.stem in VAULT_AGENTS]
+    agent_files = _agent_files(agents_dir)
     missing = VAULT_AGENTS - {f.stem for f in agent_files}
     if missing:
         c.fail(f"vault agents missing from agents/: {sorted(missing)}")
     if len(agent_files) < len(VAULT_AGENTS):
         c.fail(f"only {len(agent_files)} vault agents found (expected {len(VAULT_AGENTS)}: {sorted(VAULT_AGENTS)})")
-    fm_pattern = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
     for f in agent_files:
-        text = f.read_text()
-        m = fm_pattern.match(text)
-        if not m:
-            c.fail(f"{f.name}: missing frontmatter")
-            continue
-        try:
-            fm = yaml.safe_load(m.group(1))
-        except yaml.YAMLError as e:
-            c.fail(f"{f.name}: invalid YAML frontmatter: {e}")
-            continue
-        if not isinstance(fm, dict):
-            c.fail(f"{f.name}: frontmatter not a dict")
-            continue
-        for k in ("name", "description"):
-            if k not in fm:
-                c.fail(f"{f.name}: missing field '{k}'")
-        if fm.get("name") and fm["name"] != f.stem:
-            c.fail(f"{f.name}: name '{fm['name']}' != stem '{f.stem}'")
-        # tools: prefer CSV string, but list also valid YAML
-        tools = fm.get("tools")
-        if tools is not None and not isinstance(tools, (str, list)):
-            c.fail(f"{f.name}: tools must be CSV string or list")
-        # model: must be one of allowed values if present
-        model = fm.get("model")
-        if model is not None and model not in ALLOWED_MODELS:
-            c.fail(f"{f.name}: model '{model}' not in {ALLOWED_MODELS}")
+        fm = _agent_frontmatter(f, c)
+        if fm is not None:
+            _validate_agent_frontmatter(f, fm, c)
     return c
 
 
@@ -289,7 +312,7 @@ def _check_sources() -> Check:
         for required in ("notebooklm", "code"):
             if required not in _adapter.REGISTRY:
                 c.fail(f"adapter not registered: {required}")
-    except Exception as e:
+    except (ImportError, AttributeError, OSError, RuntimeError) as e:
         c.fail(f"adapter autodiscover failed: {e}")
     return c
 
@@ -333,6 +356,7 @@ def _check_restructure() -> Check:
 
 
 def run_all() -> tuple[int, list[Check]]:
+    """Run run all workflow."""
     checks = [
         _check_manifest(),
         _check_marketplace(),
@@ -351,19 +375,20 @@ def run_all() -> tuple[int, list[Check]]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the selftest command-line entry point."""
     n_fail, checks = run_all()
     for c in checks:
         if c.ok():
-            print(f"[PASS] {c.name}")
+            _emit(f"[PASS] {c.name}")
         else:
-            print(f"[FAIL] {c.name}")
+            _emit(f"[FAIL] {c.name}")
             for f in c.failures:
-                print(f"       - {f}")
-    print()
+                _emit(f"       - {f}")
+    _emit()
     if n_fail:
-        print(f"FAILED: {n_fail}/{len(checks)} checks")
+        _emit(f"FAILED: {n_fail}/{len(checks)} checks")
         return 1
-    print(f"PASSED: {len(checks)}/{len(checks)} checks")
+    _emit(f"PASSED: {len(checks)}/{len(checks)} checks")
     return 0
 
 

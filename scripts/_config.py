@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class AutoPilotConfig:
+    """Represent AutoPilotConfig data for this module."""
     claude_bin: str
     headless_env: dict[str, str] = field(default_factory=lambda: {
         "HARNESS_HEADLESS": "1",

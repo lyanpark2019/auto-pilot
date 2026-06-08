@@ -9,6 +9,7 @@ from ._mapping import SPORTIC_SUB_DIRS
 
 
 class Sportic365MergePhase(Phase):
+    """Represent Sportic365MergePhase data for this module."""
     name = "3_sportic365_merge"
     deps = ["2_rename_simple"]
 
@@ -35,70 +36,75 @@ class Sportic365MergePhase(Phase):
             out.append(f"  rmdir {sportic}")
         return "\n".join(out)
 
-    def run(self) -> PhaseResult:
-        # Idempotent: each sub-step guards with `if dst.exists(): skip`.
-        # 1. Skeleton
+    def _ensure_skeleton(self) -> None:
         for sub in ["_sub-projects", "_legacy", "kbo-reference", "meta"]:
             (self.target / sub).mkdir(parents=True, exist_ok=True)
 
+    def _move_sportic365(self, sportic365: Path, moved: list[str]) -> None:
+        if not sportic365.is_dir():
+            return
+        dst = self.target / "_sub-projects" / "sportic365-content"
+        if dst.exists():
+            self.ctx.trace(f"  skip (target exists): {dst}")
+            return
+        self.ctx.trace("  mv SporTic365 → _sub-projects/sportic365-content")
+        shutil.move(str(sportic365), str(dst))
+        moved.append("SporTic365→_sub-projects/sportic365-content")
+
+    def _move_sportic_subdirs(self, sportic: Path, moved: list[str]) -> None:
+        for sub in SPORTIC_SUB_DIRS:
+            src = sportic / sub
+            if not src.is_dir():
+                continue
+            dst = self.target / "_sub-projects" / sub
+            if dst.exists():
+                self.ctx.trace(f"  skip (exists): _sub-projects/{sub}")
+                continue
+            self.ctx.trace(f"  mv Sportic/{sub} → _sub-projects/{sub}")
+            shutil.move(str(src), str(dst))
+            moved.append(f"Sportic/{sub}→_sub-projects/{sub}")
+
+    def _move_wiki(self, sportic: Path, moved: list[str]) -> None:
+        wiki_src = sportic / "wiki"
+        wiki_dst = self.target / "kbo-reference"
+        if not wiki_src.is_dir():
+            return
+        if any(wiki_dst.iterdir()):
+            self.ctx.trace("  skip wiki (kbo-reference non-empty)")
+            return
+        self.ctx.trace("  mv Sportic/wiki/* → kbo-reference/")
+        for child in list(wiki_src.iterdir()):
+            shutil.move(str(child), str(wiki_dst / child.name))
+        wiki_src.rmdir()
+        moved.append("Sportic/wiki→kbo-reference")
+
+    def _move_remaining_to_legacy(self, sportic: Path) -> None:
+        legacy_dst = self.target / "_legacy"
+        for child in list(sportic.iterdir()):
+            tgt = legacy_dst / child.name
+            if tgt.exists():
+                continue
+            self.ctx.trace(f"  mv Sportic/{child.name} → _legacy/")
+            shutil.move(str(child), str(tgt))
+
+    def _remove_sportic(self, sportic: Path, moved: list[str]) -> None:
+        try:
+            sportic.rmdir()
+            moved.append("rmdir Sportic")
+        except OSError:
+            self.ctx.trace("  Sportic not empty after move — leaving in place")
+
+    def run(self) -> PhaseResult:
+        self._ensure_skeleton()
         sportic = self.ctx.obsidian_root / "Sportic"
         sportic365 = self.ctx.obsidian_root / "SporTic365"
-
-        moved = []
-
-        # 2. SporTic365 → _sub-projects/sportic365-content
-        if sportic365.is_dir():
-            dst = self.target / "_sub-projects" / "sportic365-content"
-            if dst.exists():
-                self.ctx.trace(f"  skip (target exists): {dst}")
-            else:
-                self.ctx.trace("  mv SporTic365 → _sub-projects/sportic365-content")
-                shutil.move(str(sportic365), str(dst))
-                moved.append("SporTic365→_sub-projects/sportic365-content")
-
-        # 3. Sportic sub-vaults → _sub-projects/<name>
+        moved: list[str] = []
+        self._move_sportic365(sportic365, moved)
         if sportic.is_dir():
-            for sub in SPORTIC_SUB_DIRS:
-                src = sportic / sub
-                if not src.is_dir():
-                    continue
-                dst = self.target / "_sub-projects" / sub
-                if dst.exists():
-                    self.ctx.trace(f"  skip (exists): _sub-projects/{sub}")
-                    continue
-                self.ctx.trace(f"  mv Sportic/{sub} → _sub-projects/{sub}")
-                shutil.move(str(src), str(dst))
-                moved.append(f"Sportic/{sub}→_sub-projects/{sub}")
-
-            # 4. wiki → kbo-reference (only if dst empty)
-            wiki_src = sportic / "wiki"
-            wiki_dst = self.target / "kbo-reference"
-            if wiki_src.is_dir():
-                if any(wiki_dst.iterdir()):
-                    self.ctx.trace("  skip wiki (kbo-reference non-empty)")
-                else:
-                    self.ctx.trace("  mv Sportic/wiki/* → kbo-reference/")
-                    for child in list(wiki_src.iterdir()):
-                        shutil.move(str(child), str(wiki_dst / child.name))
-                    wiki_src.rmdir()
-                    moved.append("Sportic/wiki→kbo-reference")
-
-            # 5. Remaining root contents → _legacy
-            legacy_dst = self.target / "_legacy"
-            for child in list(sportic.iterdir()):
-                # Don't pull .obsidian — it's vault-specific config; preserve as legacy reference too
-                tgt = legacy_dst / child.name
-                if tgt.exists():
-                    continue
-                self.ctx.trace(f"  mv Sportic/{child.name} → _legacy/")
-                shutil.move(str(child), str(tgt))
-            # 6. Remove empty Sportic dir
-            try:
-                sportic.rmdir()
-                moved.append("rmdir Sportic")
-            except OSError:
-                self.ctx.trace("  Sportic not empty after move — leaving in place")
-
+            self._move_sportic_subdirs(sportic, moved)
+            self._move_wiki(sportic, moved)
+            self._move_remaining_to_legacy(sportic)
+            self._remove_sportic(sportic, moved)
         return PhaseResult(status="completed", detail=f"{len(moved)} ops", artifacts={"moves": moved})
 
     def verify(self) -> tuple[bool, str]:

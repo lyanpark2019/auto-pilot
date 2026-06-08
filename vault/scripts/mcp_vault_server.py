@@ -22,6 +22,11 @@ from typing import Any
 GRAPHIFY = os.environ.get("GRAPHIFY_BIN", str(Path.home() / ".local/bin/graphify"))
 DEFAULT_VAULT = os.environ.get("NBM_VAULT_PATH", "")
 
+
+def _warn(message: str) -> None:
+    sys.stderr.write(f"{message}\n")
+
+
 _VAULT_PROP = {"type": "string", "description": "Vault root path (optional, defaults to NBM_VAULT_PATH env)"}
 _CAT_PROP = {"type": "string", "description": "Category subdirectory under <vault> (optional; if omitted, all categories are searched in deterministic alphabetical order)"}
 
@@ -130,6 +135,7 @@ def _multi_run(dirs: list[Path], *graphify_args: str) -> str:
 
 
 def tool_vault_query(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault query MCP tool."""
     vault = _vault(args)
     q = args["question"]
     budget = args.get("budget", 500)
@@ -138,18 +144,21 @@ def tool_vault_query(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def tool_vault_path(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault path MCP tool."""
     vault = _vault(args)
     dirs = _raw_dirs(vault, args)
     return {"content": [{"type": "text", "text": _multi_run(dirs, "path", args["a"], args["b"])}]}
 
 
 def tool_vault_explain(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault explain MCP tool."""
     vault = _vault(args)
     dirs = _raw_dirs(vault, args)
     return {"content": [{"type": "text", "text": _multi_run(dirs, "explain", args["concept"])}]}
 
 
 def tool_vault_audit_status(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault audit status MCP tool."""
     vault = _vault(args)
     meta = vault / "meta"
     status: dict[str, Any] = {"vault": str(vault)}
@@ -158,8 +167,8 @@ def tool_vault_audit_status(args: dict[str, Any]) -> dict[str, Any]:
         if p.exists():
             try:
                 status[name] = json.loads(p.read_text())
-            except Exception as e:
-                print(f"mcp_vault_server: failed to parse {fname} error_type={type(e).__name__}: {e}", file=sys.stderr)
+            except (OSError, json.JSONDecodeError) as e:
+                _warn(f"mcp_vault_server: failed to parse {fname} error_type={type(e).__name__}: {e}")
                 status[name] = {"error": str(e)}
     ts = meta / "ticket-state.json"
     if ts.exists():
@@ -172,8 +181,8 @@ def tool_vault_audit_status(args: dict[str, Any]) -> dict[str, Any]:
                 "rejected": sum(1 for x in tickets if x.get("status") == "rejected"),
                 "escalated": sum(1 for x in tickets if x.get("status") == "escalated"),
             }
-        except Exception as e:
-            print(f"mcp_vault_server: failed to parse ticket-state.json error_type={type(e).__name__}: {e}", file=sys.stderr)
+        except (OSError, json.JSONDecodeError, AttributeError, TypeError) as e:
+            _warn(f"mcp_vault_server: failed to parse ticket-state.json error_type={type(e).__name__}: {e}")
             status["tickets"] = {"error": str(e)}
     return {"content": [{"type": "text", "text": json.dumps(status, indent=2, ensure_ascii=False)}]}
 
@@ -197,6 +206,7 @@ def _respond(req_id: Any, result: Any = None, error: dict[str, Any] | None = Non
 
 
 def handle(req: dict[str, Any]) -> None:
+    """Provide the public handle API."""
     method = req.get("method")
     rid = req.get("id")
     params = req.get("params") or {}
@@ -221,8 +231,8 @@ def handle(req: dict[str, Any]) -> None:
             return
         try:
             _respond(rid, fn(args))
-        except Exception as e:
-            print(f"mcp_vault_server: tool={name} error_type={type(e).__name__}: {e}", file=sys.stderr)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
+            _warn(f"mcp_vault_server: tool={name} error_type={type(e).__name__}: {e}")
             _respond(rid, error={"code": -32000, "message": str(e)})
     elif method in ("notifications/initialized", "notifications/cancelled"):
         return  # no response for notifications
@@ -232,6 +242,7 @@ def handle(req: dict[str, Any]) -> None:
 
 
 def main() -> int:
+    """Run the mcp-vault-server command-line entry point."""
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -239,7 +250,7 @@ def main() -> int:
         try:
             req = json.loads(line)
         except json.JSONDecodeError as exc:
-            print(f"mcp_vault_server: skipping malformed JSON line: {type(exc).__name__}: {exc}", file=sys.stderr)
+            _warn(f"mcp_vault_server: skipping malformed JSON line: {type(exc).__name__}: {exc}")
             continue
         handle(req)
     return 0

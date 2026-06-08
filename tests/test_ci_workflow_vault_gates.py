@@ -23,6 +23,13 @@ def test_ci_runs_vault_pytest_suite() -> None:
     assert "cd vault && python -m pytest tests/ -q" in text
 
 
+def test_ci_coverage_gate_matches_local_quality_floor() -> None:
+    text = _ci_text()
+
+    assert "--cov=scripts --cov-fail-under=80" in text
+    assert "--cov-fail-under=75" not in text
+
+
 def test_ci_runs_script_style_hook_selftests() -> None:
     text = _ci_text()
 
@@ -35,6 +42,7 @@ def test_ci_installs_vault_pytest_dependencies() -> None:
     requirements = REQUIREMENTS_DEV.read_text(encoding="utf-8")
 
     assert "PyYAML" in requirements
+    assert "types-PyYAML" in requirements
 
 
 def test_ci_uses_node24_action_majors() -> None:
@@ -44,3 +52,23 @@ def test_ci_uses_node24_action_majors() -> None:
     assert "actions/setup-python@v5" not in text
     assert "actions/checkout@v5" in text
     assert "actions/setup-python@v6" in text
+
+
+def test_ci_runs_dependency_audit_and_secret_scan() -> None:
+    text = _ci_text()
+
+    assert "name: dep audit (pip-audit)" in text
+    assert "python -m pip_audit --requirement requirements-dev.txt" in text
+    assert "name: secret scan (gitleaks)" in text
+    assert "gitleaks/gitleaks-action@" in text
+
+
+def test_ci_runs_perf_budget_baseline_gate() -> None:
+    text = _ci_text()
+
+    assert "pytest-benchmark (perf budget + baseline + p95 gate)" in text
+    assert "python -m pytest tests/test_perf.py --benchmark-only -v" in text
+    assert "perf memory ceiling" in text
+    assert "python -m pytest tests/test_perf.py::test_rss_under_ceiling -q" in text
+    assert "perf cold-start ceiling" in text
+    assert "python -m pytest tests/test_perf.py::test_cli_import_cold_start_under_budget -q" in text

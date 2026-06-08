@@ -17,13 +17,16 @@ Returns per-doc map:
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 try:
-    import yaml
+    import yaml as _yaml
 except ImportError:
-    yaml = None
+    yaml: Any | None = None
+else:
+    yaml = _yaml
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:\|[^\]]+)?\]\]")
 CODE_REF_RE = re.compile(r"(?:^|[\s\(`'\"])((?:[a-zA-Z0-9_\-./]+/)?[a-zA-Z0-9_\-]+\.(?:py|ts|tsx|js|jsx|go|rs|sql))(?::(\d+))?")
@@ -62,7 +65,7 @@ def _parse_frontmatter(text: str) -> dict[str, Any]:
             data = yaml.safe_load(raw) or {}
             return data if isinstance(data, dict) else {}
         except yaml.YAMLError as exc:
-            print(f"scan_docs: failed to parse frontmatter YAML: {type(exc).__name__}: {exc}", file=sys.stderr)
+            sys.stderr.write(f"scan_docs: failed to parse frontmatter YAML: {type(exc).__name__}: {exc}\n")
             return {}
     # fallback: naive line parser
     fm: dict[str, Any] = {}
@@ -74,6 +77,7 @@ def _parse_frontmatter(text: str) -> dict[str, Any]:
 
 
 def scan_doc(path: Path) -> dict[str, Any]:
+    """Scan doc inputs into structured data."""
     text = path.read_text(errors="replace")
     fm = _parse_frontmatter(text)
     body = FRONTMATTER_RE.sub("", text, count=1)
@@ -101,6 +105,7 @@ def scan_doc(path: Path) -> dict[str, Any]:
 
 
 def scan_tree(root: Path) -> dict[str, dict[str, Any]]:
+    """Scan tree inputs into structured data."""
     root = root.expanduser().resolve()
     out: dict[str, dict[str, Any]] = {}
     seen: set[Path] = set()
@@ -117,13 +122,14 @@ def scan_tree(root: Path) -> dict[str, dict[str, Any]]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the scan-docs command-line entry point."""
     import json
     import sys
     if len(argv) < 2:
-        print("usage: scan_docs.py <repo>", file=sys.stderr)
+        sys.stderr.write("usage: scan_docs.py <repo>\n")
         return 1
     result = scan_tree(Path(argv[1]))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    sys.stdout.write(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
     return 0
 
 

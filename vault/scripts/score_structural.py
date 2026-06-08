@@ -14,6 +14,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = PLUGIN_ROOT / "templates" / "rubric.yaml"
@@ -25,12 +26,28 @@ _FALLBACK_MAX_PTS = {
 }
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
 def _load_max_pts() -> dict[str, int]:
     """Load per-dim max points from rubric.yaml; fallback to hardcoded defaults."""
     if not RUBRIC_PATH.exists():
         return dict(_FALLBACK_MAX_PTS)
     try:
         import yaml
+    except ImportError as exc:
+        _warn(f"score_structural: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}")
+        return dict(_FALLBACK_MAX_PTS)
+    try:
         data = yaml.safe_load(RUBRIC_PATH.read_text()) or {}
         dims = (data.get("structural") or {}).get("dimensions") or {}
         out = {name: int(cfg.get("max", _FALLBACK_MAX_PTS.get(name, 10)))
@@ -38,8 +55,8 @@ def _load_max_pts() -> dict[str, int]:
         for k, v in _FALLBACK_MAX_PTS.items():
             out.setdefault(k, v)
         return out
-    except Exception as exc:
-        print(f"score_structural: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except (OSError, yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
+        _warn(f"score_structural: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}")
         return dict(_FALLBACK_MAX_PTS)
 
 
@@ -232,6 +249,7 @@ def _score_conflict_dup(vault_root: Path, cats: list[str]) -> tuple[float, str]:
 
 
 def score_vault(vault_root: Path) -> dict:
+    """Score vault content against the rubric."""
     cats = _load_categories(vault_root)
 
     scores: dict[str, float] = {}
@@ -258,27 +276,28 @@ def score_vault(vault_root: Path) -> dict:
 
 
 def main() -> None:
+    """Run the score-structural command-line entry point."""
     if len(sys.argv) < 2:
-        print("Usage: score_structural.py <vault-path>", file=sys.stderr)
+        _warn("Usage: score_structural.py <vault-path>")
         sys.exit(1)
     vault = Path(sys.argv[1]).expanduser().resolve()
     if not vault.exists():
-        print(f"Vault not found: {vault}", file=sys.stderr)
+        _warn(f"Vault not found: {vault}")
         sys.exit(1)
 
     state = score_vault(vault)
 
-    print("=" * 60)
-    print(f"Structural Score: {state['total']:.1f}/100")
-    print("=" * 60)
+    _emit("=" * 60)
+    _emit(f"Structural Score: {state['total']:.1f}/100")
+    _emit("=" * 60)
     max_pts = _load_max_pts()
     for k, v in state["scores"].items():
-        print(f"  {k:25} {v:5.1f}/{max_pts.get(k, 10):2} — {state['details'][k]}")
+        _emit(f"  {k:25} {v:5.1f}/{max_pts.get(k, 10):2} — {state['details'][k]}")
 
     out = vault / "meta" / "score-state.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(state, ensure_ascii=False, indent=2))
-    print(f"\nSaved {out.relative_to(vault)}")
+    _emit(f"\nSaved {out.relative_to(vault)}")
 
 
 if __name__ == "__main__":

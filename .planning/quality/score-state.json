@@ -1,0 +1,151 @@
+{
+  "iteration": 8,
+  "timestamp": "2026-06-08T00:00:00Z",
+  "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
+  "language": "python+bash+markdown",
+  "project_type": "Claude Code plugin / autonomous development harness",
+  "current_state": "CI_FIX_PUSH_READY",
+  "target_score": 90,
+  "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
+  "head_sha": "d968ab1",
+  "baseline_weighted_score": 84.4,
+  "weighted_score": 90.04,
+  "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Hosted CI/release still pending.",
+  "scores": {
+    "type_safety": {
+      "score": 90,
+      "weight": 0.09,
+      "weighted": 8.1
+    },
+    "test_quality": {
+      "score": 90,
+      "weight": 0.13,
+      "weighted": 11.7
+    },
+    "error_handling": {
+      "score": 92,
+      "weight": 0.1,
+      "weighted": 9.2
+    },
+    "code_structure": {
+      "score": 92,
+      "weight": 0.09,
+      "weighted": 8.28
+    },
+    "configuration": {
+      "score": 89,
+      "weight": 0.07,
+      "weighted": 6.23
+    },
+    "logging": {
+      "score": 90,
+      "weight": 0.09,
+      "weighted": 8.1
+    },
+    "async_correctness": {
+      "score": 91,
+      "weight": 0.1,
+      "weighted": 9.1
+    },
+    "documentation": {
+      "score": 89,
+      "weight": 0.07,
+      "weighted": 6.23
+    },
+    "security": {
+      "score": 90,
+      "weight": 0.07,
+      "weighted": 6.3
+    },
+    "architecture": {
+      "score": 84,
+      "weight": 0.05,
+      "weighted": 4.2
+    },
+    "performance_budget": {
+      "score": 90,
+      "weight": 0.06,
+      "weighted": 5.4
+    },
+    "llm_prompt_quality": {
+      "score": 90,
+      "weight": 0.05,
+      "weighted": 4.5
+    },
+    "ci_cd_quality": {
+      "score": 90,
+      "weight": 0.03,
+      "weighted": 2.7
+    }
+  },
+  "measurement_log": {
+    "wave7_claude": ".planning/quality/claude-8-wave7/raw.md => 84.45 BELOW_90",
+    "wave8_metrics": "long_functions_gt40=0; broad_exceptions=0; print_calls=0; subprocess_without_timeout=0; shell_true_calls=0; public_api_docstring_coverage_pct=99.25",
+    "wave8_local_gates": "root pytest 665 passed; vault pytest 106 passed; scripts coverage 91.63%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; Graphify 27/27",
+    "security_ci_evidence": "ci.yml has pip-audit and gitleaks jobs; tests/test_ci_workflow_vault_gates.py guards both",
+    "perf_prompt_evidence": "tests/test_perf.py gates all 4 benchmarks against tests/perf_baseline.json; prompts/fixtures has 20 regression fixtures",
+    "decision": "Stop before release until a fresh dual adversarial rescore reaches >=90.",
+    "wave8_claude": ".planning/quality/claude-8-wave8/raw.md => 88.57 BELOW_90",
+    "wave9_metrics": "long_functions_gt40=0; broad_exceptions=0; print_calls=0; subprocess_without_timeout=0; shell_true_calls=0; event_calls=59; public_api_docstring_coverage_pct=99.25",
+    "wave9_local_gates": "root pytest 694 passed; vault pytest 106 passed; scripts coverage 91.50%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; Graphify 27/27",
+    "wave9_type_perf_prompt": "core Any hits in _contract/_dispatch=0; prompt fixtures=20 with 5 adversarial and JSON Schema; perf mean+p95+baseline plus CI memory ceiling",
+    "wave9_claude": ".planning/quality/claude-8-wave9/raw.md => JSON weighted_total=90.17, recalculated score*weight=90.03, MEETS_90_TARGET",
+    "codex_wave9": ".planning/quality/codex-8-wave9/exit_code.txt => 1; stderr.log contains app_session_terminated; no last-message.md score produced",
+    "codex_wave9_r2": ".planning/quality/codex-8-wave9-r2/last-message.md => weighted_total=89.93, recalculated score*weight=89.93, BELOW_90",
+    "wave10_changes": "Added scripts/_prompts.py render_for_llm/sanitize_for_llm with secret-like redaction, ANSI/control scrub, MAX_LLM_PROMPT_CHARS; headless-loop uses sanitized prompt path; added perf cold-start gate and explicit CI step.",
+    "wave10_local_gates": "root pytest 699 passed; vault pytest 106 passed; coverage 91.54%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; perf benchmark 4 passed/2 skipped; RSS+cold-start 2 passed; Graphify 27/27.",
+    "codex_wave10": ".planning/quality/codex-8-wave10/last-message.md => weighted_total=89.99, BELOW_90; found sanitizer leaks for quoted token, JSON api_key, Authorization Bearer.",
+    "wave11_changes": "Expanded prompt sanitizer to redact quoted secret assignments, JSON-shaped secret fields, and Authorization Bearer values; added parametrized regression tests; updated prompt-quality docs.",
+    "wave11_local_gates": "root pytest 702 passed; vault pytest 106 passed; coverage 91.56%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; perf benchmark 4 passed/2 skipped; RSS+cold-start 2 passed; Graphify 27/27.",
+    "codex_wave11": ".planning/quality/codex-8-wave11/last-message.md => weighted_total=90.04, MEETS_90_TARGET",
+    "claude_wave11": ".planning/quality/claude-8-wave11/raw.md => weighted_total=90.04, MEETS_90_TARGET",
+    "hosted_ci_pr22_r1": "GitHub Actions run 27138064053 failed in python gates at mypy: missing stubs for yaml; root cause requirements-dev.txt lacked types-PyYAML on hosted runner.",
+    "ci_stub_fix": "Added types-PyYAML>=6.0 and test guard; targeted pytest passed; mypy 51 files passed; ruff target passed.",
+    "ci_stub_fix_local_gates": "after d968ab1: root pytest 702 passed; vault pytest 106 passed; full ruff clean; mypy 51 files passed (pre-commit targeted)."
+  },
+  "residual_risks": [
+    "Hosted CI rerun after types-PyYAML fix pending.",
+    "No v0.8.7 tag/release/plugin update performed."
+  ],
+  "decision": "Push d968ab1 and wait for hosted CI rerun; release remains blocked until CI green.",
+  "codex_wave9_r2_weighted_score": 89.93,
+  "codex_wave9_r2_verdict": "BELOW_90",
+  "wave10_focus": "Low-risk closure of Codex 89.93 blockers: prompt-output sanitizer/budget cap and perf cold-start CI gate.",
+  "wave10_metrics": {
+    "long_functions_gt40": 0,
+    "broad_exceptions": 0,
+    "print_calls": 0,
+    "subprocess_without_timeout": 0,
+    "shell_true_calls": 0,
+    "event_calls": 59,
+    "public_api_total": 268,
+    "public_api_with_docstring": 266,
+    "public_api_docstring_coverage_pct": 99.25,
+    "prompt_fixtures": 20,
+    "adversarial_prompt_fixtures": 5,
+    "core_any_hits": 0,
+    "prompt_module_any_hits": 0
+  },
+  "codex_wave10_weighted_score": 89.99,
+  "codex_wave10_verdict": "BELOW_90",
+  "wave11_focus": "Close Codex Wave10 sanitizer leak findings: quoted token, JSON api_key, Authorization Bearer.",
+  "wave11_metrics": {
+    "long_functions_gt40": 0,
+    "broad_exceptions": 0,
+    "print_calls": 0,
+    "subprocess_without_timeout": 0,
+    "shell_true_calls": 0,
+    "event_calls": 59,
+    "public_api_total": 268,
+    "public_api_with_docstring": 266,
+    "public_api_docstring_coverage_pct": 99.25,
+    "prompt_fixtures": 20,
+    "adversarial_prompt_fixtures": 5,
+    "core_any_hits": 0,
+    "prompt_module_any_hits": 0
+  },
+  "codex_wave11_weighted_score": 90.04,
+  "codex_wave11_verdict": "MEETS_90_TARGET",
+  "claude_wave11_weighted_score": 90.04,
+  "claude_wave11_verdict": "MEETS_90_TARGET"
+}

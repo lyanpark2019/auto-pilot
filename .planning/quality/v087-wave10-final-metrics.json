@@ -1,0 +1,42 @@
+{
+  "long_functions_gt40": 0,
+  "broad_exceptions": 0,
+  "print_calls": 0,
+  "subprocess_without_timeout": 0,
+  "shell_true_calls": 0,
+  "event_calls": 59,
+  "long_function_hits": [],
+  "broad_exception_hits": [],
+  "print_call_hits": [],
+  "subprocess_without_timeout_hits": [],
+  "shell_true_hits": [],
+  "public_api_total": 268,
+  "public_api_with_docstring": 266,
+  "public_api_docstring_coverage_pct": 99.25,
+  "public_api_missing_docstring_hits": [
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 67,
+      "name": "Violation",
+      "lines": 6
+    },
+    {
+      "path": "scripts/docs/check_doc_reference_integrity.py",
+      "line": 470,
+      "name": "main",
+      "lines": 26
+    }
+  ],
+  "prompt_fixtures": 20,
+  "adversarial_prompt_fixtures": 5,
+  "core_any_hits": 0,
+  "prompt_module_any_hits": 0,
+  "llm_prompt_sanitizer": "scripts/_prompts.py::render_for_llm/sanitize_for_llm redacts secret-like output, strips ANSI/control chars, and enforces MAX_LLM_PROMPT_CHARS",
+  "llm_prompt_sanitizer_tests": [
+    "tests/test_prompt_regression.py::test_render_for_llm_redacts_secret_like_prompt_output",
+    "tests/test_prompt_regression.py::test_render_for_llm_strips_ansi_and_control_chars",
+    "tests/test_prompt_regression.py::test_render_for_llm_enforces_prompt_budget",
+    "tests/test_headless_loop_cli.py::test_run_claude_session_sanitizes_prompt_before_spawn"
+  ],
+  "perf_cold_start_gate": "tests/test_perf.py::test_cli_import_cold_start_under_budget (<2s) plus explicit CI step"
+}

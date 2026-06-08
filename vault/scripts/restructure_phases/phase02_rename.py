@@ -28,6 +28,7 @@ def _entry_actual_name(parent: Path, name: str) -> str | None:
 
 
 class RenameSimplePhase(Phase):
+    """Represent RenameSimplePhase data for this module."""
     name = "2_rename_simple"
     deps = ["1_backup"]
 

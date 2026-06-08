@@ -28,6 +28,7 @@ from pathlib import Path
 
 
 def load_rubric(plugin_root: Path):
+    """Load rubric data."""
     rubric_path = plugin_root / "templates" / "rubric.yaml"
     if not rubric_path.exists():
         # safe defaults if pyyaml unavailable
@@ -97,6 +98,7 @@ def delta_watchdog(vault: Path, current_total: float, consecutive: int, min_delt
 
 
 def round_summary(round_num: int, scores_before: dict, scores_after: dict, ticket_summary: dict) -> str:
+    """Provide the public round summary API."""
     s_before = scores_before.get("structural", {}).get("total", 0)
     s_after = scores_after.get("structural", {}).get("total", 0)
     c_before = scores_before.get("content", {}).get("total", 0) if scores_before.get("content") else 0
@@ -117,6 +119,7 @@ def round_summary(round_num: int, scores_before: dict, scores_after: dict, ticke
 
 
 def stop_check(scores: dict, rubric: dict) -> tuple[bool, str]:
+    """Provide the public stop check API."""
     s_pass = scores.get("structural", {}).get("total", 0) >= rubric["structural"]["pass_threshold"]
     c_pass = (
         not scores.get("content")
@@ -128,8 +131,9 @@ def stop_check(scores: dict, rubric: dict) -> tuple[bool, str]:
 
 
 def main():
+    """Run the pm-loop command-line entry point."""
     if len(sys.argv) < 2:
-        print("Usage: pm_loop.py <vault-path>", file=sys.stderr)
+        sys.stderr.write("Usage: pm_loop.py <vault-path>\n")
         sys.exit(1)
     vault = Path(sys.argv[1]).expanduser().resolve()
     # Vault-subsystem root: <plugin_root>/vault when CLAUDE_PLUGIN_ROOT is set
@@ -145,7 +149,7 @@ def main():
     c_total = scores.get("content", {}).get("total", 0) if scores.get("content") else 0
     combined = s_total + c_total
 
-    print(json.dumps({
+    sys.stdout.write(json.dumps({
         "scores": {
             "structural": s_total,
             "content": c_total,
@@ -158,7 +162,7 @@ def main():
             rubric["safety"]["delta_watchdog"]["consecutive_rounds"],
             rubric["safety"]["delta_watchdog"]["min_delta"]
         ),
-    }, ensure_ascii=False, indent=2))
+    }, ensure_ascii=False, indent=2) + "\n")
 
 
 if __name__ == "__main__":

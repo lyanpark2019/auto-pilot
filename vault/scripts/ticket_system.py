@@ -15,6 +15,7 @@ Usage:
 """
 
 import json
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -24,6 +25,7 @@ from typing import Optional, Callable
 
 
 class TicketStatus(str, Enum):
+    """Represent TicketStatus data for this module."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     DELIVERED = "delivered"
@@ -33,6 +35,7 @@ class TicketStatus(str, Enum):
 
 @dataclass
 class Ticket:
+    """Represent Ticket data for this module."""
     id: str
     round_num: int
     worker_type: str
@@ -182,5 +185,5 @@ if __name__ == "__main__":
         "acceptance": "0 placeholders across 7 cats",
         "reward": 15,
     })
-    print(t.to_prompt_context())
-    print("\nSummary:", board.round_summary(1))
+    sys.stdout.write(t.to_prompt_context() + "\n")
+    sys.stdout.write(f"\nSummary: {board.round_summary(1)}\n")

@@ -10,6 +10,7 @@ from ._mapping import VAULTS_TO_BACKUP
 
 
 class BackupPhase(Phase):
+    """Represent BackupPhase data for this module."""
     name = "1_backup"
     deps: list[str] = []
 

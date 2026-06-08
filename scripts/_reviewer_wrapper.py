@@ -87,6 +87,7 @@ class ReviewerFailure:
 
 @dataclass
 class SpawnHandle:
+    """Represent SpawnHandle data for this module."""
     role: str
     ticket: Path
     output_dir: Path
@@ -100,52 +101,47 @@ class SpawnHandle:
         return self.proc.poll()
 
 
-def spawn(*, role: str, ticket: Path, output_dir: Path,
-          allowed_tools: str, disallowed_tools: str) -> SpawnHandle:
-    """Spawn a `claude -p` subprocess for one reviewer dispatch.
+_ENV_DENYLIST = frozenset({
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "GCP_SERVICE_ACCOUNT_KEY",
+    "GITHUB_TOKEN",
+    "NPM_TOKEN",
+    "PYPI_TOKEN",
+    "SLACK_TOKEN",
+    "STRIPE_SECRET_KEY",
+    "DATABASE_URL",
+    "POSTGRES_PASSWORD",
+    "MYSQL_PASSWORD",
+    "REDIS_URL",
+})
 
-    Subprocess env contains:
-      - AUTO_PILOT_SUBAGENT_ROLE=<role>     (read by pre-reviewer-write.sh)
-      - AUTO_PILOT_OUTPUT_DIR=<output_dir>  (read by pre-reviewer-write.sh)
-    Parent env is NOT mutated.
 
-    `--allowedTools` / `--disallowedTools` are real Claude Code CLI flags
-    that constrain tool surface for this invocation only.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    # Allowlist approach considered but rejected: `claude` and `codex` consume opaque
-    # vendor env vars (CLAUDE_*, ANTHROPIC_*, OPENAI_*, model-router vars) that are not
-    # fully enumerated in any public contract.  Maintaining an allowlist would silently
-    # break spawned reviewers whenever a new vendor var is introduced.
-    # Decision: denylist of secrets that reviewer subprocesses provably do not need.
-    # Residual risk: secrets added outside this list still pass through — see module docstring.
-    _ENV_DENYLIST = frozenset({
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SESSION_TOKEN",
-        "GCP_SERVICE_ACCOUNT_KEY",
-        "GITHUB_TOKEN",
-        "NPM_TOKEN",
-        "PYPI_TOKEN",
-        "SLACK_TOKEN",
-        "STRIPE_SECRET_KEY",
-        "DATABASE_URL",
-        "POSTGRES_PASSWORD",
-        "MYSQL_PASSWORD",
-        "REDIS_URL",
-    })
-    env = {
-        k: v for k, v in os.environ.items() if k not in _ENV_DENYLIST
-    }
+def _reviewer_env(role: str, output_dir: Path) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k not in _ENV_DENYLIST}
     env["AUTO_PILOT_SUBAGENT_ROLE"] = role
     env["AUTO_PILOT_OUTPUT_DIR"] = str(output_dir)
+    return env
+
+
+def _reviewer_cmd(ticket: Path, allowed_tools: str, disallowed_tools: str) -> list[str]:
     prompt = f"TICKET={ticket}\nRead ticket. Refuse if ticket_sha mismatch."
-    cmd = [
+    return [
         "claude", "-p",
         "--allowedTools", allowed_tools,
         "--disallowedTools", disallowed_tools,
         prompt,
     ]
-    proc = subprocess.Popen(cmd, env=env)
+
+
+def spawn(*, role: str, ticket: Path, output_dir: Path,
+          allowed_tools: str, disallowed_tools: str) -> SpawnHandle:
+    """Spawn a `claude -p` subprocess for one reviewer dispatch."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.Popen(
+        _reviewer_cmd(ticket, allowed_tools, disallowed_tools),
+        env=_reviewer_env(role, output_dir),
+    )
     return SpawnHandle(role=role, ticket=ticket, output_dir=output_dir,
                        proc=proc, allowed_tools=allowed_tools,
                        disallowed_tools=disallowed_tools)
@@ -298,18 +294,9 @@ def wait_all(
     soft_warn_sec: int = SOFT_WARN_SEC,
     hard_kill_sec: int = HARD_KILL_SEC,
 ) -> list[ReviewerFailure]:
-    """Poll done.marker for every handle until all present, or timeout.
-
-    Two-tier watchdog: soft warning at ``soft_warn_sec`` (log only); hard kill
-    at ``hard_kill_sec`` (terminate→grace→kill→one retry); retry failure →
-    :class:`ReviewerFailure` in the return list.  ``timeout_sec`` is the outer
-    wall-clock cap; unhandled remaining handles raise :class:`SpawnTimeoutError`.
-
-    Returns empty list on success. Raises SpawnTimeoutError on timeout.
-    """
+    """Poll reviewer done markers with soft warning, hard kill, and one retry."""
     start = time.time()
-    deadline = start + timeout_sec
-    soft_warn_deadline = start + soft_warn_sec
+    deadline, soft_warn_deadline = start + timeout_sec, start + soft_warn_sec
     hard_kill_deadline = start + hard_kill_sec
     warned: set[str] = set()
     killed: set[str] = set()
@@ -317,7 +304,7 @@ def wait_all(
     retry_started: dict[str, float] = {}
     failures: list[ReviewerFailure] = []
     by_role: dict[str, SpawnHandleProtocol] = {h.role: h for h in handles}
-    remaining: set[str] = set(by_role.keys())
+    remaining: set[str] = set(by_role)
     tick = 0
     while remaining:
         _tick_all_roles(remaining, by_role, retrying, retry_started, killed,
