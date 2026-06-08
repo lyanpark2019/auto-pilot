@@ -35,5 +35,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: pending
+- metric delta: root scripts coverage 80.06% -> 81.28%; root suite 595 -> 600 passed after graphify artifact/manifest characterization tests
 - residual risk: if final score remains below 90, stop before release and ask whether to ship an 87-89 release.

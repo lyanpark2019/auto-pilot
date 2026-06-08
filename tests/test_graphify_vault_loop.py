@@ -9,6 +9,7 @@ from scripts.graphify_vault_loop import (
     QuerySpec,
     _read_json,
     compact_graphify_vault,
+    load_query_manifest,
     run_query_suite,
     validate_graphify_vault,
 )
@@ -117,6 +118,60 @@ def test_run_query_suite_uses_manifest_and_expected_gaps() -> None:
     assert result.passed == 2
     assert result.total == 2
     assert not result.failed
+
+
+def test_load_query_manifest_accepts_wrapped_tests(tmp_path: Path) -> None:
+    manifest = tmp_path / "queries.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "tests": [
+                    {
+                        "name": "explain-core",
+                        "cmd": ["graphify", "explain", "Core"],
+                        "must_contain": ["Node: Core"],
+                        "kind": "expected-gap",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    specs = load_query_manifest(manifest)
+
+    assert specs == [
+        QuerySpec(
+            name="explain-core",
+            cmd=["graphify", "explain", "Core"],
+            must_contain=["Node: Core"],
+            kind="expected-gap",
+        )
+    ]
+
+
+def test_run_query_suite_writes_artifacts_and_summary(tmp_path: Path) -> None:
+    specs = [
+        QuerySpec(name="ok", cmd=["graphify", "explain", "A"], must_contain=["Node: A"]),
+        QuerySpec(name="bad", cmd=["graphify", "explain", "B"], must_contain=["Node: B"]),
+    ]
+
+    def runner(cmd: list[str]) -> tuple[int, str, str]:
+        if cmd[-1] == "A":
+            return 0, "Node: A\n", ""
+        return 1, "missing\n", "boom\n"
+
+    result = run_query_suite(specs, runner=runner, out_dir=tmp_path)
+
+    assert result.passed == 1
+    assert [failure.name for failure in result.failed] == ["bad"]
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert summary["passed"] == 1
+    assert summary["failed"][0]["name"] == "bad"
+    assert "STDERR" in (tmp_path / "bad.txt").read_text(encoding="utf-8")
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "FAIL" in readme
+    assert "[[graphify/query-tests/bad|bad]]" in readme
 
 
 def test_read_json_records_parse_errors(tmp_path: Path) -> None:
