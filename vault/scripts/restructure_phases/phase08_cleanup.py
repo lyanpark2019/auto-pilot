@@ -41,6 +41,7 @@ RELOCATIONS: list[dict] = [
 
 
 class CleanupPhase(Phase):
+    """Represent CleanupPhase data for this module."""
     name = "8_cleanup"
     deps = ["7_notebooklm_create"]
 

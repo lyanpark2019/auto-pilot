@@ -9,6 +9,7 @@ from ._mapping import SPORTIC_SUB_DIRS
 
 
 class Sportic365MergePhase(Phase):
+    """Represent Sportic365MergePhase data for this module."""
     name = "3_sportic365_merge"
     deps = ["2_rename_simple"]
 

@@ -91,6 +91,7 @@ def _write_vault_indexes(vault: Path, categories: list[str], today: str) -> None
 
 @register
 class CodeAdapter:
+    """Represent CodeAdapter data for this module."""
     name = "code"
     default_rubric = "code-docs.yaml"
 

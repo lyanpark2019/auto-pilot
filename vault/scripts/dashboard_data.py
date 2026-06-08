@@ -64,6 +64,7 @@ def _cost_entries(cost_log: Path) -> list[dict[str, Any]] | None:
 
 
 def collect(vault: Path) -> dict[str, Any]:
+    """Provide the public collect API."""
     meta = vault / "meta"
     out: dict[str, Any] = {"vault": str(vault), "vault_name": vault.name}
     out["structural"] = _load_json(meta / "score-state.json")
@@ -79,6 +80,7 @@ def collect(vault: Path) -> dict[str, Any]:
 
 
 def main() -> int:
+    """Run the dashboard-data command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("vault", type=Path)
     ap.add_argument("--out", type=Path, default=None)

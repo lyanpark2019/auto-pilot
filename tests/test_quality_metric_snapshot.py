@@ -81,3 +81,22 @@ def test_collect_metrics_counts_shell_true(tmp_path: Path, call: str, expected_s
     metrics = collect_metrics([tmp_path])
 
     assert metrics.shell_true_calls == expected_shell_true
+
+
+def test_collect_metrics_reports_public_api_docstring_coverage(tmp_path: Path) -> None:
+    sample = tmp_path / "sample.py"
+    sample.write_text(
+        'class Documented:\n    """Has docs."""\n\n'
+        'class Missing:\n    pass\n\n'
+        'def documented():\n    """Has docs."""\n    return 1\n\n'
+        'def missing():\n    return 2\n\n'
+        'def _private_missing():\n    return 3\n',
+        encoding="utf-8",
+    )
+
+    metrics = collect_metrics([tmp_path])
+
+    assert metrics.public_api_total == 4
+    assert metrics.public_api_with_docstring == 2
+    assert metrics.public_api_docstring_coverage_pct == 50.0
+    assert {hit.name for hit in metrics.public_api_missing_docstring_hits} == {"Missing", "missing"}

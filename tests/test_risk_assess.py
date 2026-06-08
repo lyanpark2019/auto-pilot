@@ -235,3 +235,92 @@ def test_cli_diff_range_bad_range_exits_1(tmp_path: Path) -> None:
     proc = _run_cli("--diff-range", "nope..HEAD", cwd=repo)
     assert proc.returncode == 1
     assert "failed" in proc.stderr
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_ext"),
+    [("Makefile", ""), (".env", ""), ("archive.tar.gz", "gz")],
+)
+def test_extension_edge_cases(path: str, expected_ext: str) -> None:
+    assert risk_assess._extension(path) == expected_ext
+
+
+@pytest.mark.parametrize(
+    ("tier", "expected_policy"),
+    [
+        ("none", "skip-review"),
+        ("low", "single-reviewer"),
+        ("medium", "dual-review"),
+        ("high", "dual-review+gatekeeper(security mode)+tight-rescope"),
+        ("critical", "dual-review+gatekeeper(security mode)+tight-rescope"),
+    ],
+)
+def test_assessment_to_json_contract(tier: str, expected_policy: str) -> None:
+    assessment = risk_assess.Assessment(
+        tier=tier,
+        files=1,
+        by_tier={name: int(name == tier) for name in risk_assess.TIERS},
+        review_policy=expected_policy,
+        extra_risk=None,
+    )
+
+    payload = json.loads(assessment.to_json())
+
+    assert payload["tier"] == tier
+    assert payload["review_policy"] == expected_policy
+
+
+def test_changed_files_from_git_returns_non_empty_lines() -> None:
+    fake = subprocess.CompletedProcess(
+        args=["git"], returncode=0, stdout="a.py\n\nREADME.md\n", stderr=""
+    )
+    with pytest.MonkeyPatch.context() as mp:
+        calls: list[dict[str, object]] = []
+
+        def fake_run(*args, **kwargs):
+            calls.append(kwargs)
+            return fake
+
+        mp.setattr(risk_assess.subprocess, "run", fake_run)
+        assert risk_assess.changed_files_from_git("base..HEAD", timeout=3.5) == ["a.py", "README.md"]
+
+    assert calls[0]["timeout"] == 3.5
+
+
+def test_changed_files_from_git_raises_on_git_failure() -> None:
+    fake = subprocess.CompletedProcess(
+        args=["git"], returncode=128, stdout="", stderr="bad range"
+    )
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(risk_assess.subprocess, "run", lambda *args, **kwargs: fake)
+        with pytest.raises(RuntimeError, match="bad range"):
+            risk_assess.changed_files_from_git("bad..HEAD")
+
+
+def test_main_handles_diff_range_timeout(capsys) -> None:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            risk_assess,
+            "changed_files_from_git",
+            lambda _range: (_ for _ in ()).throw(subprocess.TimeoutExpired(["git"], 30)),
+        )
+        rc = risk_assess.main(["--diff-range", "base..HEAD"])
+
+    assert rc == 1
+    assert "risk_assess:" in capsys.readouterr().err
+
+
+def test_main_reads_stdin_when_no_paths(monkeypatch, capsys) -> None:
+    class FakeStdin:
+        def isatty(self) -> bool:
+            return False
+
+        def __iter__(self):
+            return iter(["scripts/a.py\n", "docs/b.md\n"])
+
+    monkeypatch.setattr(risk_assess.sys, "stdin", FakeStdin())
+
+    rc = risk_assess.main([])
+
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["tier"] == "medium"

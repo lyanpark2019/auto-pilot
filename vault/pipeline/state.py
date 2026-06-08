@@ -18,10 +18,12 @@ from typing import Any, cast
 
 
 def state_path(vault: Path) -> Path:
+    """Provide the public state path API."""
     return vault.expanduser().resolve() / "meta" / "vault-builder-state.json"
 
 
 def load(vault: Path) -> dict[str, Any]:
+    """Load load data."""
     p = state_path(vault)
     if p.exists():
         return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
@@ -39,6 +41,7 @@ def load(vault: Path) -> dict[str, Any]:
 
 
 def save(vault: Path, state: dict[str, Any]) -> None:
+    """Save save data atomically."""
     state["updated_at"] = time.time()
     p = state_path(vault)
     p.parent.mkdir(parents=True, exist_ok=True)

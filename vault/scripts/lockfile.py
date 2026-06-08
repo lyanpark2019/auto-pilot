@@ -22,6 +22,7 @@ from typing import TextIO
 
 
 class LockHeldError(RuntimeError):
+    """Represent LockHeldError data for this module."""
     pass
 
 
@@ -48,6 +49,7 @@ def _pid_from_lock(held: dict[str, object]) -> int | None:
 
 
 class VaultLock:
+    """Represent VaultLock data for this module."""
     def __init__(self, vault: Path, role: str = "pm-loop"):
         self.vault = Path(vault).expanduser().resolve()
         self.role = role
@@ -148,6 +150,7 @@ def _status(lock: VaultLock) -> int:
 
 
 def main(argv: list[str]) -> int:
+    """Run the lockfile command-line entry point."""
     if len(argv) < 3:
         _write_line(sys.stderr, "usage: lockfile.py <vault> {acquire|release|status} [role]")
         return 1

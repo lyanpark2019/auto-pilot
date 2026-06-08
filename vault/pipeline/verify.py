@@ -137,6 +137,7 @@ VERIFIERS: dict[str, Callable[[dict, dict], tuple[float, str]]] = {
 
 
 def verify(repo: Path, doc_root: Path | None = None, rubric_path: Path | None = None) -> dict:
+    """Provide the public verify API."""
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or repo).expanduser().resolve()
     rubric_path = rubric_path or (PLUGIN_ROOT / "rubrics" / "code-docs.yaml")
@@ -174,6 +175,7 @@ def verify(repo: Path, doc_root: Path | None = None, rubric_path: Path | None = 
 
 
 def main(argv: list[str]) -> int:
+    """Run the verify command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("repo", type=Path)
     ap.add_argument("--doc-root", type=Path, default=None)

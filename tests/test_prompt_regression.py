@@ -1,4 +1,4 @@
-"""Regression suite for prompts/ — fixture-driven, >=10 cases covering iteration + headless prompts.
+"""Regression suite for prompts/ — fixture-driven, >=20 cases covering iteration + headless prompts.
 
 Each fixture under prompts/fixtures/*.json declares:
   - prompt: name passed to _prompts.load() or _prompts.render()

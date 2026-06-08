@@ -172,6 +172,7 @@ class SnapshotMismatchError(Exception):
 
 @dataclass(frozen=True)
 class SnapshotShas:
+    """Represent SnapshotShas data for this module."""
     spec: str
     claude_md_chain: list[str]
     project_context: str | None = None

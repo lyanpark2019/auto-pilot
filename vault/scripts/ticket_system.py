@@ -25,6 +25,7 @@ from typing import Optional, Callable
 
 
 class TicketStatus(str, Enum):
+    """Represent TicketStatus data for this module."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     DELIVERED = "delivered"
@@ -34,6 +35,7 @@ class TicketStatus(str, Enum):
 
 @dataclass
 class Ticket:
+    """Represent Ticket data for this module."""
     id: str
     round_num: int
     worker_type: str

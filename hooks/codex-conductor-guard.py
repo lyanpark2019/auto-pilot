@@ -43,6 +43,7 @@ DOC_EXTS = {".md", ".markdown", ".mdx", ".txt", ".rst", ".adoc"}
 
 
 def respond_and_exit(decision: str, reason: str) -> None:
+    """Provide the public respond and exit API."""
     payload = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -118,6 +119,7 @@ def _always_allowed(fpath: str, marker_root: str) -> bool:
 
 
 def main() -> None:
+    """Run the codex-conductor-guard command-line entry point."""
     data = _load_payload(sys.stdin.read())
     if data is None:
         sys.exit(0)

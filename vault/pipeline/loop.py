@@ -36,6 +36,7 @@ def _emit(message: str) -> None:
 
 
 def run(vault: Path, source: str, input_path: Path | None = None, **opts: Any) -> dict[str, Any]:
+    """Run run workflow."""
     _adapter._autodiscover()
     AdapterCls = _adapter.get(source)
     adapter = AdapterCls()
@@ -91,6 +92,7 @@ def _extra_to_kwargs(extra: list[str]) -> dict[str, str | bool]:
 
 
 def main() -> int:
+    """Run the loop command-line entry point."""
     _adapter._autodiscover()
     available = sorted(_adapter.REGISTRY.keys()) or ["notebooklm", "code"]
     ap = argparse.ArgumentParser()

@@ -145,6 +145,7 @@ def _run(cmd: list[str], timeout: int = 120) -> tuple[int, str, str]:
 
 @register
 class NotebookLMAdapter:
+    """Represent NotebookLMAdapter data for this module."""
     name = "notebooklm"
     default_rubric = "notebooklm.yaml"
 

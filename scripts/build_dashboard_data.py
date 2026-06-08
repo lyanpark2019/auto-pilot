@@ -43,6 +43,7 @@ SUBSYSTEM_RULES: list[tuple[str, str]] = [
 
 
 def subsystem_of(name: str) -> str:
+    """Provide the public subsystem of API."""
     for pattern, sub in SUBSYSTEM_RULES:
         if re.search(pattern, name):
             return sub
@@ -50,6 +51,7 @@ def subsystem_of(name: str) -> str:
 
 
 def collect_assets() -> list[dict[str, str]]:
+    """Provide the public collect assets API."""
     assets: list[dict[str, str]] = []
     skills = ROOT / "skills"
     if skills.is_dir():
@@ -77,6 +79,7 @@ def collect_assets() -> list[dict[str, str]]:
 
 
 def load_rounds() -> list[dict[str, Any]]:
+    """Load rounds data."""
     rounds: list[dict[str, Any]] = []
     if SCORE_DIR.is_dir():
         for f in sorted(SCORE_DIR.glob("round-*.json")):
@@ -90,6 +93,7 @@ def load_rounds() -> list[dict[str, Any]]:
 
 
 def weighted(s: dict[str, Any]) -> float:
+    """Provide the public weighted API."""
     def num(key: str) -> float:
         v = s.get(key, 0)
         return float(v) if isinstance(v, (int, float)) else 0.0
@@ -272,6 +276,7 @@ def build_architecture_html(
     branch: str,
     generated: str,
 ) -> str:
+    """Build architecture html artifacts."""
     sub_counts: dict[str, int] = {}
     for a in assets:
         sub = subsystem_of(a["name"])
@@ -295,6 +300,7 @@ def build_architecture_html(
 
 
 def main() -> None:
+    """Run the build-dashboard-data command-line entry point."""
     import datetime
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True, timeout=30).stdout.strip()

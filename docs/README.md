@@ -32,6 +32,7 @@ This directory is the source-of-truth map for humans and AI agents working on th
 - `docs/asset-charter.md` — asset ownership, retention, and retired-name decisions.
 - `docs/master-plan.md` — roadmap and current consolidation plan.
 - `docs/perf-budget.md` — performance budgets and benchmark gates.
+- `docs/configuration.md` — env vars, bounded defaults, and config verification.
 - `docs/7-phase-template.md` — phase-spec template for autonomous work.
 - `docs/specs/` — active dogfood/spec inputs.
 - `docs/history/` — distilled changelogs; historical, not current implementation truth.

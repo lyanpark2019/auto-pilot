@@ -34,6 +34,7 @@ WORKER_ID = f"w-{os.getpid()}"
 
 
 def log(msg: str) -> None:
+    """Provide the public log API."""
     ts = time.strftime("%H:%M:%S")
     sys.stdout.write(f"[{ts}] {WORKER_ID}  {msg}\n")
     sys.stdout.flush()
@@ -130,6 +131,7 @@ def _claim_next(board: TicketBoard):
 
 
 def process(t) -> bool:
+    """Provide the public process API."""
     log(f"START {t.id}  src='{t.contract['src_title'][:50]}'")
     sources = _list_sources(t.contract["src_id"])
     log(f"  {len(sources)} sources to migrate")
@@ -158,6 +160,7 @@ def process(t) -> bool:
 
 
 def main() -> int:
+    """Run the worker command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--max", type=int, default=0)

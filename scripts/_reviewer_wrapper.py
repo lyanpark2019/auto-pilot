@@ -87,6 +87,7 @@ class ReviewerFailure:
 
 @dataclass
 class SpawnHandle:
+    """Represent SpawnHandle data for this module."""
     role: str
     ticket: Path
     output_dir: Path

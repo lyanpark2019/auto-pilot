@@ -10,6 +10,7 @@ from typing import Any
 
 @dataclass
 class PhaseResult:
+    """Represent PhaseResult data for this module."""
     status: str  # completed | failed | partial
     detail: str = ""
     artifacts: dict[str, Any] = field(default_factory=dict)

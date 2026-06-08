@@ -85,6 +85,7 @@ def _run_selected_cases(args: argparse.Namespace, case_ids: list[str], baseline_
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the cli command-line entry point."""
     args = _build_parser().parse_args(argv)
     case_ids = [args.case] if args.case else select_cases(_CASES, args.tier)
     summaries, total_cost, stopped_early = _run_selected_cases(args, case_ids, _load_baseline_cases())

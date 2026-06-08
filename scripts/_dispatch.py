@@ -342,6 +342,7 @@ def read_review(path: Path) -> dict[str, Any]:
 
 @dataclass
 class RoundOutcome:
+    """Represent RoundOutcome data for this module."""
     worker_exit_code: int | None
     worker_status: dict[str, Any] | None
     codex_verdict: str | None

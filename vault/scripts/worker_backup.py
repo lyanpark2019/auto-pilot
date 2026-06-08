@@ -29,6 +29,7 @@ from pathlib import Path
 
 
 class WorkerBackup:
+    """Represent WorkerBackup data for this module."""
     def __init__(self, vault: Path, worker: str, round_num: int, ticket_id: str):
         self.vault = Path(vault).expanduser().resolve()
         self.worker = worker
@@ -114,6 +115,7 @@ class WorkerBackup:
 
 
 def main(argv: list[str]) -> int:
+    """Run the worker-backup command-line entry point."""
     if len(argv) < 3:
         sys.stderr.write("usage: worker_backup.py <vault> {rollback-ticket <id>|purge [keep_rounds]}\n")
         return 1

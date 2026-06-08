@@ -305,6 +305,7 @@ def _score_content_dimensions(vault: Path, cats: list[str], scores: dict, detail
 
 
 def score_vault(vault: Path) -> dict:
+    """Score vault content against the rubric."""
     cats = _vault_categories(vault)
     scores = {}
     details = {}
@@ -320,6 +321,7 @@ def score_vault(vault: Path) -> dict:
 
 
 def main():
+    """Run the score-content command-line entry point."""
     if len(sys.argv) < 2:
         _warn("Usage: score_content.py <vault-path>")
         sys.exit(1)

@@ -48,6 +48,7 @@ def _emit(message: str = "") -> None:
 
 
 class Check:
+    """Represent Check data for this module."""
     def __init__(self, name: str):
         self.name = name
         self.failures: list[str] = []
@@ -355,6 +356,7 @@ def _check_restructure() -> Check:
 
 
 def run_all() -> tuple[int, list[Check]]:
+    """Run run all workflow."""
     checks = [
         _check_manifest(),
         _check_marketplace(),
@@ -373,6 +375,7 @@ def run_all() -> tuple[int, list[Check]]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the selftest command-line entry point."""
     n_fail, checks = run_all()
     for c in checks:
         if c.ok():

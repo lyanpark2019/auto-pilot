@@ -135,6 +135,7 @@ def _multi_run(dirs: list[Path], *graphify_args: str) -> str:
 
 
 def tool_vault_query(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault query MCP tool."""
     vault = _vault(args)
     q = args["question"]
     budget = args.get("budget", 500)
@@ -143,18 +144,21 @@ def tool_vault_query(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def tool_vault_path(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault path MCP tool."""
     vault = _vault(args)
     dirs = _raw_dirs(vault, args)
     return {"content": [{"type": "text", "text": _multi_run(dirs, "path", args["a"], args["b"])}]}
 
 
 def tool_vault_explain(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault explain MCP tool."""
     vault = _vault(args)
     dirs = _raw_dirs(vault, args)
     return {"content": [{"type": "text", "text": _multi_run(dirs, "explain", args["concept"])}]}
 
 
 def tool_vault_audit_status(args: dict[str, Any]) -> dict[str, Any]:
+    """Handle the vault audit status MCP tool."""
     vault = _vault(args)
     meta = vault / "meta"
     status: dict[str, Any] = {"vault": str(vault)}
@@ -202,6 +206,7 @@ def _respond(req_id: Any, result: Any = None, error: dict[str, Any] | None = Non
 
 
 def handle(req: dict[str, Any]) -> None:
+    """Provide the public handle API."""
     method = req.get("method")
     rid = req.get("id")
     params = req.get("params") or {}
@@ -237,6 +242,7 @@ def handle(req: dict[str, Any]) -> None:
 
 
 def main() -> int:
+    """Run the mcp-vault-server command-line entry point."""
     for line in sys.stdin:
         line = line.strip()
         if not line:

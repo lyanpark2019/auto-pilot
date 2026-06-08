@@ -54,6 +54,7 @@ def _default_memory() -> dict[str, Any]:
 
 
 def load_memory(path: Path) -> dict[str, Any]:
+    """Load memory data."""
     if not path.exists():
         return _default_memory()
     try:
@@ -71,6 +72,7 @@ def load_memory(path: Path) -> dict[str, Any]:
 
 
 def save_memory(path: Path, payload: dict[str, Any]) -> None:
+    """Save memory data atomically."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -78,6 +80,7 @@ def save_memory(path: Path, payload: dict[str, Any]) -> None:
 
 
 def parse_real_eval_report(vault: Path) -> dict[str, float]:
+    """Provide the public parse real eval report API."""
     report = vault / "meta" / "real-eval.md"
     if not report.exists():
         return {}
@@ -97,6 +100,7 @@ def parse_real_eval_report(vault: Path) -> dict[str, float]:
 
 
 def extract_real_eval_section(report_text: str, qid: str) -> str:
+    """Provide the public extract real eval section API."""
     if not report_text or not qid:
         return ""
     pattern = re.compile(rf"^## {re.escape(qid)} — .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
@@ -131,6 +135,7 @@ def write_weak_q_tickets(vault: Path, weak: list[str], scores: dict[str, float])
 
 
 def record_run(memory: dict[str, Any], vault: Path, scores: dict[str, float], threshold: float, weak: list[str]) -> None:
+    """Provide the public record run API."""
     mean = sum(scores.values()) / len(scores) if scores else 0.0
     entry = {
         "vault": str(vault),
@@ -147,6 +152,7 @@ def record_run(memory: dict[str, Any], vault: Path, scores: dict[str, float], th
 
 
 def main(argv: list[str]) -> int:
+    """Run the self-improve command-line entry point."""
     parser = argparse.ArgumentParser(prog="self-improve")
     parser.add_argument("vault", type=Path)
     parser.add_argument("--threshold", type=float, default=95.0)

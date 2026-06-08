@@ -224,6 +224,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the risk-assess command-line entry point."""
     args = _build_parser().parse_args(argv)
     paths: list[str] = list(args.paths)
     if args.diff_range is not None:

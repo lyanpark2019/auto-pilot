@@ -34,6 +34,7 @@ Run `/vault-build <repo> --obsidian-path <vault>` to populate from code.
 
 
 class NewVaultSkeletonsPhase(Phase):
+    """Represent NewVaultSkeletonsPhase data for this module."""
     name = "5_new_vault_skeletons"
     deps = ["4_notebooklm_split"]
 

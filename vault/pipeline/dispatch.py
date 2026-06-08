@@ -45,6 +45,7 @@ def _emit_json(payload: Any, *, indent: int | None = None) -> None:
 
 
 class TicketStatus(str, Enum):
+    """Represent TicketStatus data for this module."""
     PENDING = "pending"
     DISPATCHED = "dispatched"
     DELIVERED = "delivered"
@@ -55,6 +56,7 @@ class TicketStatus(str, Enum):
 
 @dataclass
 class TicketRecord:
+    """Represent TicketRecord data for this module."""
     id: str
     worker_type: str
     contract: dict[str, Any]
@@ -66,6 +68,7 @@ class TicketRecord:
 
 
 class DispatchBoard:
+    """Represent DispatchBoard data for this module."""
     def __init__(self, project_root: Path):
         self.root = project_root.expanduser().resolve()
         self.vb_dir = self.root / ".vault-builder"
@@ -175,6 +178,7 @@ def _verify_drift_fixed(t: TicketRecord, project_root: Path) -> tuple[bool, str]
 
 
 def main(argv: list[str]) -> int:
+    """Run the dispatch command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("project_root", type=Path)
     ap.add_argument("cmd", choices=["list-pending", "summary", "verify-all", "load-plan"])

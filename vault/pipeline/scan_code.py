@@ -58,6 +58,7 @@ def _sig(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 
 
 def scan_module(path: Path) -> dict[str, Any]:
+    """Scan module inputs into structured data."""
     try:
         tree = ast.parse(path.read_text())
     except (SyntaxError, UnicodeDecodeError):
@@ -86,6 +87,7 @@ def scan_module(path: Path) -> dict[str, Any]:
 
 
 def scan_tree(root: Path, extras: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    """Scan tree inputs into structured data."""
     root = root.expanduser().resolve()
     extras = extras or []
     out: dict[str, dict[str, Any]] = {}
@@ -100,6 +102,7 @@ def scan_tree(root: Path, extras: list[str] | None = None) -> dict[str, dict[str
 
 
 def main(argv: list[str]) -> int:
+    """Run the scan-code command-line entry point."""
     import json
     import sys
     if len(argv) < 2:

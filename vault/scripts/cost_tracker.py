@@ -67,6 +67,7 @@ def _load_rubric() -> dict[str, Any]:
 
 
 class CostTracker:
+    """Represent CostTracker data for this module."""
     def __init__(self, vault: Path):
         self.vault = vault
         self.log_path = _data_dir(vault) / "cost-log.jsonl"
@@ -150,6 +151,7 @@ class CostTracker:
 
 
 def main(argv: list[str]) -> int:
+    """Run the cost-tracker command-line entry point."""
     if len(argv) < 2:
         _warn("usage: cost_tracker.py <vault_path> [report|round N|check N]")
         return 1

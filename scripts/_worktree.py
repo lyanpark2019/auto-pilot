@@ -29,6 +29,7 @@ _GIT_TREE_TIMEOUT = 60  # worktree add/remove, am, format-patch, commit --amend 
 
 @dataclass(frozen=True)
 class WorktreeHandle:
+    """Represent WorktreeHandle data for this module."""
     path: Path
     branch: str
     base_sha: str
@@ -92,6 +93,7 @@ class StaleAmStateError(Exception):
 
 @dataclass(frozen=True)
 class ApplyResult:
+    """Represent ApplyResult data for this module."""
     status: str  # "applied" | "conflict"
     main_sha: str | None = None
     pre_apply_head: str | None = None

@@ -71,6 +71,7 @@ def _plan_header(repo: Path, doc_root: Path, report_dict: dict[str, Any]) -> dic
 
 
 def build_plan(repo: Path, doc_root: Path | None = None, max_per_type: int = 50) -> dict[str, Any]:
+    """Build plan artifacts."""
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or repo).expanduser().resolve()
     report_dict = drift_mod.detect(repo, doc_root).to_dict()
@@ -81,6 +82,7 @@ def build_plan(repo: Path, doc_root: Path | None = None, max_per_type: int = 50)
 
 
 def main(argv: list[str]) -> int:
+    """Run the fix command-line entry point."""
     ap = argparse.ArgumentParser()
     ap.add_argument("repo", type=Path)
     ap.add_argument("--doc-root", type=Path, default=None)

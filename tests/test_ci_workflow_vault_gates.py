@@ -51,3 +51,19 @@ def test_ci_uses_node24_action_majors() -> None:
     assert "actions/setup-python@v5" not in text
     assert "actions/checkout@v5" in text
     assert "actions/setup-python@v6" in text
+
+
+def test_ci_runs_dependency_audit_and_secret_scan() -> None:
+    text = _ci_text()
+
+    assert "name: dep audit (pip-audit)" in text
+    assert "python -m pip_audit --requirement requirements-dev.txt" in text
+    assert "name: secret scan (gitleaks)" in text
+    assert "gitleaks/gitleaks-action@" in text
+
+
+def test_ci_runs_perf_budget_baseline_gate() -> None:
+    text = _ci_text()
+
+    assert "pytest-benchmark (perf budget + baseline gate)" in text
+    assert "python -m pytest tests/test_perf.py --benchmark-only -v" in text

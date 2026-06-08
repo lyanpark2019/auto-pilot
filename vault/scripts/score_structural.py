@@ -249,6 +249,7 @@ def _score_conflict_dup(vault_root: Path, cats: list[str]) -> tuple[float, str]:
 
 
 def score_vault(vault_root: Path) -> dict:
+    """Score vault content against the rubric."""
     cats = _load_categories(vault_root)
 
     scores: dict[str, float] = {}
@@ -275,6 +276,7 @@ def score_vault(vault_root: Path) -> dict:
 
 
 def main() -> None:
+    """Run the score-structural command-line entry point."""
     if len(sys.argv) < 2:
         _warn("Usage: score_structural.py <vault-path>")
         sys.exit(1)

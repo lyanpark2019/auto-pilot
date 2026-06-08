@@ -44,6 +44,7 @@ STOP_WORDS = frozenset(
 
 
 class Asset(NamedTuple):
+    """Represent Asset data for this module."""
     name: str
     description: str
     source: str
@@ -240,6 +241,7 @@ def _write_artifact(path: str, result: str, registry_count: int, overlaps: list[
 
 
 def main() -> int:
+    """Run the asset-registry-check command-line entry point."""
     args = _build_parser().parse_args()
     registry = _scan_registry()
     result, overlaps = _evaluate_candidate(args, registry)

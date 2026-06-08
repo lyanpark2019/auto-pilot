@@ -41,6 +41,7 @@ def _warn(message: str) -> None:
 
 @dataclass
 class DriftReport:
+    """Represent DriftReport data for this module."""
     repo_root: str
     code_modules: int
     doc_files: int
@@ -274,6 +275,7 @@ def _detect_claim_drift(
 
 
 def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
+    """Provide the public detect API."""
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or repo).expanduser().resolve()
 
@@ -291,6 +293,7 @@ def detect(repo: Path, doc_root: Path | None = None) -> DriftReport:
 
 
 def main(argv: list[str]) -> int:
+    """Run the drift command-line entry point."""
     import argparse
     import json
     ap = argparse.ArgumentParser()

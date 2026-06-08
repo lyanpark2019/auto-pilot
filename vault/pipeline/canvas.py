@@ -17,6 +17,7 @@ CanvasObject: TypeAlias = dict[str, object]
 
 
 class RankedNode(NamedTuple):
+    """Represent RankedNode data for this module."""
     node_id: str
     label: str
     degree: int
@@ -130,6 +131,7 @@ def _canvas_edges(edges: list[object], id_to_canvas: dict[str, str]) -> list[Can
 
 
 def emit_graph_canvas(vault: Path, max_nodes: int = 80) -> Path | None:
+    """Provide the public emit graph canvas API."""
     vault = vault.expanduser().resolve()
     graph_path = vault / "graphify-out" / "graph.json"
     if not graph_path.exists():
@@ -157,6 +159,7 @@ def emit_graph_canvas(vault: Path, max_nodes: int = 80) -> Path | None:
 
 
 def main(argv: list[str]) -> int:
+    """Run the canvas command-line entry point."""
     parser = argparse.ArgumentParser(prog="canvas")
     parser.add_argument("vault", type=Path)
     parser.add_argument("--max-nodes", type=int, default=80)

@@ -46,6 +46,7 @@ def _find_contract_dirs(contracts_root: Path) -> list[Path]:
 
 
 def assert_phases_completed(state_path: Path, expected: int) -> list[str]:
+    """Assert that phases completed holds."""
     if not state_path.exists():
         return [f"state.json missing at {state_path}"]
     state = json.loads(state_path.read_text())
@@ -62,6 +63,7 @@ def assert_phases_completed(state_path: Path, expected: int) -> list[str]:
 
 
 def assert_no_active_worktrees(worktrees_dir: Path) -> list[str]:
+    """Assert that no active worktrees holds."""
     if not worktrees_dir.exists():
         return []
     leftover = [p for p in worktrees_dir.iterdir() if p.is_dir()]
@@ -71,6 +73,7 @@ def assert_no_active_worktrees(worktrees_dir: Path) -> list[str]:
 
 
 def assert_contracts_signed(contracts_root: Path) -> list[str]:
+    """Assert that contracts signed holds."""
     failures: list[str] = []
     for round_dir in _find_contract_dirs(contracts_root):
         contract = round_dir / "contract.json"
@@ -94,6 +97,7 @@ def assert_contracts_signed(contracts_root: Path) -> list[str]:
 
 
 def assert_trailer_chain(repo_root: Path, expected_phases: int) -> list[str]:
+    """Assert that trailer chain holds."""
     res = subprocess.run(
         ["git", "log", "--format=%H%n%B%n---END---", "-n", "20"],
         cwd=str(repo_root),
@@ -117,6 +121,7 @@ def assert_trailer_chain(repo_root: Path, expected_phases: int) -> list[str]:
 
 
 def assert_no_sandbox_violations(state_dir: Path) -> list[str]:
+    """Assert that no sandbox violations holds."""
     log = state_dir / "sandbox-violations.jsonl"
     if not log.exists():
         return []

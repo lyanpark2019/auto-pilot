@@ -158,6 +158,7 @@ BASES = {
 
 
 def generate_bases(vault: Path) -> list[Path]:
+    """Provide the public generate bases API."""
     vault = vault.expanduser().resolve()
     out_dir = vault / "meta" / "bases"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -170,6 +171,7 @@ def generate_bases(vault: Path) -> list[Path]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the bases command-line entry point."""
     parser = argparse.ArgumentParser(prog="bases")
     parser.add_argument("vault", type=Path)
     args = parser.parse_args(argv[1:])

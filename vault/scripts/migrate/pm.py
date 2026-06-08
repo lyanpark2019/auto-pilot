@@ -59,6 +59,7 @@ def _source_count(nid: str) -> int:
 
 
 def cmd_issue(args) -> int:
+    """Run the issue subcommand."""
     board = TicketBoard(BOARD_PATH)
     nbs = _list_notebooks()
     targets = [nb for nb in nbs if _classify_title(nb["title"]) == args.category and nb["id"] != args.dst]
@@ -90,6 +91,7 @@ def cmd_issue(args) -> int:
 
 
 def cmd_status(args) -> int:
+    """Run the status subcommand."""
     board = TicketBoard(BOARD_PATH)
     summary = board.round_summary(1)
     _emit(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -147,6 +149,7 @@ def cmd_reissue(args) -> int:
 
 
 def cmd_reset(args) -> int:
+    """Run the reset subcommand."""
     if BOARD_PATH.exists():
         BOARD_PATH.unlink()
         _emit(f"Removed {BOARD_PATH}")
@@ -154,6 +157,7 @@ def cmd_reset(args) -> int:
 
 
 def main() -> int:
+    """Run the pm command-line entry point."""
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
 

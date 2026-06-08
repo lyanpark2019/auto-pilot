@@ -1,45 +1,95 @@
 {
   "iteration": 8,
-  "timestamp": "2026-06-08T03:55:00Z",
+  "timestamp": "2026-06-08T00:00:00Z",
   "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
   "current_state": "BLOCKED_BELOW_TARGET",
   "target_score": 90,
-  "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked because adversarial tracks did not agree on >=90",
-  "head_sha": "403283e",
+  "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
+  "head_sha": "wave8-commit; run `git rev-parse HEAD` for exact SHA",
   "baseline_weighted_score": 84.4,
-  "weighted_score": 82.78,
-  "scores_source": "Claude wave4 conservative rescore lower-bound; Codex final rerun blocked by quota after Codex r1 rejected at 87.33",
+  "weighted_score": 84.45,
+  "scores_source": "Claude wave7 conservative rescore = 84.45 BELOW_90; Codex rerun still pending/quota-dependent after earlier 87.33 rejection",
   "scores": {
-    "type_safety": {"score": 82, "weight": 0.09, "notes": "mypy strict expanded to 49 files / 14 vault pilots, but Any density remains high."},
-    "test_quality": {"score": 84, "weight": 0.13, "notes": "611 root + 106 vault tests; scripts coverage 87.50%; parametrization still sparse."},
-    "error_handling": {"score": 83, "weight": 0.10, "notes": "broad exceptions reduced 30 -> 8, with remaining broad catches in core boundaries."},
-    "code_structure": {"score": 85, "weight": 0.09, "notes": "long functions reduced 34 -> 11; largest remaining prepare_subagent_ticket at 69 lines."},
-    "configuration": {"score": 81, "weight": 0.07, "notes": "AutoPilotConfig exists; scattered constants remain."},
-    "logging": {"score": 84, "weight": 0.09, "notes": "print calls reduced 168 -> 50; event() calls 37 -> 56; structured logging remains uneven."},
-    "async_correctness": {"score": 78, "weight": 0.10, "notes": "Claude track flagged subprocess timeout risk; PM AST recount finds only two production Popen sites without timeout kwarg, both watchdog-bounded, but final adversarial agreement not obtained."},
-    "documentation": {"score": 79, "weight": 0.07, "notes": "Docs gates pass; public docstring coverage remains incomplete."},
-    "security": {"score": 86, "weight": 0.07, "notes": "gitleaks and pip-audit CI gates present; small shell=True/eval-scope concerns remain."},
-    "architecture": {"score": 84, "weight": 0.05, "notes": "Clean helper modules and adapter protocol; broad DI boundary not systemic."},
-    "performance_budget": {"score": 83, "weight": 0.06, "notes": "pytest-benchmark/RSS gates exist; p95/p99 coverage absent."},
-    "llm_prompt_quality": {"score": 85, "weight": 0.05, "notes": "Prompt files/schemas/fixtures exist; eval coverage remains thin."},
-    "ci_cd_quality": {"score": 84, "weight": 0.03, "notes": "CI coverage floor raised 75 -> 80 after Claude critique; hosted CI not yet run for this branch."}
+    "type_safety": {
+      "weight": 0.09,
+      "score": 85,
+      "weighted": 7.65
+    },
+    "test_quality": {
+      "weight": 0.13,
+      "score": 83,
+      "weighted": 10.79
+    },
+    "error_handling": {
+      "weight": 0.1,
+      "score": 87,
+      "weighted": 8.7
+    },
+    "code_structure": {
+      "weight": 0.09,
+      "score": 91,
+      "weighted": 8.19
+    },
+    "configuration": {
+      "weight": 0.07,
+      "score": 82,
+      "weighted": 5.74
+    },
+    "logging": {
+      "weight": 0.09,
+      "score": 84,
+      "weighted": 7.56
+    },
+    "async_correctness": {
+      "weight": 0.1,
+      "score": 88,
+      "weighted": 8.8
+    },
+    "documentation": {
+      "weight": 0.07,
+      "score": 76,
+      "weighted": 5.32
+    },
+    "security": {
+      "weight": 0.07,
+      "score": 86,
+      "weighted": 6.02
+    },
+    "architecture": {
+      "weight": 0.05,
+      "score": 84,
+      "weighted": 4.2
+    },
+    "performance_budget": {
+      "weight": 0.06,
+      "score": 81,
+      "weighted": 4.86
+    },
+    "llm_prompt_quality": {
+      "weight": 0.05,
+      "score": 82,
+      "weighted": 4.1
+    },
+    "ci_cd_quality": {
+      "weight": 0.03,
+      "score": 84,
+      "weighted": 2.52
+    }
   },
   "measurement_log": {
-    "metrics": "long_functions_gt40=11; broad_exceptions=8; print_calls=50; event_calls=56; pytest_parametrize_markers=9",
-    "pytest": "python3 -m pytest tests/ -q => 611 passed; cd vault && python3 -m pytest tests/ -q => 106 passed",
-    "coverage": "python3 -m pytest tests/ -q --cov=scripts --cov-fail-under=80 => 87.50%",
-    "mypy": "python3 -m mypy => clean, 49 source files",
-    "ruff": "python3 -m ruff check scripts/ tests/ hooks/ vault/ => clean before final CI-only YAML floor edit; focused CI workflow test passed after edit",
-    "hooks_bats_docs_graphify": "hook selftests 13/13, 9/9, 9/9; bats 40/40 and 47/47; module-size OK; doc-reference OK; graphify loop 27/27",
-    "codex": "Codex r1 .planning/quality/eval-codex-8.json = 87.33 REJECT_FOR_90_TARGET; final rerun blocked by Codex quota and recorded in .planning/quality/codex-8-final/",
-    "claude": "Claude wave4 .planning/quality/eval-claude-8.md = 82.78 BELOW 90",
-    "decision": "Stop before release; no v0.8.7 tag/release/plugin update until adversarial rescore reaches >=90."
+    "wave7_claude": ".planning/quality/claude-8-wave7/raw.md => 84.45 BELOW_90",
+    "wave8_metrics": "long_functions_gt40=0; broad_exceptions=0; print_calls=0; subprocess_without_timeout=0; shell_true_calls=0; public_api_docstring_coverage_pct=99.25",
+    "wave8_local_gates": "root pytest 665 passed; vault pytest 106 passed; scripts coverage 91.63%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; Graphify 27/27",
+    "security_ci_evidence": "ci.yml has pip-audit and gitleaks jobs; tests/test_ci_workflow_vault_gates.py guards both",
+    "perf_prompt_evidence": "tests/test_perf.py gates all 4 benchmarks against tests/perf_baseline.json; prompts/fixtures has 20 regression fixtures",
+    "decision": "Stop before release until a fresh dual adversarial rescore reaches >=90."
   },
   "residual_risks": [
-    "No dual-track agreement on >=90; final Codex rerun was quota-blocked.",
-    "Adversarial tracks still penalize Any density, sparse parametrization, uneven structured logging, and remaining long core functions.",
-    "Hosted CI has not run for this branch after the CI coverage floor change."
+    "Claude wave7 remains below 90 before Wave8 changes; fresh rescore required.",
+    "Codex final rerun still required if quota permits.",
+    "Hosted CI has not run for the Wave8 commit.",
+    "No v0.8.7 tag/release/plugin update performed."
   ]
 }

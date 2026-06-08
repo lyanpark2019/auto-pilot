@@ -18,6 +18,7 @@ from ._mapping import NBM_NEW_NOTEBOOKS
 
 
 class NotebookLMCreatePhase(Phase):
+    """Represent NotebookLMCreatePhase data for this module."""
     name = "7_notebooklm_create"
     deps = ["6_vault_build_per_domain"]
 

@@ -72,6 +72,7 @@ def register(adapter_cls: AdapterClass) -> AdapterClass:
 
 
 def get(name: str) -> AdapterClass:
+    """Provide the public get API."""
     if name not in REGISTRY:
         raise ValueError(f"unknown source adapter: {name}. registered: {list(REGISTRY)}")
     return REGISTRY[name]

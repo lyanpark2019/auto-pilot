@@ -3,6 +3,7 @@
 ## Scope
 - Owned files:
   - `tests/test_headless_loop.py`
+  - `tests/test_headless_loop_cli.py`
   - `tests/test_graphify_vault_loop.py`
   - `.github/workflows/ci.yml` only if parity drifts
   - `.planning/quality/v087-*.json`
@@ -35,5 +36,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: root scripts coverage 80.06% -> 87.80%; CI coverage floor 75 -> 80; root suite 595 -> 622 passed and vault suite 91 -> 106 passed; pytest parametrize markers 6 -> 12 after graphify artifact/manifest characterization tests, asset registry scanner coverage, Graphify timeout regression tests, subprocess-timeout metric tests, metric scope/timeout/shell parametrization, eval oracle no-shell regression, refreshed Graphify helper expectations, and parametrized NotebookLM classifier cases
+- metric delta: root scripts coverage 80.06% -> 91.63%; CI coverage floor 75 -> 80; root suite 595 -> 665 passed and vault suite 91 -> 106 passed; pytest parametrize markers 6 -> 18; prompt regression fixtures guarded at 20; headless-loop.py coverage 54% -> 97% and risk_assess.py 75% -> 97% after graphify artifact/manifest characterization tests, asset registry scanner coverage, Graphify timeout regression tests, subprocess-timeout metric tests, metric scope/timeout/shell/docstring parametrization, eval oracle no-shell regression, headless subprocess/CLI coverage, direct risk-assessment branch coverage, refreshed Graphify helper expectations, and parametrized NotebookLM classifier cases
 - residual risk: if final score remains below 90, stop before release and ask whether to ship a sub-90 release.

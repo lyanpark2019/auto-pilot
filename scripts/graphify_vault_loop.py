@@ -16,6 +16,7 @@ from _log import event
 
 @dataclass(frozen=True)
 class QuerySpec:
+    """Represent QuerySpec data for this module."""
     name: str
     cmd: list[str]
     must_contain: list[str]
@@ -24,6 +25,7 @@ class QuerySpec:
 
 @dataclass(frozen=True)
 class QueryResult:
+    """Represent QueryResult data for this module."""
     name: str
     cmd: str
     returncode: int
@@ -35,6 +37,7 @@ class QueryResult:
 
 @dataclass(frozen=True)
 class QuerySuiteResult:
+    """Represent QuerySuiteResult data for this module."""
     total: int
     passed: int
     failed: list[QueryResult]
@@ -47,6 +50,7 @@ class QuerySuiteResult:
 
 @dataclass(frozen=True)
 class ValidationResult:
+    """Represent ValidationResult data for this module."""
     ok: bool
     issues: list[str]
     metrics: dict[str, int] = field(default_factory=dict)
@@ -54,6 +58,7 @@ class ValidationResult:
 
 @dataclass(frozen=True)
 class CompactResult:
+    """Represent CompactResult data for this module."""
     removed_files: int
     preserved_files: int
     canvas_nodes: int
@@ -85,6 +90,7 @@ CURATED_MARKDOWN = {
 
 
 def load_query_manifest(path: Path) -> list[QuerySpec]:
+    """Load query manifest data."""
     data = json.loads(path.read_text(encoding="utf-8"))
     specs = data.get("tests", data)
     return [
@@ -99,6 +105,7 @@ def load_query_manifest(path: Path) -> list[QuerySpec]:
 
 
 def default_runner(cmd: list[str]) -> tuple[int, str, str]:
+    """Provide the public default runner API."""
     try:
         proc = subprocess.run(
             cmd,
@@ -122,6 +129,7 @@ def run_query_suite(
     runner: Runner = default_runner,
     out_dir: Path | None = None,
 ) -> QuerySuiteResult:
+    """Run run query suite workflow."""
     results: list[QueryResult] = []
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -158,6 +166,7 @@ def run_query_suite(
 
 
 def validate_graphify_vault(vault: Path) -> ValidationResult:
+    """Provide the public validate graphify vault API."""
     vault = vault.expanduser().resolve()
     graphify = vault / "graphify"
     issues: list[str] = []
@@ -181,6 +190,7 @@ def validate_graphify_vault(vault: Path) -> ValidationResult:
 
 
 def compact_graphify_vault(vault: Path) -> CompactResult:
+    """Provide the public compact graphify vault API."""
     vault = vault.expanduser().resolve()
     graphify = vault / "graphify"
     community_files = sorted(graphify.glob("_COMMUNITY_*.md"))
@@ -204,6 +214,7 @@ def compact_graphify_vault(vault: Path) -> CompactResult:
 
 
 def copy_query_artifacts(source_dir: Path, vault: Path) -> None:
+    """Provide the public copy query artifacts API."""
     target = vault.expanduser().resolve() / "graphify" / "query-tests"
     if target.exists():
         shutil.rmtree(target)
@@ -211,6 +222,7 @@ def copy_query_artifacts(source_dir: Path, vault: Path) -> None:
 
 
 def loop_once(vault: Path, manifest: Path, *, compact: bool = False) -> ValidationResult:
+    """Provide the public loop once API."""
     specs = load_query_manifest(manifest)
     out_dir = Path("graphify-out") / "query-tests"
     suite = run_query_suite(specs, out_dir=out_dir)
@@ -224,6 +236,7 @@ def loop_once(vault: Path, manifest: Path, *, compact: bool = False) -> Validati
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the graphify-vault-loop command-line entry point."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--vault", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, default=Path("scripts/graphify_query_suite.json"))

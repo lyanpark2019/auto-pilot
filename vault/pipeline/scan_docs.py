@@ -77,6 +77,7 @@ def _parse_frontmatter(text: str) -> dict[str, Any]:
 
 
 def scan_doc(path: Path) -> dict[str, Any]:
+    """Scan doc inputs into structured data."""
     text = path.read_text(errors="replace")
     fm = _parse_frontmatter(text)
     body = FRONTMATTER_RE.sub("", text, count=1)
@@ -104,6 +105,7 @@ def scan_doc(path: Path) -> dict[str, Any]:
 
 
 def scan_tree(root: Path) -> dict[str, dict[str, Any]]:
+    """Scan tree inputs into structured data."""
     root = root.expanduser().resolve()
     out: dict[str, dict[str, Any]] = {}
     seen: set[Path] = set()
@@ -120,6 +122,7 @@ def scan_tree(root: Path) -> dict[str, dict[str, Any]]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the scan-docs command-line entry point."""
     import json
     import sys
     if len(argv) < 2:

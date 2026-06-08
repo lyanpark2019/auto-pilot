@@ -53,6 +53,7 @@ MAX_RETRIES = 3
 
 
 def make_ctx(args: Any) -> PhaseContext:
+    """Provide the public make ctx API."""
     obsidian = Path(args.obsidian).expanduser().resolve()
     project = Path(args.project).expanduser().resolve()
     state_path = Path(args.state).expanduser().resolve()
@@ -210,6 +211,7 @@ def _write_final_report(ctx: PhaseContext, state: dict[str, Any], failures: list
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the restructure-loop command-line entry point."""
     args = _build_parser().parse_args(argv)
     ctx = make_ctx(args)
     _reset_state_if_requested(ctx, args.reset)

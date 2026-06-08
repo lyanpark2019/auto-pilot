@@ -45,6 +45,7 @@ def _warn(message: str) -> None:
 
 
 class VaultBuildPerDomainPhase(Phase):
+    """Represent VaultBuildPerDomainPhase data for this module."""
     name = "6_vault_build_per_domain"
     deps = ["5_new_vault_skeletons"]
 

@@ -129,6 +129,10 @@ def test_pivot_check_within_budget(benchmark) -> None:
         f"pivot_check (risk_assess.assess) exceeded {BUDGET_MS}ms budget: "
         f"{mean * 1000:.3f}ms mean"
     )
+    baseline = _baseline_mean("test_pivot_check_within_budget")
+    assert mean <= baseline, (
+        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms"
+    )
 
 
 def test_rss_under_ceiling() -> None:

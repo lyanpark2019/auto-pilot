@@ -222,6 +222,7 @@ def _scan_destructive_patterns(scanned: str, marker: str, now: datetime) -> None
 
 
 def main() -> None:
+    """Run the guard-destructive command-line entry point."""
     payload = _load_payload(sys.stdin.read())
     if payload is None:
         sys.exit(0)

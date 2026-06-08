@@ -383,3 +383,4 @@ class TestPidCount:
         fake = MagicMock(returncode=0, stdout="123\n456\n789\n")
         with patch.object(_budget.subprocess, "run", return_value=fake):
             assert _budget.count_claude_pids() == 3
+
