@@ -21,6 +21,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TextIO
 
 MEMORY_VERSION = 2
 
@@ -28,6 +29,18 @@ DEFAULT_MEMORY_PATH = Path(os.environ.get(
     "VAULT_LEARNING_MEMORY",
     str(Path.home() / ".claude" / "memories" / "vault-builder-learning.json"),
 ))
+
+
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
 
 
 def _default_memory() -> dict:
@@ -46,7 +59,7 @@ def load_memory(path: Path) -> dict:
     try:
         payload = json.loads(path.read_text(errors="replace"))
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"self_improve: failed to load memory {path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        _warn(f"self_improve: failed to load memory {path}: {type(exc).__name__}: {exc}")
         return _default_memory()
     if not isinstance(payload, dict):
         return _default_memory()
@@ -78,7 +91,7 @@ def parse_real_eval_report(vault: Path) -> dict[str, float]:
             try:
                 scores[task_id] = float(match.group(1))
             except ValueError as exc:
-                print(f"self_improve: failed to parse score for {task_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                _warn(f"self_improve: failed to parse score for {task_id}: {type(exc).__name__}: {exc}")
                 continue
     return scores
 
@@ -143,21 +156,21 @@ def main(argv: list[str]) -> int:
     vault = args.vault.expanduser().resolve()
     scores = parse_real_eval_report(vault)
     if not scores:
-        print(f"[self-improve] no real-eval report at {vault}/meta/real-eval.md", file=sys.stderr)
+        _warn(f"[self-improve] no real-eval report at {vault}/meta/real-eval.md")
         return 2
     mean = sum(scores.values()) / len(scores)
     weak = sorted(q for q, s in scores.items() if s < args.threshold)
-    print(f"[self-improve] mean={mean:.2f} threshold={args.threshold} weak={weak}")
+    _emit(f"[self-improve] mean={mean:.2f} threshold={args.threshold} weak={weak}")
 
     memory_path = args.memory.expanduser().resolve()
     memory = load_memory(memory_path)
     record_run(memory, vault, scores, args.threshold, weak)
     save_memory(memory_path, memory)
-    print(f"[self-improve] memory: {memory_path}")
+    _emit(f"[self-improve] memory: {memory_path}")
 
     if args.emit_tickets and weak:
         ticket_path = write_weak_q_tickets(vault, weak, scores)
-        print(f"[self-improve] tickets: {ticket_path}")
+        _emit(f"[self-improve] tickets: {ticket_path}")
     return 0
 
 

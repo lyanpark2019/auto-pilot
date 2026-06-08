@@ -33,5 +33,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: pending
-- residual risk: script entrypoints may keep raw `print()` only when conversion would add more complexity than it removes.
+- metric delta: raw print calls 168 -> 97 after converting vault loop/scoring/cost/selftest/self-improve/migration outputs to stream helpers
+- residual risk: 97 raw prints remain, led by `scripts/orchestrator.py`, asset/doc check scripts, hook selftest scripts, and several vault restructure/dispatch utilities.

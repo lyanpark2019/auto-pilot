@@ -22,6 +22,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import TextIO
 
 import yaml
 
@@ -36,6 +37,14 @@ VAULT_AGENTS = frozenset({
 VAULT_COMMANDS = frozenset({
     "vault-build", "vault-score", "vault-dashboard", "vault-selftest",
 })
+
+
+def _write_line(stream: TextIO, message: str = "") -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str = "") -> None:
+    _write_line(sys.stdout, message)
 
 
 class Check:
@@ -354,16 +363,16 @@ def main(argv: list[str]) -> int:
     n_fail, checks = run_all()
     for c in checks:
         if c.ok():
-            print(f"[PASS] {c.name}")
+            _emit(f"[PASS] {c.name}")
         else:
-            print(f"[FAIL] {c.name}")
+            _emit(f"[FAIL] {c.name}")
             for f in c.failures:
-                print(f"       - {f}")
-    print()
+                _emit(f"       - {f}")
+    _emit()
     if n_fail:
-        print(f"FAILED: {n_fail}/{len(checks)} checks")
+        _emit(f"FAILED: {n_fail}/{len(checks)} checks")
         return 1
-    print(f"PASSED: {len(checks)}/{len(checks)} checks")
+    _emit(f"PASSED: {len(checks)}/{len(checks)} checks")
     return 0
 
 

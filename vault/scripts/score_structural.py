@@ -14,6 +14,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = PLUGIN_ROOT / "templates" / "rubric.yaml"
@@ -23,6 +24,18 @@ _FALLBACK_MAX_PTS = {
     "adr_pages": 10, "cross_vault": 10, "hot_cache": 10, "wiki_articles": 10,
     "bases": 5, "backlinks": 10, "conflict_dup": 10,
 }
+
+
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _emit(message: str) -> None:
+    _write_line(sys.stdout, message)
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
 
 
 def _load_max_pts() -> dict[str, int]:
@@ -39,7 +52,7 @@ def _load_max_pts() -> dict[str, int]:
             out.setdefault(k, v)
         return out
     except Exception as exc:
-        print(f"score_structural: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        _warn(f"score_structural: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}")
         return dict(_FALLBACK_MAX_PTS)
 
 
@@ -259,26 +272,26 @@ def score_vault(vault_root: Path) -> dict:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: score_structural.py <vault-path>", file=sys.stderr)
+        _warn("Usage: score_structural.py <vault-path>")
         sys.exit(1)
     vault = Path(sys.argv[1]).expanduser().resolve()
     if not vault.exists():
-        print(f"Vault not found: {vault}", file=sys.stderr)
+        _warn(f"Vault not found: {vault}")
         sys.exit(1)
 
     state = score_vault(vault)
 
-    print("=" * 60)
-    print(f"Structural Score: {state['total']:.1f}/100")
-    print("=" * 60)
+    _emit("=" * 60)
+    _emit(f"Structural Score: {state['total']:.1f}/100")
+    _emit("=" * 60)
     max_pts = _load_max_pts()
     for k, v in state["scores"].items():
-        print(f"  {k:25} {v:5.1f}/{max_pts.get(k, 10):2} — {state['details'][k]}")
+        _emit(f"  {k:25} {v:5.1f}/{max_pts.get(k, 10):2} — {state['details'][k]}")
 
     out = vault / "meta" / "score-state.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(state, ensure_ascii=False, indent=2))
-    print(f"\nSaved {out.relative_to(vault)}")
+    _emit(f"\nSaved {out.relative_to(vault)}")
 
 
 if __name__ == "__main__":
