@@ -4,78 +4,78 @@
   "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "WAVE11_LOCAL_GATES_PASS_RESCORING_PENDING",
+  "current_state": "DUAL_WAVE11_MEETS_TARGET_CI_PENDING",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
-  "head_sha": "f1dbe0c",
+  "head_sha": "d7f19d387ef90fc947c81416f286b57678aaa2f1",
   "baseline_weighted_score": 84.4,
-  "weighted_score": 90.03,
-  "scores_source": "Claude wave9 conservative rescore = 90.03 MEETS_90_TARGET; Codex wave10 = 89.99 BELOW_90; Wave11 local gates pass and adversarial rescore pending.",
+  "weighted_score": 90.04,
+  "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Hosted CI/release still pending.",
   "scores": {
     "type_safety": {
       "score": 90,
       "weight": 0.09,
-      "rationale": "mypy --strict passes 51 files. Core modules (contract/dispatch) fully narrowed \u2014 JsonObject+_as_str pattern is solid. 7 peripheral modules still use dict[str, Any] freely (orchestrator, worktree, subagent_helpers, etc). Not 95+ because Any persists across ~40% of module count."
+      "weighted": 8.1
     },
     "test_quality": {
-      "score": 91,
+      "score": 90,
       "weight": 0.13,
-      "rationale": "694 tests, 20 parametrize markers, boundary/error-path coverage demonstrated, 80% CI floor (locally 91.5%). Prompt regression with adversarial fixtures is strong. Perf benchmarks + RSS gate push this beyond typical 'good coverage'. Deduction: no integration test marker separation in CI; all tests run in one pass."
+      "weighted": 11.7
     },
     "error_handling": {
       "score": 92,
       "weight": 0.1,
-      "rationale": "0 broad exceptions, 0 bare except. All subprocess calls have timeout. Error events use structured fields. raise-from chaining verified in prior waves. Log redaction present. Near ceiling for this codebase type."
+      "weighted": 9.2
     },
     "code_structure": {
-      "score": 93,
+      "score": 92,
       "weight": 0.09,
-      "rationale": "0 functions >40 lines. Module size gate enforced in CI (\u2264500). Early return patterns. SRP well-maintained. Deduction only for some longer orchestrator modules (~250 lines) that could split further."
+      "weighted": 8.28
     },
     "configuration": {
-      "score": 86,
+      "score": 89,
       "weight": 0.07,
-      "rationale": "AutoPilotConfig dataclass with env-driven defaults. docs/configuration.md documents vars/bounds/consumers. Tests guard drift. No pydantic (accepted stdlib-only constraint). Deduction: no runtime bound validation at load time (ge/le constraints) \u2014 bounds are documented but not enforced by code at config parse, only by downstream logic. No enum guard on categorical config values."
+      "weighted": 6.23
     },
     "logging": {
       "score": 90,
       "weight": 0.09,
-      "rationale": "60 event() calls across scripts/, 0 print calls, secret redaction, duration_ms on git subprocesses. Structured event= pattern consistent. Deduction: not every external call (e.g., dogfood_gate subprocess) has duration_ms yet."
+      "weighted": 8.1
     },
     "async_correctness": {
-      "score": 90,
+      "score": 91,
       "weight": 0.1,
-      "rationale": "All subprocess.run calls have timeout params. No blocking I/O in async context (codebase is sync/subprocess-based, not asyncio \u2014 appropriate for the CLI plugin domain). shell=True = 0. Deduction: score capped because the codebase doesn't exercise async patterns (no asyncio), so it's 'correct by absence' rather than 'correct by handling'."
+      "weighted": 9.1
     },
     "documentation": {
       "score": 89,
       "weight": 0.07,
-      "rationale": "99.25% public API docstring coverage (263/265). configuration.md + perf-budget.md exist. CLAUDE.md comprehensive. Only 2 missing docstrings (check_doc_reference_integrity.py). Deduction: some docs (perf-budget.md at 98 lines) are generous in prose but light on specific SLO numbers beyond the test assertions."
+      "weighted": 6.23
     },
     "security": {
-      "score": 91,
+      "score": 90,
       "weight": 0.07,
-      "rationale": "Log redaction, pip-audit + gitleaks in CI, no shell=True, subprocess with explicit args lists. .gitleaks.toml for false positive suppression shows active management. Deduction: no explicit path-traversal guard in _contract.py contract path resolution (relies on caller discipline)."
+      "weighted": 6.3
     },
     "architecture": {
       "score": 84,
       "weight": 0.05,
-      "rationale": "SpawnHandleProtocol is the only Protocol-based DI boundary. Most modules depend directly on concrete _contract/_dispatch/_state. No circular imports detected, good. Module boundaries are clean but not DI-oriented \u2014 this is flat-module-with-shared-state, not layered architecture. Acceptable for a plugin, but rubric asks for Protocol/Interface boundaries."
+      "weighted": 4.2
     },
     "performance_budget": {
       "score": 90,
       "weight": 0.06,
-      "rationale": "mean <50ms + p95 <50ms + committed baseline + RSS ceiling. All gated in CI. docs/perf-budget.md exists. This is genuinely strong for a plugin codebase. Deduction: no cold-start measurement, no throughput SLO."
+      "weighted": 5.4
     },
     "llm_prompt_quality": {
-      "score": 89,
+      "score": 90,
       "weight": 0.05,
-      "rationale": "20 prompt fixtures, 5 adversarial, schema-validated. Structured output schema in tests. Prompts in separate .md files. Deduction: no model-upgrade diff gate or budget cap test. No PII/secret sanitizer on rendered prompt output (redaction is in logging, not prompt output path)."
+      "weighted": 4.5
     },
     "ci_cd_quality": {
-      "score": 92,
+      "score": 90,
       "weight": 0.03,
-      "rationale": "7 CI jobs: ruff, mypy --strict, pytest+coverage, vault pytest, shellcheck, bats, pip-audit, gitleaks, module-size, perf benchmark, RSS ceiling, doc integrity. timeout-minutes set. Concurrency group with smart cancel. Under 5 min. Missing: SBOM generation, integration test separation."
+      "weighted": 2.7
     }
   },
   "measurement_log": {
@@ -96,14 +96,16 @@
     "wave10_local_gates": "root pytest 699 passed; vault pytest 106 passed; coverage 91.54%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; perf benchmark 4 passed/2 skipped; RSS+cold-start 2 passed; Graphify 27/27.",
     "codex_wave10": ".planning/quality/codex-8-wave10/last-message.md => weighted_total=89.99, BELOW_90; found sanitizer leaks for quoted token, JSON api_key, Authorization Bearer.",
     "wave11_changes": "Expanded prompt sanitizer to redact quoted secret assignments, JSON-shaped secret fields, and Authorization Bearer values; added parametrized regression tests; updated prompt-quality docs.",
-    "wave11_local_gates": "root pytest 702 passed; vault pytest 106 passed; coverage 91.56%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; perf benchmark 4 passed/2 skipped; RSS+cold-start 2 passed; Graphify 27/27."
+    "wave11_local_gates": "root pytest 702 passed; vault pytest 106 passed; coverage 91.56%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; perf benchmark 4 passed/2 skipped; RSS+cold-start 2 passed; Graphify 27/27.",
+    "codex_wave11": ".planning/quality/codex-8-wave11/last-message.md => weighted_total=90.04, MEETS_90_TARGET",
+    "claude_wave11": ".planning/quality/claude-8-wave11/raw.md => weighted_total=90.04, MEETS_90_TARGET"
   },
   "residual_risks": [
-    "Wave11 adversarial rescore not yet run.",
     "Hosted CI has not run for the Wave11 release-candidate branch.",
-    "No v0.8.7 tag/release/plugin update performed."
+    "No v0.8.7 tag/release/plugin update performed.",
+    "Architecture remains the lowest-scoring dimension (84), accepted for v0.8.7 because weighted target is met."
   ],
-  "decision": "Do not release yet: rerun dual adversarial rescore after Wave11 commit; release only if both >=90 and hosted CI is green.",
+  "decision": "Dual adversarial target met. Next: push branch, verify hosted CI green, then release/tag/plugin update.",
   "codex_wave9_r2_weighted_score": 89.93,
   "codex_wave9_r2_verdict": "BELOW_90",
   "wave10_focus": "Low-risk closure of Codex 89.93 blockers: prompt-output sanitizer/budget cap and perf cold-start CI gate.",
@@ -139,5 +141,9 @@
     "adversarial_prompt_fixtures": 5,
     "core_any_hits": 0,
     "prompt_module_any_hits": 0
-  }
+  },
+  "codex_wave11_weighted_score": 90.04,
+  "codex_wave11_verdict": "MEETS_90_TARGET",
+  "claude_wave11_weighted_score": 90.04,
+  "claude_wave11_verdict": "MEETS_90_TARGET"
 }
