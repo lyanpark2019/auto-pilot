@@ -22,6 +22,11 @@ from typing import Any
 GRAPHIFY = os.environ.get("GRAPHIFY_BIN", str(Path.home() / ".local/bin/graphify"))
 DEFAULT_VAULT = os.environ.get("NBM_VAULT_PATH", "")
 
+
+def _warn(message: str) -> None:
+    sys.stderr.write(f"{message}\n")
+
+
 _VAULT_PROP = {"type": "string", "description": "Vault root path (optional, defaults to NBM_VAULT_PATH env)"}
 _CAT_PROP = {"type": "string", "description": "Category subdirectory under <vault> (optional; if omitted, all categories are searched in deterministic alphabetical order)"}
 
@@ -158,8 +163,8 @@ def tool_vault_audit_status(args: dict[str, Any]) -> dict[str, Any]:
         if p.exists():
             try:
                 status[name] = json.loads(p.read_text())
-            except Exception as e:
-                print(f"mcp_vault_server: failed to parse {fname} error_type={type(e).__name__}: {e}", file=sys.stderr)
+            except (OSError, json.JSONDecodeError) as e:
+                _warn(f"mcp_vault_server: failed to parse {fname} error_type={type(e).__name__}: {e}")
                 status[name] = {"error": str(e)}
     ts = meta / "ticket-state.json"
     if ts.exists():
@@ -172,8 +177,8 @@ def tool_vault_audit_status(args: dict[str, Any]) -> dict[str, Any]:
                 "rejected": sum(1 for x in tickets if x.get("status") == "rejected"),
                 "escalated": sum(1 for x in tickets if x.get("status") == "escalated"),
             }
-        except Exception as e:
-            print(f"mcp_vault_server: failed to parse ticket-state.json error_type={type(e).__name__}: {e}", file=sys.stderr)
+        except (OSError, json.JSONDecodeError, AttributeError, TypeError) as e:
+            _warn(f"mcp_vault_server: failed to parse ticket-state.json error_type={type(e).__name__}: {e}")
             status["tickets"] = {"error": str(e)}
     return {"content": [{"type": "text", "text": json.dumps(status, indent=2, ensure_ascii=False)}]}
 
@@ -222,7 +227,7 @@ def handle(req: dict[str, Any]) -> None:
         try:
             _respond(rid, fn(args))
         except Exception as e:
-            print(f"mcp_vault_server: tool={name} error_type={type(e).__name__}: {e}", file=sys.stderr)
+            _warn(f"mcp_vault_server: tool={name} error_type={type(e).__name__}: {e}")
             _respond(rid, error={"code": -32000, "message": str(e)})
     elif method in ("notifications/initialized", "notifications/cancelled"):
         return  # no response for notifications
@@ -239,7 +244,7 @@ def main() -> int:
         try:
             req = json.loads(line)
         except json.JSONDecodeError as exc:
-            print(f"mcp_vault_server: skipping malformed JSON line: {type(exc).__name__}: {exc}", file=sys.stderr)
+            _warn(f"mcp_vault_server: skipping malformed JSON line: {type(exc).__name__}: {exc}")
             continue
         handle(req)
     return 0

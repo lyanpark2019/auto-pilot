@@ -58,6 +58,7 @@ class CompactResult:
 
 
 Runner = Callable[[list[str]], tuple[int, str, str]]
+QUERY_TIMEOUT_SEC = 120
 
 
 REQUIRED_VAULT_FILES = (
@@ -96,8 +97,20 @@ def load_query_manifest(path: Path) -> list[QuerySpec]:
 
 
 def default_runner(cmd: list[str]) -> tuple[int, str, str]:
-    proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    return proc.returncode, proc.stdout, proc.stderr
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=QUERY_TIMEOUT_SEC,
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return 124, stdout, f"timeout after {QUERY_TIMEOUT_SEC}s\n{stderr}".strip()
 
 
 def run_query_suite(

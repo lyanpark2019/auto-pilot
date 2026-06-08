@@ -298,7 +298,7 @@ def _check_sources() -> Check:
         for required in ("notebooklm", "code"):
             if required not in _adapter.REGISTRY:
                 c.fail(f"adapter not registered: {required}")
-    except Exception as e:
+    except (ImportError, AttributeError, OSError, RuntimeError) as e:
         c.fail(f"adapter autodiscover failed: {e}")
     return c
 

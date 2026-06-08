@@ -34,5 +34,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: broad exceptions 30 -> 14; print calls 168 -> 77; long functions 34 -> 20 after explicit JSON/OSError/YAML catches plus helper extraction across lockfile, scan_code, graphify loop, dashboard/cost/scoring, migration worker, and restructure paths
-- residual risk: 14 broad catches remain, led by `_contract.py`, `_dogfood_gate.py`, `asset_registry_check.py`, `evals/runner.py`, `vault/pipeline/export.py`, `mcp_vault_server.py`, and fail-open restructure paths.
+- metric delta: broad exceptions 30 -> 8; print calls 168 -> 50; long functions 34 -> 15 after explicit JSON/OSError/YAML catches plus helper extraction across lockfile, scan_code, graphify loop, dashboard/cost/scoring, migration worker, asset registry, MCP audit status, selftest, and restructure paths
+- residual risk: 8 broad catches remain, led by core atomic-write/dogfood/eval boundary/fail-open paths where broad catch is still intentional or requires deeper behavioral review.

@@ -22,6 +22,7 @@
 - after:
   - strict vault mypy pilots: >=8
   - full `python3 -m mypy` clean
+  - Wave 3: strict vault mypy pilots >=11
 
 ## Required tests
 - RED/characterization:
@@ -37,5 +38,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: strict vault mypy pilots 2 -> 8; mypy source files 37 -> 43 after Task 1 scanner and type scope expansion
-- residual risk: broader vault strict scope remains staged; skipped candidates require separate focused work.
+- metric delta: strict vault mypy pilots 2 -> 11; mypy source files 37 -> 46 after Task 1 scanner, Wave 1 type scope, and Wave 3 dispatch/loop/self_improve expansion
+- residual risk: broader vault strict scope remains staged; skipped candidates such as full drift/source adapter typing require separate focused work.

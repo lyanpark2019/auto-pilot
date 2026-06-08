@@ -27,6 +27,14 @@ else:
 from sources._excludes import is_excluded
 
 
+def _emit(message: str) -> None:
+    sys.stdout.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    sys.stderr.write(f"{message}\n")
+
+
 @dataclass
 class DriftReport:
     repo_root: str
@@ -243,7 +251,7 @@ def _detect_claim_drift(
         try:
             body = doc_path.read_text(errors="replace")
         except OSError as exc:
-            print(f"drift: failed to read {doc_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            _warn(f"drift: failed to read {doc_path}: {type(exc).__name__}: {exc}")
             continue
         for m in _SIG_IN_DOC_RE.finditer(body):
             name, args_str = m.group(1), m.group(2).strip()
@@ -291,9 +299,9 @@ def main(argv: list[str]) -> int:
     content = json.dumps(report.to_dict(), indent=2, ensure_ascii=False) if args.format == "json" else report.to_markdown()
     if args.out:
         args.out.write_text(content)
-        print(f"wrote {args.out}")
+        _emit(f"wrote {args.out}")
     else:
-        print(content)
+        _emit(content)
     return 0
 
 

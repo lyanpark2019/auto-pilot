@@ -17,6 +17,9 @@ def test_mypy_scope_includes_vault_pilots() -> None:
         "vault/pipeline/state.py",
         "vault/pipeline/scan_docs.py",
         "vault/scripts/lockfile.py",
+        "vault/pipeline/dispatch.py",
+        "vault/pipeline/loop.py",
+        "vault/pipeline/self_improve.py",
     }
 
     for path in expected:

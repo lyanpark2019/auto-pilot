@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -11,6 +13,7 @@ from scripts.graphify_vault_loop import (
     compact_graphify_vault,
     load_query_manifest,
     run_query_suite,
+    default_runner,
     validate_graphify_vault,
 )
 
@@ -118,6 +121,22 @@ def test_run_query_suite_uses_manifest_and_expected_gaps() -> None:
     assert result.passed == 2
     assert result.total == 2
     assert not result.failed
+
+
+def test_default_runner_sets_timeout() -> None:
+    completed = subprocess.CompletedProcess(["graphify"], 0, "ok", "")
+    with patch("scripts.graphify_vault_loop.subprocess.run", return_value=completed) as run:
+        assert default_runner(["graphify", "explain", "A"]) == (0, "ok", "")
+    assert run.call_args.kwargs["timeout"] == 120
+
+
+def test_default_runner_reports_timeout() -> None:
+    exc = subprocess.TimeoutExpired(["graphify"], timeout=120, output="partial", stderr="slow")
+    with patch("scripts.graphify_vault_loop.subprocess.run", side_effect=exc):
+        rc, stdout, stderr = default_runner(["graphify", "query", "slow"])
+    assert rc == 124
+    assert stdout == "partial"
+    assert "timeout after 120s" in stderr
 
 
 def test_load_query_manifest_accepts_wrapped_tests(tmp_path: Path) -> None:

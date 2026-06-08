@@ -32,5 +32,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: long functions 34 -> 20 after splitting destructive/conductor hooks, restructure loop, phase03/phase06/phase07 restructure phases, notebook classification, migration source-add, dashboard aggregation, and score_content scoring paths
-- residual risk: 20 long functions remain, led by core scripts `_dispatch.py`, `orchestrator.py`, `_worktree.py`, and selected eval/doc/source adapters; defer deeper core orchestration refactors until stronger characterization coverage exists.
+- metric delta: long functions 34 -> 15 after splitting destructive/conductor hooks, restructure loop, phase03/phase06/phase07 restructure phases, notebook classification/materialization, migration source-add, dashboard aggregation, asset registry, eval runner/CLI, fix planner, and score_content scoring paths
+- residual risk: 15 long functions remain, led by core scripts `_dispatch.py`, `orchestrator.py`, `_worktree.py`, `_reviewer_wrapper.py`, and doc citation integrity; defer deeper core orchestration refactors until stronger characterization coverage exists.

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -206,48 +207,60 @@ class NotebookLMAdapter:
         root_idx.write_text(f"---\ntype: index\ncreated: {today}\n---\n\n# {vault.name}\n\n"
                             + "\n".join(f"- [[{c}/index|{c}]]" for c in cats))
 
+    def _source_list(self, nid: str) -> tuple[list[dict[str, Any]] | None, str]:
+        rc, src_json, err = _run(["notebooklm", "source", "list", "--notebook", nid, "--json"])
+        if rc != 0:
+            return None, err[:120]
+        try:
+            data = json.loads(src_json)
+        except json.JSONDecodeError:
+            return None, "parse"
+        sources = data.get("sources", []) if isinstance(data, dict) else []
+        return [s for s in sources if isinstance(s, dict)], ""
+
+    def _notebook_archive_parts(self, cat: str, nb: dict[str, Any], sources: list[dict[str, Any]]) -> list[str]:
+        nid, title = nb["id"], nb["title"]
+        parts = ["---", "type: notebook-archive", f"notebook_id: {nid}",
+                 f"title: {json.dumps(title, ensure_ascii=False)}", f"created_at: {nb.get('created_at', '')}",
+                 f"category: {cat}", f"source_count: {len(sources)}", "---", "", f"# {title}", "", "## Sources", ""]
+        for source in sources:
+            parts.append(f"- {source.get('title', '?')} (`{source['id'][:8]}`)")
+        parts += ["", "## Fulltext", ""]
+        return parts
+
+    def _append_fulltext(self, parts: list[str], nid: str, sources: list[dict[str, Any]]) -> None:
+        for source in sources:
+            rc, st, _ = _run(["notebooklm", "source", "fulltext", source["id"], "-n", nid, "--json"], timeout=60)
+            try:
+                content = json.loads(st).get("content", "") if rc == 0 else "(fetch failed)"
+            except json.JSONDecodeError:
+                content = "(parse error)"
+            parts += [f"### {source.get('title', '?')}", "", content[:200_000], ""]
+
+    def _materialize_one(self, vault: Path, cat: str, nb: dict[str, Any]) -> str:
+        nid, title = nb["id"], nb["title"]
+        slug = _slugify(title) or nid[:8]
+        out = vault / cat / "raw" / f"{slug}.md"
+        if out.exists() and out.stat().st_size > 200:
+            return f"SKIP {cat}/{slug}"
+        sources, err = self._source_list(nid)
+        if sources is None:
+            return f"FAIL {'parse' if err == 'parse' else 'src-list'} {nid[:8]}{': ' + err if err != 'parse' else ''}"
+        parts = self._notebook_archive_parts(cat, nb, sources)
+        self._append_fulltext(parts, nid, sources)
+        out.write_text("\n".join(parts))
+        return f"OK {cat}/{slug} ({len(sources)} sources)"
+
     def materialize(self, vault: Path, buckets: dict[str, list[SourceItem]], **opts: Any) -> None:
         vault = vault.expanduser().resolve()
         preserve = {c: v for c, v in buckets.items() if c not in ("archive", "uncategorized")}
         jobs = [(c, it.payload) for c, items in preserve.items() for it in items]
         parallel = opts.get("parallel", 6)
-
-        def process(cat, nb):
-            nid, title = nb["id"], nb["title"]
-            slug = _slugify(title) or nid[:8]
-            out = vault / cat / "raw" / f"{slug}.md"
-            if out.exists() and out.stat().st_size > 200:
-                return f"SKIP {cat}/{slug}"
-            rc, src_json, err = _run(["notebooklm", "source", "list", "--notebook", nid, "--json"])
-            if rc != 0:
-                return f"FAIL src-list {nid[:8]}: {err[:120]}"
-            try:
-                sources = json.loads(src_json).get("sources", [])
-            except json.JSONDecodeError:
-                return f"FAIL parse {nid[:8]}"
-            parts = ["---", "type: notebook-archive", f"notebook_id: {nid}",
-                     f"title: {json.dumps(title, ensure_ascii=False)}",
-                     f"created_at: {nb.get('created_at', '')}",
-                     f"category: {cat}", f"source_count: {len(sources)}", "---", "",
-                     f"# {title}", "", "## Sources", ""]
-            for s in sources:
-                parts.append(f"- {s.get('title', '?')} (`{s['id'][:8]}`)")
-            parts += ["", "## Fulltext", ""]
-            for s in sources:
-                rc, st, _ = _run(["notebooklm", "source", "fulltext", s["id"], "-n", nid, "--json"], timeout=60)
-                try:
-                    content = json.loads(st).get("content", "") if rc == 0 else "(fetch failed)"
-                except json.JSONDecodeError:
-                    content = "(parse error)"
-                parts += [f"### {s.get('title', '?')}", "", content[:200_000], ""]
-            out.write_text("\n".join(parts))
-            return f"OK {cat}/{slug} ({len(sources)} sources)"
-
         with ThreadPoolExecutor(max_workers=parallel) as ex:
-            futs = {ex.submit(process, c, nb): (c, nb) for c, nb in jobs}
+            futs = {ex.submit(self._materialize_one, vault, c, nb): (c, nb) for c, nb in jobs}
             for i, f in enumerate(as_completed(futs), 1):
-                print(f"[{i}/{len(jobs)}] {f.result()}", flush=True)
-
+                sys.stdout.write(f"[{i}/{len(jobs)}] {f.result()}\n")
+                sys.stdout.flush()
         self._restructure(vault)
 
     def _restructure(self, vault: Path) -> None:

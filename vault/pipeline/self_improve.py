@@ -21,7 +21,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 MEMORY_VERSION = 2
 
@@ -43,7 +43,7 @@ def _warn(message: str) -> None:
     _write_line(sys.stderr, message)
 
 
-def _default_memory() -> dict:
+def _default_memory() -> dict[str, Any]:
     return {
         "version": MEMORY_VERSION,
         "quality_history": [],
@@ -53,7 +53,7 @@ def _default_memory() -> dict:
     }
 
 
-def load_memory(path: Path) -> dict:
+def load_memory(path: Path) -> dict[str, Any]:
     if not path.exists():
         return _default_memory()
     try:
@@ -70,7 +70,7 @@ def load_memory(path: Path) -> dict:
     return base
 
 
-def save_memory(path: Path, payload: dict) -> None:
+def save_memory(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -130,7 +130,7 @@ def write_weak_q_tickets(vault: Path, weak: list[str], scores: dict[str, float])
     return out
 
 
-def record_run(memory: dict, vault: Path, scores: dict[str, float], threshold: float, weak: list[str]) -> None:
+def record_run(memory: dict[str, Any], vault: Path, scores: dict[str, float], threshold: float, weak: list[str]) -> None:
     mean = sum(scores.values()) / len(scores) if scores else 0.0
     entry = {
         "vault": str(vault),
@@ -141,7 +141,9 @@ def record_run(memory: dict, vault: Path, scores: dict[str, float], threshold: f
         "per_q": {q: round(s, 1) for q, s in sorted(scores.items())},
         "weak_qs": weak,
     }
-    memory.setdefault("quality_history", []).append(entry)
+    history = memory.setdefault("quality_history", [])
+    if isinstance(history, list):
+        history.append(entry)
 
 
 def main(argv: list[str]) -> int:

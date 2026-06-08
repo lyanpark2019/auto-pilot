@@ -40,6 +40,10 @@ PER_DOMAIN_BUDGET_USD = float(os.environ.get("VAULT_BUILD_BUDGET_USD", "0"))  # 
 PER_DOMAIN_TIMEOUT_SEC = int(os.environ.get("VAULT_BUILD_TIMEOUT_SEC", "1800"))  # 30 min
 
 
+def _warn(message: str) -> None:
+    sys.stderr.write(f"{message}\n")
+
+
 class VaultBuildPerDomainPhase(Phase):
     name = "6_vault_build_per_domain"
     deps = ["5_new_vault_skeletons"]
@@ -99,8 +103,8 @@ class VaultBuildPerDomainPhase(Phase):
                 return None
             data = json.loads(state.read_text())
             return int(round(float(data.get("total", 0))))
-        except Exception as exc:
-            print(f"phase06: _score_vault failed for {vault}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError, AttributeError) as exc:
+            _warn(f"phase06: _score_vault failed for {vault}: {type(exc).__name__}: {exc}")
             return None
 
     def _score_from_verify_report(self, project_path: Path) -> int | None:
@@ -113,8 +117,8 @@ class VaultBuildPerDomainPhase(Phase):
             m = _SCORE_PAT.search(text)
             if m:
                 return int(round(float(m.group(1))))
-        except Exception as exc:
-            print(f"phase06: _score_from_verify_report failed for {report}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        except OSError as exc:
+            _warn(f"phase06: _score_from_verify_report failed for {report}: {type(exc).__name__}: {exc}")
         return None
 
     def _score_from_stdout(self, stdout_tail: str) -> int | None:
@@ -132,7 +136,7 @@ class VaultBuildPerDomainPhase(Phase):
             try:
                 return int(round(float(m.group(1))))
             except (TypeError, ValueError) as exc:
-                print(f"phase06: failed to convert score match '{m.group(1)}': {type(exc).__name__}: {exc}", file=sys.stderr)
+                _warn(f"phase06: failed to convert score match '{m.group(1)}': {type(exc).__name__}: {exc}")
         for pat in (_GAP_PAT, _GAP_PAT_REV):
             m = pat.search(stdout_tail)
             if m:
@@ -140,7 +144,7 @@ class VaultBuildPerDomainPhase(Phase):
                     gap = float(m.group(1))
                     return int(round(100 - gap))
                 except (TypeError, ValueError) as exc:
-                    print(f"phase06: failed to convert gap match '{m.group(1)}': {type(exc).__name__}: {exc}", file=sys.stderr)
+                    _warn(f"phase06: failed to convert gap match '{m.group(1)}': {type(exc).__name__}: {exc}")
         return None
 
     def _build_prompt(self, entry: dict) -> str:
@@ -195,7 +199,7 @@ class VaultBuildPerDomainPhase(Phase):
             entries = prior.get("phases", {}).get("6_vault_build_per_domain", {}).get("entries", {})
             return entries if isinstance(entries, dict) else {}
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"phase06: failed to load prior state from {self.ctx.state_path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            _warn(f"phase06: failed to load prior state from {self.ctx.state_path}: {type(exc).__name__}: {exc}")
             return {}
 
     def _entry_state(self, entry: dict, prior_state: dict) -> dict:

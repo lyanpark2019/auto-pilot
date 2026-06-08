@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO, cast
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
@@ -35,7 +35,7 @@ def _emit(message: str) -> None:
     _write_line(sys.stdout, message)
 
 
-def run(vault: Path, source: str, input_path: Path | None = None, **opts) -> dict:
+def run(vault: Path, source: str, input_path: Path | None = None, **opts: Any) -> dict[str, Any]:
     _adapter._autodiscover()
     AdapterCls = _adapter.get(source)
     adapter = AdapterCls()
@@ -43,7 +43,7 @@ def run(vault: Path, source: str, input_path: Path | None = None, **opts) -> dic
     input_path = (input_path or vault).expanduser().resolve()
     vault = vault.expanduser().resolve()
 
-    st = pipeline_state.load(vault)
+    st = cast(dict[str, Any], pipeline_state.load(vault))
     st["source_adapter"] = source
     st.setdefault("phases", {})
 
@@ -71,9 +71,9 @@ def run(vault: Path, source: str, input_path: Path | None = None, **opts) -> dic
     return st
 
 
-def _extra_to_kwargs(extra: list[str]) -> dict:
+def _extra_to_kwargs(extra: list[str]) -> dict[str, str | bool]:
     """Parse leftover argv into kwargs: --foo bar → {foo: 'bar'}; --flag → {flag: True}."""
-    out: dict = {}
+    out: dict[str, str | bool] = {}
     i = 0
     while i < len(extra):
         tok = extra[i]

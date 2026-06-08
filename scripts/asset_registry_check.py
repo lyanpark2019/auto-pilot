@@ -15,18 +15,11 @@ Usage:
   python3 scripts/asset_registry_check.py --fail-on-overlap [--name X --description "..."]
   python3 scripts/asset_registry_check.py --fail-on-overlap --emit-artifact <path>
 
-Overlap heuristic (document crudeness):
+Overlap heuristic:
   - Shared name tokens (word-tokenized, lower-case, stop words excluded)
   - OR >60% description token overlap (Jaccard on token sets)
-  This is a simple deterministic heuristic. False positives exist for common words.
-  Overlap does NOT block — it flags for human review.
 
 Exit: 1 on overlap (when --fail-on-overlap), 0 on clean.
-
-Artifact format (--emit-artifact):
-  {"generated_ts": <unix_epoch_int>, "head_sha": "<sha>", "result": "clean"|"overlap",
-   "overlaps": [...]}
-  (generated_ts matches preflight schema TTL pattern — tech-critic condition)
 """
 from __future__ import annotations
 
@@ -37,7 +30,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TextIO
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STOP_WORDS = frozenset(
@@ -51,8 +44,16 @@ STOP_WORDS = frozenset(
 class Asset(NamedTuple):
     name: str
     description: str
-    source: str  # relative path
-    asset_type: str  # agent|skill|hook|command|codex
+    source: str
+    asset_type: str
+
+
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
 
 
 def _tokenize(text: str) -> frozenset[str]:
@@ -61,7 +62,7 @@ def _tokenize(text: str) -> frozenset[str]:
 
 
 def _parse_frontmatter(text: str) -> dict[str, str]:
-    """Extract name/description from YAML-style frontmatter (--- ... ---)."""
+    """Extract name/description from YAML-style frontmatter."""
     m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
     if not m:
         return {}
@@ -77,9 +78,7 @@ def _scan_agents() -> list[Asset]:
     assets = []
     for f in (REPO_ROOT / "agents").glob("*.md"):
         fm = _parse_frontmatter(f.read_text(encoding="utf-8", errors="replace"))
-        name = fm.get("name", f.stem)
-        desc = fm.get("description", "")
-        assets.append(Asset(name=name, description=desc, source=str(f.relative_to(REPO_ROOT)), asset_type="agent"))
+        assets.append(Asset(fm.get("name", f.stem), fm.get("description", ""), str(f.relative_to(REPO_ROOT)), "agent"))
     return assets
 
 
@@ -93,9 +92,8 @@ def _scan_skills() -> list[Asset]:
         if not skill_file.exists():
             continue
         fm = _parse_frontmatter(skill_file.read_text(encoding="utf-8", errors="replace"))
-        name = fm.get("name", skill_dir.name)
-        desc = fm.get("description", "")
-        assets.append(Asset(name=name, description=desc, source=str(skill_file.relative_to(REPO_ROOT)), asset_type="skill"))
+        assets.append(Asset(fm.get("name", skill_dir.name), fm.get("description", ""),
+                            str(skill_file.relative_to(REPO_ROOT)), "skill"))
     return assets
 
 
@@ -105,14 +103,12 @@ def _scan_hooks() -> list[Asset]:
     if not hooks_dir.exists():
         return assets
     for f in hooks_dir.iterdir():
-        # Skip hook test scripts — they are not assets; keep this scanner aligned
-        # with build_dashboard_data.collect_assets() (review r1 divergence finding).
-        if f.suffix in {".sh", ".py"} and f.name != "hooks.json" and not f.name.startswith("test_"):
-            # Use filename stem as name, first comment line as description
-            text = f.read_text(encoding="utf-8", errors="replace")
-            desc_match = re.search(r"^#\s*(.+)", text, re.MULTILINE)
-            desc = desc_match.group(1).strip() if desc_match else ""
-            assets.append(Asset(name=f.stem, description=desc, source=str(f.relative_to(REPO_ROOT)), asset_type="hook"))
+        if f.suffix not in {".sh", ".py"} or f.name == "hooks.json" or f.name.startswith("test_"):
+            continue
+        text = f.read_text(encoding="utf-8", errors="replace")
+        desc_match = re.search(r"^#\s*(.+)", text, re.MULTILINE)
+        desc = desc_match.group(1).strip() if desc_match else ""
+        assets.append(Asset(f.stem, desc, str(f.relative_to(REPO_ROOT)), "hook"))
     return assets
 
 
@@ -123,9 +119,8 @@ def _scan_commands() -> list[Asset]:
         return assets
     for f in cmd_dir.glob("*.md"):
         fm = _parse_frontmatter(f.read_text(encoding="utf-8", errors="replace"))
-        name = fm.get("name", f.stem)
-        desc = fm.get("description", "")
-        assets.append(Asset(name=name, description=desc, source=str(f.relative_to(REPO_ROOT)), asset_type="command"))
+        assets.append(Asset(fm.get("name", f.stem), fm.get("description", ""),
+                            str(f.relative_to(REPO_ROOT)), "command"))
     return assets
 
 
@@ -135,18 +130,30 @@ def _scan_codex_skills() -> list[Asset]:
     if not codex_skills_dir.exists():
         return assets
     for skill_dir in codex_skills_dir.iterdir():
-        if not skill_dir.is_dir():
-            continue
-        # Look for SKILL.md or any .md with frontmatter
-        for candidate in [skill_dir / "SKILL.md"] + list(skill_dir.glob("*.md")):
-            if candidate.exists():
-                fm = _parse_frontmatter(candidate.read_text(encoding="utf-8", errors="replace"))
-                if fm.get("name") or fm.get("description"):
-                    name = fm.get("name", skill_dir.name)
-                    desc = fm.get("description", "")
-                    assets.append(Asset(name=name, description=desc, source=str(candidate.relative_to(REPO_ROOT)), asset_type="codex"))
-                    break
+        if skill_dir.is_dir():
+            assets.extend(_scan_codex_skill_dir(skill_dir))
     return assets
+
+
+def _scan_codex_skill_dir(skill_dir: Path) -> list[Asset]:
+    for candidate in [skill_dir / "SKILL.md", *skill_dir.glob("*.md")]:
+        if not candidate.exists():
+            continue
+        fm = _parse_frontmatter(candidate.read_text(encoding="utf-8", errors="replace"))
+        if fm.get("name") or fm.get("description"):
+            return [Asset(fm.get("name", skill_dir.name), fm.get("description", ""),
+                          str(candidate.relative_to(REPO_ROOT)), "codex")]
+    return []
+
+
+def _scan_registry() -> list[Asset]:
+    registry: list[Asset] = []
+    registry.extend(_scan_agents())
+    registry.extend(_scan_skills())
+    registry.extend(_scan_hooks())
+    registry.extend(_scan_commands())
+    registry.extend(_scan_codex_skills())
+    return registry
 
 
 def _get_head_sha() -> str:
@@ -159,103 +166,78 @@ def _get_head_sha() -> str:
             timeout=30,
         ).strip()
     except subprocess.TimeoutExpired:
-        import sys
-        print("asset_registry_check: git rev-parse timed out, returning empty sha", file=sys.stderr)
+        _warn("asset_registry_check: git rev-parse timed out, returning empty sha")
         return ""
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):
         return ""
 
 
-def _check_overlap(
-    candidate_name: str,
-    candidate_desc: str,
-    registry: list[Asset],
-) -> list[dict[str, str]]:
+def _check_overlap(candidate_name: str, candidate_desc: str, registry: list[Asset]) -> list[dict[str, str]]:
     """Return list of overlapping assets for a candidate."""
     c_name_tokens = _tokenize(candidate_name)
     c_desc_tokens = _tokenize(candidate_desc)
     overlaps: list[dict[str, str]] = []
     for asset in registry:
-        a_name_tokens = _tokenize(asset.name)
-        a_desc_tokens = _tokenize(asset.description)
-
-        # Shared name tokens
-        shared_name = c_name_tokens & a_name_tokens
+        shared_name = c_name_tokens & _tokenize(asset.name)
         if shared_name:
-            overlaps.append({
-                "source": asset.source,
-                "name": asset.name,
-                "reason": f"shared name tokens: {sorted(shared_name)}",
-            })
+            overlaps.append({"source": asset.source, "name": asset.name,
+                             "reason": f"shared name tokens: {sorted(shared_name)}"})
             continue
-
-        # >60% description Jaccard overlap
+        a_desc_tokens = _tokenize(asset.description)
         if c_desc_tokens and a_desc_tokens:
             union = c_desc_tokens | a_desc_tokens
             intersection = c_desc_tokens & a_desc_tokens
             jaccard = len(intersection) / len(union) if union else 0.0
             if jaccard > 0.60:
-                overlaps.append({
-                    "source": asset.source,
-                    "name": asset.name,
-                    "reason": f"description Jaccard {jaccard:.2f} > 0.60",
-                })
+                overlaps.append({"source": asset.source, "name": asset.name,
+                                 "reason": f"description Jaccard {jaccard:.2f} > 0.60"})
     return overlaps
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Asset registry overlap checker (creation gate)")
-    parser.add_argument("--fail-on-overlap", action="store_true",
-                        help="Exit 1 if overlap detected")
-    parser.add_argument("--name", default="",
-                        help="Candidate asset name to check against registry")
-    parser.add_argument("--description", default="",
-                        help="Candidate asset description to check against registry")
-    parser.add_argument("--emit-artifact", metavar="PATH", default="",
-                        help="Write overlap-check artifact JSON to this path")
-    args = parser.parse_args()
+    parser.add_argument("--fail-on-overlap", action="store_true", help="Exit 1 if overlap detected")
+    parser.add_argument("--name", default="", help="Candidate asset name to check against registry")
+    parser.add_argument("--description", default="", help="Candidate asset description to check against registry")
+    parser.add_argument("--emit-artifact", metavar="PATH", default="", help="Write overlap-check artifact JSON")
+    return parser
 
-    # Scan registry
-    registry: list[Asset] = []
-    registry.extend(_scan_agents())
-    registry.extend(_scan_skills())
-    registry.extend(_scan_hooks())
-    registry.extend(_scan_commands())
-    registry.extend(_scan_codex_skills())
 
-    overlaps: list[dict[str, str]] = []
-    result = "clean"
+def _evaluate_candidate(args: argparse.Namespace, registry: list[Asset]) -> tuple[str, list[dict[str, str]]]:
+    if not (args.name or args.description):
+        _warn(f"[asset_registry_check] Registry: {len(registry)} assets scanned")
+        return "clean", []
+    overlaps = _check_overlap(args.name, args.description, registry)
+    if not overlaps:
+        _warn(f"[asset_registry_check] clean — no overlap for '{args.name}'")
+        return "clean", []
+    _warn(f"[asset_registry_check] OVERLAP detected for '{args.name}':")
+    for overlap in overlaps:
+        _warn(f"  {overlap['source']} ({overlap['name']}): {overlap['reason']}")
+    return "overlap", overlaps
 
-    if args.name or args.description:
-        overlaps = _check_overlap(args.name, args.description, registry)
-        if overlaps:
-            result = "overlap"
-            print(f"[asset_registry_check] OVERLAP detected for '{args.name}':", file=sys.stderr)
-            for o in overlaps:
-                print(f"  {o['source']} ({o['name']}): {o['reason']}", file=sys.stderr)
-        else:
-            print(f"[asset_registry_check] clean — no overlap for '{args.name}'", file=sys.stderr)
-    else:
-        # No candidate provided — just emit registry summary
-        print(f"[asset_registry_check] Registry: {len(registry)} assets scanned", file=sys.stderr)
-        result = "clean"
 
+def _write_artifact(path: str, result: str, registry_count: int, overlaps: list[dict[str, str]]) -> None:
+    artifact_path = Path(path)
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact = {
+        "generated_ts": int(time.time()),
+        "head_sha": _get_head_sha(),
+        "result": result,
+        "registry_count": registry_count,
+        "overlaps": overlaps,
+    }
+    artifact_path.write_text(json.dumps(artifact, indent=2))
+    _warn(f"[asset_registry_check] Artifact written to {artifact_path}")
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
+    registry = _scan_registry()
+    result, overlaps = _evaluate_candidate(args, registry)
     if args.emit_artifact:
-        artifact_path = Path(args.emit_artifact)
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        artifact = {
-            "generated_ts": int(time.time()),
-            "head_sha": _get_head_sha(),
-            "result": result,
-            "registry_count": len(registry),
-            "overlaps": overlaps,
-        }
-        artifact_path.write_text(json.dumps(artifact, indent=2))
-        print(f"[asset_registry_check] Artifact written to {artifact_path}", file=sys.stderr)
-
-    if args.fail_on_overlap and result == "overlap":
-        return 1
-    return 0
+        _write_artifact(args.emit_artifact, result, len(registry), overlaps)
+    return 1 if args.fail_on_overlap and result == "overlap" else 0
 
 
 if __name__ == "__main__":
