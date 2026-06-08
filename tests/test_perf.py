@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import json
 import resource
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,8 @@ import risk_assess  # type: ignore[import-not-found]
 
 
 BUDGET_MS = 50.0  # per-command mean and p95 ceiling
+COLD_START_BUDGET_SEC = 2.0
+ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = Path(__file__).parent / "perf_baseline.json"
 
 # Peak RSS ceiling for a representative hot-path call sequence (assess 200 paths).
@@ -133,6 +137,29 @@ def test_pivot_check_within_budget(benchmark) -> None:
 
     benchmark(risk_assess.assess, paths)
     _assert_benchmark_budget(benchmark, "test_pivot_check_within_budget", "pivot_check")
+
+
+def test_cli_import_cold_start_under_budget() -> None:
+    """Cold-start import budget for CLI modules loaded by subprocess entrypoints."""
+    start = time.perf_counter()
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.path.insert(0, 'scripts'); import orchestrator, risk_assess",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=COLD_START_BUDGET_SEC + 0.5,
+        check=False,
+    )
+    elapsed = time.perf_counter() - start
+
+    assert proc.returncode == 0, proc.stderr
+    assert elapsed < COLD_START_BUDGET_SEC, (
+        f"CLI import cold-start {elapsed:.3f}s exceeds {COLD_START_BUDGET_SEC:.1f}s"
+    )
 
 
 def test_rss_under_ceiling() -> None:

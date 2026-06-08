@@ -69,3 +69,5 @@ def test_ci_runs_perf_budget_baseline_gate() -> None:
     assert "python -m pytest tests/test_perf.py --benchmark-only -v" in text
     assert "perf memory ceiling" in text
     assert "python -m pytest tests/test_perf.py::test_rss_under_ceiling -q" in text
+    assert "perf cold-start ceiling" in text
+    assert "python -m pytest tests/test_perf.py::test_cli_import_cold_start_under_budget -q" in text

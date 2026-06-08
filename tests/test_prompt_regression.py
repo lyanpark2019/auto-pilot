@@ -120,3 +120,27 @@ def test_headless_render_raises_keyerror() -> None:
     """
     with pytest.raises(KeyError):
         _prompts.render("headless")
+
+
+def test_render_for_llm_redacts_secret_like_prompt_output() -> None:
+    rendered = _prompts.render_for_llm(
+        "iteration",
+        iter_n="api_key=sk-live-secret-token-123456",
+        phase=1,
+    )
+
+    assert "sk-live-secret-token-123456" not in rendered
+    assert "api_key=<redacted>" in rendered
+
+
+def test_render_for_llm_strips_ansi_and_control_chars() -> None:
+    rendered = _prompts.render_for_llm("iteration", iter_n="\x1b[31m5\x00", phase=1)
+
+    assert "\x1b" not in rendered
+    assert "\x00" not in rendered
+    assert "Iteration 5" in rendered
+
+
+def test_render_for_llm_enforces_prompt_budget() -> None:
+    with pytest.raises(_prompts.PromptBudgetError):
+        _prompts.render_for_llm("iteration", iter_n="x" * 2_000, phase=1, max_chars=500)

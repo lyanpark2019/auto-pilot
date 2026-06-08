@@ -57,6 +57,9 @@ jobs:
       - name: perf memory ceiling
         run: python -m pytest tests/test_perf.py::test_rss_under_ceiling -q
 
+      - name: perf cold-start ceiling
+        run: python -m pytest tests/test_perf.py::test_cli_import_cold_start_under_budget -q
+
   bash:
     name: bash gates (shellcheck)
     runs-on: ubuntu-latest

@@ -20,6 +20,7 @@ local dev hardware (Apple M-series, Python 3.13).
 | `orchestrator pivot-check` (`risk_assess.assess`) | < 50 ms | called per finding within a round; measured ~0.03 ms locally |
 | pytest suite (`tests/`) | informally monitored | no in-tree wall-time gate; pytest output and CI duration are the live SoT |
 | peak RSS (assess 200 paths × 50 runs) | < 200 MB | `test_rss_under_ceiling` in `tests/test_perf.py` |
+| CLI import cold start | < 2 s | `test_cli_import_cold_start_under_budget` in `tests/test_perf.py` |
 
 ## How budgets are enforced
 
@@ -32,17 +33,18 @@ pytest tests/test_perf.py --benchmark-only -v
 ```
 
 The `test_rss_under_ceiling` test (non-benchmark) checks peak RSS of the
-`risk_assess.assess` hot path after a representative call sequence. CI runs it
-explicitly in the `perf memory ceiling` step beside the normal `pytest tests/ -q`
-coverage run.
+`risk_assess.assess` hot path after a representative call sequence. The
+`test_cli_import_cold_start_under_budget` test measures a fresh Python process
+importing the CLI hot modules. CI runs both explicitly beside the normal
+`pytest tests/ -q` coverage run.
 
 The pytest suite takes tens of seconds locally on an M-series Mac, including
 benchmark overhead. The `< 5 s` target in earlier versions was aspirational and
 unmeasured. Do not duplicate collected test counts or wall-time ceilings here —
 pytest output and CI duration are the SoT. No automated session-duration gate is
-in-tree; the benchmark assertions (`<50 ms` mean/p95, `<=baseline` regression)
-are the primary latency guards. Suite wall-time is monitored informally via CI
-duration.
+in-tree; the benchmark assertions (`<50 ms` mean/p95, `<=baseline` regression),
+RSS ceiling, and cold-start ceiling are the primary perf guards. Suite wall-time
+is monitored informally via CI duration.
 
 If the assertion fails, either:
 - Inspect the regression with `--benchmark-compare` (requires a prior baseline run).

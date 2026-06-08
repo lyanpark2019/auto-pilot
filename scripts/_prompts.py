@@ -1,15 +1,32 @@
 """Prompt loader for auto-pilot. Reads from <repo>/prompts/<name>.md."""
 from __future__ import annotations
+
+import re
 from pathlib import Path
-from typing import Any
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+MAX_LLM_PROMPT_CHARS = 120_000
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"\b(?P<key>api[_-]?key|token|password|secret|credential|authorization|auth)"
+    r"\s*[:=]\s*(?P<value>[^\s`\"']+)",
+    re.IGNORECASE,
+)
+_BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}", re.IGNORECASE)
+_OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b")
+_ANSI_CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+class PromptBudgetError(ValueError):
+    """Raised when rendered prompt output exceeds the configured character cap."""
+
 
 def load(name: str) -> str:
     """Return raw prompt text for `prompts/<name>.md`."""
     return (PROMPTS_DIR / f"{name}.md").read_text()
 
-def render(name: str, **vars: Any) -> str:
+
+def render(name: str, **vars: object) -> str:
     """Load prompt and resolve `{key}` placeholders with `vars`.
 
     Always invokes `str.format_map`. Raises `KeyError` if the prompt
@@ -24,3 +41,30 @@ def render(name: str, **vars: Any) -> str:
     a Python `{...}` field.
     """
     return load(name).format_map(vars)
+
+
+def _redact_secret_assignment(match: re.Match[str]) -> str:
+    return f"{match.group('key')}=<redacted>"
+
+
+def sanitize_for_llm(text: str, *, max_chars: int = MAX_LLM_PROMPT_CHARS) -> str:
+    """Return prompt text safe for an LLM call, or raise on prompt budget overflow."""
+    cleaned = _ANSI_CSI_RE.sub("", text)
+    cleaned = _CONTROL_CHAR_RE.sub("", cleaned)
+    cleaned = _SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, cleaned)
+    cleaned = _BEARER_RE.sub("Bearer <redacted>", cleaned)
+    cleaned = _OPENAI_KEY_RE.sub("sk-<redacted>", cleaned)
+    if max_chars < 1:
+        raise PromptBudgetError(f"max_chars must be >=1, got {max_chars}")
+    if len(cleaned) > max_chars:
+        raise PromptBudgetError(
+            f"rendered prompt length {len(cleaned)} exceeds cap {max_chars}"
+        )
+    return cleaned
+
+
+def render_for_llm(
+    name: str, *, max_chars: int = MAX_LLM_PROMPT_CHARS, **vars: object
+) -> str:
+    """Render a prompt and apply LLM-call redaction, control scrub, and size cap."""
+    return sanitize_for_llm(render(name, **vars), max_chars=max_chars)

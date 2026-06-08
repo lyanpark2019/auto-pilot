@@ -143,6 +143,31 @@ def test_run_claude_session_streams_and_returns_code(loop_module, tmp_path) -> N
     assert kwargs["env"]["HARNESS_HEADLESS"] == "1"
 
 
+def test_run_claude_session_sanitizes_prompt_before_spawn(loop_module, tmp_path) -> None:
+    class FakeProc:
+        stdout = iter([])
+        returncode = 0
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def terminate(self):
+            raise AssertionError("terminate should not be called")
+
+        def kill(self):
+            raise AssertionError("kill should not be called")
+
+    with patch.object(loop_module.subprocess, "Popen", return_value=FakeProc()) as popen:
+        assert loop_module.run_claude_session(
+            "token=secret-value-123456 \x1b[31mphase", tmp_path / "safe.log", 3
+        ) == 0
+
+    prompt_arg = popen.call_args.args[0][-1]
+    assert "secret-value-123456" not in prompt_arg
+    assert "token=<redacted>" in prompt_arg
+    assert "\x1b" not in prompt_arg
+
+
 def test_run_claude_session_timeout_returns_124(loop_module, tmp_path) -> None:
     fake = MagicMock(returncode=0, stdout=iter([]))
     with patch.object(loop_module.subprocess, "Popen", return_value=fake), \
