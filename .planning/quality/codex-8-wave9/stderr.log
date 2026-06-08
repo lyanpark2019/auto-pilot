@@ -1,0 +1,248 @@
+2026-06-08T11:56:28.346445Z ERROR codex_models_manager::manager: failed to refresh available models: unexpected status 401 Unauthorized: Your authentication token has been invalidated. Please try signing in again., url: https://chatgpt.com/backend-api/codex/models?client_version=0.137.0, cf-ray: a087b6a409893d69-ICN, request id: bfcae48c-98fe-43f3-b857-1468c360288e, auth error: 401, auth error code: token_invalidated
+2026-06-08T11:56:31.198810Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when UnexpectedContentType(Some("text/plain; body: {\n  \"error\": {\n    \"message\": \"Your authentication token has been invalidated. Please try signing in again.\",\n    \"type\": \"invalid_request_error\",\n    \"code\": \"token_invalidated\",\n    \"param\": null\n  },\n  \"status\": 401\n}"))
+2026-06-08T11:56:34.756768Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:34.839607Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:34.944204Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:35.091343Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:35.133520Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:35.421827Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:35.472315Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:35.619799Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:35.912201Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:35.997767Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:36.007889Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:36.140469Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:36.140609Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:36.432641Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:36.679904Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:36.753217Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:36.833590Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:36.956433Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:37.031909Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:37.189232Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:37.465791Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:37.712915Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:37.797572Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:37.910616Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:38.010867Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:38.070681Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:38.358130Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:38.939807Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:39.015931Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:39.317138Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:39.808472Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:39.883084Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:40.334013Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:41.034217Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:41.125704Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:41.418722Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:41.991602Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:42.065213Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:42.430632Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:45.053427Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:45.134513Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:45.411405Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:45.807846Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:45.887610Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://chatgpt.com/backend-api/codex/responses
+2026-06-08T11:56:46.186926Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:46.453210Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:46.989037Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:47.443908Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:47.935951Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:48.569176Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:49.100627Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:50.046480Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:50.460527Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:52.278495Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:53.042528Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:57.302635Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
+2026-06-08T11:56:57.826354Z ERROR codex_login::auth::manager: Failed to refresh token: 400 Bad Request: {
+  "error": {
+    "message": "Your session has ended. Please log in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "app_session_terminated"
+  }
+}
