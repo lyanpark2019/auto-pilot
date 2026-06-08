@@ -4,7 +4,7 @@
   "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "DUAL_WAVE11_MEETS_TARGET_CI_PENDING",
+  "current_state": "CI_MYPY_STUB_FIX_READY",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
   "head_sha": "d7f19d387ef90fc947c81416f286b57678aaa2f1",
@@ -98,14 +98,15 @@
     "wave11_changes": "Expanded prompt sanitizer to redact quoted secret assignments, JSON-shaped secret fields, and Authorization Bearer values; added parametrized regression tests; updated prompt-quality docs.",
     "wave11_local_gates": "root pytest 702 passed; vault pytest 106 passed; coverage 91.56%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; perf benchmark 4 passed/2 skipped; RSS+cold-start 2 passed; Graphify 27/27.",
     "codex_wave11": ".planning/quality/codex-8-wave11/last-message.md => weighted_total=90.04, MEETS_90_TARGET",
-    "claude_wave11": ".planning/quality/claude-8-wave11/raw.md => weighted_total=90.04, MEETS_90_TARGET"
+    "claude_wave11": ".planning/quality/claude-8-wave11/raw.md => weighted_total=90.04, MEETS_90_TARGET",
+    "hosted_ci_pr22_r1": "GitHub Actions run 27138064053 failed in python gates at mypy: missing stubs for yaml; root cause requirements-dev.txt lacked types-PyYAML on hosted runner.",
+    "ci_stub_fix": "Added types-PyYAML>=6.0 and test guard; targeted pytest passed; mypy 51 files passed; ruff target passed."
   },
   "residual_risks": [
-    "Hosted CI has not run for the Wave11 release-candidate branch.",
-    "No v0.8.7 tag/release/plugin update performed.",
-    "Architecture remains the lowest-scoring dimension (84), accepted for v0.8.7 because weighted target is met."
+    "Hosted CI rerun after types-PyYAML fix pending.",
+    "No v0.8.7 tag/release/plugin update performed."
   ],
-  "decision": "Dual adversarial target met. Next: push branch, verify hosted CI green, then release/tag/plugin update.",
+  "decision": "Push CI stub fix and rerun PR hosted CI before release.",
   "codex_wave9_r2_weighted_score": 89.93,
   "codex_wave9_r2_verdict": "BELOW_90",
   "wave10_focus": "Low-risk closure of Codex 89.93 blockers: prompt-output sanitizer/budget cap and perf cold-start CI gate.",

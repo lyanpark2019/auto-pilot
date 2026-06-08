@@ -42,6 +42,7 @@ def test_ci_installs_vault_pytest_dependencies() -> None:
     requirements = REQUIREMENTS_DEV.read_text(encoding="utf-8")
 
     assert "PyYAML" in requirements
+    assert "types-PyYAML" in requirements
 
 
 def test_ci_uses_node24_action_majors() -> None:
