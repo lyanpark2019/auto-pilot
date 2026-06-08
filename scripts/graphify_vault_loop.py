@@ -270,7 +270,7 @@ def _read_json(path: Path, issues: list[str]) -> dict[str, Any]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError) as exc:
         issues.append(f"json-parse: {path}: {type(exc).__name__}: {exc}")
         return {}
     return data if isinstance(data, dict) else {}

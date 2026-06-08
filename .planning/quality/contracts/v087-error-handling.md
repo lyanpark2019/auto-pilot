@@ -34,5 +34,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: pending
-- residual risk: broad catches may remain only for explicit per-destination isolation or advisory hook boundaries.
+- metric delta: broad exceptions 30 -> 24; print calls 168 -> 154; long functions 34 -> 33 after lockfile helper extraction and explicit JSON/OSError catches
+- residual risk: 24 broad catches remain, led by `_contract.py`, `_dogfood_gate.py`, `asset_registry_check.py`, `evals/runner.py`, `vault/pipeline/export.py`, and several vault scripts.

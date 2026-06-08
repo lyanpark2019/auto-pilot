@@ -46,6 +46,15 @@ def _setup_repo(tmp: str, sub: str = "repo", with_marker: bool = True) -> pathli
     return repo
 
 
+def _raw_hook(stdin: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["python3", HOOK],
+        input=stdin,
+        capture_output=True,
+        text=True,
+    )
+
+
 CaseFn = Callable[[str], tuple[str, str]]
 CASES: list[tuple[str, CaseFn]] = []
 
@@ -123,6 +132,12 @@ def _h(tmp: str) -> tuple[str, str]:
     f = repo / "main.py"
     f.touch()
     return _verdict(str(f), tool="Bash"), "ALLOW"
+
+
+@case("I malformed JSON fails open -> ALLOW")
+def _i(tmp: str) -> tuple[str, str]:
+    result = _raw_hook("{bad")
+    return ("ALLOW" if result.returncode == 0 and not result.stdout else "DENY"), "ALLOW"
 
 
 def main() -> int:

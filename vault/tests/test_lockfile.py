@@ -65,3 +65,40 @@ def test_different_roles_independent(tmp_path: Path) -> None:
     assert a.lock_path != b.lock_path
     a.release()
     b.release()
+
+
+def test_acquire_corrupt_lock_reports_error_type(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    vault = tmp_path / "v"
+    (vault / "meta").mkdir(parents=True)
+    (vault / "meta" / ".lock.pm-loop").write_text("{bad", encoding="utf-8")
+
+    lock = VaultLock(vault)
+    lock.acquire()
+
+    err = capsys.readouterr().err
+    assert "error_type=JSONDecodeError" in err
+    lock.release()
+
+
+def test_release_unexpected_lock_read_error_propagates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vault = tmp_path / "v"
+    vault.mkdir()
+    lock = VaultLock(vault)
+    lock.acquire()
+    original_read_text = Path.read_text
+
+    def read_text(path: Path, *args: object, **kwargs: object) -> str:
+        if path == lock.lock_path:
+            raise RuntimeError("unexpected")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+
+    with pytest.raises(RuntimeError, match="unexpected"):
+        lock.release()

@@ -74,7 +74,7 @@ def find_marker_root(start: str) -> str | None:
 def main() -> None:
     try:
         data = json.loads(sys.stdin.read() or "{}")
-    except Exception:
+    except json.JSONDecodeError:
         sys.exit(0)
 
     tool = data.get("tool_name", "")

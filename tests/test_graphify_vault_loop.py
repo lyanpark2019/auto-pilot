@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.graphify_vault_loop import (
     QuerySpec,
+    _read_json,
     compact_graphify_vault,
     run_query_suite,
     validate_graphify_vault,
@@ -114,3 +117,30 @@ def test_run_query_suite_uses_manifest_and_expected_gaps() -> None:
     assert result.passed == 2
     assert result.total == 2
     assert not result.failed
+
+
+def test_read_json_records_parse_errors(tmp_path: Path) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text("{bad", encoding="utf-8")
+    issues: list[str] = []
+
+    assert _read_json(path, issues) == {}
+
+    assert issues
+    assert "JSONDecodeError" in issues[0]
+
+
+def test_read_json_does_not_swallow_unexpected_runtime_error(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text("{}", encoding="utf-8")
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("scripts.graphify_vault_loop.json.loads", boom)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        _read_json(path, [])

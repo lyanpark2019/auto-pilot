@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 # Support running both as `python3 -m pipeline.scan_code` and `python3 pipeline/scan_code.py`
 if __package__ in (None, ""):
@@ -37,12 +37,20 @@ _API_EXCLUDES = (
 )
 
 
+def _write_line(stream: TextIO, message: str) -> None:
+    stream.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    _write_line(sys.stderr, message)
+
+
 def _sig(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Render function signature as `name(args) -> ret`."""
     try:
         sig_inner = ast.unparse(node.args)
-    except Exception as exc:
-        print(f"scan_code: failed to unparse args for {node.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    except (AttributeError, RecursionError, TypeError, ValueError) as exc:
+        _warn(f"scan_code: failed to unparse args for {node.name}: error_type={type(exc).__name__}: {exc}")
         sig_inner = "..."
     ret = f" -> {ast.unparse(node.returns)}" if node.returns else ""
     prefix = "async " if isinstance(node, ast.AsyncFunctionDef) else ""
