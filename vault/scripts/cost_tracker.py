@@ -61,7 +61,7 @@ def _load_rubric() -> dict[str, Any]:
         return {}
     try:
         return yaml.safe_load(RUBRIC_PATH.read_text()) or {}
-    except Exception as exc:
+    except (OSError, yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
         _warn(f"cost_tracker: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}")
         return {}
 

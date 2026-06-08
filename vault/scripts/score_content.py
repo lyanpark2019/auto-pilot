@@ -52,6 +52,10 @@ def _load_max_pts() -> dict[str, int]:
         return dict(_FALLBACK_MAX_PTS)
     try:
         import yaml
+    except ImportError as exc:
+        _warn(f"score_content: failed to load rubric {RUBRIC_PATH}: {exc}")
+        return dict(_FALLBACK_MAX_PTS)
+    try:
         data = yaml.safe_load(RUBRIC_PATH.read_text()) or {}
         dims = (data.get("content") or {}).get("dimensions") or {}
         out = {name: int(cfg.get("max", _FALLBACK_MAX_PTS.get(name, 10)))
@@ -59,7 +63,7 @@ def _load_max_pts() -> dict[str, int]:
         for k, v in _FALLBACK_MAX_PTS.items():
             out.setdefault(k, v)
         return out
-    except Exception as exc:
+    except (OSError, yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
         _warn(f"score_content: failed to load rubric {RUBRIC_PATH}: {exc}")
         return dict(_FALLBACK_MAX_PTS)
 

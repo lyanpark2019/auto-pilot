@@ -53,7 +53,7 @@ def _source_count(nid: str) -> int:
                        capture_output=True, text=True, timeout=30)
     try:
         return len(json.loads(r.stdout).get("sources", []))
-    except Exception as exc:
+    except (json.JSONDecodeError, AttributeError) as exc:
         _warn(f"migrate/pm: _source_count JSON parse failed for {nid}: {type(exc).__name__}: {exc}")
         return -1
 

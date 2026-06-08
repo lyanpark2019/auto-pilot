@@ -21,8 +21,8 @@ def collect(vault: Path) -> dict:
             return None
         try:
             return json.loads(p.read_text())
-        except Exception as exc:
-            print(f"dashboard_data: failed to load {p}: {exc}", file=sys.stderr)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"dashboard_data: failed to load {p}: {type(exc).__name__}: {exc}", file=sys.stderr)
             return None
 
     out["structural"] = _load(meta / "score-state.json")
