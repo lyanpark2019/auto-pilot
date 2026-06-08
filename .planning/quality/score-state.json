@@ -4,13 +4,13 @@
   "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "CODEX_REAUTH_REQUIRED",
+  "current_state": "CODEX_BELOW_TARGET_WAVE9_R2",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
-  "head_sha": "e7e40f8",
+  "head_sha": "a30f7fb16e8c856f0debdb449edb995cb9bd38b5",
   "baseline_weighted_score": 84.4,
   "weighted_score": 90.03,
-  "scores_source": "Claude wave9 conservative rescore recalculated from dimension scores = 90.03 MEETS_90_TARGET; Codex wave9 rerun attempted but blocked by Codex auth session termination (no score produced)",
+  "scores_source": "Claude wave9 conservative rescore recalculated from dimension scores = 90.03 MEETS_90_TARGET; Codex wave9 r2 reauth succeeded but rescore = 89.93 BELOW_90",
   "scores": {
     "type_safety": {
       "score": 90,
@@ -90,12 +90,15 @@
     "wave9_local_gates": "root pytest 694 passed; vault pytest 106 passed; scripts coverage 91.50%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; Graphify 27/27",
     "wave9_type_perf_prompt": "core Any hits in _contract/_dispatch=0; prompt fixtures=20 with 5 adversarial and JSON Schema; perf mean+p95+baseline plus CI memory ceiling",
     "wave9_claude": ".planning/quality/claude-8-wave9/raw.md => JSON weighted_total=90.17, recalculated score*weight=90.03, MEETS_90_TARGET",
-    "codex_wave9": ".planning/quality/codex-8-wave9/exit_code.txt => 1; stderr.log contains app_session_terminated; no last-message.md score produced"
+    "codex_wave9": ".planning/quality/codex-8-wave9/exit_code.txt => 1; stderr.log contains app_session_terminated; no last-message.md score produced",
+    "codex_wave9_r2": ".planning/quality/codex-8-wave9-r2/last-message.md => weighted_total=89.93, recalculated score*weight=89.93, BELOW_90"
   },
   "residual_risks": [
-    "Codex final rerun did not produce a score because Codex auth session ended; run `codex login`/reauth then rerun.",
-    "Hosted CI has not run for the Wave9 branch.",
+    "Codex wave9 r2 succeeded after reauth but scored 89.93, below the strict 90 target.",
+    "Hosted CI has not run for a release candidate branch.",
     "No v0.8.7 tag/release/plugin update performed."
   ],
-  "decision": "Release remains blocked: strict v0.8.7 criterion requires dual adversarial rescore >=90; Codex needs re-auth then rerun."
+  "decision": "Do not release v0.8.7: strict criterion requires dual adversarial rescore >=90; Codex wave9 r2 is 89.93.",
+  "codex_wave9_r2_weighted_score": 89.93,
+  "codex_wave9_r2_verdict": "BELOW_90"
 }
