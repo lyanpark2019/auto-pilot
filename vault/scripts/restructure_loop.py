@@ -85,17 +85,20 @@ def _run_dry_phase(phase: Any, ctx: PhaseContext, state: dict[str, Any]) -> bool
     return True
 
 
+PHASE_FAILURES = (OSError, RuntimeError, ValueError, TypeError)
+
+
 def _execute_phase_attempt(phase: Any) -> PhaseResult:
     try:
         return phase.run()
-    except Exception as e:
+    except PHASE_FAILURES as e:
         return PhaseResult(status="failed", detail=f"exception: {e!r}")
 
 
 def _rollback_phase(phase: Any, ctx: PhaseContext) -> None:
     try:
         phase.rollback()
-    except Exception as e:
+    except PHASE_FAILURES as e:
         ctx.trace(f"  rollback raised: {e!r}")
 
 

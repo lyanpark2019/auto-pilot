@@ -3,7 +3,7 @@
     {
       "name": "explain-worktree-manager",
       "cmd": ["graphify", "explain", "WorktreeManager", "--graph", "graphify-out/graph.json"],
-      "must_contain": ["WorktreeManager", ".apply_to_main()", "._main_apply_lock()"]
+      "must_contain": ["WorktreeManager", ".apply_to_main()", "._write_patch_series()"]
     },
     {
       "name": "explain-apply-to-main",
@@ -38,13 +38,13 @@
     {
       "name": "query-dispatch-review",
       "cmd": ["graphify", "query", "collect_round_outcome read_review done marker schema validate", "--graph", "graphify-out/graph.json", "--budget", "1400"],
-      "must_contain": ["collect_round_outcome()", "read_review()", "done.marker"]
+      "must_contain": ["collect_round_outcome()", "read_review()", "_wait_for_markers()"]
     },
     {
-      "name": "known-limitation-path-worktree-apply",
-      "kind": "known-limitation",
+      "name": "path-worktree-apply",
+      "kind": "pass",
       "cmd": ["graphify", "path", "WorktreeManager", ".apply_to_main()", "--graph", "graphify-out/graph.json"],
-      "must_contain": ["No path found", "ambiguous"]
+      "must_contain": ["Shortest path", "WorktreeManager", ".apply_to_main()"]
     },
     {
       "name": "explain-orchestrator-phase-start",

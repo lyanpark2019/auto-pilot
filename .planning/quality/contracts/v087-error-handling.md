@@ -34,5 +34,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: broad exceptions 30 -> 8; print calls 168 -> 50; long functions 34 -> 15 after explicit JSON/OSError/YAML catches plus helper extraction across lockfile, scan_code, graphify loop, dashboard/cost/scoring, migration worker, asset registry, MCP audit status, selftest, and restructure paths
-- residual risk: 8 broad catches remain, led by core atomic-write/dogfood/eval boundary/fail-open paths where broad catch is still intentional or requires deeper behavioral review.
+- metric delta: broad exceptions 30 -> 0; print calls 168 -> 37; long functions 34 -> 0 after explicit JSON/OSError/YAML/subprocess/runtime catches plus helper extraction across lockfile, scan_code, graphify loop, dashboard/cost/scoring, migration worker, asset registry, MCP audit status, selftest, restructure paths, core atomic write cleanup, dogfood contract checks, eval boundary handling, exporter destination errors, MCP tool dispatch, and phase rollback/run envelopes
+- residual risk: exception tuples now encode expected failure classes; truly novel programming errors will fail loudly instead of being converted to soft status in those boundary paths.

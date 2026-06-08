@@ -30,6 +30,65 @@ def _detect_area(path: Path, root: Path) -> str:
     return parts[0] if parts else "root"
 
 
+def _write_category_indexes(d: Path, category: str, today: str) -> None:
+    for sub in ("concepts", "entities", "decisions", "sources"):
+        (d / sub).mkdir(exist_ok=True)
+        idx = d / sub / "_index.md"
+        if not idx.exists():
+            idx.write_text(
+                f"---\ntype: index\ncategory: {category}\nsubcategory: {sub}\n"
+                f"created: {today}\n---\n\n# {category}/{sub}\n\n"
+                f"_Populated by PM-orchestrator workers._\n"
+            )
+
+
+def _category_pages(category: str, today: str) -> list[tuple[str, str]]:
+    hot = (
+        f"---\ntype: meta\ntitle: \"Hot Cache — {category}\"\nstatus: developing\n---\n\n"
+        f"# Hot Cache — {category}\n\n"
+        f"## God Nodes\n_Populated by vault-graph-enricher worker._\n\n"
+        f"## Cross-bridges\n_Populated by vault-graph-enricher worker._\n\n"
+        f"## Source Files\n_Populated by vault-graph-enricher worker._\n\n"
+        f"## Quick Questions\n_Populated by vault-graph-enricher worker._\n\n"
+        f"## Cross-vault\n_Populated by vault-graph-enricher worker._\n"
+    )
+    return [
+        ("index.md", f"---\ntype: index\ncategory: {category}\ncreated: {today}\n---\n\n# {category}\n\n## Modules\n"),
+        ("overview.md", f"---\ntype: overview\ncategory: {category}\n---\n\n# {category} — Overview\n\nPurpose, scope, key abstractions.\n"),
+        ("hot.md", hot),
+        ("log.md", f"---\ntype: log\ncategory: {category}\n---\n\n# Docs Log — {category}\n\n| date | action | file | note |\n|---|---|---|---|\n"),
+    ]
+
+
+def _write_category_root(vault: Path, category: str, today: str) -> None:
+    d = vault / category
+    d.mkdir(exist_ok=True)
+    (d / "modules").mkdir(exist_ok=True)
+    (d / "raw").mkdir(exist_ok=True)
+    _write_category_indexes(d, category, today)
+    for fname, body in _category_pages(category, today):
+        target = d / fname
+        if not target.exists():
+            target.write_text(body)
+
+
+def _write_vault_indexes(vault: Path, categories: list[str], today: str) -> None:
+    root_idx = vault / "index.md"
+    root_idx.write_text(
+        f"---\ntype: index\ncreated: {today}\n---\n\n# {vault.name}\n\n"
+        + "\n".join(f"- [[{c}/index|{c}]]" for c in categories)
+    )
+    cv_path = vault / "meta" / "cross-vault-links.md"
+    if not cv_path.exists():
+        cv_links = "\n".join(f"- [[../{c}/index|{c}]]" for c in categories)
+        cv_path.write_text(
+            f"---\ntype: meta\ntitle: \"Cross-vault Links\"\ncreated: {today}\n---\n\n"
+            f"# Cross-vault Links\n\n"
+            f"Internal vault category roots (verified targets for scoring):\n\n"
+            f"{cv_links}\n"
+        )
+
+
 @register
 class CodeAdapter:
     name = "code"
@@ -82,52 +141,9 @@ class CodeAdapter:
             json.dumps({c: [it.payload for it in v] for c, v in buckets.items()},
                        ensure_ascii=False, indent=2)
         )
-
         for c in cats:
-            d = vault / c
-            d.mkdir(exist_ok=True)
-            (d / "modules").mkdir(exist_ok=True)
-            (d / "raw").mkdir(exist_ok=True)
-            for sub in ("concepts", "entities", "decisions", "sources"):
-                (d / sub).mkdir(exist_ok=True)
-                idx = d / sub / "_index.md"
-                if not idx.exists():
-                    idx.write_text(
-                        f"---\ntype: index\ncategory: {c}\nsubcategory: {sub}\n"
-                        f"created: {today}\n---\n\n# {c}/{sub}\n\n"
-                        f"_Populated by PM-orchestrator workers._\n"
-                    )
-            for fname, body in [
-                ("index.md", f"---\ntype: index\ncategory: {c}\ncreated: {today}\n---\n\n# {c}\n\n## Modules\n"),
-                ("overview.md", f"---\ntype: overview\ncategory: {c}\n---\n\n# {c} — Overview\n\nPurpose, scope, key abstractions.\n"),
-                ("hot.md", (
-                    f"---\ntype: meta\ntitle: \"Hot Cache — {c}\"\nstatus: developing\n---\n\n"
-                    f"# Hot Cache — {c}\n\n"
-                    f"## God Nodes\n_Populated by vault-graph-enricher worker._\n\n"
-                    f"## Cross-bridges\n_Populated by vault-graph-enricher worker._\n\n"
-                    f"## Source Files\n_Populated by vault-graph-enricher worker._\n\n"
-                    f"## Quick Questions\n_Populated by vault-graph-enricher worker._\n\n"
-                    f"## Cross-vault\n_Populated by vault-graph-enricher worker._\n"
-                )),
-                ("log.md", f"---\ntype: log\ncategory: {c}\n---\n\n# Docs Log — {c}\n\n| date | action | file | note |\n|---|---|---|---|\n"),
-            ]:
-                target = d / fname
-                if not target.exists():
-                    target.write_text(body)
-
-        root_idx = vault / "index.md"
-        root_idx.write_text(f"---\ntype: index\ncreated: {today}\n---\n\n# {vault.name}\n\n"
-                            + "\n".join(f"- [[{c}/index|{c}]]" for c in cats))
-
-        cv_path = vault / "meta" / "cross-vault-links.md"
-        if not cv_path.exists():
-            cv_links = "\n".join(f"- [[../{c}/index|{c}]]" for c in cats)
-            cv_path.write_text(
-                f"---\ntype: meta\ntitle: \"Cross-vault Links\"\ncreated: {today}\n---\n\n"
-                f"# Cross-vault Links\n\n"
-                f"Internal vault category roots (verified targets for scoring):\n\n"
-                f"{cv_links}\n"
-            )
+            _write_category_root(vault, c, today)
+        _write_vault_indexes(vault, cats, today)
 
     def materialize(self, vault: Path, buckets: dict[str, list[SourceItem]], **opts: Any) -> None:
         """No download — code files stay in repo. Write module stubs that workers will fill."""

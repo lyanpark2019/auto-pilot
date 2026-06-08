@@ -405,7 +405,7 @@ def export_all(repo: Path, destinations: list[str], **opts) -> dict:
             continue
         try:
             results[d] = fn(repo, **{k: v for k, v in opts.items() if k in fn.__code__.co_varnames})
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as e:
             _warn(f"export: destination={d} error_type={type(e).__name__}: {e}")
             results[d] = {"destination": d, "error": str(e), "failed": True}
     return results

@@ -97,7 +97,7 @@ def atomic_write_text(path: Path, text: str) -> Path:
             _fsync_file(f.fileno())
         os.replace(tmp_name, path)  # atomic on same fs
         _fsync_dir(path.parent)
-    except Exception:
+    except OSError:
         try:
             os.unlink(tmp_name)
         except FileNotFoundError:
@@ -219,52 +219,52 @@ def snapshot_context(dest_dir: Path, spec_path: Path,
                         project_context=context_sha)
 
 
-def verify_snapshots(contract_dir: Path) -> None:
-    """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas.
-
-    For ``project_context``:
-      - Declared sha → bundle file ``project-context.md`` must exist + match
-        (fail-closed: raises :class:`SnapshotMismatchError` on any mismatch).
-      - Absent key → logs "ran context-blind" to stderr and continues (Step-1
-        semantics: context-free runs are allowed but explicitly surfaced).
-
-    Raises SnapshotMismatchError on any mismatch.
-    """
-    import sys as _sys
-    contract = read_contract(contract_dir / "contract.json")
-    bundle = Path(contract["context_bundle_path"])
-    expected_spec = contract["snapshot_shas"]["spec"]
+def _verify_spec_sha(bundle: Path, expected_spec: str) -> None:
     actual_spec = _sha256((bundle / "spec.md").read_bytes())
     if actual_spec != expected_spec:
         raise SnapshotMismatchError(f"spec.md sha mismatch: {actual_spec!r} != {expected_spec!r}")
 
-    expected_chain = contract["snapshot_shas"]["claude_md_chain"]
-    # Discover bundle CLAUDE files in stable order: CLAUDE.md first, then CLAUDE-*.md sorted
+
+def _bundle_claude_files(bundle: Path) -> list[Path]:
     chain_files: list[Path] = []
     if (bundle / "CLAUDE.md").exists():
         chain_files.append(bundle / "CLAUDE.md")
     chain_files.extend(sorted(bundle.glob("CLAUDE-*.md")))
-    actual_chain = [_sha256(p.read_bytes()) for p in chain_files]
+    return chain_files
+
+
+def _verify_claude_chain(bundle: Path, expected_chain: list[str]) -> None:
+    actual_chain = [_sha256(p.read_bytes()) for p in _bundle_claude_files(bundle)]
     if actual_chain != expected_chain:
         raise SnapshotMismatchError(
             f"claude_md_chain sha mismatch: {actual_chain!r} != {expected_chain!r}"
         )
 
-    expected_ctx = contract["snapshot_shas"].get("project_context")
+
+def _verify_project_context(bundle: Path, expected_ctx: str | None) -> None:
     if expected_ctx is None:
-        print("verify_snapshots: ran context-blind (no project_context sha declared)",
-              file=_sys.stderr)
-    else:
-        ctx_file = bundle / "project-context.md"
-        if not ctx_file.exists():
-            raise SnapshotMismatchError(
-                "project-context.md declared in snapshot_shas but absent from bundle"
-            )
-        actual_ctx = _sha256(ctx_file.read_bytes())
-        if actual_ctx != expected_ctx:
-            raise SnapshotMismatchError(
-                f"project-context.md sha mismatch: {actual_ctx!r} != {expected_ctx!r}"
-            )
+        print("verify_snapshots: ran context-blind (no project_context sha declared)", file=sys.stderr)
+        return
+    ctx_file = bundle / "project-context.md"
+    if not ctx_file.exists():
+        raise SnapshotMismatchError(
+            "project-context.md declared in snapshot_shas but absent from bundle"
+        )
+    actual_ctx = _sha256(ctx_file.read_bytes())
+    if actual_ctx != expected_ctx:
+        raise SnapshotMismatchError(
+            f"project-context.md sha mismatch: {actual_ctx!r} != {expected_ctx!r}"
+        )
+
+
+def verify_snapshots(contract_dir: Path) -> None:
+    """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas."""
+    contract = read_contract(contract_dir / "contract.json")
+    bundle = Path(contract["context_bundle_path"])
+    snapshot_shas = contract["snapshot_shas"]
+    _verify_spec_sha(bundle, snapshot_shas["spec"])
+    _verify_claude_chain(bundle, snapshot_shas["claude_md_chain"])
+    _verify_project_context(bundle, snapshot_shas.get("project_context"))
 
 
 def _sha256(b: bytes) -> str:

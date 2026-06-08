@@ -182,6 +182,62 @@ def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
     _check_preflight_head_sha(preflight, repo_root)
 
 
+def _validate_ticket_inputs(subagent_role: str, contract_dir: Path) -> dict[str, Any]:
+    if subagent_role not in _VALID_ROLES:
+        raise ValueError(f"unknown subagent_role: {subagent_role!r}; allowed: {sorted(_VALID_ROLES)}")
+    _contract.verify_pm_signature(contract_dir)
+    _contract.verify_snapshots(contract_dir)
+    return _contract.read_contract(contract_dir / "contract.json")
+
+
+def _enforce_ticket_gates(
+    contract_dir: Path,
+    contract: dict[str, Any],
+    *,
+    skip_preflight: bool,
+    skip_contract_check: bool,
+) -> None:
+    if not skip_contract_check:
+        _check_contract_check_artifact(contract_dir)
+    if not skip_preflight:
+        _check_preflight_artifact(contract_dir, contract.get("phase", 0))
+
+
+def _ticket_body(
+    *,
+    contract_dir: Path,
+    worktree: Path,
+    subagent_role: str,
+    output_dir: Path,
+    contract: dict[str, Any],
+    diff_path: Path | None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "schema_version": 1,
+        "contract_id": contract["id"],
+        "base_sha": contract["snapshot_shas"]["base_sha"],
+        "contract_dir": str(contract_dir.resolve()),
+        "worktree": str(worktree.resolve()),
+        "subagent_role": subagent_role,
+        "output_dir": str(output_dir.resolve()),
+        "helper_abspath": str(Path(__file__).resolve().parent / "_subagent_helpers.py"),
+        "diff_path": str(diff_path.resolve()) if diff_path else None,
+        "diff_sha256": _contract._sha256(diff_path.read_bytes()) if diff_path else None,
+        "boot_ok_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    body["ticket_sha"] = _compute_ticket_sha(body)
+    return body
+
+
+def _write_ticket(contract_dir: Path, subagent_role: str, body: dict[str, Any]) -> Path:
+    _validator().validate(body)
+    tickets_dir = contract_dir / "tickets"
+    tickets_dir.mkdir(parents=True, exist_ok=True)
+    ticket_path = tickets_dir / f"{subagent_role}.json"
+    _contract.atomic_write_text(ticket_path, json.dumps(body, indent=2, sort_keys=True) + "\n")
+    return ticket_path
+
+
 def prepare_subagent_ticket(
     *,
     contract_dir: Path,
@@ -191,66 +247,25 @@ def prepare_subagent_ticket(
     skip_preflight: bool = False,
     skip_contract_check: bool = False,
 ) -> Path:
-    """PM-side validation. Writes a signed ticket under <contract_dir>/tickets/<role>.json.
-
-    Validates contract + PM-SIGNATURE + snapshots BEFORE writing the ticket.
-    Also enforces:
-      - Layer-2 contract-check artifact (ⓓ-7②): ``ContractCheckMissing`` on failure
-        (disable with ``skip_contract_check=True`` for tests / initial bootstrap).
-      - Preflight artifact (ⓓ-9): ``PreflightError`` on failure
-        (disable with ``skip_preflight=True`` for tests / non-interactive).
-    Returns the ticket path.
-
-    Raises:
-        ValueError on invalid role.
-        ContractValidationError / SnapshotMismatchError / PMSignatureMismatchError
-            on contract integrity failures.
-        ContractCheckMissing when the contract-check artifact is absent or stale.
-        PreflightError when the preflight artifact is missing / stale / wrong HEAD.
-    """
-    if subagent_role not in _VALID_ROLES:
-        raise ValueError(f"unknown subagent_role: {subagent_role!r}; allowed: {sorted(_VALID_ROLES)}")
-
-    _contract.verify_pm_signature(contract_dir)
-    _contract.verify_snapshots(contract_dir)
-    contract = _contract.read_contract(contract_dir / "contract.json")
-
-    if not skip_contract_check:
-        _check_contract_check_artifact(contract_dir)
-
-    if not skip_preflight:
-        phase = contract.get("phase", 0)
-        _check_preflight_artifact(contract_dir, phase)
-
+    """PM-side validation. Writes a signed ticket under <contract_dir>/tickets/<role>.json."""
+    contract = _validate_ticket_inputs(subagent_role, contract_dir)
+    _enforce_ticket_gates(
+        contract_dir,
+        contract,
+        skip_preflight=skip_preflight,
+        skip_contract_check=skip_contract_check,
+    )
     output_dir = contract_dir / "outputs" / subagent_role
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    helper_abspath = str((Path(__file__).resolve().parent / "_subagent_helpers.py"))
-
-    body: dict[str, Any] = {
-        "schema_version":  1,
-        "contract_id":     contract["id"],
-        "base_sha":        contract["snapshot_shas"]["base_sha"],
-        "contract_dir":    str(contract_dir.resolve()),
-        "worktree":        str(worktree.resolve()),
-        "subagent_role":   subagent_role,
-        "output_dir":      str(output_dir.resolve()),
-        "helper_abspath":  helper_abspath,
-        "diff_path":       str(diff_path.resolve()) if diff_path else None,
-        "diff_sha256":     None,
-        "boot_ok_at":      datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    }
-    if diff_path:
-        body["diff_sha256"] = _contract._sha256(diff_path.read_bytes())
-    body["ticket_sha"] = _compute_ticket_sha(body)
-
-    _validator().validate(body)
-
-    tickets_dir = contract_dir / "tickets"
-    tickets_dir.mkdir(parents=True, exist_ok=True)
-    ticket_path = tickets_dir / f"{subagent_role}.json"
-    _contract.atomic_write_text(ticket_path, json.dumps(body, indent=2, sort_keys=True) + "\n")
-    return ticket_path
+    body = _ticket_body(
+        contract_dir=contract_dir,
+        worktree=worktree,
+        subagent_role=subagent_role,
+        output_dir=output_dir,
+        contract=contract,
+        diff_path=diff_path,
+    )
+    return _write_ticket(contract_dir, subagent_role, body)
 
 
 def _compute_ticket_sha(body_without_sha: dict[str, Any]) -> str:
@@ -336,60 +351,66 @@ class RoundOutcome:
     specialists:    dict[str, dict[str, Any]]
 
 
-def collect_round_outcome(contract_dir: Path, timeout_per_agent_sec: int) -> RoundOutcome:
-    """Wait for done.marker per expected agent, read exit-code + payload, schema-validate.
+def _expected_agents(outputs: Path) -> list[str]:
+    return [
+        name for name in ("worker", "codex-reviewer", "claude-reviewer")
+        if (outputs / name).exists()
+    ]
 
-    PM does NOT read Agent return text for control flow — only filesystem state.
-    """
-    outputs = contract_dir / "outputs"
-    expected = []
-    if (outputs / "worker").exists():
-        expected.append("worker")
-    if (outputs / "codex-reviewer").exists():
-        expected.append("codex-reviewer")
-    if (outputs / "claude-reviewer").exists():
-        expected.append("claude-reviewer")
 
+def _wait_for_markers(outputs: Path, expected: list[str], timeout_per_agent_sec: int) -> None:
     deadlines = {name: _time.time() + timeout_per_agent_sec for name in expected}
-    while expected:
-        for name in list(expected):
-            marker = outputs / name / "done.marker"
-            if marker.exists():
-                expected.remove(name)
+    pending = set(expected)
+    while pending:
+        for name in list(pending):
+            if (outputs / name / "done.marker").exists():
+                pending.remove(name)
                 continue
             if _time.time() > deadlines[name]:
                 raise RoundCollectTimeout(f"no done.marker for {name}")
         _time.sleep(0.05)
 
-    def _exit_code(name: str) -> int | None:
-        p = outputs / name / "exit-code.txt"
-        return int(p.read_text().strip()) if p.exists() else None
 
-    def _read_status(name: str) -> dict[str, Any] | None:
-        p = outputs / name / "status.json"
-        return json.loads(p.read_text()) if p.exists() else None
+def _exit_code(outputs: Path, name: str) -> int | None:
+    p = outputs / name / "exit-code.txt"
+    return int(p.read_text().strip()) if p.exists() else None
 
-    def _read_review(name: str) -> dict[str, Any] | None:
-        p = outputs / name / "review.json"
-        return read_review(p) if p.exists() else None
 
-    codex_review = _read_review("codex-reviewer")
-    claude_review = _read_review("claude-reviewer")
+def _read_status(outputs: Path, name: str) -> dict[str, Any] | None:
+    p = outputs / name / "status.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def _read_agent_review(outputs: Path, name: str) -> dict[str, Any] | None:
+    p = outputs / name / "review.json"
+    return read_review(p) if p.exists() else None
+
+
+def _read_specialists(outputs: Path) -> dict[str, dict[str, Any]]:
     specialists: dict[str, dict[str, Any]] = {}
     specialists_dir = outputs / "specialists"
-    if specialists_dir.exists():
-        for sub in specialists_dir.iterdir():
-            if sub.is_dir() and (sub / "review.json").exists():
-                specialists[sub.name] = read_review(sub / "review.json")
+    if not specialists_dir.exists():
+        return specialists
+    for sub in specialists_dir.iterdir():
+        if sub.is_dir() and (sub / "review.json").exists():
+            specialists[sub.name] = read_review(sub / "review.json")
+    return specialists
 
+
+def collect_round_outcome(contract_dir: Path, timeout_per_agent_sec: int) -> RoundOutcome:
+    """Wait for done.marker per expected agent, read exit-code + payload, schema-validate."""
+    outputs = contract_dir / "outputs"
+    _wait_for_markers(outputs, _expected_agents(outputs), timeout_per_agent_sec)
+    codex_review = _read_agent_review(outputs, "codex-reviewer")
+    claude_review = _read_agent_review(outputs, "claude-reviewer")
     return RoundOutcome(
-        worker_exit_code=_exit_code("worker"),
-        worker_status=_read_status("worker"),
+        worker_exit_code=_exit_code(outputs, "worker"),
+        worker_status=_read_status(outputs, "worker"),
         codex_verdict=(codex_review or {}).get("verdict"),
         codex_review=codex_review,
         claude_verdict=(claude_review or {}).get("verdict"),
         claude_review=claude_review,
-        specialists=specialists,
+        specialists=_read_specialists(outputs),
     )
 
 

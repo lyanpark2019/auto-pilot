@@ -32,5 +32,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: long functions 34 -> 11 after splitting destructive/conductor hooks, orchestrator phase/dispatch/parser paths, restructure loop, phase03/phase06/phase07 restructure phases, notebook classification/materialization, migration source-add, dashboard aggregation, asset registry, eval runner/CLI, fix planner, and score_content scoring paths
-- residual risk: 11 long functions remain, led by core scripts `_dispatch.py`, `_worktree.py`, `_reviewer_wrapper.py`, `_contract.py`, and doc citation integrity; defer deeper core orchestration refactors until stronger characterization coverage exists.
+- metric delta: long functions 34 -> 0 after splitting destructive/conductor hooks, orchestrator phase/dispatch/parser paths, restructure loop, phase03/phase06/phase07 restructure phases, notebook classification/materialization, migration source-add, dashboard aggregation, asset registry, eval runner/CLI, fix planner, score_content scoring paths, dispatch ticket/outcome helpers, WorktreeManager lifecycle helpers, CodeAdapter bootstrap writers, doc citation loops, snapshot verification, reviewer wait init, and selftest agent validation
+- residual risk: helper extraction increases symbol count; Graphify query suite expectations were refreshed and rerun 27/27 to guard navigability after the split.

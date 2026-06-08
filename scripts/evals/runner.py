@@ -83,7 +83,7 @@ def run_case(
     clone = Path(tempfile.mkdtemp(prefix=f"eval-{run_id}-{case_id}-"))
     try:
         return _execute_case(case_id, repo, clone, max_iter, max_cost_usd)
-    except Exception as exc:
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         event("eval_case.error", case_id=case_id, error_type=type(exc).__name__)
         return CaseAttempt(
             OracleResult(outcome="error", reason=f"{type(exc).__name__}: {exc}"),

@@ -83,12 +83,12 @@ def assert_contracts_signed(contracts_root: Path) -> list[str]:
             continue
         try:
             _contract.read_contract(contract)
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, _contract.ContractValidationError) as e:
             failures.append(f"contract schema invalid at {round_dir}: {e}")
             continue
         try:
             _contract.verify_pm_signature(round_dir)
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, _contract.PMSignatureMismatchError) as e:
             failures.append(f"PM-SIGNATURE mismatch at {round_dir}: {e}")
     return failures
 

@@ -226,7 +226,7 @@ def handle(req: dict[str, Any]) -> None:
             return
         try:
             _respond(rid, fn(args))
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
             _warn(f"mcp_vault_server: tool={name} error_type={type(e).__name__}: {e}")
             _respond(rid, error={"code": -32000, "message": str(e)})
     elif method in ("notifications/initialized", "notifications/cancelled"):
