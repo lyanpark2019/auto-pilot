@@ -1,16 +1,16 @@
 {
-  "iteration": 8,
-  "timestamp": "2026-06-08T00:00:00Z",
-  "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
+  "iteration": 9,
+  "timestamp": "2026-06-08T12:44:00Z",
+  "project_root": "/Users/lyan/Documents/Project/auto-pilot",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "CI_FIX_PUSH_READY",
+  "current_state": "RELEASED_V0_8_7",
   "target_score": 90,
-  "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
-  "head_sha": "d968ab1",
+  "mode": "v0.8.7 quality-90 release shipped after dual adversarial rescore >=90, local full gates, hosted CI green, release tag, and plugin manifest update",
+  "head_sha": "e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb",
   "baseline_weighted_score": 84.4,
   "weighted_score": 90.04,
-  "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Hosted CI/release still pending.",
+  "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Release metadata commit e3200cb passed hosted CI run 27138414829 and shipped as v0.8.7.",
   "scores": {
     "type_safety": {
       "score": 90,
@@ -101,13 +101,17 @@
     "claude_wave11": ".planning/quality/claude-8-wave11/raw.md => weighted_total=90.04, MEETS_90_TARGET",
     "hosted_ci_pr22_r1": "GitHub Actions run 27138064053 failed in python gates at mypy: missing stubs for yaml; root cause requirements-dev.txt lacked types-PyYAML on hosted runner.",
     "ci_stub_fix": "Added types-PyYAML>=6.0 and test guard; targeted pytest passed; mypy 51 files passed; ruff target passed.",
-    "ci_stub_fix_local_gates": "after d968ab1: root pytest 702 passed; vault pytest 106 passed; full ruff clean; mypy 51 files passed (pre-commit targeted)."
+    "ci_stub_fix_local_gates": "after d968ab1: root pytest 702 passed; vault pytest 106 passed; full ruff clean; mypy 51 files passed (pre-commit targeted).",
+    "hosted_ci_pr22_r2": "GitHub Actions run 27138212879 passed on PR #22 after types-PyYAML fix.",
+    "hosted_ci_main_merge": "GitHub Actions run 27138280499 passed on main merge commit 7b52cf4.",
+    "hosted_ci_release_metadata": "GitHub Actions run 27138414829 passed on release metadata commit e3200cb.",
+    "release_v087": "Created annotated tag v0.8.7 and GitHub Release https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.7; plugin.json and marketplace.json both report 0.8.7."
   },
   "residual_risks": [
-    "Hosted CI rerun after types-PyYAML fix pending.",
-    "No v0.8.7 tag/release/plugin update performed."
+    "Wave11 dual rescore covers the quality code head; the final release commit changed only plugin metadata.",
+    "Future release trains should extend this invariant test with the next release tag and CI evidence."
   ],
-  "decision": "Push d968ab1 and wait for hosted CI rerun; release remains blocked until CI green.",
+  "decision": "v0.8.7 shipped from e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb with hosted CI run 27138414829 green; release URL: https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.7",
   "codex_wave9_r2_weighted_score": 89.93,
   "codex_wave9_r2_verdict": "BELOW_90",
   "wave10_focus": "Low-risk closure of Codex 89.93 blockers: prompt-output sanitizer/budget cap and perf cold-start CI gate.",
@@ -147,5 +151,16 @@
   "codex_wave11_weighted_score": 90.04,
   "codex_wave11_verdict": "MEETS_90_TARGET",
   "claude_wave11_weighted_score": 90.04,
-  "claude_wave11_verdict": "MEETS_90_TARGET"
+  "claude_wave11_verdict": "MEETS_90_TARGET",
+  "release": {
+    "tag": "v0.8.7",
+    "url": "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.7",
+    "commit": "e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb",
+    "ci_run": 27138414829,
+    "plugin_version": "0.8.7",
+    "marketplace_version": "0.8.7",
+    "pr": 22,
+    "pr_ci_run": 27138212879,
+    "main_merge_ci_run": 27138280499
+  }
 }
