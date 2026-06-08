@@ -28,6 +28,10 @@ are made through CLI flags for per-run budget/time controls or the two env vars
 above for host integration. There is no dev/staging/prod split because the
 plugin runs against the caller's checkout rather than a deployed service.
 
+`AutoPilotConfig` intentionally stays stdlib-only instead of requiring pydantic
+at plugin runtime. The equivalent guardrail is explicit lower/upper-bound
+validation in `__post_init__`, plus tests that cover every bound and env override.
+
 ## Verification
 
 - `tests/test_config.py` checks default values, env overrides, and every numeric

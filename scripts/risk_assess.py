@@ -35,8 +35,11 @@ import json
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from _log import event
 
 TIERS: tuple[str, ...] = ("none", "low", "medium", "high", "critical")
 _TIER_RANK: dict[str, int] = {name: rank for rank, name in enumerate(TIERS)}
@@ -191,6 +194,7 @@ def changed_files_from_git(
     diff_range: str, timeout: float = _GIT_TIMEOUT_SEC
 ) -> list[str]:
     """``git diff --name-only <diff_range>`` in the current working directory."""
+    start = time.monotonic()
     proc = subprocess.run(
         ["git", "diff", "--name-only", diff_range],
         capture_output=True,
@@ -198,6 +202,7 @@ def changed_files_from_git(
         timeout=timeout,
         check=False,
     )
+    event("risk_assess.git_diff", duration_ms=int((time.monotonic() - start) * 1000), returncode=proc.returncode)
     if proc.returncode != 0:
         raise RuntimeError(
             f"git diff --name-only {diff_range!r} failed "

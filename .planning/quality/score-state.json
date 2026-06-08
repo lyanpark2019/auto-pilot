@@ -7,75 +7,75 @@
   "current_state": "BLOCKED_BELOW_TARGET",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked until dual adversarial rescore >=90, hosted CI green, release/tag/plugin update",
-  "head_sha": "wave8-commit; run `git rev-parse HEAD` for exact SHA",
+  "head_sha": "wave9-working-tree; run `git rev-parse HEAD` after commit",
   "baseline_weighted_score": 84.4,
-  "weighted_score": 84.45,
-  "scores_source": "Claude wave7 conservative rescore = 84.45 BELOW_90; Codex rerun still pending/quota-dependent after earlier 87.33 rejection",
+  "weighted_score": 88.57,
+  "scores_source": "Claude wave8 conservative rescore = 88.57 BELOW_90; Wave9 evidence implemented and awaiting fresh rescore; Codex rerun still pending/quota-dependent",
   "scores": {
     "type_safety": {
+      "score": 88,
       "weight": 0.09,
-      "score": 85,
-      "weighted": 7.65
+      "weighted": 7.92
     },
     "test_quality": {
+      "score": 88,
       "weight": 0.13,
-      "score": 83,
-      "weighted": 10.79
+      "weighted": 11.44
     },
     "error_handling": {
+      "score": 90,
       "weight": 0.1,
-      "score": 87,
-      "weighted": 8.7
+      "weighted": 9.0
     },
     "code_structure": {
-      "weight": 0.09,
       "score": 91,
+      "weight": 0.09,
       "weighted": 8.19
     },
     "configuration": {
+      "score": 88,
       "weight": 0.07,
-      "score": 82,
-      "weighted": 5.74
+      "weighted": 6.16
     },
     "logging": {
+      "score": 89,
       "weight": 0.09,
-      "score": 84,
-      "weighted": 7.56
+      "weighted": 8.01
     },
     "async_correctness": {
+      "score": 91,
       "weight": 0.1,
-      "score": 88,
-      "weighted": 8.8
+      "weighted": 9.1
     },
     "documentation": {
+      "score": 88,
       "weight": 0.07,
-      "score": 76,
-      "weighted": 5.32
+      "weighted": 6.16
     },
     "security": {
+      "score": 89,
       "weight": 0.07,
-      "score": 86,
-      "weighted": 6.02
+      "weighted": 6.23
     },
     "architecture": {
-      "weight": 0.05,
       "score": 84,
+      "weight": 0.05,
       "weighted": 4.2
     },
     "performance_budget": {
+      "score": 86,
       "weight": 0.06,
-      "score": 81,
-      "weighted": 4.86
+      "weighted": 5.16
     },
     "llm_prompt_quality": {
+      "score": 86,
       "weight": 0.05,
-      "score": 82,
-      "weighted": 4.1
+      "weighted": 4.3
     },
     "ci_cd_quality": {
+      "score": 90,
       "weight": 0.03,
-      "score": 84,
-      "weighted": 2.52
+      "weighted": 2.7
     }
   },
   "measurement_log": {
@@ -84,12 +84,16 @@
     "wave8_local_gates": "root pytest 665 passed; vault pytest 106 passed; scripts coverage 91.63%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; Graphify 27/27",
     "security_ci_evidence": "ci.yml has pip-audit and gitleaks jobs; tests/test_ci_workflow_vault_gates.py guards both",
     "perf_prompt_evidence": "tests/test_perf.py gates all 4 benchmarks against tests/perf_baseline.json; prompts/fixtures has 20 regression fixtures",
-    "decision": "Stop before release until a fresh dual adversarial rescore reaches >=90."
+    "decision": "Stop before release until a fresh dual adversarial rescore reaches >=90.",
+    "wave8_claude": ".planning/quality/claude-8-wave8/raw.md => 88.57 BELOW_90",
+    "wave9_metrics": "long_functions_gt40=0; broad_exceptions=0; print_calls=0; subprocess_without_timeout=0; shell_true_calls=0; event_calls=59; public_api_docstring_coverage_pct=99.25",
+    "wave9_local_gates": "root pytest 694 passed; vault pytest 106 passed; scripts coverage 91.50%; mypy clean 51 files; ruff clean; module-size OK; doc-reference OK; hook selftests 13/13,9/9,9/9; bats 40/40 and 47/47; Graphify 27/27",
+    "wave9_type_perf_prompt": "core Any hits in _contract/_dispatch=0; prompt fixtures=20 with 5 adversarial and JSON Schema; perf mean+p95+baseline plus CI memory ceiling"
   },
   "residual_risks": [
-    "Claude wave7 remains below 90 before Wave8 changes; fresh rescore required.",
+    "Claude wave8 remains below 90 before Wave9 changes; fresh rescore required.",
     "Codex final rerun still required if quota permits.",
-    "Hosted CI has not run for the Wave8 commit.",
+    "Hosted CI has not run for the Wave9 commit.",
     "No v0.8.7 tag/release/plugin update performed."
   ]
 }

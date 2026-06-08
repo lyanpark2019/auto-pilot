@@ -1,12 +1,19 @@
 {
   "_doc": "Adversarial: JSON object string in a template var. str.format_map will attempt to parse the {key} inside the JSON fragment as a Python field reference — however, since the JSON value is passed as the var's value (not embedded in the template text), the JSON string is injected verbatim. The rendered output contains the JSON string with no extra escaping.",
   "prompt": "iteration",
-  "vars": {"iter_n": "{\"action\": \"inject\", \"payload\": 42}", "phase": 3},
+  "vars": {
+    "iter_n": "{\"action\": \"inject\", \"payload\": 42}",
+    "phase": 3
+  },
   "expects_substring": [
     "\"action\"",
     "\"inject\"",
     "42",
     "auto-pilot-phase: 3"
   ],
-  "expects_not": ["{iter_n}", "{phase}"]
+  "expects_not": [
+    "{iter_n}",
+    "{phase}"
+  ],
+  "adversarial": true
 }

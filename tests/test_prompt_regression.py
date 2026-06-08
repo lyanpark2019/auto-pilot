@@ -20,10 +20,13 @@ import json
 from pathlib import Path
 
 import pytest
+import jsonschema
 
 import _prompts  # type: ignore[import-not-found]
 
-FIXTURES_DIR = Path(__file__).resolve().parent.parent / "prompts" / "fixtures"
+ROOT = Path(__file__).resolve().parent.parent
+FIXTURES_DIR = ROOT / "prompts" / "fixtures"
+PROMPT_FIXTURE_SCHEMA = ROOT / "schemas" / "prompt-fixture.schema.json"
 
 
 def _all_fixtures() -> list[Path]:
@@ -35,6 +38,16 @@ def test_fixtures_directory_has_minimum_cases():
     assert len(cases) >= 20, (
         f"prompt regression suite needs >=20 fixtures, found {len(cases)}"
     )
+
+
+def test_prompt_fixture_schema_is_valid_jsonschema() -> None:
+    jsonschema.Draft202012Validator.check_schema(json.loads(PROMPT_FIXTURE_SCHEMA.read_text()))
+
+
+@pytest.mark.parametrize("fixture_path", _all_fixtures(), ids=lambda p: p.stem)
+def test_fixture_shape_matches_schema(fixture_path: Path) -> None:
+    schema = json.loads(PROMPT_FIXTURE_SCHEMA.read_text())
+    jsonschema.Draft202012Validator(schema).validate(json.loads(fixture_path.read_text()))
 
 
 @pytest.mark.parametrize("fixture_path", _all_fixtures(), ids=lambda p: p.stem)
@@ -59,6 +72,31 @@ def test_fixture_render_matches_expectations(fixture_path: Path) -> None:
             f"{fixture_path.name}: forbidden substring present: {sub!r}\n"
             f"---rendered---\n{rendered}"
         )
+
+
+def test_prompt_regression_has_adversarial_fixture_set() -> None:
+    adversarial = [
+        json.loads(path.read_text()).get("adversarial", False)
+        for path in _all_fixtures()
+    ]
+
+    assert sum(1 for value in adversarial if value) >= 5
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "08-iteration-prompt-injection.json",
+        "14-iteration-unicode-confusables.json",
+        "15-iteration-control-chars-ansi.json",
+        "18-iteration-markdown-breaking.json",
+        "19-iteration-json-in-var.json",
+    ],
+)
+def test_named_adversarial_prompt_fixture_exists(fixture_name: str) -> None:
+    data = json.loads((FIXTURES_DIR / fixture_name).read_text())
+
+    assert data["adversarial"] is True
 
 
 def test_iteration_prompt_has_commit_trailer_markers() -> None:

@@ -35,5 +35,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: raw print calls 168 -> 0, event() calls 37 -> 55, long functions=0, broad exceptions=0, subprocess_without_timeout=0, shell_true_calls=0 after normalizing metric scope to production files, converting vault loop/scoring/cost/selftest/self-improve/migration/dashboard/dispatch/drift/MCP/doc/risk/worker outputs to stream helpers, adding secret-like key/value redaction to `event()`, and adding structured event logs to asset registry, eval runner/CLI, and graphify query loop
+- metric delta: raw print calls 168 -> 0, event() calls 37 -> 59, long functions=0, broad exceptions=0, subprocess_without_timeout=0, shell_true_calls=0 after normalizing metric scope to production files, converting vault loop/scoring/cost/selftest/self-improve/migration/dashboard/dispatch/drift/MCP/doc/risk/worker outputs to stream helpers, adding secret-like key/value redaction to `event()`, adding `duration_ms` external-call events for risk/dispatch git subprocesses, and adding structured event logs to asset registry, eval runner/CLI, and graphify query loop
 - residual risk: production stream writes preserve CLI stdout/stderr contracts but are still not all structured `event()` records because some tools intentionally emit JSON or user-facing reports.

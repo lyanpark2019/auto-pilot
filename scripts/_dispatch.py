@@ -30,11 +30,12 @@ import time as _time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import jsonschema
 
 import _contract
+from _log import event
 
 # Matches _worktree.py timeout budget convention.
 _GIT_QUICK_TIMEOUT = 30  # rev-parse, status plumbing
@@ -52,6 +53,29 @@ _VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer",
 PREFLIGHT_TTL_SEC = int(os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC", "900"))
 
 _TICKET_VALIDATOR: jsonschema.Draft202012Validator | None = None
+JsonObject = dict[str, object]
+
+
+def _as_str(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    raise ValueError(f"expected string JSON value, got {type(value).__name__}")
+
+
+def _as_int(value: object) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise ValueError(f"expected integer JSON value, got {type(value).__name__}")
+
+
+def _as_object(value: object) -> JsonObject:
+    if isinstance(value, dict):
+        return cast(JsonObject, value)
+    raise ValueError(f"expected object JSON value, got {type(value).__name__}")
+
+
+def _optional_str(value: object | None) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _validator() -> jsonschema.Draft202012Validator:
@@ -110,9 +134,9 @@ def _locate_repo_root(contract_dir: Path) -> Path:
     )
 
 
-def _check_preflight_ttl(preflight: dict[str, Any]) -> None:
+def _check_preflight_ttl(preflight: JsonObject) -> None:
     """Raise PreflightError if preflight artifact is expired or has invalid timestamp."""
-    generated_ts_str = preflight.get("generated_ts", "")
+    generated_ts_str = _as_str(preflight.get("generated_ts", ""))
     try:
         generated_dt = datetime.fromisoformat(generated_ts_str)
         age_sec = (datetime.now(timezone.utc) - generated_dt).total_seconds()
@@ -127,17 +151,19 @@ def _check_preflight_ttl(preflight: dict[str, Any]) -> None:
         ) from exc
 
 
-def _check_preflight_head_sha(preflight: dict[str, Any], repo_root: Path) -> None:
+def _check_preflight_head_sha(preflight: JsonObject, repo_root: Path) -> None:
     """Raise PreflightError if preflight head_sha does not match current HEAD.
 
     Silently skips on git timeout or non-git environment.
     """
+    start = _time.monotonic()
     try:
         current_head = subprocess.check_output(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
             text=True, stderr=subprocess.DEVNULL,
             timeout=_GIT_QUICK_TIMEOUT,
         ).strip()
+        event("dispatch.git_rev_parse", duration_ms=int((_time.monotonic() - start) * 1000))
     except subprocess.TimeoutExpired:
         sys.stderr.write(f"_dispatch: git rev-parse timed out (>{_GIT_QUICK_TIMEOUT}s), skipping HEAD check\n")
         return
@@ -182,7 +208,7 @@ def _check_preflight_artifact(contract_dir: Path, phase: int) -> None:
     _check_preflight_head_sha(preflight, repo_root)
 
 
-def _validate_ticket_inputs(subagent_role: str, contract_dir: Path) -> dict[str, Any]:
+def _validate_ticket_inputs(subagent_role: str, contract_dir: Path) -> JsonObject:
     if subagent_role not in _VALID_ROLES:
         raise ValueError(f"unknown subagent_role: {subagent_role!r}; allowed: {sorted(_VALID_ROLES)}")
     _contract.verify_pm_signature(contract_dir)
@@ -192,7 +218,7 @@ def _validate_ticket_inputs(subagent_role: str, contract_dir: Path) -> dict[str,
 
 def _enforce_ticket_gates(
     contract_dir: Path,
-    contract: dict[str, Any],
+    contract: JsonObject,
     *,
     skip_preflight: bool,
     skip_contract_check: bool,
@@ -200,7 +226,7 @@ def _enforce_ticket_gates(
     if not skip_contract_check:
         _check_contract_check_artifact(contract_dir)
     if not skip_preflight:
-        _check_preflight_artifact(contract_dir, contract.get("phase", 0))
+        _check_preflight_artifact(contract_dir, _as_int(contract.get("phase", 0)))
 
 
 def _ticket_body(
@@ -209,13 +235,14 @@ def _ticket_body(
     worktree: Path,
     subagent_role: str,
     output_dir: Path,
-    contract: dict[str, Any],
+    contract: JsonObject,
     diff_path: Path | None,
-) -> dict[str, Any]:
-    body: dict[str, Any] = {
+) -> JsonObject:
+    snapshots = _as_object(contract["snapshot_shas"])
+    body: JsonObject = {
         "schema_version": 1,
-        "contract_id": contract["id"],
-        "base_sha": contract["snapshot_shas"]["base_sha"],
+        "contract_id": _as_str(contract["id"]),
+        "base_sha": _as_str(snapshots["base_sha"]),
         "contract_dir": str(contract_dir.resolve()),
         "worktree": str(worktree.resolve()),
         "subagent_role": subagent_role,
@@ -229,7 +256,7 @@ def _ticket_body(
     return body
 
 
-def _write_ticket(contract_dir: Path, subagent_role: str, body: dict[str, Any]) -> Path:
+def _write_ticket(contract_dir: Path, subagent_role: str, body: JsonObject) -> Path:
     _validator().validate(body)
     tickets_dir = contract_dir / "tickets"
     tickets_dir.mkdir(parents=True, exist_ok=True)
@@ -268,7 +295,7 @@ def prepare_subagent_ticket(
     return _write_ticket(contract_dir, subagent_role, body)
 
 
-def _compute_ticket_sha(body_without_sha: dict[str, Any]) -> str:
+def _compute_ticket_sha(body_without_sha: JsonObject) -> str:
     """Deterministic sha256 of canonicalized ticket body sans the ticket_sha field."""
     canonical = json.dumps(body_without_sha, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -278,10 +305,12 @@ def freeze_diff_for_review(worktree: Path, base_sha: str, contract_dir: Path) ->
     """PM-side: capture worker HEAD diff against base_sha, write to review-input/ with sha."""
     review_input = contract_dir / "review-input"
     review_input.mkdir(parents=True, exist_ok=True)
+    start = _time.monotonic()
     diff_bytes = subprocess.check_output(
         ["git", "-C", str(worktree), "diff", base_sha, "HEAD"],
         timeout=_GIT_TREE_TIMEOUT,
     )
+    event("dispatch.git_diff", duration_ms=int((_time.monotonic() - start) * 1000), bytes=len(diff_bytes))
     diff_path = review_input / "frozen.diff"
     diff_path.write_bytes(diff_bytes)
     sha_path = review_input / "frozen.diff.sha256"
@@ -329,7 +358,7 @@ class PreflightError(Exception):
     """Raised when the preflight artifact is missing, stale, wrong-phase, or wrong HEAD."""
 
 
-def read_review(path: Path) -> dict[str, Any]:
+def read_review(path: Path) -> JsonObject:
     """Read + schema-validate a review.json. Raises MalformedReviewError on bad shape."""
     data = json.loads(path.read_text())
     errors = sorted(_review_validator().iter_errors(data), key=lambda e: e.path)
@@ -337,19 +366,19 @@ def read_review(path: Path) -> dict[str, Any]:
         raise MalformedReviewError(
             "; ".join(f"{list(e.absolute_path)}: {e.message}" for e in errors)
         )
-    return cast(dict[str, Any], data)
+    return cast(JsonObject, data)
 
 
 @dataclass
 class RoundOutcome:
     """Represent RoundOutcome data for this module."""
     worker_exit_code: int | None
-    worker_status: dict[str, Any] | None
+    worker_status: JsonObject | None
     codex_verdict: str | None
-    codex_review:  dict[str, Any] | None
+    codex_review:  JsonObject | None
     claude_verdict: str | None
-    claude_review:  dict[str, Any] | None
-    specialists:    dict[str, dict[str, Any]]
+    claude_review:  JsonObject | None
+    specialists:    dict[str, JsonObject]
 
 
 def _expected_agents(outputs: Path) -> list[str]:
@@ -377,18 +406,18 @@ def _exit_code(outputs: Path, name: str) -> int | None:
     return int(p.read_text().strip()) if p.exists() else None
 
 
-def _read_status(outputs: Path, name: str) -> dict[str, Any] | None:
+def _read_status(outputs: Path, name: str) -> JsonObject | None:
     p = outputs / name / "status.json"
-    return json.loads(p.read_text()) if p.exists() else None
+    return cast(JsonObject, json.loads(p.read_text())) if p.exists() else None
 
 
-def _read_agent_review(outputs: Path, name: str) -> dict[str, Any] | None:
+def _read_agent_review(outputs: Path, name: str) -> JsonObject | None:
     p = outputs / name / "review.json"
     return read_review(p) if p.exists() else None
 
 
-def _read_specialists(outputs: Path) -> dict[str, dict[str, Any]]:
-    specialists: dict[str, dict[str, Any]] = {}
+def _read_specialists(outputs: Path) -> dict[str, JsonObject]:
+    specialists: dict[str, JsonObject] = {}
     specialists_dir = outputs / "specialists"
     if not specialists_dir.exists():
         return specialists
@@ -407,9 +436,9 @@ def collect_round_outcome(contract_dir: Path, timeout_per_agent_sec: int) -> Rou
     return RoundOutcome(
         worker_exit_code=_exit_code(outputs, "worker"),
         worker_status=_read_status(outputs, "worker"),
-        codex_verdict=(codex_review or {}).get("verdict"),
+        codex_verdict=_optional_str((codex_review or {}).get("verdict")),
         codex_review=codex_review,
-        claude_verdict=(claude_review or {}).get("verdict"),
+        claude_verdict=_optional_str((claude_review or {}).get("verdict")),
         claude_review=claude_review,
         specialists=_read_specialists(outputs),
     )
@@ -429,11 +458,13 @@ def assert_reviewer_was_scoped(repo_root: Path, worktree: Path,
     for path in (repo_root, worktree):
         if not (path / ".git").exists() and path.exists() and not (path.is_dir()):
             continue
+        start = _time.monotonic()
         result = subprocess.run(
             ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
             capture_output=True, text=True, check=True,
             timeout=_GIT_QUICK_TIMEOUT,
         )
+        event("dispatch.git_status", duration_ms=int((_time.monotonic() - start) * 1000), path=str(path))
         if result.stdout.strip():
             raise ScopeViolation(
                 f"reviewer left {path} dirty (allowed_output_dir={allowed_output_dir}): {result.stdout}"

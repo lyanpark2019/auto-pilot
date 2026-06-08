@@ -51,8 +51,11 @@ jobs:
       - name: pytest vault export layer
         run: cd vault && python -m pytest tests/ -q
 
-      - name: pytest-benchmark (perf budget + baseline gate)
+      - name: pytest-benchmark (perf budget + baseline + p95 gate)
         run: python -m pytest tests/test_perf.py --benchmark-only -v
+
+      - name: perf memory ceiling
+        run: python -m pytest tests/test_perf.py::test_rss_under_ceiling -q
 
   bash:
     name: bash gates (shellcheck)

@@ -40,5 +40,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: strict vault mypy pilots 2 -> 16; mypy source files 37 -> 51 after Task 1 scanner, Wave 1 type scope, Wave 3 dispatch/loop/self_improve expansion, Wave 4 fix/dashboard/notebooklm expansion, and Wave 5 adapter/drift expansion
+- metric delta: strict vault mypy pilots 2 -> 16; mypy source files 37 -> 51; core `_contract.py`/`_dispatch.py` `dict[str, Any]`/`typing.Any` annotations 23 -> 0 after Task 1 scanner, Wave 1 type scope, Wave 3 dispatch/loop/self_improve expansion, Wave 4 fix/dashboard/notebooklm expansion, Wave 5 adapter/drift expansion, and Wave 9 JsonObject narrowing for contract/ticket/review payloads
 - residual risk: broader vault strict scope remains staged; remaining skipped candidates require separate focused work.

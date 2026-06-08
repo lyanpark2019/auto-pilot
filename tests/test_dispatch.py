@@ -148,6 +148,40 @@ def test_review_schema_is_valid_jsonschema():
     jsonschema.Draft202012Validator.check_schema(schema)
 
 
+def _review_payload(verdict="APPROVE"):
+    return {
+        "schema_version": 1,
+        "reviewer": "auto-pilot-codex-reviewer",
+        "contract_id": "iter-1/phase-1/contract-1/round-1",
+        "verdict": verdict,
+        "scope_check": "PASS",
+        "scope_drift_files": [],
+        "scope_reduction_detected": False,
+        "findings": [],
+        "verify_rerun": {"cmd": "pytest -q", "exit_code": 0},
+        "reviewer_meta": {"model": "gpt-5.5-high",
+                          "started_at": "2026-05-28T10:00:00+00:00",
+                          "ended_at":   "2026-05-28T10:01:00+00:00"}
+    }
+
+
+def test_review_schema_accepts_structured_llm_response_contract():
+    import jsonschema
+    schema = _json.loads(REVIEW_SCHEMA_PATH.read_text())
+
+    jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(
+        _review_payload()
+    )
+
+
+def test_review_schema_rejects_extra_llm_response_fields():
+    import jsonschema
+    schema = _json.loads(REVIEW_SCHEMA_PATH.read_text())
+    payload = _review_payload()
+    payload["unstructured_freeform"] = "not allowed"
+
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(payload)
 
 
 def _write_review(out_dir, verdict="APPROVE"):

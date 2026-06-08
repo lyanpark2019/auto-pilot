@@ -65,5 +65,7 @@ def test_ci_runs_dependency_audit_and_secret_scan() -> None:
 def test_ci_runs_perf_budget_baseline_gate() -> None:
     text = _ci_text()
 
-    assert "pytest-benchmark (perf budget + baseline gate)" in text
+    assert "pytest-benchmark (perf budget + baseline + p95 gate)" in text
     assert "python -m pytest tests/test_perf.py --benchmark-only -v" in text
+    assert "perf memory ceiling" in text
+    assert "python -m pytest tests/test_perf.py::test_rss_under_ceiling -q" in text

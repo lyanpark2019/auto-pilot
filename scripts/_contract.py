@@ -28,13 +28,38 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, cast
+from typing import Iterator, cast
 
 import jsonschema
 
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 CONTRACT_SCHEMA_PATH = SCHEMAS_DIR / "contract.schema.json"
 _VALIDATOR: jsonschema.Draft202012Validator | None = None
+JsonObject = dict[str, object]
+
+
+def _as_str(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    raise SnapshotMismatchError(f"expected string JSON value, got {type(value).__name__}")
+
+
+def _as_object(value: object) -> JsonObject:
+    if isinstance(value, dict):
+        return cast(JsonObject, value)
+    raise SnapshotMismatchError(f"expected object JSON value, got {type(value).__name__}")
+
+
+def _as_str_list(value: object) -> list[str]:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    raise SnapshotMismatchError(f"expected string-list JSON value, got {type(value).__name__}")
+
+
+def _as_optional_str(value: object) -> str | None:
+    if value is None or isinstance(value, str):
+        return value
+    raise SnapshotMismatchError(f"expected optional string JSON value, got {type(value).__name__}")
 
 
 class ContractValidationError(Exception):
@@ -51,7 +76,7 @@ def _validator() -> jsonschema.Draft202012Validator:
     return _VALIDATOR
 
 
-def validate(c: dict[str, Any]) -> None:
+def validate(c: JsonObject) -> None:
     """Validate a contract dict against schemas/contract.schema.json.
 
     Raises:
@@ -63,7 +88,7 @@ def validate(c: dict[str, Any]) -> None:
         raise ContractValidationError(msg)
 
 
-def write_contract(c: dict[str, Any], path: Path) -> Path:
+def write_contract(c: JsonObject, path: Path) -> Path:
     """Atomic write of a validated contract to ``path``.
 
     Same-mount tempfile + fsync(fd) + rename + fsync(dir_fd). On Darwin uses
@@ -74,11 +99,11 @@ def write_contract(c: dict[str, Any], path: Path) -> Path:
     return atomic_write_text(path, json.dumps(c, indent=2, sort_keys=True) + "\n")
 
 
-def read_contract(path: Path) -> dict[str, Any]:
+def read_contract(path: Path) -> JsonObject:
     """Read + validate a contract from ``path``."""
     data = json.loads(path.read_text())
     validate(data)
-    return cast(dict[str, Any], data)
+    return cast(JsonObject, data)
 
 
 def atomic_write_text(path: Path, text: str) -> Path:
@@ -261,11 +286,11 @@ def _verify_project_context(bundle: Path, expected_ctx: str | None) -> None:
 def verify_snapshots(contract_dir: Path) -> None:
     """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas."""
     contract = read_contract(contract_dir / "contract.json")
-    bundle = Path(contract["context_bundle_path"])
-    snapshot_shas = contract["snapshot_shas"]
-    _verify_spec_sha(bundle, snapshot_shas["spec"])
-    _verify_claude_chain(bundle, snapshot_shas["claude_md_chain"])
-    _verify_project_context(bundle, snapshot_shas.get("project_context"))
+    bundle = Path(_as_str(contract["context_bundle_path"]))
+    snapshot_shas = _as_object(contract["snapshot_shas"])
+    _verify_spec_sha(bundle, _as_str(snapshot_shas["spec"]))
+    _verify_claude_chain(bundle, _as_str_list(snapshot_shas["claude_md_chain"]))
+    _verify_project_context(bundle, _as_optional_str(snapshot_shas.get("project_context")))
 
 
 def _sha256(b: bytes) -> str:

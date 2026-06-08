@@ -1,10 +1,18 @@
 {
   "_doc": "Adversarial: unicode confusable chars (Cyrillic look-alikes for ASCII). render() treats vars as opaque strings — confusable chars pass through unchanged. Verifies no normalization/stripping occurs at the render layer.",
   "prompt": "iteration",
-  "vars": {"iter_n": "аdmin", "phase": 1},
+  "vars": {
+    "iter_n": "аdmin",
+    "phase": 1
+  },
   "expects_substring": [
     "аdmin",
     "auto-pilot-phase: 1"
   ],
-  "expects_not": ["{iter_n}", "{phase}", "admin"]
+  "expects_not": [
+    "{iter_n}",
+    "{phase}",
+    "admin"
+  ],
+  "adversarial": true
 }

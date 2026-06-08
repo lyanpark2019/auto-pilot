@@ -1,12 +1,19 @@
 {
   "_doc": "Adversarial: markdown-breaking content in a template var — backticks, bold markers, headings, horizontal rules. render() passes the content unchanged. Verifies no markdown-escape step is applied at the template layer.",
   "prompt": "iteration",
-  "vars": {"iter_n": "**bold** `code` # heading\n---", "phase": 2},
+  "vars": {
+    "iter_n": "**bold** `code` # heading\n---",
+    "phase": 2
+  },
   "expects_substring": [
     "**bold**",
     "`code`",
     "# heading",
     "auto-pilot-phase: 2"
   ],
-  "expects_not": ["{iter_n}", "{phase}"]
+  "expects_not": [
+    "{iter_n}",
+    "{phase}"
+  ],
+  "adversarial": true
 }
