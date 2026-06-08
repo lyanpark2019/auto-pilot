@@ -26,6 +26,10 @@ else:
 
 from sources._excludes import is_excluded
 
+ScanInfo = dict[str, Any]
+ScanMap = dict[str, ScanInfo]
+DriftItem = dict[str, Any]
+
 
 def _emit(message: str) -> None:
     sys.stdout.write(f"{message}\n")
@@ -40,10 +44,10 @@ class DriftReport:
     repo_root: str
     code_modules: int
     doc_files: int
-    gap: list[dict] = field(default_factory=list)
-    orphan: list[dict] = field(default_factory=list)
-    symbol_drift: list[dict] = field(default_factory=list)
-    claim_drift: list[dict] = field(default_factory=list)
+    gap: list[DriftItem] = field(default_factory=list)
+    orphan: list[DriftItem] = field(default_factory=list)
+    symbol_drift: list[DriftItem] = field(default_factory=list)
+    claim_drift: list[DriftItem] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,7 +100,7 @@ class DriftReport:
         return "\n".join(lines)
 
 
-def _module_referenced_in_docs(module_path: str, doc_scan: dict[str, dict]) -> bool:
+def _module_referenced_in_docs(module_path: str, doc_scan: ScanMap) -> bool:
     """Module mentioned in any doc's frontmatter source_files / wikilinks / code_refs?"""
     stem = Path(module_path).stem
     for doc, info in doc_scan.items():
@@ -122,8 +126,8 @@ _LANG_EXTS = frozenset((".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".py"))
 
 
 def _detect_gaps(
-    code: dict[str, dict],
-    docs: dict[str, dict],
+    code: ScanMap,
+    docs: ScanMap,
     report: DriftReport,
 ) -> None:
     for mod_path, mod_info in code.items():
@@ -179,8 +183,8 @@ def _is_orphan_ref(
 
 
 def _detect_orphans(
-    code: dict[str, dict],
-    docs: dict[str, dict],
+    code: ScanMap,
+    docs: ScanMap,
     repo: Path,
     report: DriftReport,
 ) -> None:
@@ -194,7 +198,7 @@ def _detect_orphans(
                 report.orphan.append({"doc": doc, "ref": ref})
 
 
-def _build_all_symbols(code: dict[str, dict]) -> set[str]:
+def _build_all_symbols(code: ScanMap) -> set[str]:
     all_symbols: set[str] = set()
     for mod_info in code.values():
         all_symbols.update(mod_info["public_classes"])
@@ -203,8 +207,8 @@ def _build_all_symbols(code: dict[str, dict]) -> set[str]:
 
 
 def _detect_symbol_drift(
-    code: dict[str, dict],
-    docs: dict[str, dict],
+    code: ScanMap,
+    docs: ScanMap,
     all_symbols: set[str],
     report: DriftReport,
 ) -> None:
@@ -239,8 +243,8 @@ def _norm_args(s: str) -> str:
 
 
 def _detect_claim_drift(
-    code: dict[str, dict],
-    docs: dict[str, dict],
+    code: ScanMap,
+    docs: ScanMap,
     doc_root: Path,
     report: DriftReport,
 ) -> None:

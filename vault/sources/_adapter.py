@@ -9,7 +9,7 @@ Adapters live under sources/. Register in REGISTRY at bottom for dispatch.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -31,7 +31,7 @@ class TicketPlanEntry:
 
     worker_type: str
     contract: dict[str, Any]
-    depends_on: list[str] = None    # ticket ids
+    depends_on: list[str] = field(default_factory=list)    # ticket ids
 
 
 class SourceAdapter(Protocol):
@@ -56,21 +56,22 @@ class SourceAdapter(Protocol):
         """Phase 3: download/extract source text into <vault>/<cat>/raw/*.md. Idempotent."""
         ...
 
-    def plan_tickets(self, vault: Path, round_num: int, score_state: dict, **opts: Any) -> list[TicketPlanEntry]:
+    def plan_tickets(self, vault: Path, round_num: int, score_state: dict[str, Any], **opts: Any) -> list[TicketPlanEntry]:
         """Phase 5+: read current score, plan tickets for next PM round."""
         ...
 
 
-REGISTRY: dict[str, type] = {}
+AdapterClass = type[SourceAdapter]
+REGISTRY: dict[str, AdapterClass] = {}
 
 
-def register(adapter_cls: type) -> type:
+def register(adapter_cls: AdapterClass) -> AdapterClass:
     """Class decorator: register adapter under its `name` attribute."""
     REGISTRY[adapter_cls.name] = adapter_cls
     return adapter_cls
 
 
-def get(name: str) -> type:
+def get(name: str) -> AdapterClass:
     if name not in REGISTRY:
         raise ValueError(f"unknown source adapter: {name}. registered: {list(REGISTRY)}")
     return REGISTRY[name]

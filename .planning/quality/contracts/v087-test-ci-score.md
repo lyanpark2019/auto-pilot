@@ -35,5 +35,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: root scripts coverage 80.06% -> 87.50%; CI coverage floor 75 -> 80; root suite 595 -> 611 passed and vault suite 91 -> 106 passed after graphify artifact/manifest characterization tests, asset registry scanner coverage, Graphify timeout regression tests, and parametrized NotebookLM classifier cases
+- metric delta: root scripts coverage 80.06% -> 87.50%; CI coverage floor 75 -> 80; root suite 595 -> 611 passed and vault suite 91 -> 106 passed after graphify artifact/manifest characterization tests, asset registry scanner coverage, Graphify timeout regression tests, subprocess-timeout metric tests, eval oracle no-shell regression, and parametrized NotebookLM classifier cases
 - residual risk: if final score remains below 90, stop before release and ask whether to ship an 87-89 release.

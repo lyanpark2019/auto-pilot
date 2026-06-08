@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -35,15 +36,10 @@ def load_case_oracle(case_id: str) -> CheckFn:
 
 
 def run_verify_cmd(workdir: Path, cmd: str, timeout: int = 120) -> tuple[bool, str]:
-    """Run a shell Verify cmd in ``workdir``; return ``(ok, detail)``.
-
-    ``workdir`` is put on PYTHONPATH so ``from scripts.x import ...`` resolves
-    against the case clone, not the harness repo.
-    """
+    """Run a Verify cmd in ``workdir``; return ``(ok, detail)``."""
     try:
         proc = subprocess.run(
-            cmd,
-            shell=True,
+            shlex.split(cmd),
             cwd=str(workdir),
             env={"PYTHONPATH": str(workdir), "PATH": _safe_path()},
             capture_output=True,
@@ -52,6 +48,8 @@ def run_verify_cmd(workdir: Path, cmd: str, timeout: int = 120) -> tuple[bool, s
         )
     except subprocess.TimeoutExpired:
         return (False, f"timeout after {timeout}s: {cmd}")
+    except ValueError as exc:
+        return (False, f"invalid verify command: {type(exc).__name__}: {exc}")
     detail = (proc.stdout + proc.stderr).strip()[-500:]
     return (proc.returncode == 0, detail)
 
