@@ -121,11 +121,11 @@ def _clean_slug(title: str) -> str:
     return re.sub(r"-+", "-", s).strip("-").lower()[:60]
 
 
-def _parse_frontmatter(text: str) -> dict:
+def _parse_frontmatter(text: str) -> dict[str, str]:
     m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
     if not m:
         return {}
-    fm = {}
+    fm: dict[str, str] = {}
     for line in m.group(1).split("\n"):
         if ":" in line:
             k, v = line.split(":", 1)
@@ -299,7 +299,7 @@ class NotebookLMAdapter:
                 lines.append(f"| {cr} | {ti} | `{i8}` | {sc} | [[{cr}_{sl}_{i8}]] |")
             (src / "_index.md").write_text("\n".join(lines))
 
-    def plan_tickets(self, vault: Path, round_num: int, score_state: dict, **opts: Any) -> list[TicketPlanEntry]:
+    def plan_tickets(self, vault: Path, round_num: int, score_state: dict[str, Any], **opts: Any) -> list[TicketPlanEntry]:
         """Map low-scoring dims to worker tickets. PM uses this as starting plan."""
         plan = []
         scores = score_state.get("scores", {})

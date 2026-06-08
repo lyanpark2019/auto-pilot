@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
+from _log import event
+
 
 @dataclass(frozen=True)
 class QuerySpec:
@@ -108,6 +110,7 @@ def default_runner(cmd: list[str]) -> tuple[int, str, str]:
         )
         return proc.returncode, proc.stdout, proc.stderr
     except subprocess.TimeoutExpired as exc:
+        event("graphify_query.timeout", timeout_sec=QUERY_TIMEOUT_SEC, error_type="TimeoutExpired")
         stdout = exc.stdout if isinstance(exc.stdout, str) else ""
         stderr = exc.stderr if isinstance(exc.stderr, str) else ""
         return 124, stdout, f"timeout after {QUERY_TIMEOUT_SEC}s\n{stderr}".strip()
@@ -122,6 +125,7 @@ def run_query_suite(
     results: list[QueryResult] = []
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
+    event("graphify_query_suite.start", total=len(specs))
     for spec in specs:
         returncode, stdout, stderr = runner(spec.cmd)
         combined = stdout + (("\nSTDERR:\n" + stderr) if stderr else "")
@@ -138,6 +142,7 @@ def run_query_suite(
             artifact=artifact,
         )
         results.append(result)
+        event("graphify_query_suite.result", query_name=spec.name, ok=ok, returncode=returncode)
         if out_dir:
             _write_query_artifacts(out_dir, result, combined)
     suite = QuerySuiteResult(
@@ -148,6 +153,7 @@ def run_query_suite(
     )
     if out_dir:
         _write_query_summary(out_dir, suite)
+    event("graphify_query_suite.done", passed=suite.passed, total=suite.total)
     return suite
 
 

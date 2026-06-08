@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from scripts import asset_registry_check as arc
 
 
@@ -12,13 +14,27 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def test_tokenize_removes_stop_words() -> None:
-    assert arc._tokenize("The Auto Pilot Hook") == frozenset({"auto", "pilot", "hook"})
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("The Auto Pilot Hook", frozenset({"auto", "pilot", "hook"})),
+        ("Use this when you need CI/CD", frozenset({"need", "ci", "cd"})),
+        ("A B c d", frozenset()),
+    ],
+)
+def test_tokenize_removes_stop_words(text: str, expected: frozenset[str]) -> None:
+    assert arc._tokenize(text) == expected
 
 
-def test_parse_frontmatter_extracts_name_description() -> None:
-    data = arc._parse_frontmatter('---\nname: "vault-build"\ndescription: Build vault docs\n---\nbody')
-    assert data == {"name": "vault-build", "description": "Build vault docs"}
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('---\nname: "vault-build"\ndescription: Build vault docs\n---\nbody', {"name": "vault-build", "description": "Build vault docs"}),
+        ("no frontmatter", {}),
+    ],
+)
+def test_parse_frontmatter_extracts_name_description(text: str, expected: dict[str, str]) -> None:
+    assert arc._parse_frontmatter(text) == expected
 
 
 def test_scan_registry_excludes_hook_tests(tmp_path: Path, monkeypatch) -> None:

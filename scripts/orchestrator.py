@@ -85,109 +85,99 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ensure_run_id(state: State) -> None:
+    if "run_id" not in state or not state.get("run_id"):
+        import uuid
+        state["run_id"] = uuid.uuid4().hex
+
+
+def _phase_entry(phases: list[PhaseEntry], phase: int) -> PhaseEntry | None:
+    return next((p for p in phases if p["phase"] == phase), None)
+
+
+def _restart_phase(state: State, existing: PhaseEntry, phase: int, contracts: int) -> None:
+    existing["round"] = existing["round"] + 1
+    existing["status"] = "running"
+    existing["ended"] = None
+    existing["contracts"] = contracts
+    state["current_phase"] = phase
+
+
+def _new_phase_entry(phase: int, contracts: int) -> PhaseEntry:
+    return {
+        "phase": phase,
+        "status": "running",
+        "round": 1,
+        "contracts": contracts,
+        "approved": 0,
+        "started": utc_now(),
+        "ended": None,
+        "commits": [],
+    }
+
+
 def cmd_phase_start(args: argparse.Namespace) -> int:
-    """Begin (or retry) a phase, validating bounds and bumping ``round`` on retry.
-
-    Validation rules:
-      - state must be initialized,
-      - ``--phase`` must be within ``1..total_phases`` inclusive,
-      - if an entry for ``--phase`` is already ``running`` it is refused,
-      - if an entry exists in any other status the entry is reused with
-        ``round`` incremented, ``status`` reset to ``running``, ``ended``
-        cleared, and ``contracts`` overwritten.
-
-    Args:
-        args: parsed CLI namespace; expects ``phase`` (int) and ``contracts`` (int).
-
-    Returns:
-        0 on success, 2 on any validation failure.
-    """
+    """Begin (or retry) a phase, validating bounds and bumping ``round`` on retry."""
     state = load_state()
     if not state:
         event("phase_start.no_state")
         return 2
 
-    if "run_id" not in state or not state.get("run_id"):
-        import uuid
-        state["run_id"] = uuid.uuid4().hex
-
+    _ensure_run_id(state)
     total = state.get("total_phases", 0)
     if args.phase < 1 or args.phase > total:
         event("phase_start.out_of_range", phase=args.phase, total_phases=total)
         return 2
 
     phases: list[PhaseEntry] = state.setdefault("phases", [])
-    existing = next((p for p in phases if p["phase"] == args.phase), None)
+    existing = _phase_entry(phases, args.phase)
     if existing is not None:
         if existing["status"] == "running":
             event("phase_start.already_running", phase=args.phase)
             return 2
-        existing["round"] = existing["round"] + 1
-        existing["status"] = "running"
-        existing["ended"] = None
-        existing["contracts"] = args.contracts
-        state["current_phase"] = args.phase
+        _restart_phase(state, existing, args.phase, args.contracts)
         save_state(state)
         _emit_json({"ok": True, "phase": args.phase, "round": existing["round"]}, indent=2)
         return 0
 
     state["current_phase"] = args.phase
-    new_entry: PhaseEntry = {
-        "phase": args.phase,
-        "status": "running",
-        "round": 1,
-        "contracts": args.contracts,
-        "approved": 0,
-        "started": utc_now(),
-        "ended": None,
-        "commits": [],
-    }
-    phases.append(new_entry)
+    phases.append(_new_phase_entry(args.phase, args.contracts))
     save_state(state)
     _emit_json({"ok": True, "phase": args.phase}, indent=2)
     return 0
 
 
+def _active_phase(state: State) -> PhaseEntry | None:
+    phases = state.get("phases")
+    return phases[-1] if phases else None
+
+
+def _close_phase(current: PhaseEntry, status: str, commits: str) -> None:
+    current["status"] = status
+    current["ended"] = utc_now()
+    current["commits"] = commits.split(",") if commits else []
+
+
+def _update_run_status(state: State, status: str) -> None:
+    if status == "success" and state.get("current_phase", 0) >= state.get("total_phases", 0):
+        state["status"] = "success"
+    elif status in ("failed", "pivot-needed"):
+        state["status"] = status
+
+
 def cmd_phase_end(args: argparse.Namespace) -> int:
-    """Close out the active phase with a final status and commit list.
-
-    Promotes the run's top-level ``status`` to ``success`` only when the last
-    spec phase has just ended successfully; otherwise propagates ``failed`` /
-    ``pivot-needed`` as-is.
-
-    Args:
-        args: parsed CLI namespace; expects ``phase``, ``status``, ``commits``.
-
-    Returns:
-        0 on success, 2 if no phase is active or the requested phase does not
-        match the currently-running one.
-    """
+    """Close out the active phase with a final status and commit list."""
     state = load_state()
     if not state or not state.get("phases"):
         event("phase_end.no_active_phase")
         return 2
 
-    phases = state["phases"]
-    current = phases[-1]
-    if current["phase"] != args.phase:
-        event(
-            "phase_end.phase_mismatch",
-            requested=args.phase,
-            active=current["phase"],
-        )
+    current = _active_phase(state)
+    if current is None or current["phase"] != args.phase:
+        event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
         return 2
-    current["status"] = args.status
-    current["ended"] = utc_now()
-    current["commits"] = args.commits.split(",") if args.commits else []
-
-    if (
-        args.status == "success"
-        and state.get("current_phase", 0) >= state.get("total_phases", 0)
-    ):
-        state["status"] = "success"
-    elif args.status in ("failed", "pivot-needed"):
-        state["status"] = args.status
-
+    _close_phase(current, args.status, args.commits)
+    _update_run_status(state, args.status)
     save_state(state)
     _emit_json({"ok": True, "phase": args.phase, "status": args.status}, indent=2)
     return 0
@@ -252,59 +242,51 @@ def cmd_stop(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
-    """Validate a contract file and write a pass artifact beside it.
-
-    Runs ``_contract.validate`` on the given contract path and writes
-    ``<contract_dir>/contract-check.json`` with:
-      {
-        "contract_sha256": "<hex64>",
-        "checked_at": "<iso8601>",
-        "schema_version": <int>,
-        "result": "pass"
-      }
-
-    Layer-2 enforcement: ``prepare_subagent_ticket`` in ``_dispatch.py``
-    refuses dispatch when this artifact is absent or the recorded
-    ``contract_sha256`` no longer matches the contract file on disk.
-    Layer-3 enforcement is the PreToolUse(Task) hook (contract γ builds it)
-    — that hook reads the same artifact format.
-
-    Args:
-        args: parsed CLI namespace; expects ``contract`` (path string).
-
-    Returns:
-        0 on success, 2 if the file is missing, 1 if validation fails.
-    """
-    import hashlib
+def _validate_contract_for_dispatch(contract_path: Path) -> tuple[bool, str]:
     import _contract
 
+    try:
+        _contract.validate(json.loads(contract_path.read_text()))
+    except _contract.ContractValidationError as exc:
+        return False, str(exc)
+    return True, ""
+
+
+def _dispatch_contract_artifact(contract_path: Path) -> dict[str, Any]:
+    import hashlib
+
+    contract_bytes = contract_path.read_bytes()
+    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
+    return {
+        "contract_sha256": contract_sha,
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "schema_version": json.loads(contract_bytes.decode()).get("schema_version", 1),
+        "result": "pass",
+    }
+
+
+def _write_dispatch_artifact(contract_path: Path, artifact: dict[str, Any]) -> Path:
+    artifact_path = contract_path.parent / "contract-check.json"
+    artifact_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact_path
+
+
+def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
+    """Validate a contract file and write a pass artifact beside it."""
     contract_path = Path(args.contract)
     if not contract_path.exists():
         event("dispatch_contract_check.missing", path=str(contract_path))
         return 2
 
-    try:
-        _contract.validate(json.loads(contract_path.read_text()))
-    except _contract.ContractValidationError as exc:
-        event("dispatch_contract_check.invalid", error=str(exc),
-              error_type=type(exc).__name__)
-        _emit_json({"ok": False, "error": str(exc)}, indent=2)
+    ok, error = _validate_contract_for_dispatch(contract_path)
+    if not ok:
+        event("dispatch_contract_check.invalid", error=error, error_type="ContractValidationError")
+        _emit_json({"ok": False, "error": error}, indent=2)
         return 1
 
-    contract_bytes = contract_path.read_bytes()
-    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
-    schema_version = json.loads(contract_bytes.decode()).get("schema_version", 1)
-
-    artifact = {
-        "contract_sha256": contract_sha,
-        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "schema_version": schema_version,
-        "result": "pass",
-    }
-    artifact_path = contract_path.parent / "contract-check.json"
-    artifact_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
-    event("dispatch_contract_check.ok", sha=contract_sha[:16], artifact=str(artifact_path))
+    artifact = _dispatch_contract_artifact(contract_path)
+    artifact_path = _write_dispatch_artifact(contract_path, artifact)
+    event("dispatch_contract_check.ok", sha=artifact["contract_sha256"][:16], artifact=str(artifact_path))
     _emit_json({"ok": True, "artifact": str(artifact_path), **artifact}, indent=2)
     return 0
 
@@ -408,15 +390,7 @@ def _count_phases(spec_path: Path) -> int:
     return max(count, 1)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point — parse ``argv`` and dispatch to the chosen subcommand.
-
-    Args:
-        argv: optional argv list (defaults to ``sys.argv[1:]``).
-
-    Returns:
-        Process exit code from the dispatched subcommand handler.
-    """
+def _build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auto-pilot")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -454,8 +428,12 @@ def main(argv: list[str] | None = None) -> int:
     p_rb.add_argument("--score-dir", required=True)
     p_rb.add_argument("--round", type=int, required=True)
     p_rb.set_defaults(func=cmd_round_budget)
+    return parser
 
-    args = parser.parse_args(argv)
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point — parse ``argv`` and dispatch to the chosen subcommand."""
+    args = _build_cli_parser().parse_args(argv)
     rc: int = args.func(args)
     return rc
 

@@ -33,5 +33,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: raw print calls 168 -> 50 after converting vault loop/scoring/cost/selftest/self-improve/migration/dashboard/dispatch/drift/MCP outputs and orchestrator/eval/asset-registry JSON output to stream helpers
+- metric delta: raw print calls 168 -> 50 and event() calls 37 -> 56 after converting vault loop/scoring/cost/selftest/self-improve/migration/dashboard/dispatch/drift/MCP outputs to stream helpers and adding structured event logs to asset registry, eval runner/CLI, and graphify query loop
 - residual risk: 50 raw prints remain, led by doc check scripts, worker backup, hook selftest scripts, and selected CLI-facing exporters.

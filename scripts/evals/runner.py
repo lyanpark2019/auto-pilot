@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from _log import event
 from evals._types import CaseAttempt, OracleResult, RunResult
 from evals.oracle_api import load_case_oracle
 
@@ -25,6 +26,7 @@ def _disk_space_error(min_free_disk_gb: float) -> CaseAttempt | None:
     free_gb = shutil.disk_usage(tempfile.gettempdir()).free / 10**9
     if free_gb >= min_free_disk_gb:
         return None
+    event("eval_case.disk_insufficient", free_gb=f"{free_gb:.1f}", min_free_disk_gb=min_free_disk_gb)
     return CaseAttempt(
         OracleResult(outcome="error", reason=f"insufficient disk: {free_gb:.1f}GB < {min_free_disk_gb}GB"),
         _null_run_result(Path(tempfile.gettempdir())),
@@ -55,12 +57,15 @@ def _run_headless_loop(clone: Path, max_iter: int, max_cost_usd: float) -> None:
 
 
 def _execute_case(case_id: str, repo: Path, clone: Path, max_iter: int, max_cost_usd: float) -> CaseAttempt:
+    event("eval_case.start", case_id=case_id, clone=clone)
     _clone_repo(repo, clone)
     _init_case(clone, case_id)
     _run_headless_loop(clone, max_iter, max_cost_usd)
     run = _read_run_result(clone)
     oracle = load_case_oracle(case_id)
-    return CaseAttempt(oracle(clone, run), run)
+    attempt = CaseAttempt(oracle(clone, run), run)
+    event("eval_case.done", case_id=case_id, outcome=attempt.oracle.outcome, status=run.status)
+    return attempt
 
 
 def run_case(
@@ -79,6 +84,7 @@ def run_case(
     try:
         return _execute_case(case_id, repo, clone, max_iter, max_cost_usd)
     except Exception as exc:
+        event("eval_case.error", case_id=case_id, error_type=type(exc).__name__)
         return CaseAttempt(
             OracleResult(outcome="error", reason=f"{type(exc).__name__}: {exc}"),
             _null_run_result(clone),

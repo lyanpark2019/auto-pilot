@@ -10,10 +10,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 
-def _write_line(stream, message: str) -> None:
+def _write_line(stream: TextIO, message: str) -> None:
     stream.write(f"{message}\n")
 
 

@@ -32,6 +32,8 @@ import time
 from pathlib import Path
 from typing import NamedTuple, TextIO
 
+from _log import event
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STOP_WORDS = frozenset(
     {"a", "an", "the", "and", "or", "of", "in", "to", "for", "on", "with",
@@ -166,9 +168,11 @@ def _get_head_sha() -> str:
             timeout=30,
         ).strip()
     except subprocess.TimeoutExpired:
+        event("asset_registry.head_sha_timeout", error_type="TimeoutExpired")
         _warn("asset_registry_check: git rev-parse timed out, returning empty sha")
         return ""
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError) as exc:
+        event("asset_registry.head_sha_failed", error_type=type(exc).__name__)
         return ""
 
 
@@ -205,12 +209,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _evaluate_candidate(args: argparse.Namespace, registry: list[Asset]) -> tuple[str, list[dict[str, str]]]:
     if not (args.name or args.description):
+        event("asset_registry.summary", registry_count=len(registry))
         _warn(f"[asset_registry_check] Registry: {len(registry)} assets scanned")
         return "clean", []
     overlaps = _check_overlap(args.name, args.description, registry)
     if not overlaps:
+        event("asset_registry.clean", registry_count=len(registry))
         _warn(f"[asset_registry_check] clean — no overlap for '{args.name}'")
         return "clean", []
+    event("asset_registry.overlap", registry_count=len(registry), overlap_count=len(overlaps))
     _warn(f"[asset_registry_check] OVERLAP detected for '{args.name}':")
     for overlap in overlaps:
         _warn(f"  {overlap['source']} ({overlap['name']}): {overlap['reason']}")
@@ -228,6 +235,7 @@ def _write_artifact(path: str, result: str, registry_count: int, overlaps: list[
         "overlaps": overlaps,
     }
     artifact_path.write_text(json.dumps(artifact, indent=2))
+    event("asset_registry.artifact_written", path=artifact_path, result=result)
     _warn(f"[asset_registry_check] Artifact written to {artifact_path}")
 
 
