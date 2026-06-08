@@ -35,6 +35,18 @@ from _state import (
 )
 
 
+def _emit(message: str) -> None:
+    sys.stdout.write(f"{message}\n")
+
+
+def _warn(message: str) -> None:
+    sys.stderr.write(f"{message}\n")
+
+
+def _emit_json(payload: Any, *, indent: int | None = None) -> None:
+    _emit(json.dumps(payload, indent=indent))
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     """Initialize a new auto-pilot run by writing a fresh state file.
 
@@ -69,7 +81,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "pivot_detector": {},
     }
     save_state(state)
-    print(json.dumps({"ok": True, "state": state}, indent=2))
+    _emit_json({"ok": True, "state": state}, indent=2)
     return 0
 
 
@@ -116,12 +128,7 @@ def cmd_phase_start(args: argparse.Namespace) -> int:
         existing["contracts"] = args.contracts
         state["current_phase"] = args.phase
         save_state(state)
-        print(
-            json.dumps(
-                {"ok": True, "phase": args.phase, "round": existing["round"]},
-                indent=2,
-            )
-        )
+        _emit_json({"ok": True, "phase": args.phase, "round": existing["round"]}, indent=2)
         return 0
 
     state["current_phase"] = args.phase
@@ -137,7 +144,7 @@ def cmd_phase_start(args: argparse.Namespace) -> int:
     }
     phases.append(new_entry)
     save_state(state)
-    print(json.dumps({"ok": True, "phase": args.phase}, indent=2))
+    _emit_json({"ok": True, "phase": args.phase}, indent=2)
     return 0
 
 
@@ -182,7 +189,7 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
         state["status"] = args.status
 
     save_state(state)
-    print(json.dumps({"ok": True, "phase": args.phase, "status": args.status}, indent=2))
+    _emit_json({"ok": True, "phase": args.phase, "status": args.status}, indent=2)
     return 0
 
 
@@ -205,7 +212,7 @@ def cmd_pivot_check(args: argparse.Namespace) -> int:
     save_state(state)
 
     count = bucket[args.finding_hash]
-    print(json.dumps({"finding_hash": args.finding_hash, "count": count}))
+    _emit_json({"finding_hash": args.finding_hash, "count": count})
     if count >= 3:
         event("pivot.needed", reason="finding_repeated_3_rounds")
         state["status"] = "pivot-needed"
@@ -222,9 +229,9 @@ def cmd_status(_: argparse.Namespace) -> int:
     """
     state = load_state()
     if not state:
-        print("auto-pilot: not initialized")
+        _emit("auto-pilot: not initialized")
         return 0
-    print(json.dumps(state, indent=2))
+    _emit_json(state, indent=2)
     return 0
 
 
@@ -236,12 +243,12 @@ def cmd_stop(_: argparse.Namespace) -> int:
     """
     state = load_state()
     if not state:
-        print("auto-pilot: nothing to stop")
+        _emit("auto-pilot: nothing to stop")
         return 0
     state["status"] = "stopped"
     state["stopped_at"] = utc_now()
     save_state(state)
-    print(json.dumps({"ok": True, "status": "stopped"}, indent=2))
+    _emit_json({"ok": True, "status": "stopped"}, indent=2)
     return 0
 
 
@@ -282,7 +289,7 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
     except _contract.ContractValidationError as exc:
         event("dispatch_contract_check.invalid", error=str(exc),
               error_type=type(exc).__name__)
-        print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
+        _emit_json({"ok": False, "error": str(exc)}, indent=2)
         return 1
 
     contract_bytes = contract_path.read_bytes()
@@ -298,7 +305,7 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
     artifact_path = contract_path.parent / "contract-check.json"
     artifact_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
     event("dispatch_contract_check.ok", sha=contract_sha[:16], artifact=str(artifact_path))
-    print(json.dumps({"ok": True, "artifact": str(artifact_path), **artifact}, indent=2))
+    _emit_json({"ok": True, "artifact": str(artifact_path), **artifact}, indent=2)
     return 0
 
 
@@ -321,10 +328,10 @@ def _count_findings(data: dict[str, Any]) -> int:
 def _emit_hard_stop(n: int, c_prev: int, c_curr: int) -> int:
     """Print HARD-STOP verdict to stdout+stderr and return exit 3."""
     msg = "HARD-STOP: 전략 전환 필요"
-    print(json.dumps({
+    _emit_json({
         "round": n, "count_prev": c_prev, "count_curr": c_curr, "verdict": msg,
-    }, indent=2))
-    print(msg, file=sys.stderr)
+    }, indent=2)
+    _warn(msg)
     return 3
 
 
@@ -346,7 +353,7 @@ def cmd_round_budget(args: argparse.Namespace) -> int:
         if not data_n:
             return 2
         c = _count_findings(data_n)
-        print(json.dumps({"round": n, "count": c, "status": "informational"}, indent=2))
+        _emit_json({"round": n, "count": c, "status": "informational"}, indent=2)
         return 0
     data_prev = _load_findings(score_dir, n - 1)
     data_curr = _load_findings(score_dir, n)
@@ -356,10 +363,10 @@ def cmd_round_budget(args: argparse.Namespace) -> int:
     c_curr = _count_findings(data_curr)
     if c_curr >= c_prev:
         return _emit_hard_stop(n, c_prev, c_curr)
-    print(json.dumps({
+    _emit_json({
         "round": n, "count_prev": c_prev, "count_curr": c_curr,
         "verdict": "round 4 = final cap",
-    }, indent=2))
+    }, indent=2)
     return 0
 
 

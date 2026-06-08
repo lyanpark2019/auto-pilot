@@ -33,5 +33,5 @@
 
 ## Deliverable
 - commit(s): pending
-- metric delta: raw print calls 168 -> 97 after converting vault loop/scoring/cost/selftest/self-improve/migration outputs to stream helpers
-- residual risk: 97 raw prints remain, led by `scripts/orchestrator.py`, asset/doc check scripts, hook selftest scripts, and several vault restructure/dispatch utilities.
+- metric delta: raw print calls 168 -> 77 after converting vault loop/scoring/cost/selftest/self-improve/migration/dashboard outputs and orchestrator JSON output to stream helpers
+- residual risk: 77 raw prints remain, led by asset/doc check scripts, hook selftest scripts, MCP/restructure utilities, and selected CLI-facing exporters.

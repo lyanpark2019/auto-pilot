@@ -20,59 +20,89 @@ from sources._adapter import SourceItem, TicketPlanEntry, register
 SUBS = ("concepts", "entities", "decisions", "flows", "components", "research", "sources", "archive")
 
 
+def _is_match_analysis(title: str, lowered: str) -> bool:
+    return (
+        bool(re.match(r"team_(mlb|laliga|kbo|npb|nba|kbl|kleague|epl|j[12])_", lowered))
+        or bool(re.match(r"league_brief_", lowered))
+        or (bool(re.match(r"team\s+", lowered)) and "2026-05" in lowered)
+        or any(k in title for k in ["사이넷", "경쟁사", "승부예측"])
+        or "라이브스코어" in lowered
+    )
+
+
+def _project_category(lowered: str) -> str | None:
+    prefixes = {
+        "pickl": "pickl-projects",
+        "fyqro": "fyqro-projects",
+        "agitrade": "agitrade-projects",
+    }
+    for prefix, category in prefixes.items():
+        if lowered.startswith(prefix) or f"{prefix}-" in lowered:
+            return category
+    if lowered.startswith("clai") or "clai-" in lowered or "clai " in lowered:
+        return "clai-projects"
+    if any(k in lowered for k in [
+        "sportic365", "스포틱365", "proto", "hermes", "syndicator", "session architecture",
+        "reload loop", "team id unification", "auth envelope", "cag", "sportic-server", "ga4-collector",
+    ]):
+        return "sportic-projects"
+    return None
+
+
+def _is_archive(title: str, lowered: str) -> bool:
+    return (
+        lowered.startswith("temp-")
+        or lowered == "temp-check"
+        or "gemma" in lowered
+        or "옥션" in title
+        or "m5 gpu" in lowered
+        or "html to markdown" in lowered
+        or any(k in lowered for k in ["paperclip", "mythos", "death of", "blueprint", "claude peers",
+                                      "cloudfront", "supabase vector"])
+        or lowered in ("code", "design")
+        or "tutorial" in lowered
+        or "학습" in title
+        or "eval-test" in lowered
+        or "claude code documentation" in lowered
+        or "5가지 에이전트" in title
+        or lowered.startswith("job")
+        or lowered == "business model"
+    )
+
+
+def _is_ai_library(lowered: str) -> bool:
+    return any(k in lowered for k in [
+        "symphony", "harness", "archon", "karpathy", "second brain", "voice agent",
+        "cli anything", "마케팅 기술", "claude code", "obsidian", "prompt", "ai 자동화",
+        "프롬프트", "하네스", "클로드 코드", "코덱스",
+    ])
+
+
+def _is_llm_research(lowered: str) -> bool:
+    return any(k in lowered for k in [
+        "vs sonnet", "vs opus", "vs haiku", "vs gpt", "model selection", "output control",
+        "chat model", "ai engineering", "ibm ai", "ai·llm", "비개발자", "claude opus",
+        "claude sonnet", "claude haiku", "llm", "openai", "schema",
+    ])
+
+
 def _classify_title(title: str) -> str:
-    """Heuristic mapping title → category. Keep in one place; override via --classifier-yaml."""
-    t = title.lower()
-    if re.match(r"team_(mlb|laliga|kbo|npb|nba|kbl|kleague|epl|j[12])_", t):
+    """Heuristic mapping title → category."""
+    lowered = title.lower()
+    if _is_match_analysis(title, lowered):
         return "match-analysis"
-    if re.match(r"league_brief_", t):
-        return "match-analysis"
-    if re.match(r"team\s+", t) and "2026-05" in t:
-        return "match-analysis"
-    if any(k in title for k in ["사이넷", "경쟁사", "승부예측"]) or "라이브스코어" in t:
-        return "match-analysis"
-    if any(k in title for k in ["농식품", "비관세"]) or any(k in t for k in ["fta", "sps", "cbam", "fda"]):
+    if any(k in title for k in ["농식품", "비관세"]) or any(k in lowered for k in ["fta", "sps", "cbam", "fda"]):
         return "agri-trade"
     if "로또" in title or "연금복권" in title:
         return "lotto"
-    if t.startswith("pickl") or "pickl-" in t:
-        return "pickl-projects"
-    if t.startswith("fyqro") or "fyqro-" in t:
-        return "fyqro-projects"
-    if t.startswith("agitrade") or "agitrade-" in t:
-        return "agitrade-projects"
-    if t.startswith("clai") or "clai-" in t or "clai " in t:
-        return "clai-projects"
-    if any(k in t for k in ["sportic365", "스포틱365", "proto", "hermes", "syndicator", "session architecture",
-                             "reload loop", "team id unification", "auth envelope", "cag",
-                             "sportic-server", "ga4-collector"]):
-        return "sportic-projects"
-    if t.startswith("temp-") or t == "temp-check":
+    category = _project_category(lowered)
+    if category:
+        return category
+    if _is_archive(title, lowered):
         return "archive"
-    if "gemma" in t or "옥션" in title or "m5 gpu" in t or "html to markdown" in t:
-        return "archive"
-    if any(k in t for k in ["paperclip", "mythos", "death of", "blueprint", "claude peers",
-                             "cloudfront", "supabase vector"]):
-        return "archive"
-    if t in ("code", "design") or "tutorial" in t or "학습" in title or "eval-test" in t:
-        return "archive"
-    if "claude code documentation" in t or "5가지 에이전트" in title:
-        return "archive"
-    if t.startswith("job") or t == "business model":
-        return "archive"
-    # ai-libraries: specific tools/frameworks/harness (checked first to win boundary cases).
-    # E.g. "OpenAI Symphony" (agent paradigm) → ai-libraries, not llm-research.
-    if any(k in t for k in ["symphony", "harness", "archon", "karpathy", "second brain",
-                             "voice agent", "cli anything", "마케팅 기술", "claude code",
-                             "obsidian", "prompt", "ai 자동화", "프롬프트", "하네스",
-                             "클로드 코드", "코덱스"]):
+    if _is_ai_library(lowered):
         return "ai-libraries"
-    # llm-research: model comparison / fundamentals / output / schema (WHAT).
-    if any(k in t for k in ["vs sonnet", "vs opus", "vs haiku", "vs gpt",
-                             "model selection", "output control", "chat model",
-                             "ai engineering", "ibm ai", "ai·llm", "비개발자",
-                             "claude opus", "claude sonnet", "claude haiku",
-                             "llm", "openai", "schema"]):
+    if _is_llm_research(lowered):
         return "llm-research"
     return "uncategorized"
 

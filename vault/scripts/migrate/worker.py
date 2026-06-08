@@ -35,7 +35,8 @@ WORKER_ID = f"w-{os.getpid()}"
 
 def log(msg: str) -> None:
     ts = time.strftime("%H:%M:%S")
-    print(f"[{ts}] {WORKER_ID}  {msg}", flush=True)
+    sys.stdout.write(f"[{ts}] {WORKER_ID}  {msg}\n")
+    sys.stdout.flush()
 
 
 def _list_sources(nid: str) -> list[dict]:
@@ -48,52 +49,63 @@ def _existing_titles(dst: str) -> set[str]:
     """Titles already in dst — for idempotent skip."""
     try:
         return {s.get("title", "") for s in _list_sources(dst)}
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, AttributeError, TypeError) as exc:
         log(f"  ! _existing_titles failed for {dst}: {exc}")
         return set()
 
 
-def _add_source(dst: str, source: dict, prefix: str) -> str | None:
-    """Add one source to dst notebook with title prefix. Returns new source id or None.
-
-    Strategy:
-    1. Explicit URL (youtube/url with url field) → add as URL.
-    2. Title looks like URL (orphan YouTube link) → try URL add.
-    3. Otherwise → fetch fulltext, add as text with `--` separator (avoids Click parse issues).
-    """
-    title = f"{prefix} {source.get('title','')}".strip()
+def _effective_url(source: dict) -> str | None:
     stype = str(source.get("type", "")).split(".")[-1].lower()
     url = source.get("url")
     raw_title = source.get("title", "")
-    title_is_url = raw_title.startswith("http://") or raw_title.startswith("https://")
-    effective_url = url if (stype in ("youtube", "url") and url) else (raw_title if title_is_url else None)
+    if stype in ("youtube", "url") and isinstance(url, str) and url:
+        return url
+    if isinstance(raw_title, str) and raw_title.startswith(("http://", "https://")):
+        return raw_title
+    return None
 
+
+def _source_fulltext(source: dict) -> str:
+    full = subprocess.run(
+        ["notebooklm", "source", "fulltext", source["id"], "--json"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    try:
+        return json.loads(full.stdout).get("content", "")
+    except (json.JSONDecodeError, AttributeError) as exc:
+        log(f"  ! fulltext JSON parse failed for source {source.get('id','?')}: {exc}")
+        return ""
+
+
+def _parse_added_source_id(stdout: str, title: str) -> str | None:
+    try:
+        data = json.loads(stdout)
+        return data.get("id") or data.get("source", {}).get("id")
+    except (json.JSONDecodeError, AttributeError) as exc:
+        log(f"  ! add-source JSON parse failed for {title[:60]}: {exc}")
+        return None
+
+
+def _add_source(dst: str, source: dict, prefix: str) -> str | None:
+    """Add one source to dst notebook with title prefix."""
+    title = f"{prefix} {source.get('title','')}".strip()
     base = ["notebooklm", "source", "add", "-n", dst, "--title", title, "--json"]
+    effective_url = _effective_url(source)
     if effective_url:
         cmd = base + ["--", effective_url]
     else:
-        full = subprocess.run(["notebooklm", "source", "fulltext", source["id"], "--json"],
-                              capture_output=True, text=True, timeout=60)
-        try:
-            text = json.loads(full.stdout).get("content", "")
-        except Exception as exc:
-            log(f"  ! fulltext JSON parse failed for source {source.get('id','?')}: {exc}")
-            text = ""
+        text = _source_fulltext(source)
         if not text:
             log(f"  ! skip (no content, no url): {title[:60]}")
             return None
         cmd = base + ["--type", "text", "--", text]
-
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     if r.returncode != 0:
         log(f"  ! add failed: {r.stderr[:200]}")
         return None
-    try:
-        data = json.loads(r.stdout)
-        return data.get("id") or data.get("source", {}).get("id")
-    except Exception as exc:
-        log(f"  ! add-source JSON parse failed for {title[:60]}: {exc}")
-        return None
+    return _parse_added_source_id(r.stdout, title)
 
 
 LOCK_PATH = Path.home() / ".vault-builder" / "migrate-tickets.lock"

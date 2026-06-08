@@ -266,50 +266,49 @@ def hallucination_check(vault: Path, cats: list) -> tuple[int, int]:
     return int(pct_grounded * 100), 100  # as percentage
 
 
-def score_vault(vault: Path) -> dict:
-    cats = sorted([d.name for d in vault.iterdir()
-                   if d.is_dir() and (d / "raw").exists() and not d.name.startswith(".")])
+def _vault_categories(vault: Path) -> list[str]:
+    return sorted(d.name for d in vault.iterdir() if d.is_dir() and (d / "raw").exists() and not d.name.startswith("."))
 
-    scores = {}
-    details = {}
 
-    # 1. Edge fact (30)
+def _scaled(max_points: int, passed: int, total: int) -> float:
+    return round(max_points * passed / max(total, 1), 1)
+
+
+def _score_edge_fact(vault: Path, cats: list[str], scores: dict, details: dict) -> None:
     passed, total, failures = edge_token_check(vault, cats, sample_n=30)
-    scores["edge_fact"] = round(30 * passed / max(total, 1), 1)
+    scores["edge_fact"] = _scaled(30, passed, total)
     details["edge_fact"] = f"{passed}/{total} edges grounded in raw co-occurrence"
     if failures:
         details["edge_fact"] += f" (e.g. {failures[0]})"
 
-    # 2. Concept accuracy (20)
-    passed, total = concept_accuracy(vault, cats, sample_n=14)
-    scores["concept_accuracy"] = round(20 * passed / max(total, 1), 1)
-    details["concept_accuracy"] = f"{passed}/{total} concepts grounded"
 
-    # 3. ADR fidelity (15)
-    passed, total = adr_fidelity(vault, cats)
-    scores["adr_fidelity"] = round(15 * passed / max(total, 1), 1)
-    details["adr_fidelity"] = f"{passed}/{total} ADRs grounded"
+def _score_pair(scores: dict, details: dict, key: str, max_points: int, outcome: tuple[int, int], text: str) -> None:
+    passed, total = outcome
+    scores[key] = _scaled(max_points, passed, total)
+    details[key] = text.format(passed=passed, total=total)
 
-    # 4. Community label fit (10)
-    passed, total = community_label_fit(vault, cats)
-    scores["label_fit"] = round(10 * passed / max(total, 1), 1)
-    details["label_fit"] = f"{passed}/{total} labels fit members"
 
-    # 5. Cross-vault relevance (10)
-    passed, total = cross_vault_relevance(vault)
-    scores["cross_vault_relevance"] = round(10 * passed / max(total, 1), 1)
-    details["cross_vault_relevance"] = f"{passed}/{total} real cross-vault targets exist"
-
-    # 6. Hot cache citation (5)
-    passed, total = hot_cache_citation(vault, cats)
-    scores["hot_citation"] = round(5 * passed / max(total, 1), 1)
-    details["hot_citation"] = f"{passed}/{total} hot.md cites real god nodes"
-
-    # 7. Hallucination (10) — % of concept/entity pages with source linkage
+def _score_content_dimensions(vault: Path, cats: list[str], scores: dict, details: dict) -> None:
+    _score_edge_fact(vault, cats, scores, details)
+    _score_pair(scores, details, "concept_accuracy", 20, concept_accuracy(vault, cats, sample_n=14),
+                "{passed}/{total} concepts grounded")
+    _score_pair(scores, details, "adr_fidelity", 15, adr_fidelity(vault, cats), "{passed}/{total} ADRs grounded")
+    _score_pair(scores, details, "label_fit", 10, community_label_fit(vault, cats),
+                "{passed}/{total} labels fit members")
+    _score_pair(scores, details, "cross_vault_relevance", 10, cross_vault_relevance(vault),
+                "{passed}/{total} real cross-vault targets exist")
+    _score_pair(scores, details, "hot_citation", 5, hot_cache_citation(vault, cats),
+                "{passed}/{total} hot.md cites real god nodes")
     grounded_pct, _ = hallucination_check(vault, cats)
     scores["non_hallucinated"] = round(10 * grounded_pct / 100, 1)
     details["non_hallucinated"] = f"{grounded_pct}% pages have source linkage"
 
+
+def score_vault(vault: Path) -> dict:
+    cats = _vault_categories(vault)
+    scores = {}
+    details = {}
+    _score_content_dimensions(vault, cats, scores, details)
     total = min(100, sum(scores.values()))
     return {
         "total": round(total, 1),
