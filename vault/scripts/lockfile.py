@@ -35,7 +35,7 @@ class VaultLock:
         self.acquire()
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.release()
 
     def acquire(self) -> None:

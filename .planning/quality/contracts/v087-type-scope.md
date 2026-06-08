@@ -31,7 +31,11 @@
   - `python3 -m pytest tests/test_mypy_scope.py -q`
   - `python3 -m mypy`
 
+## Candidate measurement
+- accepted: `vault/sources/_excludes.py` (clean), `vault/pipeline/bases.py` (clean), `vault/pipeline/scan_code.py` (clean), `vault/pipeline/state.py` (1 local fix), `vault/pipeline/scan_docs.py` (1 local fix), `vault/scripts/lockfile.py` (1 local fix)
+- skipped: `vault/sources/docs.py` (file absent), `vault/pipeline/drift.py` (14 errors), `vault/sources/_adapter.py` (3 errors), `vault/scripts/dashboard_data.py` (4 errors)
+
 ## Deliverable
 - commit(s): pending
-- metric delta: pending
-- residual risk: skip any candidate with broad architectural type debt instead of forcing it into strict scope.
+- metric delta: strict vault mypy pilots 2 -> 8; mypy source files 37 -> 43 after Task 1 scanner and type scope expansion
+- residual risk: broader vault strict scope remains staged; skipped candidates require separate focused work.

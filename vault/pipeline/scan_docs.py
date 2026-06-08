@@ -17,13 +17,16 @@ Returns per-doc map:
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 try:
-    import yaml
+    import yaml as _yaml
 except ImportError:
-    yaml = None
+    yaml: Any | None = None
+else:
+    yaml = _yaml
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:\|[^\]]+)?\]\]")
 CODE_REF_RE = re.compile(r"(?:^|[\s\(`'\"])((?:[a-zA-Z0-9_\-./]+/)?[a-zA-Z0-9_\-]+\.(?:py|ts|tsx|js|jsx|go|rs|sql))(?::(\d+))?")

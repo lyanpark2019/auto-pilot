@@ -14,7 +14,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def state_path(vault: Path) -> Path:
@@ -24,7 +24,7 @@ def state_path(vault: Path) -> Path:
 def load(vault: Path) -> dict[str, Any]:
     p = state_path(vault)
     if p.exists():
-        return json.loads(p.read_text())
+        return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
     return {
         "schema_version": 1,
         "vault": str(vault.expanduser().resolve()),

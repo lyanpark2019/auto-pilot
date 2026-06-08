@@ -8,6 +8,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def test_mypy_scope_includes_vault_pilots() -> None:
     config = (REPO_ROOT / "mypy.ini").read_text(encoding="utf-8")
+    expected = {
+        "vault/pipeline/canvas.py",
+        "vault/sources/code.py",
+        "vault/sources/_excludes.py",
+        "vault/pipeline/bases.py",
+        "vault/pipeline/scan_code.py",
+        "vault/pipeline/state.py",
+        "vault/pipeline/scan_docs.py",
+        "vault/scripts/lockfile.py",
+    }
 
-    assert "vault/pipeline/canvas.py" in config
-    assert "vault/sources/code.py" in config
+    for path in expected:
+        assert path in config
