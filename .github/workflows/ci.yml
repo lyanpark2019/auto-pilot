@@ -42,11 +42,11 @@ jobs:
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
 
-      - name: pytest (suite + prompt regression + coverage gate ≥75%)
+      - name: pytest (suite + prompt regression + coverage gate ≥80%)
         # Coverage gate ACTIVE (2026-06-07): pytest-cov in requirements-dev.txt;
-        # measured scripts-wide coverage 81.33% at activation. Devs keep running
-        # plain `pytest` locally — the gate is CI-only.
-        run: python -m pytest tests/ -q --cov=scripts --cov-fail-under=75
+        # measured scripts-wide coverage 87.50% after v0.8.7 quality lift.
+        # Devs keep running plain `pytest` locally — the gate is CI-only.
+        run: python -m pytest tests/ -q --cov=scripts --cov-fail-under=80
 
       - name: pytest vault export layer
         run: cd vault && python -m pytest tests/ -q

@@ -23,6 +23,13 @@ def test_ci_runs_vault_pytest_suite() -> None:
     assert "cd vault && python -m pytest tests/ -q" in text
 
 
+def test_ci_coverage_gate_matches_local_quality_floor() -> None:
+    text = _ci_text()
+
+    assert "--cov=scripts --cov-fail-under=80" in text
+    assert "--cov-fail-under=75" not in text
+
+
 def test_ci_runs_script_style_hook_selftests() -> None:
     text = _ci_text()
 

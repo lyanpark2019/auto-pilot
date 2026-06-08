@@ -1,0 +1,45 @@
+{
+  "iteration": 8,
+  "timestamp": "2026-06-08T03:55:00Z",
+  "project_root": "/Users/lyan/.config/superpowers/worktrees/auto-pilot/v087-quality-90",
+  "language": "python+bash+markdown",
+  "project_type": "Claude Code plugin / autonomous development harness",
+  "current_state": "BLOCKED_BELOW_TARGET",
+  "target_score": 90,
+  "mode": "v0.8.7 quality-90 multi-wave rescore; release blocked because adversarial tracks did not agree on >=90",
+  "head_sha": "403283e",
+  "baseline_weighted_score": 84.4,
+  "weighted_score": 82.78,
+  "scores_source": "Claude wave4 conservative rescore lower-bound; Codex final rerun blocked by quota after Codex r1 rejected at 87.33",
+  "scores": {
+    "type_safety": {"score": 82, "weight": 0.09, "notes": "mypy strict expanded to 49 files / 14 vault pilots, but Any density remains high."},
+    "test_quality": {"score": 84, "weight": 0.13, "notes": "611 root + 106 vault tests; scripts coverage 87.50%; parametrization still sparse."},
+    "error_handling": {"score": 83, "weight": 0.10, "notes": "broad exceptions reduced 30 -> 8, with remaining broad catches in core boundaries."},
+    "code_structure": {"score": 85, "weight": 0.09, "notes": "long functions reduced 34 -> 11; largest remaining prepare_subagent_ticket at 69 lines."},
+    "configuration": {"score": 81, "weight": 0.07, "notes": "AutoPilotConfig exists; scattered constants remain."},
+    "logging": {"score": 84, "weight": 0.09, "notes": "print calls reduced 168 -> 50; event() calls 37 -> 56; structured logging remains uneven."},
+    "async_correctness": {"score": 78, "weight": 0.10, "notes": "Claude track flagged subprocess timeout risk; PM AST recount finds only two production Popen sites without timeout kwarg, both watchdog-bounded, but final adversarial agreement not obtained."},
+    "documentation": {"score": 79, "weight": 0.07, "notes": "Docs gates pass; public docstring coverage remains incomplete."},
+    "security": {"score": 86, "weight": 0.07, "notes": "gitleaks and pip-audit CI gates present; small shell=True/eval-scope concerns remain."},
+    "architecture": {"score": 84, "weight": 0.05, "notes": "Clean helper modules and adapter protocol; broad DI boundary not systemic."},
+    "performance_budget": {"score": 83, "weight": 0.06, "notes": "pytest-benchmark/RSS gates exist; p95/p99 coverage absent."},
+    "llm_prompt_quality": {"score": 85, "weight": 0.05, "notes": "Prompt files/schemas/fixtures exist; eval coverage remains thin."},
+    "ci_cd_quality": {"score": 84, "weight": 0.03, "notes": "CI coverage floor raised 75 -> 80 after Claude critique; hosted CI not yet run for this branch."}
+  },
+  "measurement_log": {
+    "metrics": "long_functions_gt40=11; broad_exceptions=8; print_calls=50; event_calls=56; pytest_parametrize_markers=9",
+    "pytest": "python3 -m pytest tests/ -q => 611 passed; cd vault && python3 -m pytest tests/ -q => 106 passed",
+    "coverage": "python3 -m pytest tests/ -q --cov=scripts --cov-fail-under=80 => 87.50%",
+    "mypy": "python3 -m mypy => clean, 49 source files",
+    "ruff": "python3 -m ruff check scripts/ tests/ hooks/ vault/ => clean before final CI-only YAML floor edit; focused CI workflow test passed after edit",
+    "hooks_bats_docs_graphify": "hook selftests 13/13, 9/9, 9/9; bats 40/40 and 47/47; module-size OK; doc-reference OK; graphify loop 27/27",
+    "codex": "Codex r1 .planning/quality/eval-codex-8.json = 87.33 REJECT_FOR_90_TARGET; final rerun blocked by Codex quota and recorded in .planning/quality/codex-8-final/",
+    "claude": "Claude wave4 .planning/quality/eval-claude-8.md = 82.78 BELOW 90",
+    "decision": "Stop before release; no v0.8.7 tag/release/plugin update until adversarial rescore reaches >=90."
+  },
+  "residual_risks": [
+    "No dual-track agreement on >=90; final Codex rerun was quota-blocked.",
+    "Adversarial tracks still penalize Any density, sparse parametrization, uneven structured logging, and remaining long core functions.",
+    "Hosted CI has not run for this branch after the CI coverage floor change."
+  ]
+}
