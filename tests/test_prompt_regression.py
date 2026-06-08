@@ -133,6 +133,22 @@ def test_render_for_llm_redacts_secret_like_prompt_output() -> None:
     assert "api_key=<redacted>" in rendered
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        'token="secret-value-123456"',
+        '{"api_key": "secret-value-123456"}',
+        "Authorization: Bearer abcdefgh123456",
+    ],
+)
+def test_render_for_llm_redacts_quoted_json_and_bearer_forms(payload: str) -> None:
+    rendered = _prompts.render_for_llm("iteration", iter_n=payload, phase=1)
+
+    assert "secret-value-123456" not in rendered
+    assert "abcdefgh123456" not in rendered
+    assert "<redacted>" in rendered
+
+
 def test_render_for_llm_strips_ansi_and_control_chars() -> None:
     rendered = _prompts.render_for_llm("iteration", iter_n="\x1b[31m5\x00", phase=1)
 

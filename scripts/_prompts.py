@@ -6,9 +6,17 @@ from pathlib import Path
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 MAX_LLM_PROMPT_CHARS = 120_000
-_SECRET_ASSIGNMENT_RE = re.compile(
-    r"\b(?P<key>api[_-]?key|token|password|secret|credential|authorization|auth)"
-    r"\s*[:=]\s*(?P<value>[^\s`\"']+)",
+_SECRET_FIELD_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<key_quote>[\"']?)"
+    r"(?P<key>api[_-]?key|token|password|secret|credential|auth)"
+    r"(?P=key_quote)(?P<sep>\s*[:=]\s*)"
+    r"(?P<value_quote>[\"']?)(?P<value>[^\"'\s,}]+)(?P=value_quote)",
+    re.IGNORECASE,
+)
+_AUTHORIZATION_FIELD_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<key_quote>[\"']?)authorization(?P=key_quote)"
+    r"(?P<sep>\s*[:=]\s*)(?P<value_quote>[\"']?)"
+    r"(?P<scheme>Bearer\s+)?(?P<value>[^\"'\s,}]+)(?P=value_quote)",
     re.IGNORECASE,
 )
 _BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}", re.IGNORECASE)
@@ -43,15 +51,25 @@ def render(name: str, **vars: object) -> str:
     return load(name).format_map(vars)
 
 
-def _redact_secret_assignment(match: re.Match[str]) -> str:
-    return f"{match.group('key')}=<redacted>"
+def _redact_secret_field(match: re.Match[str]) -> str:
+    quote = match.group("key_quote")
+    value_quote = match.group("value_quote")
+    return f"{quote}{match.group('key')}{quote}{match.group('sep')}{value_quote}<redacted>{value_quote}"
+
+
+def _redact_authorization_field(match: re.Match[str]) -> str:
+    quote = match.group("key_quote")
+    value_quote = match.group("value_quote")
+    scheme = match.group("scheme") or ""
+    return f"{quote}authorization{quote}{match.group('sep')}{value_quote}{scheme}<redacted>{value_quote}"
 
 
 def sanitize_for_llm(text: str, *, max_chars: int = MAX_LLM_PROMPT_CHARS) -> str:
     """Return prompt text safe for an LLM call, or raise on prompt budget overflow."""
     cleaned = _ANSI_CSI_RE.sub("", text)
     cleaned = _CONTROL_CHAR_RE.sub("", cleaned)
-    cleaned = _SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, cleaned)
+    cleaned = _AUTHORIZATION_FIELD_RE.sub(_redact_authorization_field, cleaned)
+    cleaned = _SECRET_FIELD_RE.sub(_redact_secret_field, cleaned)
     cleaned = _BEARER_RE.sub("Bearer <redacted>", cleaned)
     cleaned = _OPENAI_KEY_RE.sub("sk-<redacted>", cleaned)
     if max_chars < 1:

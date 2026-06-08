@@ -22,7 +22,8 @@ Use `scripts/_prompts.py::render_for_llm()` or `sanitize_for_llm()` before a
 rendered prompt is sent to an LLM process. That boundary enforces:
 
 - secret-like assignment redaction (`api_key=...`, `token=...`, `password=...`),
-- bearer/OpenAI-style key redaction,
+- quoted and JSON-shaped secret field redaction (`token="..."`, `"api_key": "..."`),
+- bearer/OpenAI-style key redaction (`Authorization: Bearer ...`, raw `sk-...`),
 - ANSI escape and non-printing control-character removal,
 - a rendered-output size cap (`MAX_LLM_PROMPT_CHARS`).
 
