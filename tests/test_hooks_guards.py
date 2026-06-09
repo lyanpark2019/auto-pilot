@@ -492,3 +492,135 @@ class TestBranchLock:
         assert "deny" not in r.stdout
 
 
+@pytest.mark.parametrize("command,head_is_main,expect_deny", [
+    # commit targets HEAD — deny when on main, allow on feature
+    ("git commit -m x", True, True),
+    ("git commit -m x", False, False),
+    # push with explicit dst=main → deny regardless of HEAD
+    ("git push origin main", False, True),
+    # push with explicit dst=feature while HEAD=main → ALLOW (the bug)
+    ("git push origin feature", True, False),
+    # HEAD:main and feature:main → deny (colon-form, dst is main)
+    ("git push origin HEAD:main", False, True),
+    ("git push origin feature:main", False, True),
+    # -u flag with feature dst while HEAD=main → allow
+    ("git push -u origin feature", True, False),
+    # bare push, HEAD=main → deny (defaults to current branch)
+    ("git push", True, True),
+    # push <remote> only, no refspec, HEAD=main → deny
+    ("git push origin", True, True),
+    # bypass env with explicit main dst → allow
+    ("AUTO_PILOT_MAIN_OK=1 git push origin main", False, False),
+    # A1 bypass fixes — each was a hole in the old parse
+    # force-push prefix (+) stripped before dst compare
+    ("git push origin +main", False, True),
+    # value-taking option (-o) must skip next token; main is still the refspec dst
+    ("git push -o ci.skip origin main", False, True),
+    # bare HEAD as refspec → resolve to current branch → deny when HEAD=main
+    ("git push origin HEAD", True, True),
+    # refs/heads/ prefix stripped before protected-branch compare
+    ("git push origin refs/heads/main", False, True),
+    # --force is a flag; main is still the refspec dst
+    ("git push --force origin main", False, True),
+    # multi-refspec: second refspec maps dst to main → deny
+    ("git push origin feat1 feat2:main", False, True),
+    # value-taking -o option with a feature refspec; HEAD=main → still ALLOW
+    ("git push -o x origin feature", True, False),
+])
+def test_branch_lock_push_refspec(
+    hooks_dir: Path,
+    tmp_path: Path,
+    command: str,
+    head_is_main: bool,
+    expect_deny: bool,
+) -> None:
+    """Push decisions gate on the push refspec DST, not HEAD branch."""
+    if head_is_main:
+        repo = _make_main_repo_helper(tmp_path)
+    else:
+        repo = _make_feature_repo_helper(tmp_path)
+
+    hook = hooks_dir / "branch-lock.sh"
+    r = _run_hook(
+        hook,
+        {"tool_input": {"command": command, "cwd": str(repo)}},
+        cwd=repo,
+    )
+    assert r.returncode == 0
+    if expect_deny:
+        _deny_json(r.stdout)
+    else:
+        assert "deny" not in r.stdout
+
+
+def _make_main_repo_helper(tmp_path: Path) -> Path:
+    """Init a git repo with a commit on main (standalone helper)."""
+    subprocess.run(["git", "init", "-b", "main", str(tmp_path)],
+                   capture_output=True, check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "test@test.com"],
+                   check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "Test"],
+                   check=True)
+    (tmp_path / "README.md").write_text("test")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "init"],
+                   capture_output=True, check=True)
+    return tmp_path
+
+
+def _make_feature_repo_helper(tmp_path: Path) -> Path:
+    """Init a git repo on a feature branch (standalone helper)."""
+    _make_main_repo_helper(tmp_path)
+    subprocess.run(["git", "-C", str(tmp_path), "checkout", "-b", "feature"],
+                   capture_output=True, check=True)
+    return tmp_path
+
+
+def _make_gh_repo(tmp_path: Path) -> Path:
+    """Create a git repo with a github remote so gh-auth-preflight can resolve owner."""
+    repo = _make_main_repo_helper(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "add", "origin",
+         "https://github.com/lyanpark2019/test-repo.git"],
+        check=True,
+    )
+    return repo
+
+
+@pytest.mark.parametrize("command,should_fire", [
+    ("gh pr list", True),
+    ("gh auth status", False),          # auth skip
+    ('git grep "gh CLI"', False),        # segment starts with git, not gh
+    ('echo "use gh auth switch"', False), # segment starts with echo
+    ("make build && gh release create", True),  # second segment starts with gh
+    ("# gh active note", False),         # comment token, not a command
+    # A2 fix: env-var prefix before gh must not swallow the gh token
+    ("GH_TOKEN=x gh pr create", True),
+])
+def test_gh_auth_fires_only_on_command(
+    hooks_dir: Path,
+    tmp_path: Path,
+    command: str,
+    should_fire: bool,
+) -> None:
+    """Hook fires only when a segment's first token is `gh` (not a substring)."""
+    repo = _make_gh_repo(tmp_path)
+    hook = hooks_dir / "gh-auth-preflight.sh"
+
+    # Place a wrong-user cache so any real fire → deny
+    cache_file = tmp_path / "gh-auth-lyanpark2019.cache"
+    cache_file.write_text("wrong-user")
+
+    r = _run_hook(
+        hook,
+        {"tool_input": {"command": command, "cwd": str(repo)}},
+        cwd=repo,
+        env={"TMPDIR": str(tmp_path)},
+    )
+    assert r.returncode == 0
+    if should_fire:
+        _deny_json(r.stdout)
+    else:
+        assert "deny" not in r.stdout
+
+

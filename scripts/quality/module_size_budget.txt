@@ -5,8 +5,7 @@
 #
 # SKILL.md files are prose interface specs read by the agent in one pass;
 # splitting them across files would break the single-load contract and the
-# relative scripts/references refs. These three are the long-form skills.
-skills/quality-eval/SKILL.md|620
+# relative scripts/references refs. These are the long-form skills.
 skills/setup-harness/SKILL.md|560
 #
 # Vendored Codex-fork CLI (codex/ tree = repo-SoT, one-way synced out via
@@ -20,3 +19,9 @@ codex/skills/migrate-to-codex/scripts/cli.py|920
 # absorbed pm-quality-harness-loop orchestrator) was folded in 2026-06-07;
 # same single-load-contract rationale as the other SKILL.md entries.
 skills/adversarial-review-loop/SKILL.md|640
+#
+# test_hooks_guards.py accumulates parametrized matrix tests for all hook
+# guards (branch-lock, gh-auth, reviewer-write, worker-scope-gate); the
+# table-driven test pattern is the right shape here — splitting would
+# scatter the per-hook contract tables across files.
+tests/test_hooks_guards.py|700

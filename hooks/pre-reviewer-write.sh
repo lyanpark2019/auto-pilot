@@ -23,10 +23,20 @@ tool_name=$(echo "$input" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
-except json.JSONDecodeError:
+except (json.JSONDecodeError, ValueError):
+    print("__PARSE_FAIL__")
     sys.exit(0)
-print(d.get("tool_name", ""))
+val = d.get("tool_name", "")
+if not isinstance(val, str) or not val:
+    print("__PARSE_FAIL__")
+    sys.exit(0)
+print(val)
 ')
+
+if [ "$tool_name" = "__PARSE_FAIL__" ] || [ -z "$tool_name" ]; then
+  echo "auto-pilot: BLOCKED reviewer ($role) — unparseable or missing tool_name (fail-closed)" >&2
+  exit 2
+fi
 
 case "$tool_name" in
   Edit|Write|MultiEdit)

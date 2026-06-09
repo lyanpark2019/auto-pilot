@@ -45,13 +45,13 @@ against the repo before accepting the finding.
 
 | # | Sev | Finding | Evidence |
 |---|-----|---------|----------|
-| 1 | P0 | `finding_hash` unfit as fingerprint seed: line# in payload → unstable across runs; first-8-token truncation → distinct findings collide (proven empirically). | `scripts/_subagent_helpers.py:46-48` |
-| 2 | P0 | Committed ledger derived from gitignored inputs → evidence `path:line` dangles on fresh clone; SoT inversion. | `.gitignore:2,5` |
+| 1 | P0 | `finding_hash` unfit as fingerprint seed: line# in payload → unstable across runs; first-8-token truncation → distinct findings collide (proven empirically). | `scripts/_subagent_helpers.py:46-48` <!-- cite-ignore --> |
+| 2 | P0 | Committed ledger derived from gitignored inputs → evidence `path:line` dangles on fresh clone; SoT inversion. | `.gitignore:2,5` <!-- cite-ignore --> |
 | 3 | P0 | Target-repo pollution — the loop runs on arbitrary user repos; default-committing a tracked dir dirties their VCS and leaks finding text. | brownfield-driver purpose |
-| 4 | P1 | No flock/atomic on read-modify-write bump; repo mandates lock+atomic for state writes. | `scripts/_state.py:122-130` |
-| 5 | P1 | Parsing `insights.md` prose is brittle AND contradicts "retro untouched". | `agents/retro.md:46-58` |
-| 6 | P1 | `pivot_detector` keyed `phase-N`, per-run scratch → wrong granularity for cross-run counting. | `scripts/orchestrator.py:200` |
-| 7 | P1 | Schema lacks run/plugin lineage → stale candidates contaminate counts; raw-occurrence threshold gameable within one run. | `scripts/orchestrator.py:88` (`run_id` exists) |
+| 4 | P1 | No flock/atomic on read-modify-write bump; repo mandates lock+atomic for state writes. | `scripts/_state.py:122-130` <!-- cite-ignore --> |
+| 5 | P1 | Parsing `insights.md` prose is brittle AND contradicts "retro untouched". | `agents/retro.md:46-58` <!-- cite-ignore --> |
+| 6 | P1 | `pivot_detector` keyed `phase-N`, per-run scratch → wrong granularity for cross-run counting. | `scripts/orchestrator.py:200` <!-- cite-ignore --> |
+| 7 | P1 | Schema lacks run/plugin lineage → stale candidates contaminate counts; raw-occurrence threshold gameable within one run. | `scripts/orchestrator.py:88` <!-- cite-ignore --> (`run_id` exists) |
 | 8 | P1 | Schema must be validated before any persist. | — |
 
 ## 4. Architecture (v2)
