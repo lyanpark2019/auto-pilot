@@ -103,7 +103,7 @@ elif [[ -f "$repo_root/$file_path" ]]; then
 fi
 
 if [[ -n "$target_file" ]]; then
-  if grep -qE '^[[:space:]]*(#|//|/\*|\*|;|--|<!--)?[[:space:]]*HUMAN-ONLY([[:space:]].*)?$' "$target_file" 2>/dev/null; then
+  if grep -qE '^[[:space:]]*(#|//|/\*|\*|;|--|<!--)?[[:space:]]*HUMAN-ONLY(-->|\*/)?([[:space:]].*)?$' "$target_file" 2>/dev/null; then
     deny "File contains HUMAN-ONLY marker: $file_path"
   fi
 fi
