@@ -561,3 +561,49 @@ def _make_feature_repo_helper(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _make_gh_repo(tmp_path: Path) -> Path:
+    """Create a git repo with a github remote so gh-auth-preflight can resolve owner."""
+    repo = _make_main_repo_helper(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "add", "origin",
+         "https://github.com/lyanpark2019/test-repo.git"],
+        check=True,
+    )
+    return repo
+
+
+@pytest.mark.parametrize("command,should_fire", [
+    ("gh pr list", True),
+    ("gh auth status", False),          # auth skip
+    ('git grep "gh CLI"', False),        # segment starts with git, not gh
+    ('echo "use gh auth switch"', False), # segment starts with echo
+    ("make build && gh release create", True),  # second segment starts with gh
+    ("# gh active note", False),         # comment token, not a command
+])
+def test_gh_auth_fires_only_on_command(
+    hooks_dir: Path,
+    tmp_path: Path,
+    command: str,
+    should_fire: bool,
+) -> None:
+    """Hook fires only when a segment's first token is `gh` (not a substring)."""
+    repo = _make_gh_repo(tmp_path)
+    hook = hooks_dir / "gh-auth-preflight.sh"
+
+    # Place a wrong-user cache so any real fire → deny
+    cache_file = tmp_path / "gh-auth-lyanpark2019.cache"
+    cache_file.write_text("wrong-user")
+
+    r = _run_hook(
+        hook,
+        {"tool_input": {"command": command, "cwd": str(repo)}},
+        cwd=repo,
+        env={"TMPDIR": str(tmp_path)},
+    )
+    assert r.returncode == 0
+    if should_fire:
+        _deny_json(r.stdout)
+    else:
+        assert "deny" not in r.stdout
+
+

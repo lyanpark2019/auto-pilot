@@ -37,18 +37,36 @@ fi
 
 [[ -z "$cmd" ]] && exit 0
 
-# Only fire when command contains `gh ` as a word
-# shellcheck disable=SC2016 # regex literal — backtick/$( are pattern chars, expansion not wanted
-if ! printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]'; then
+# Fire only when some segment's FIRST token is exactly `gh`.
+# Split on ; && || | newline ( to get simple-command segments, then check
+# whether any segment's leading token is `gh`.  This prevents false-fires
+# from substrings inside comments, strings, or other command args.
+# shellcheck disable=SC2016 # python heredoc — not a shell expansion context
+gh_segment=$(printf '%s' "$cmd" | python3 -c '
+import sys, re
+cmd = sys.stdin.read()
+# Split on compound separators; strip leading whitespace per segment.
+segments = re.split(r";|&&|\|\||[|\n(]", cmd)
+gh_seg = ""
+for seg in segments:
+    tokens = seg.split()
+    if not tokens:
+        continue
+    if tokens[0] == "gh":
+        gh_seg = seg.strip()
+        break
+print(gh_seg)
+' 2>/dev/null || echo "")
+
+if [[ -z "$gh_segment" ]]; then
   exit 0
 fi
 
-# Skip `gh auth` commands (those are maintenance commands, not repo operations)
-# When the command is `gh auth switch`, purge the owner cache files so the next
+# Skip `gh auth` commands (maintenance, not repo operations).
+# When the command is `gh auth switch`, purge owner cache files so the next
 # gh command re-validates against the newly active user (cache invalidation).
-# shellcheck disable=SC2016 # regex literal — backtick/$( are pattern chars, expansion not wanted
-if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]+auth[[:space:]]'; then
-  if printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&`$(])gh[[:space:]]+auth[[:space:]]+switch'; then
+if printf '%s' "$gh_segment" | grep -qE '^gh[[:space:]]+auth[[:space:]]'; then
+  if printf '%s' "$gh_segment" | grep -qE '^gh[[:space:]]+auth[[:space:]]+switch'; then
     rm -f "${TMPDIR:-/tmp}"/gh-auth-*.cache 2>/dev/null || true
   fi
   exit 0
