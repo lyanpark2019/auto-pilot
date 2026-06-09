@@ -19,10 +19,10 @@ In addition, PM scans the diff's file paths and dispatches matching specialists 
 |---|---|---|---|
 | `app/api/**`, `app/**/route.*`, `**/middleware.*`, `lib/auth*`, `lib/session*`, `*supabase*`, `*insforge*`, `.env*`, `config*`, SQL/migration files, `*payment*`, `*stripe*`, `*webhook*`, `*upload*`, `*storage*`, `*signed-url*` | `review-gatekeeper` | `security` | Trust boundary — OWASP Top 10 gate |
 | Any worker diff touching application (runtime) code (not docs/config-only) | `review-gatekeeper` | `tdd-gate` | Test-first hard gate — runtime diff missing a matching test → REJECT, delete impl, restart from a failing test |
-| `**/*migration*.sql`, `**/migrations/**`, `prisma/schema.prisma`, `**/*.sql` | `database-reviewer` (Phase 2+ — port from everything-claude-code/agents/database-reviewer.md when needed) | — | Schema correctness, RLS, index plan |
-| `**/*.tf`, `**/*Dockerfile*`, `**/k8s/**`, `**/.github/workflows/**`, `vercel.json`, `vercel.ts`, `**/fly.toml` | `infra-reviewer` (TBD) | — | Infra change blast radius |
-| `prompts/**`, `**/*.prompt.md`, anywhere with LLM call + prompt template | `prompt-reviewer` (TBD) | — | Prompt drift, cost regression |
-| Tests-only diffs (only `tests/**`, `**/*.test.*`) | `test-quality-reviewer` (TBD) | — | Are tests real or theatre? |
+| `**/*migration*.sql`, `**/migrations/**`, `prisma/schema.prisma`, `**/*.sql` | `database-reviewer` — NOT YET PORTED, do not dispatch | — | Schema correctness, RLS, index plan |
+| `**/*.tf`, `**/*Dockerfile*`, `**/k8s/**`, `**/.github/workflows/**`, `vercel.json`, `vercel.ts`, `**/fly.toml` | `infra-reviewer` — NOT YET PORTED, do not dispatch | — | Infra change blast radius |
+| `prompts/**`, `**/*.prompt.md`, anywhere with LLM call + prompt template | `prompt-reviewer` — NOT YET PORTED, do not dispatch | — | Prompt drift, cost regression |
+| Tests-only diffs (only `tests/**`, `**/*.test.*`) | `test-quality-reviewer` — NOT YET PORTED, do not dispatch | — | Are tests real or theatre? |
 
 `review-gatekeeper` carries both gates (modes `security` + `tdd-gate`) in one agent. A diff may match both rows → PM dispatches the agent once per mode (or instructs it to run both modes), and each mode emits its own verdict.
 
@@ -59,7 +59,7 @@ If 2 specialists disagree (e.g., `review-gatekeeper` (`security`) says REJECT bu
 ## Tier system
 
 - **Tier 1 (ship now)**: `auto-pilot-codex-reviewer`, `auto-pilot-claude-reviewer`, `review-gatekeeper` (modes `security` + `tdd-gate`). These exist in `auto-pilot/agents/`.
-- **Tier 2 (port on demand)**: `database-reviewer`, `infra-reviewer`, `prompt-reviewer`, `test-quality-reviewer`. PM will request port from `~/Documents/Project/everything-claude-code/agents/` when first triggered.
+- **Tier 2 (port on demand — NOT YET PORTED, do not dispatch)**: `database-reviewer`, `infra-reviewer`, `prompt-reviewer`, `test-quality-reviewer`. PM will request port from `~/Documents/Project/everything-claude-code/agents/` when first triggered.
 
 ## Don't over-dispatch
 
