@@ -157,6 +157,11 @@ def scan_insights(repo_root: Path, run_id: str) -> list[Observation]:
             class_val = issue_val if isinstance(issue_val, str) else ""
         if not class_val.strip():
             continue
+        # A path/date-shaped tag normalizes to "" inside compute_fingerprint;
+        # keying on it would collapse unrelated insights into one ticket (the
+        # exact fragmentation this source exists to prevent). Skip such a tag.
+        if not imp.normalize_issue(class_val).strip():
+            continue
         candidate_val = finding.get("candidate_asset")
         if candidate_val is not None and not isinstance(candidate_val, str):
             candidate_val = str(candidate_val)

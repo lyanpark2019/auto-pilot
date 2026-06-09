@@ -249,6 +249,27 @@ def test_insight_missing_class_falls_back_to_issue(tmp_path: Path, monkeypatch: 
     assert obs[0].issue == "no class present here"
 
 
+def test_insight_path_shaped_class_skipped_not_collapsed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path/date-shaped class normalizes to '' → keying on it would collapse
+    unrelated insights into one ticket. Such tags must be SKIPPED, not merged."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    _write_insights(
+        root, "r1",
+        [
+            {"class": "hooks/foo.sh", "issue": "a", "candidate_asset": "hook"},
+            {"class": "src/bar.ts", "issue": "b", "candidate_asset": "test"},
+            {"class": "2026-06-09", "issue": "c", "candidate_asset": "doc"},
+        ],
+    )
+    obs = lm.scan_insights(root, "r1")
+    assert obs == []  # all three normalize to empty → skipped, never collapsed
+    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert _ledger_tickets(tmp_path / "home", root) == []
+
+
 def test_insight_malformed_and_out_of_enum_tolerated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     root = tmp_path / "repo"

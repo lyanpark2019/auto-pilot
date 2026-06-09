@@ -59,6 +59,7 @@ Each lesson is one bullet: **trap → consequence → guard**, with evidence. Ev
 4. NEVER rewrite, reorder, or delete existing entries. If you must use the Write tool (new file only), it may carry only the header plus your new bullets.
 5. **Structured sidecar for the Hermes miner.** For each lesson you append (NOT the deduped/skipped ones), also append one JSON object per line to `.planning/auto-pilot/insights.jsonl` so `scripts/learning_miner.py` (`scan_insights`) can accumulate it across runs:
    ```bash
+   mkdir -p .planning/auto-pilot
    cat >> .planning/auto-pilot/insights.jsonl <<'EOF'
    {"class": "fail-open", "issue": "<the lesson one-liner>", "candidate_asset": "hook"}
    EOF
