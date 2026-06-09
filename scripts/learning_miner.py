@@ -125,6 +125,61 @@ def scan_doom_loops(repo_root: Path, run_id: str) -> list[Observation]:
     return observations
 
 
+def scan_insights(repo_root: Path, run_id: str) -> list[Observation]:
+    """Parse insights.jsonl → class-keyed Observations (source='insight').
+
+    The fingerprint keys on the canonical ``class`` tag with an empty
+    ``file_basename`` so a recurring class accumulates ``distinct_runs`` across
+    sessions even when the human one-liner is reworded each time (measurement:
+    classes recur across many session-days, the wording does not). A line with
+    no usable ``class`` falls back to its ``issue`` text; with neither it is
+    skipped. Malformed / non-dict lines are tolerated (degrade, never crash).
+    """
+    path = repo_root / ".planning" / "auto-pilot" / "insights.jsonl"
+    observations: list[Observation] = []
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return observations
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            finding = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(finding, dict):
+            continue
+        class_val = finding.get("class")
+        issue_val = finding.get("issue", "")
+        if not (isinstance(class_val, str) and class_val.strip()):
+            class_val = issue_val if isinstance(issue_val, str) else ""
+        if not class_val.strip():
+            continue
+        # A path/date-shaped tag normalizes to "" inside compute_fingerprint;
+        # keying on it would collapse unrelated insights into one ticket (the
+        # exact fragmentation this source exists to prevent). Skip such a tag.
+        if not imp.normalize_issue(class_val).strip():
+            continue
+        candidate_val = finding.get("candidate_asset")
+        if candidate_val is not None and not isinstance(candidate_val, str):
+            candidate_val = str(candidate_val)
+        if candidate_val not in VALID_ASSET_TYPES:
+            candidate_val = None
+        observations.append(
+            Observation(
+                source="insight",
+                file_basename="",
+                issue=class_val,
+                candidate_asset=candidate_val,
+                run_id=run_id,
+                snippet=json.dumps(finding)[:500],
+            )
+        )
+    return observations
+
+
 def _ticket_source(ticket: dict[str, object]) -> str:
     src = ticket.get("source", "")
     return src if isinstance(src, str) else ""
@@ -162,6 +217,7 @@ def run_miner(
     observations: list[Observation] = []
     observations.extend(scan_reviewer_findings(repo_root, run_id))
     observations.extend(scan_doom_loops(repo_root, run_id))
+    observations.extend(scan_insights(repo_root, run_id))
 
     ledger = imp.ledger_dir(repo_root, commit_to)
 
