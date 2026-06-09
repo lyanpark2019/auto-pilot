@@ -223,6 +223,16 @@
             "description": "Generate PM loop final report on session stop"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/learning-miner-stop.sh",
+            "description": "Advisory (never blocks): on Stop, if an auto-pilot run is active (.planning/auto-pilot/state.json), run the Hermes learning miner to accumulate the durable improvement ledger across runs"
+          }
+        ]
       }
     ],
     "SubagentStop": [

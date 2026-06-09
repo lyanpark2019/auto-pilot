@@ -85,6 +85,7 @@ jobs:
           python3 hooks/test_guard_destructive.py
           python3 hooks/test_codex_conductor_guard.py
           python3 hooks/test_notebooklm_delete_gate.py
+          python3 hooks/test_learning_miner_stop.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh

@@ -120,6 +120,39 @@ class TestPreEditHumanOnly:
         assert r.returncode == 0
         _deny_json(r.stdout)
 
+    def test_inline_marker_mention_passes(self, hooks_dir, tmp_path):
+        """A file that only MENTIONS the marker inline (description, doc, table)
+        is not self-protected — the marker must be the sole content of a line.
+        Without this, the wiring SoT hooks.json self-locks on its own hook
+        description text."""
+        repo = self._make_repo(tmp_path)
+        target = repo / "config.json"
+        marker = "HUMAN" + "-ONLY"
+        target.write_text(
+            '{\n  "description": "Block edits to ' + marker + ' marked files"\n}\n'
+        )
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"file_path": str(target)}},
+            cwd=repo,
+        )
+        assert r.returncode == 0
+        assert r.stdout.strip() == ""
+
+    def test_commented_marker_line_denies(self, hooks_dir, tmp_path):
+        """A deliberate marker wrapped in a comment is still a real marker."""
+        repo = self._make_repo(tmp_path)
+        target = repo / "marked.sh"
+        marker = "HUMAN" + "-ONLY"
+        target.write_text(f"#!/bin/sh\n# {marker}\necho hi\n")
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_input": {"file_path": str(target)}},
+            cwd=repo,
+        )
+        assert r.returncode == 0
+        _deny_json(r.stdout)
+
     # ── deny: tier-2 hardcoded paths ──
 
     def test_denies_tier2_governance_doc(self, hooks_dir, tmp_path):

@@ -30,6 +30,14 @@ PROMOTION_THRESHOLDS: dict[str, int] = {
     "insight": 3,
 }
 
+# Mirrors candidate_asset enum in schemas/improvement-ticket.schema.json (SoT).
+# A producer-written value outside this set is coerced to None so a
+# mis-classified finding still becomes a ticket instead of being dropped on
+# ValidationError.
+VALID_ASSET_TYPES: frozenset[str] = frozenset(
+    {"skill", "hook", "schema", "test", "doc", "cache"}
+)
+
 
 def current_run_id(repo_root: Path) -> str:
     """Return state.json 'run_id'; '' if absent or unparseable."""
@@ -69,13 +77,15 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
                 issue_val = str(issue_val)
             if candidate_val is not None and not isinstance(candidate_val, str):
                 candidate_val = str(candidate_val)
+            if candidate_val not in VALID_ASSET_TYPES:
+                candidate_val = None
             snippet = json.dumps(finding)[:500]
             observations.append(
                 Observation(
                     source="reviewer-finding",
                     file_basename=Path(file_val).name if file_val else "",
                     issue=issue_val,
-                    candidate_asset=candidate_val if candidate_val else None,
+                    candidate_asset=candidate_val,
                     run_id=run_id,
                     snippet=snippet,
                 )
