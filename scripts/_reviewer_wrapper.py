@@ -29,6 +29,7 @@ codex exec Bash timeout + Task deadline (residual risk documented here).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -116,9 +117,20 @@ _ENV_DENYLIST = frozenset({
     "REDIS_URL",
 })
 
+# Secondary pattern filter: deny any env var whose name matches a
+# secret-class pattern not covered by the explicit denylist above.
+# Incidental vars (PATH, HOME, LANG, TMPDIR, etc.) pass both filters.
+_SECRET_RE = re.compile(
+    r"(?i)(SECRET|TOKEN|PASSWORD|_KEY$|^GH_CLIENT|DATABASE_URL|REDIS_URL)"
+)
+
 
 def _reviewer_env(role: str, output_dir: Path) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k not in _ENV_DENYLIST}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in _ENV_DENYLIST and not _SECRET_RE.search(k)
+    }
     env["AUTO_PILOT_SUBAGENT_ROLE"] = role
     env["AUTO_PILOT_OUTPUT_DIR"] = str(output_dir)
     return env

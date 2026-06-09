@@ -107,3 +107,29 @@ def test_wait_all_times_out(tmp_path):
     handle = FakeHandle(tmp_path, "r1")
     with pytest.raises(rw.SpawnTimeoutError):
         rw.wait_all([handle], timeout_sec=1)
+
+
+def test_reviewer_env_strips_secrets(monkeypatch, tmp_path):
+    """_reviewer_env must not forward secret vars to subprocess env."""
+    import _reviewer_wrapper as rw
+
+    secret_vars = [
+        "GH_CLIENT_ID",
+        "GH_CLIENT_SECRET",
+        "GH_TOKEN",
+        "MY_API_TOKEN",
+        "DB_PASSWORD",
+        "SOME_SECRET",
+        "STRIPE_KEY",
+        "GITHUB_TOKEN",
+    ]
+    for k in secret_vars:
+        monkeypatch.setenv(k, "leak")
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    env = rw._reviewer_env("codex-reviewer", tmp_path)
+
+    for k in secret_vars:
+        assert k not in env, f"{k} leaked to reviewer env"
+    assert env["PATH"] == "/usr/bin"
+    assert env["AUTO_PILOT_SUBAGENT_ROLE"] == "codex-reviewer"
