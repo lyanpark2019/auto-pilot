@@ -89,6 +89,9 @@ TECH-CRITIC GATE (1 message, N parallel Agent blocks)
   - verdict: APPROVE | REJECT + reason + improvement_path
   - REJECT scope_too_large → slice contract once, re-submit
   - REJECT other → drop contract, log to critic-rejections-phase-N.jsonl
+    (one JSON object per line: `{file, issue, candidate_asset}`; candidate_asset
+    ∈ skill|hook|schema|test|doc|cache or null — line shape SoT in
+    `agents/tech-critic-lead.md`; consumed by the Hermes miner)
   - if all rejected → escalate to user (or in headless mode, STOP with pivot-needed)
   ↓
 DISPATCH WORKERS (1 message, N parallel Agent blocks)

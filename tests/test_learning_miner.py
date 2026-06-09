@@ -87,6 +87,25 @@ def test_reviewer_finding_missing_issue_no_crash(
     assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
 
 
+def test_reviewer_finding_out_of_enum_asset_coerced_not_dropped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A candidate_asset outside the schema enum (e.g. a path) must coerce to
+    None and still produce a ticket — never be silently dropped on ValidationError."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    (d / "state.json").write_text(json.dumps({"run_id": "r1"}))
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({"file": "a.py", "issue": "bad thing", "candidate_asset": "hooks/foo.sh"})
+        + "\n"
+    )
+    res = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert res["candidates"] == 1
+    assert res["by_asset"] == {"none": 1}
+
+
 def test_run_miner_skips_crashing_observation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -150,3 +169,11 @@ def test_fail_on_exit_code_two_when_promotable(
     lm.main(["--repo-root", str(root)])
     (d / "state.json").write_text(json.dumps({"run_id": "r2"}))
     assert lm.main(["--repo-root", str(root), "--fail-on", "promotable"]) == 2
+
+
+def test_valid_asset_types_matches_schema_enum() -> None:
+    """VALID_ASSET_TYPES must mirror the schema candidate_asset enum (no drift)."""
+    schema = json.loads(lm.imp.SCHEMA_PATH.read_text())
+    enum = schema["properties"]["candidate_asset"]["enum"]
+    non_null = {e for e in enum if isinstance(e, str)}
+    assert lm.VALID_ASSET_TYPES == non_null

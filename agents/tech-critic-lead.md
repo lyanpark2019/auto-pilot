@@ -91,4 +91,16 @@ for contract in phase_contracts:
             drop contract from phase plan
 ```
 
+**critic-rejections JSONL line shape (one JSON object per line)** — consumed by
+the Hermes learning miner (`scripts/learning_miner.py` `scan_reviewer_findings`).
+Emit exactly these keys so the finding becomes an improvement ticket:
+
+```json
+{"file": "<repo-relative path>", "issue": "<one-line reject reason>", "candidate_asset": "skill|hook|schema|test|doc|cache or null"}
+```
+
+`candidate_asset` is the asset *type* that would prevent recurrence (the enum
+above), or `null` if none applies — NOT a path. An out-of-enum value is coerced
+to `null` by the miner (the finding is kept, the asset attribution is dropped).
+
 PM은 reject 사유를 phase 종료 보고서에 포함해야 한다 ("거부된 contract: 3개 / scope_too_large 2, insufficient_evidence 1").

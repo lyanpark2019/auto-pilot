@@ -4,7 +4,13 @@
 #
 # Three protection tiers:
 #   (a) Paths listed in .claude/human-only.paths (one path-prefix per line, # comments)
-#   (b) Files whose content contains a HUMAN-ONLY marker line
+#   (b) Files with a "marker-led" line: after an optional comment opener
+#       (one of  #  //  /*  *  ;  --  <!--  ) and whitespace, the line's FIRST
+#       token is the HUMAN-ONLY marker. A trailing note or comment closer after
+#       the marker is allowed. A mere inline mention buried in prose / a JSON
+#       "description" does NOT self-protect -- otherwise this hook's own wiring
+#       (hooks.json) self-locks on its description text. Fail-safe: a marker-led
+#       line denies even when its comment is unterminated (errs toward protect).
 #   (c) Tier-2 hardcoded core: schemas/, hooks/guard-*, and the two governance SoT pages
 #
 # Bypass: AUTO_PILOT_ALLOW_CORE_EDIT=1 overrides tier-2 only (logs allow reason).
@@ -97,7 +103,7 @@ elif [[ -f "$repo_root/$file_path" ]]; then
 fi
 
 if [[ -n "$target_file" ]]; then
-  if grep -qF 'HUMAN-ONLY' "$target_file" 2>/dev/null; then
+  if grep -qE '^[[:space:]]*(#|//|/\*|\*|;|--|<!--)?[[:space:]]*HUMAN-ONLY(-->|\*/)?([[:space:]].*)?$' "$target_file" 2>/dev/null; then
     deny "File contains HUMAN-ONLY marker: $file_path"
   fi
 fi
