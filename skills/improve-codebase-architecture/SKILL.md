@@ -52,6 +52,8 @@ Present a numbered list of deepening opportunities. For each candidate:
 - **Problem** — why the current architecture is causing friction
 - **Solution** — plain English description of what would change
 - **Benefits** — explained in terms of locality and leverage, and also in how tests would improve
+- **Before / after** — a short plain-text contrast: the shallow shape now vs the deepened shape (text only — this skill stays headless, no diagrams/browser)
+- **Recommendation strength** — one of `Strong` / `Worth exploring` / `Speculative`
 
 **Use CONTEXT.md vocabulary for the domain, and [LANGUAGE.md](LANGUAGE.md) vocabulary for the architecture.** If `CONTEXT.md` defines "Order," talk about "the Order intake module" — not "the FooBarHandler," and not "the Order service."
 
