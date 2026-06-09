@@ -219,13 +219,17 @@ def run_miner(
     observations.extend(scan_doom_loops(repo_root, run_id))
     observations.extend(scan_insights(repo_root, run_id))
 
+    effective_dry_run = dry_run or (not run_id.strip())
+    if not run_id.strip() and not dry_run:
+        event("learning_miner.non_persisting", reason="empty_run_id", candidates=len(observations))
+
     ledger = imp.ledger_dir(repo_root, commit_to)
 
     tickets: list[dict[str, object]] = []
     for obs in observations:
         try:
             ticket = imp.bump_or_create(
-                ledger, obs, repo_root=repo_root, now=now, dry_run=dry_run
+                ledger, obs, repo_root=repo_root, now=now, dry_run=effective_dry_run
             )
         except Exception as exc:  # noqa: BLE001 — advisory miner degrades, never aborts the scan
             event("learning_miner.bump_skipped", source=obs.source, error=type(exc).__name__)

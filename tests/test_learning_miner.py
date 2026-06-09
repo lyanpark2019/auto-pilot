@@ -284,3 +284,62 @@ def test_insight_malformed_and_out_of_enum_tolerated(tmp_path: Path, monkeypatch
     tickets = _ledger_tickets(tmp_path / "home", root)
     race = [t for t in tickets if t["pattern"] == "race"]
     assert race and race[0]["candidate_asset"] is None  # out-of-enum coerced
+
+
+# --- New tests for empty run_id non-persisting behaviour (TDD RED first) ---
+
+
+def test_empty_run_id_does_not_persist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """With run_id=="" the miner must NOT write any ticket file to the ledger."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
+
+    # Case 1: run_id key present but empty string
+    _write_insights(root, "", [line])
+    result = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert "verdict" in result
+    assert _ledger_tickets(tmp_path / "home", root) == []
+
+    # Case 2: run_id key absent entirely from state.json
+    d = root / ".planning" / "auto-pilot"
+    (d / "state.json").write_text(json.dumps({}))
+    result2 = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert "verdict" in result2
+    assert _ledger_tickets(tmp_path / "home", root) == []
+
+
+def test_empty_run_id_reports_projected_candidates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Empty run_id: projection still visible (candidates == 1), not zeroed."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
+    _write_insights(root, "", [line])
+    result = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert result["candidates"] == 1
+
+
+def test_nonempty_run_id_still_persists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression guard: non-empty run_id must still persist exactly one ticket."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
+    _write_insights(root, "r1", [line])
+    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert len(_ledger_tickets(tmp_path / "home", root)) == 1
+
+
+def test_whitespace_run_id_does_not_persist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A whitespace-only run_id must be treated as empty — no ticket persisted."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
+    _write_insights(root, "   ", [line])
+    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert _ledger_tickets(tmp_path / "home", root) == []
