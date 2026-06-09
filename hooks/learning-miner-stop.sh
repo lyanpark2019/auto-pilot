@@ -20,7 +20,7 @@ try:
     d = json.load(sys.stdin)
 except Exception:
     sys.exit(1)
-sys.exit(0 if isinstance(d, dict) and d.get("stop_hook_active") else 1)
+sys.exit(0 if isinstance(d, dict) and d.get("stop_hook_active") is True else 1)
 ' 2>/dev/null; then
   exit 0
 fi

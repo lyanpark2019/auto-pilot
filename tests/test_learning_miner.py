@@ -169,3 +169,11 @@ def test_fail_on_exit_code_two_when_promotable(
     lm.main(["--repo-root", str(root)])
     (d / "state.json").write_text(json.dumps({"run_id": "r2"}))
     assert lm.main(["--repo-root", str(root), "--fail-on", "promotable"]) == 2
+
+
+def test_valid_asset_types_matches_schema_enum() -> None:
+    """VALID_ASSET_TYPES must mirror the schema candidate_asset enum (no drift)."""
+    schema = json.loads(lm.imp.SCHEMA_PATH.read_text())
+    enum = schema["properties"]["candidate_asset"]["enum"]
+    non_null = {e for e in enum if isinstance(e, str)}
+    assert lm.VALID_ASSET_TYPES == non_null
