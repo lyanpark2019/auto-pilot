@@ -52,7 +52,13 @@ for seg in segments:
     tokens = seg.split()
     if not tokens:
         continue
-    if tokens[0] == "gh":
+    # Skip leading env-var assignments (VAR=val or VAR=) before first-token check.
+    start = 0
+    while start < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[start]):
+        start += 1
+    if start >= len(tokens):
+        continue
+    if tokens[start] == "gh":
         gh_seg = seg.strip()
         break
 print(gh_seg)

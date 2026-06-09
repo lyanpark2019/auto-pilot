@@ -137,15 +137,39 @@ for seg in segments:
     if subcmd == "commit":
         print(f"commit {c_str}")
     elif subcmd == "push":
-        # Drop flags to find remote + refspec
-        non_flags = [t for t in rest if not t.startswith("-")]
-        if len(non_flags) <= 1:
+        # Build POSITIONALS: drop flags AND skip the value token for options
+        # that take a space-separated value (not =-joined).
+        # Value-taking push options: -o/--push-option, --repo, --exec,
+        # --receive-pack.  =-joined forms (--push-option=x) are a single
+        # token starting with '-' and are already dropped by the flag check.
+        VALUE_TAKING = {"-o", "--push-option", "--repo", "--exec", "--receive-pack"}
+        positionals = []
+        j = 0
+        while j < len(rest):
+            t = rest[j]
+            if t in VALUE_TAKING:
+                j += 2  # skip option + its value token
+            elif t.startswith("-"):
+                j += 1  # drop standalone flags
+            else:
+                positionals.append(t)
+                j += 1
+        if len(positionals) <= 1:
             # bare push or push <remote> only — dst = current HEAD
             print(f"push {c_str} __CURRENT__")
         else:
-            refspec = non_flags[1]
-            dst = refspec.split(":", 1)[1] if ":" in refspec else refspec
-            print(f"push {c_str} {dst}")
+            # Check EVERY refspec (positionals[1:]) for a protected dst.
+            # Emit one line per refspec so the bash loop checks each.
+            for refspec in positionals[1:]:
+                # Strip force-push prefix
+                if refspec.startswith("+"):
+                    refspec = refspec[1:]
+                # Extract dst: "src:dst" → dst; bare refspec → whole token is dst
+                dst = refspec.split(":", 1)[1] if ":" in refspec else refspec
+                # Strip refs/heads/ prefix (leave refs/tags/ alone)
+                if dst.startswith("refs/heads/"):
+                    dst = dst[len("refs/heads/"):]
+                print(f"push {c_str} {dst}")
 ' 2>/dev/null || echo "")
 
 [[ -z "$invocations" ]] && exit 0
@@ -169,7 +193,7 @@ while IFS= read -r inv; do
   fi
 
   if [[ "$subcmd" == "push" ]]; then
-    if [[ "$dst" == "__CURRENT__" ]]; then
+    if [[ "$dst" == "__CURRENT__" || "$dst" == "HEAD" ]]; then
       branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
     else
       branch="$dst"

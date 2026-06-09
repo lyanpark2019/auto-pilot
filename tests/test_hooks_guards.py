@@ -511,6 +511,21 @@ class TestBranchLock:
     ("git push origin", True, True),
     # bypass env with explicit main dst → allow
     ("AUTO_PILOT_MAIN_OK=1 git push origin main", False, False),
+    # A1 bypass fixes — each was a hole in the old parse
+    # force-push prefix (+) stripped before dst compare
+    ("git push origin +main", False, True),
+    # value-taking option (-o) must skip next token; main is still the refspec dst
+    ("git push -o ci.skip origin main", False, True),
+    # bare HEAD as refspec → resolve to current branch → deny when HEAD=main
+    ("git push origin HEAD", True, True),
+    # refs/heads/ prefix stripped before protected-branch compare
+    ("git push origin refs/heads/main", False, True),
+    # --force is a flag; main is still the refspec dst
+    ("git push --force origin main", False, True),
+    # multi-refspec: second refspec maps dst to main → deny
+    ("git push origin feat1 feat2:main", False, True),
+    # value-taking -o option with a feature refspec; HEAD=main → still ALLOW
+    ("git push -o x origin feature", True, False),
 ])
 def test_branch_lock_push_refspec(
     hooks_dir: Path,
@@ -579,6 +594,8 @@ def _make_gh_repo(tmp_path: Path) -> Path:
     ('echo "use gh auth switch"', False), # segment starts with echo
     ("make build && gh release create", True),  # second segment starts with gh
     ("# gh active note", False),         # comment token, not a command
+    # A2 fix: env-var prefix before gh must not swallow the gh token
+    ("GH_TOKEN=x gh pr create", True),
 ])
 def test_gh_auth_fires_only_on_command(
     hooks_dir: Path,

@@ -73,6 +73,15 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"file_path": f"{OUTPUT_DIR}/review.md"},
         }),
     ),
+    # A3 fix: null tool_name must fail-closed (was bypassing via None→"None" string)
+    (
+        "null tool_name with Bash payload → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": None,
+            "tool_input": {"command": "rm -rf /tmp/x"},
+        }),
+    ),
 ]
 
 

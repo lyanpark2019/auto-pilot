@@ -26,7 +26,11 @@ try:
 except (json.JSONDecodeError, ValueError):
     print("__PARSE_FAIL__")
     sys.exit(0)
-print(d.get("tool_name", ""))
+val = d.get("tool_name", "")
+if not isinstance(val, str) or not val:
+    print("__PARSE_FAIL__")
+    sys.exit(0)
+print(val)
 ')
 
 if [ "$tool_name" = "__PARSE_FAIL__" ] || [ -z "$tool_name" ]; then
