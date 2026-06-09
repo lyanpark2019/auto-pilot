@@ -17,12 +17,32 @@ high-value signal:
   root cause reworded across rounds produces N *separate* thin tickets; a class
   recurring across files splits on `file_basename`; within-run thrash never
   raises `distinct_runs`.
-- **Real corpus** (293 commits over 11 session-days): recurring *classes* are
-  real and strong — `format-drift` and `fixture` each span **8** distinct
-  session-days; `silent` 6; `race` 5; `marker` 4; `fail-open`/`reentry` 2 — but
-  each surfaces with **different wording every time** (e.g. commit subjects
-  "fail-open observability" vs "was fail-open"). The literal fingerprint
-  fragments them, so they never reach the `distinct_runs` gate.
+- **Real corpus** (~230 commits over 11 session-days): recurring *classes* exist
+  but are **weaker and more heterogeneous than first stated** (see correction
+  below). The defensible point stands — the same class surfaces with **different
+  wording every time** (e.g. commit subjects "fail-open observability" vs "was
+  fail-open"), so a literal fingerprint fragments it and it never reaches the
+  `distinct_runs` gate.
+
+> **Correction (2026-06-09, dual-review of the next-step decision).** This
+> section originally claimed "293 commits", and "`format-drift` and `fixture`
+> each span **8** distinct session-days; `silent` 6; `race` 5; `marker` 4".
+> Those numbers do **not** reproduce and overstated the signal:
+> - Corpus is **230** commits, not 293.
+> - `format-drift` is a **grep artifact / grab-bag**: `git log --pretty=%s | grep
+>   -ic format` = **0**; the figure came from bare `drift` (8 commits) spanning
+>   six *unrelated* kinds — graphify drift, asset-count drift, prompt-schema
+>   drift, doc-count drift, spec-drift review-lens, doc-drift-audit tooling,
+>   anchor-guard, composition-root harness-drift. It is **not one fixable
+>   class**, and its asset-count sub-class is already CI-guarded
+>   (`scripts/docs/check_doc_reference_integrity.py`, wired at `.github/workflows/ci.yml:40`).
+> - By distinct commit-day on subjects: `format-drift`(bare-drift) 6, `fixture`
+>   3, `shellcheck` 3, `silent` 2, `fail-open` 2, rest ≤1 — only one class
+>   nominally clears the `insight: 3` gate, and that one is heterogeneous.
+> The class-key **mechanism** in §2 remains sound (semantic recurrence is real),
+> but this corpus does **not** establish "real and strong" per-class volume. The
+> honest state: signal weak + method-dependent; let live runs accumulate honest
+> `distinct_runs` before building any promotion machinery on top.
 
 Conclusion: the recurring signal is **semantic / class-level**, and a
 deterministic literal fingerprint cannot cluster it. The human already clusters
