@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # ⓓ-2 branch-lock.sh — PreToolUse Bash
-# Deny `git commit` / `git push` when current branch is main or master.
+# Deny `git commit` / `git push` when the operation targets main or master.
+#   commit  → gate on current HEAD branch
+#   push    → gate on push REFSPEC DST (not HEAD); bare push/no-refspec → HEAD
 # Bypass: AUTO_PILOT_MAIN_OK=1.
 # Worktree-aware: uses the tool_input.cwd field when available.
 # Unparseable stdin → allow (fail-open).
@@ -38,11 +40,8 @@ fi
 # let those bypass the lock.
 GIT_OPTS='([[:space:]]+(-C[[:space:]]+[^[:space:];|&]+|-c[[:space:]]+[^[:space:];|&]+|--[A-Za-z0-9-]+(=[^[:space:];|&]*)?))*'
 
-# STRATEGY SHIFT (r4): three rounds of "pick the right segment" patches each
-# spawned a new ordering edge (r2 opt-order, r3 message -C, r4 push-first
-# chain). Segment SELECTION is abolished: collect EVERY `git <global-opts>
-# commit|push` invocation in the command and deny if ANY of them targets a
-# protected branch — order-independent by construction.
+# STRATEGY SHIFT (r4): collect EVERY `git <global-opts> commit|push` invocation
+# and deny if ANY targets a protected branch — order-independent.
 segs=$(printf '%s' "$cmd" | grep -oE "(^|[[:space:];|&])git${GIT_OPTS}[[:space:]]+(commit|push)([[:space:]]|\$)" || echo "")
 
 [[ -z "$segs" ]] && exit 0
@@ -72,27 +71,117 @@ if [[ -z "$work_dir" ]]; then
   work_dir="$(pwd)"
 fi
 
-# Per segment: honor its own `git -C <path>` (the branch that matters is the
-# -C target's, not CWD's). -C extraction stays scoped to the matched
-# global-opts segment, so commit-message tokens can never hijack it (r3).
-# Residual (documented, accepted): multiple -C compose in git (`-C /a -C b`
-# = /a/b) — we honor the last one only.
-while IFS= read -r seg; do
-  [[ -z "$seg" ]] && continue
-  c_path=$(printf '%s' "$seg" | grep -oE '(^|[[:space:]])-C[[:space:]]+[^[:space:];|&]+' | tail -1 | sed -E 's/.*-C[[:space:]]+//' || echo "")
+# Parse every git commit/push invocation out of the full command string.
+# For each invocation emit one line:
+#   commit <c_path_or_NONE>
+#   push   <c_path_or_NONE> <dst_refspec_or___CURRENT__>
+# Then bash consumes those lines to decide deny/allow.
+#
+# r5 change: push gates on DST refspec, not HEAD branch — fixes false-deny
+# when HEAD=main but pushing a feature branch.
+# Residual (documented): multiple -C compose in git; we honour the last only.
+invocations=$(printf '%s' "$cmd" | python3 -c '
+import sys, re
+
+cmd = sys.stdin.read()
+
+# Split the command on shell compound separators (; && || | newline)
+# to find individual simple-command tokens.
+# We process the whole string as a token list instead of splitting by
+# separator, because separators can appear inside quoted strings; a
+# best-effort split is good enough for a bash hook.
+segments = re.split(r";|&&|\|\||[\n(]", cmd)
+
+for seg in segments:
+    tokens = seg.split()
+    if not tokens:
+        continue
+    # Skip env-var assignments at the front (VAR=val)
+    start = 0
+    while start < len(tokens) and re.match(r"^[A-Z_][A-Z_0-9]*=", tokens[start]):
+        start += 1
+    if start >= len(tokens):
+        continue
+    # Must start with "git"
+    if tokens[start] != "git":
+        continue
+
+    # Collect global options (flags and their arguments), then find subcommand
+    i = start + 1
+    c_path = None
+    while i < len(tokens):
+        t = tokens[i]
+        if t == "-C" and i + 1 < len(tokens):
+            c_path = tokens[i + 1]
+            i += 2
+        elif t.startswith("-c") and not t.startswith("--"):
+            # -c key=val (may be one or two tokens)
+            if t == "-c":
+                i += 2  # skip the value token
+            else:
+                i += 1
+        elif t.startswith("--"):
+            i += 1
+        elif t.startswith("-"):
+            i += 1
+        else:
+            break  # found the subcommand
+
+    if i >= len(tokens):
+        continue
+    subcmd = tokens[i]
+    rest = tokens[i + 1:]  # everything after the subcommand
+
+    c_str = c_path if c_path is not None else "NONE"
+
+    if subcmd == "commit":
+        print(f"commit {c_str}")
+    elif subcmd == "push":
+        # Drop flags to find remote + refspec
+        non_flags = [t for t in rest if not t.startswith("-")]
+        if len(non_flags) <= 1:
+            # bare push or push <remote> only — dst = current HEAD
+            print(f"push {c_str} __CURRENT__")
+        else:
+            refspec = non_flags[1]
+            dst = refspec.split(":", 1)[1] if ":" in refspec else refspec
+            print(f"push {c_str} {dst}")
+' 2>/dev/null || echo "")
+
+[[ -z "$invocations" ]] && exit 0
+
+while IFS= read -r inv; do
+  [[ -z "$inv" ]] && continue
+
+  # Parse: "commit <c_path>" or "push <c_path> <dst>"
+  subcmd=$(printf '%s' "$inv" | cut -d' ' -f1)
+  c_path=$(printf '%s' "$inv" | cut -d' ' -f2)
+  dst=$(printf '%s' "$inv" | cut -d' ' -f3)
+
+  # Resolve the -C target directory
   target="$work_dir"
-  if [[ -n "$c_path" ]]; then
+  if [[ "$c_path" != "NONE" && -n "$c_path" ]]; then
     if [[ "$c_path" == /* ]]; then
       target="$c_path"
     else
       target="$work_dir/$c_path"
     fi
   fi
-  # Get this invocation's branch (tolerate non-git dirs)
-  branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
+
+  if [[ "$subcmd" == "push" ]]; then
+    if [[ "$dst" == "__CURRENT__" ]]; then
+      branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
+    else
+      branch="$dst"
+    fi
+  else
+    # commit: gate on current HEAD
+    branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
+  fi
+
   if [[ "$branch" == "main" || "$branch" == "master" ]]; then
     deny "Refusing git commit/push on protected branch '$branch' (target: $target). Set AUTO_PILOT_MAIN_OK=1 to override."
   fi
-done <<< "$segs"
+done <<< "$invocations"
 
 exit 0

@@ -492,3 +492,72 @@ class TestBranchLock:
         assert "deny" not in r.stdout
 
 
+@pytest.mark.parametrize("command,head_is_main,expect_deny", [
+    # commit targets HEAD — deny when on main, allow on feature
+    ("git commit -m x", True, True),
+    ("git commit -m x", False, False),
+    # push with explicit dst=main → deny regardless of HEAD
+    ("git push origin main", False, True),
+    # push with explicit dst=feature while HEAD=main → ALLOW (the bug)
+    ("git push origin feature", True, False),
+    # HEAD:main and feature:main → deny (colon-form, dst is main)
+    ("git push origin HEAD:main", False, True),
+    ("git push origin feature:main", False, True),
+    # -u flag with feature dst while HEAD=main → allow
+    ("git push -u origin feature", True, False),
+    # bare push, HEAD=main → deny (defaults to current branch)
+    ("git push", True, True),
+    # push <remote> only, no refspec, HEAD=main → deny
+    ("git push origin", True, True),
+    # bypass env with explicit main dst → allow
+    ("AUTO_PILOT_MAIN_OK=1 git push origin main", False, False),
+])
+def test_branch_lock_push_refspec(
+    hooks_dir: Path,
+    tmp_path: Path,
+    command: str,
+    head_is_main: bool,
+    expect_deny: bool,
+) -> None:
+    """Push decisions gate on the push refspec DST, not HEAD branch."""
+    if head_is_main:
+        repo = _make_main_repo_helper(tmp_path)
+    else:
+        repo = _make_feature_repo_helper(tmp_path)
+
+    hook = hooks_dir / "branch-lock.sh"
+    r = _run_hook(
+        hook,
+        {"tool_input": {"command": command, "cwd": str(repo)}},
+        cwd=repo,
+    )
+    assert r.returncode == 0
+    if expect_deny:
+        _deny_json(r.stdout)
+    else:
+        assert "deny" not in r.stdout
+
+
+def _make_main_repo_helper(tmp_path: Path) -> Path:
+    """Init a git repo with a commit on main (standalone helper)."""
+    subprocess.run(["git", "init", "-b", "main", str(tmp_path)],
+                   capture_output=True, check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "test@test.com"],
+                   check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "Test"],
+                   check=True)
+    (tmp_path / "README.md").write_text("test")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "init"],
+                   capture_output=True, check=True)
+    return tmp_path
+
+
+def _make_feature_repo_helper(tmp_path: Path) -> Path:
+    """Init a git repo on a feature branch (standalone helper)."""
+    _make_main_repo_helper(tmp_path)
+    subprocess.run(["git", "-C", str(tmp_path), "checkout", "-b", "feature"],
+                   capture_output=True, check=True)
+    return tmp_path
+
+
