@@ -50,9 +50,11 @@ class Observation:
     run_id: str
     snippet: str           # self-contained evidence text (<=500 chars)
 
-def bump_or_create(ledger: Path, obs: Observation, *, now: datetime,
-                  dry_run: bool) -> dict:
+def bump_or_create(ledger: Path, obs: Observation, *, repo_root: Path,
+                  now: datetime, dry_run: bool) -> dict:
     """flock + atomic temp+rename RMW of ledger/<fp>.json. fp = compute_fingerprint(...).
+    repo_fingerprint is derived from repo_root (NOT ledger). dry_run creates no dir.
+    A corrupt existing ticket is reseeded (no crash).
     evidence deduped on (run_id, snippet). occurrences = len(evidence).
     distinct_runs = len({e['run_id'] for e in evidence}).
     Create with state='candidate', first_seen=last_seen=now if absent; else last_seen=now.

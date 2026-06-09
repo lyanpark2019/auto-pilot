@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/improvement-ticket/v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "fingerprint",
+    "state",
+    "pattern",
+    "source",
+    "candidate_asset",
+    "occurrences",
+    "distinct_runs",
+    "first_seen",
+    "last_seen",
+    "plugin_version",
+    "repo_fingerprint",
+    "evidence",
+    "promotion_gate"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "state": {
+      "enum": [
+        "candidate",
+        "accepted",
+        "implemented",
+        "verified",
+        "promoted",
+        "rejected"
+      ]
+    },
+    "pattern": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "enum": [
+        "reviewer-finding",
+        "doom-loop",
+        "pivot",
+        "insight",
+        "wasted-tool"
+      ]
+    },
+    "candidate_asset": {
+      "enum": [
+        "skill",
+        "hook",
+        "schema",
+        "test",
+        "doc",
+        "cache",
+        null
+      ]
+    },
+    "occurrences": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "distinct_runs": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "first_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plugin_version": {
+      "type": "string"
+    },
+    "repo_fingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "snippet"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "locator": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "promotion_gate": {
+      "type": "object",
+      "required": [
+        "tests_pass",
+        "ci_pass",
+        "user_approved"
+      ],
+      "properties": {
+        "tests_pass": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ci_pass": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "user_approved": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
