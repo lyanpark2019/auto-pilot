@@ -343,3 +343,35 @@ def test_whitespace_run_id_does_not_persist(
     _write_insights(root, "   ", [line])
     lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
     assert _ledger_tickets(tmp_path / "home", root) == []
+
+
+def test_null_run_id_does_not_persist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """JSON null run_id must not persist — str(null) == 'None' is truthy but invalid."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    (d / "state.json").write_text(json.dumps({"run_id": None}))
+    (d / "insights.jsonl").write_text(
+        json.dumps({"class": "fail-open", "issue": "x", "candidate_asset": "hook"}) + "\n"
+    )
+    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert _ledger_tickets(tmp_path / "home", root) == []
+
+
+def test_numeric_run_id_does_not_persist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Numeric run_id 0 must not persist — str(0) == '0' is truthy but invalid."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    (d / "state.json").write_text(json.dumps({"run_id": 0}))
+    (d / "insights.jsonl").write_text(
+        json.dumps({"class": "fail-open", "issue": "x", "candidate_asset": "hook"}) + "\n"
+    )
+    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    assert _ledger_tickets(tmp_path / "home", root) == []

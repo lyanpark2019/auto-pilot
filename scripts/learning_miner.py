@@ -40,11 +40,14 @@ VALID_ASSET_TYPES: frozenset[str] = frozenset(
 
 
 def current_run_id(repo_root: Path) -> str:
-    """Return state.json 'run_id'; '' if absent or unparseable."""
+    """Return state.json 'run_id'; '' if absent, non-string, or unparseable."""
     state_path = repo_root / ".planning" / "auto-pilot" / "state.json"
     try:
         data = json.loads(state_path.read_text())
-        return str(data.get("run_id", ""))
+        val = data.get("run_id", "")
+        if not isinstance(val, str):
+            return ""
+        return val
     except (OSError, json.JSONDecodeError, ValueError):
         return ""
 
