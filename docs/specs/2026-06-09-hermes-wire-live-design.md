@@ -41,7 +41,7 @@ advisory. Behavior, in order:
 2. **Reentry guard** — `stop_hook_active == true` → exit 0 (copies
    `hooks/subagent-deliverable-check.sh`; prevents infinite Stop re-fire).
 3. **Target root** — `${CLAUDE_PROJECT_DIR:-<payload cwd>:-$PWD}`. The env var is
-   the repo's established pattern (`hooks/pm_final_report.sh:23`); payload `cwd`
+   the repo's established pattern (`hooks/pm_final_report.sh:23` <!-- cite-ignore -->); payload `cwd`
    then `$PWD` are fallbacks. This is the repo being *driven* (the target), which
    in brownfield mode is **not** the plugin.
 4. **Miner path** — the plugin's own copy, derived from the hook's location:
@@ -57,7 +57,7 @@ advisory. Behavior, in order:
    the verdict line to session output.
 7. **Advisory** — exit 0 on every path, including miner error (`|| true`). The
    miner already wraps `bump_or_create` in try/except
-   (`scripts/learning_miner.py:164`).
+   (`scripts/learning_miner.py:234`).
 
 ## 4. Data flow
 

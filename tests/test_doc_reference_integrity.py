@@ -214,3 +214,43 @@ class TestScanScope:
         r = _run(repo)
         assert r.returncode == 1
         assert "2 violation" in r.stdout
+
+
+class TestSymbolWarn:
+    """Pin the symbol-proximity WARN heuristic behaviour.
+
+    The WARN fires when a backtick-wrapped symbol appears near a citation in the
+    doc but is absent from the 10-line window around the cited line in the code
+    file.  It is advisory only (exit 0); the test captures it via stderr.
+    """
+
+    def _make_code_file(self, repo: Path, fn_line: int) -> None:
+        """Write scripts/code.py with `def foo():` at `fn_line` (1-based)."""
+        padding = ["# padding\n"] * (fn_line - 1)
+        (repo / "scripts" / "code.py").write_text(
+            "".join(padding) + "def foo():\n    pass\n"
+        )
+
+    def test_warn_emitted_for_symbol_at_wrong_line(self, repo: Path) -> None:
+        """Citation pointing to line 5 when `foo` is at line 50 → WARN on stderr."""
+        self._make_code_file(repo, fn_line=50)
+        # cite line 5; symbol `foo` appears near doc line but NOT in code window
+        (repo / "docs" / "guide.md").write_text(
+            "`foo` lives in `scripts/code.py:5`\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, "WARN must not cause a violation (exit stays 0)"
+        assert "WARN" in r.stderr
+        assert "foo" in r.stderr
+        assert "scripts/code.py:5" in r.stderr
+
+    def test_no_warn_for_symbol_at_correct_line(self, repo: Path) -> None:
+        """`foo` cited at the line it actually lives on → no WARN."""
+        self._make_code_file(repo, fn_line=3)
+        # cite line 3 where foo actually is
+        (repo / "docs" / "guide.md").write_text(
+            "`foo` is defined at `scripts/code.py:3`\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0
+        assert "WARN" not in r.stderr

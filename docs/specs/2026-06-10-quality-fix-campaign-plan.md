@@ -122,7 +122,7 @@ Current bug (`hooks/pre-reviewer-write.sh:22-29`): for a reviewer role, JSONDeco
 
 ### Task B1: reviewer env — allowlist, not denylist (audit #5)
 
-Current bug (`scripts/_reviewer_wrapper.py:104-124`): `_reviewer_env` is allow-by-default (`{k:v for ... if k not in _ENV_DENYLIST}`) and the denylist omits this repo's actual secret var names (`GH_CLIENT_ID`, `GH_CLIENT_SECRET`, `GH_TOKEN`). If `.env` is sourced, those reach every `claude -p` reviewer subprocess.
+Current bug (`scripts/_reviewer_wrapper.py:104-124` <!-- cite-ignore -->): `_reviewer_env` is allow-by-default (`{k:v for ... if k not in _ENV_DENYLIST}`) and the denylist omits this repo's actual secret var names (`GH_CLIENT_ID`, `GH_CLIENT_SECRET`, `GH_TOKEN`). If `.env` is sourced, those reach every `claude -p` reviewer subprocess.
 
 **Decision:** keep the denylist approach but make it pattern-based AND closed against the repo's own names — deny any var whose name matches `(?i)(SECRET|TOKEN|PASSWORD|_KEY$|^GH_CLIENT|DATABASE_URL|REDIS_URL)`. (Full allowlist rejected: a reviewer subprocess needs PATH/HOME/LANG/TMPDIR/AUTO_PILOT_*/many incidental vars; an allowlist would be brittle and break the reviewer. Pattern-denylist closes the secret classes without that fragility.)
 
@@ -184,7 +184,7 @@ assert (tickets / "worker.json") in removed_paths, \
 
 ### Task C2: coerce non-string run_id → non-persisting (audit #8 — the gap deferred 2026-06-09)
 
-`scripts/learning_miner.py:47` `current_run_id` does `str(data.get("run_id",""))`, so JSON `null`→`"None"` and numeric `0`→`"0"` are truthy → persist a `distinct_runs`-stuck ticket, defeating the empty-run_id guard for those shapes.
+`scripts/learning_miner.py:42` <!-- cite-ignore --> `current_run_id` does `str(data.get("run_id",""))`, so JSON `null`→`"None"` and numeric `0`→`"0"` are truthy → persist a `distinct_runs`-stuck ticket, defeating the empty-run_id guard for those shapes.
 
 - [ ] **Step 1 — failing tests** in `tests/test_learning_miner.py`:
 ```python
@@ -282,7 +282,7 @@ return val
 - [ ] **Step 1 — failing test.** `hooks/test_worker_scope_gate.py` (script-style): `AUTO_PILOT_SUBAGENT_ROLE=worker AUTO_PILOT_SCOPE_FILES="scripts/a.py"` + Edit to `scripts/b.py` → exit 2; Edit to `scripts/a.py` → exit 0; role unset → exit 0.
 - [ ] **Step 2 — watch fail** (hook doesn't exist → script errors). 
 - [ ] **Step 3 — implement** `hooks/worker-scope-gate.sh` (fail-closed on parse error for the worker role, per A3 precedent), `chmod +x`, wire into `hooks/hooks.json` PreToolUse Edit|Write|MultiEdit matcher.
-- [ ] **Step 4 — green; `shellcheck`; wire self-test into CI (C3).** Update `agents/worker.md:13` to reference the gate as the enforcement (not just prose).
+- [ ] **Step 4 — green; `shellcheck`; wire self-test into CI (C3).** Update `agents/worker.md:13` <!-- cite-ignore --> to reference the gate as the enforcement (not just prose).
 - [ ] **Step 5 — commit.** `Constraint: gate active only when the PM sets AUTO_PILOT_SCOPE_FILES in the worker env; absent → no-op (documented).`
 
 ### Task D4: specialist-pool — mark unported reviewers (audit P2)
@@ -306,17 +306,17 @@ return val
 
 ### Task E1: symbol-WARN — test it, then fix the stale citations (audit #12, #13)
 
-The symbol-proximity WARN heuristic (`check_doc_reference_integrity.py:290-311`) is untested and every current WARN is a false positive (symbol exists, line drifted). Two-part fix: (a) add tests for the WARN path so its behavior is pinned; (b) correct the stale `:line` citations so the WARN set goes to zero.
+The symbol-proximity WARN heuristic (`scripts/docs/check_doc_reference_integrity.py:290-311`) is untested and every current WARN is a false positive (symbol exists, line drifted). Two-part fix: (a) add tests for the WARN path so its behavior is pinned; (b) correct the stale `:line` citations so the WARN set goes to zero.
 
-- [ ] **Step 1 — failing test.** `tests/test_doc_reference_integrity.py`: a fixture doc citing `foo.py:5` where symbol `foo` is at line 50 → assert a WARN is emitted (captured stderr / return structure); a doc citing the correct line → no WARN. (Watch fail — no such test today.)
+- [ ] **Step 1 — failing test.** `tests/test_doc_reference_integrity.py`: a fixture doc citing `foo.py:5` <!-- cite-ignore --> where symbol `foo` is at line 50 → assert a WARN is emitted (captured stderr / return structure); a doc citing the correct line → no WARN. (Watch fail — no such test today.)
 - [ ] **Step 2 — implement/confirm** the WARN function behaves per the test (it likely already does; the test pins it). If the ±window is the issue, leave behavior, just pin it.
-- [ ] **Step 3 — fix the live stale citations** the audit named: `docs/specs/2026-06-09-hermes-loop-mvp-design.md:54` (`pivot_detector` → correct line near `scripts/orchestrator.py:81`), and re-run `python3 scripts/docs/check_doc_reference_integrity.py` → iterate until **0 WARN, 0 violations**.
+- [ ] **Step 3 — fix the live stale citations** the audit named: `docs/specs/2026-06-09-hermes-loop-mvp-design.md:54` <!-- cite-ignore --> (`pivot_detector` → correct line near `scripts/orchestrator.py:81`), and re-run `python3 scripts/docs/check_doc_reference_integrity.py` → iterate until **0 WARN, 0 violations**.
 - [ ] **Step 4 — commit.** `Constraint: WARN stays advisory (not promoted to CI-fail) because line-drift churn is high; the test pins behavior and the live WARN set is now zero.`
 
 ### Task E2: stale prose in CLAUDE.md + onboarding + module-size budget (audit P2 ×3)
 
 - [ ] **Step 1.** `CLAUDE.md:37` — replace `currently 2026-05-28-dogfood-smoke.md` with the actual `ls docs/specs/` set, or stop enumerating a volatile dir (prefer the latter: "active PR-input/dogfood specs under `docs/specs/`").
-- [ ] **Step 2.** `scripts/quality/module_size_budget.txt:11` — remove the stale `skills/quality-eval/SKILL.md|620` entry (actual 258, under the 500 default). Re-run `bash scripts/quality/check-module-size.sh` → OK.
+- [ ] **Step 2.** `scripts/quality/module_size_budget.txt:9` <!-- cite-ignore --> — remove the stale `skills/quality-eval/SKILL.md|620` entry (actual 258, under the 500 default). Re-run `bash scripts/quality/check-module-size.sh` → OK.
 - [ ] **Step 3.** `docs/onboarding/README.md` — regenerate (or update `source_commit`) so it is not 66 commits stale; confirm all referenced paths still resolve.
 - [ ] **Step 4 — commit** each as its own small commit.
 

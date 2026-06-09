@@ -35,7 +35,7 @@ high-value signal:
 >   drift, doc-count drift, spec-drift review-lens, doc-drift-audit tooling,
 >   anchor-guard, composition-root harness-drift. It is **not one fixable
 >   class**, and its asset-count sub-class is already CI-guarded
->   (`scripts/docs/check_doc_reference_integrity.py`, wired at `.github/workflows/ci.yml:40`).
+>   (`scripts/docs/check_doc_reference_integrity.py`, wired at `.github/workflows/ci.yml:40` <!-- cite-ignore -->).
 > - By distinct commit-day on subjects: `format-drift`(bare-drift) 6, `fixture`
 >   3, `shellcheck` 3, `silent` 2, `fail-open` 2, rest ≤1 — only one class
 >   nominally clears the `insight: 3` gate, and that one is heterogeneous.
