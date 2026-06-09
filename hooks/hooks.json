@@ -17,6 +17,17 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/worker-scope-gate.sh",
+            "description": "Block worker agent edits outside AUTO_PILOT_SCOPE_FILES allowlist (no-op when role != worker or scope unset)",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-composition-root.sh"
           }
         ]

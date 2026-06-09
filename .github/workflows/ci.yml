@@ -87,6 +87,7 @@ jobs:
           python3 hooks/test_notebooklm_delete_gate.py
           python3 hooks/test_learning_miner_stop.py
           python3 hooks/test_pre_reviewer_write.py
+          python3 hooks/test_worker_scope_gate.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh
