@@ -39,5 +39,5 @@ def test_sweep_orphan_tickets_removes_no_marker(tmp_path):
     os.utime(tickets / "worker.json", (old, old))
 
     removed = _gc.sweep_orphan_tickets(state_dir, max_age_hours=24)
-    assert (tickets / "worker.json") not in [Path(p) for p in removed] or True
-    # Either reaped or reported as orphan candidate
+    removed_paths = [Path(p) for p in removed]
+    assert (tickets / "worker.json") in removed_paths, "old marker-less ticket should be reaped"
