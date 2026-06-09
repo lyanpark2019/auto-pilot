@@ -231,9 +231,9 @@ NOW = datetime(2026, 6, 9, tzinfo=timezone.utc)
 
 def test_fingerprint_stable_across_line_path_date():
     a = imp.compute_fingerprint("reviewer-finding", "auth.py",
-        "phase-2 /Users/x/auth.py:88 missing token check 2026-06-09", "hook")
+        "phase-2 /Users/x/auth.py:88 missing token check 2026-06-09", "hook")  <!-- cite-ignore -->  fixture, not a repo citation
     b = imp.compute_fingerprint("reviewer-finding", "auth.py",
-        "phase-5 /tmp/auth.py:120 missing token check 2026-01-01", "hook")
+        "phase-5 /tmp/auth.py:120 missing token check 2026-01-01", "hook")  <!-- cite-ignore -->  fixture, not a repo citation
     assert a == b  # line/path/date/phase normalized away
 
 def test_fingerprint_distinguishes_semantics():
