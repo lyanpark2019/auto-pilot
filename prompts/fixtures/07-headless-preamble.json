@@ -10,7 +10,9 @@
     "stdin is /dev/null",
     "${HARNESS_HEADLESS:-0}",
     "SYNCHRONOUS",
-    "NEVER exit with subagents in flight"
+    "NEVER exit with subagents in flight",
+    "nohup",
+    "detached wrappers"
   ],
   "expects_not": ["{iter_n}", "{phase}", "auto-pilot-iter:"]
 }
