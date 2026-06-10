@@ -53,7 +53,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 | `scripts/_reviewer_wrapper.py` | PR3 | parallel reviewer dispatch with isolated env dicts |
 | `scripts/_dogfood_gate.py` | PR4 | Tier 1 / Tier 2 acceptance assertions + CLI |
 | `scripts/_budget.py` | PR5 | cost / token / pid caps for headless driver (extracted from `headless-loop.py`) |
-| `scripts/_discovery.py` | Step 1 | graphify provenance record + diff-relevance freshness check (`orchestrator.py discover`) |
+| `scripts/_discovery.py` | Step 1+2 | graphify provenance record, diff-relevance freshness check (`orchestrator.py discover`), `resolve_report` bundle seam |
 | `scripts/risk_assess.py` | v0.7.1 | diff → risk tier + `review_policy` JSON (advisory gate for review dispatch; SoT for tier/policy tokens) |
 
 ## Editing this plugin

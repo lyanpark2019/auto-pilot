@@ -186,7 +186,7 @@ PM reads `done.marker` → `exit-code.txt` → `review.json | status.json` (PR1 
 
 ### Discovery seam (Step 1, 2026-06-10)
 
-`scripts/_discovery.py` + `orchestrator.py discover --record|--check`. The PM runs graphify itself, then `--record` persists provenance only (`graphify-provenance.json`: build_commit + graphify_version + recorded_at — the graph is never SHA-pinned; its LLM layer is non-reproducible). `--check --scope-files a,b,dir/` returns a pure-git diff-relevance verdict (exit 0 fresh / 1 stale): regen is needed only when the recorded-commit..HEAD diff intersects the next phase's scope or the graphify version changed — plain commit inequality would force a regen after every phase merge.
+`scripts/_discovery.py` + `orchestrator.py discover --record|--check`. The PM runs graphify itself, then `--record` persists provenance only (`graphify-provenance.json`: build_commit + graphify_version + recorded_at — the graph is never SHA-pinned; its LLM layer is non-reproducible). `--check --scope-files a,b,dir/` returns a pure-git diff-relevance verdict (exit 0 fresh / 1 stale): regen is needed only when the recorded-commit..HEAD diff intersects the next phase's scope or the graphify version changed — plain commit inequality would force a regen after every phase merge. `resolve_report` composes both: returns `graphify-out/GRAPH_REPORT.md` for `snapshot_context(project_context_path=…)` only when the report exists and provenance is fresh — the Step-2 bundle seam (copied bytes land as `context-bundle/project-context.md`, SHA-pinned via `snapshot_shas.project_context`).
 
 ## Worktree lifecycle (PR2)
 

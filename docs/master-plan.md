@@ -78,11 +78,10 @@ Dual adversarial review (Codex + cold Claude) found the original "graphify first
 - `graphify-out/` already gitignored (predates Step 1) — clean-tree preflight unaffected.
 - Schema v2 landed earlier in round-2 W2 unified migration (project_context seat + dispatch required fields).
 
-### Step 2 — copy graphify context INTO the bundle (no drill-down)
-- Workers run in isolated worktrees (clean checkout at `base_sha`) → they **cannot** see `graphify-out/` in `$ROOT`. Everything a worker needs is **copied into `context-bundle/`** (which is per-contract). Drop the "drill into raw graph" idea entirely.
-- Start with a **deterministic copy of the full `GRAPH_REPORT.md`** graphify emits — no PM-authored digest yet (that adds an unverified authoring stage). SHA-pin the copied bytes.
-- **Freshness = diff-relevance**, NOT sha-equality: regen only if `git diff <build-commit>..<base_sha> --name-only` intersects the next phase's scope, or use graphify `--update` incremental. (Plain `build-commit != base_sha` regenerates every phase because base_sha advances per merge — defeats the whole point.)
-- Record graphify version alongside `.build-commit`; force regen on version change.
+### Step 2 — copy graphify context INTO the bundle — ✅ DONE 2026-06-10 (wiring; live-run pending)
+- Mechanics were already in place from the round-2 W2 migration: `_contract.snapshot_context(project_context_path=…)` copies the report bytes as `context-bundle/project-context.md`, SHA-pins them into `snapshot_shas.project_context` + MANIFEST, and `verify_snapshots` fail-closes on declared-but-missing/tampered bytes ("ran context-blind" log when absent).
+- This step added the missing seam: `_discovery.resolve_report(repo_root, state_dir, graphify_version, scope_files)` → `(path | None, Freshness)` — returns `graphify-out/GRAPH_REPORT.md` only when it exists AND provenance is fresh (diff-relevance + version match). PM contract (`agents/pm-orchestrator.md` dispatch step 0) wires it: None → regen graphify + `discover --record` + resolve again; still None → context-blind, never blocks dispatch. Dispatch prompt template now lists `project-context.md`.
+- NOT yet proven live: a worker actually receiving/reading `project-context.md` in its bundle — fold into the next live run (REJECT-round dogfood).
 
 ### Step 3 — relevance digest (OPTIONAL, measured)
 - Build a PM-authored, scope-sliced `project-map.md` digest **only if** workers measurably degrade on the full report. Measure before optimizing. Split global-map (pre-PLAN) from per-contract slice (post-tech-critic) to avoid the circular timing (slice needs `scope_files`, which PLAN produces).

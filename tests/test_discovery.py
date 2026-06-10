@@ -162,3 +162,53 @@ def test_check_corrupt_provenance_stale(repo):
     )
     assert f.fresh is False
     assert f.reason == "provenance-corrupt"
+
+
+class TestResolveReport:
+    @staticmethod
+    def _with_report(repo_root: Path) -> Path:
+        report = repo_root / "graphify-out" / "GRAPH_REPORT.md"
+        report.parent.mkdir(parents=True)
+        report.write_text("# graph\n")
+        return report
+
+    def test_report_missing(self, repo):
+        repo_root, state = repo
+        path, verdict = _discovery.resolve_report(
+            repo_root=repo_root, state_dir=state, graphify_version="g1"
+        )
+        assert path is None
+        assert verdict.reason == "report-missing"
+
+    def test_fresh_returns_path(self, repo):
+        repo_root, state = repo
+        report = self._with_report(repo_root)
+        _discovery.record_provenance(repo_root=repo_root, state_dir=state, graphify_version="g1")
+        path, verdict = _discovery.resolve_report(
+            repo_root=repo_root, state_dir=state, graphify_version="g1",
+            scope_files=("src/",),
+        )
+        assert path == report
+        assert verdict.fresh is True
+
+    def test_stale_version_returns_none(self, repo):
+        repo_root, state = repo
+        self._with_report(repo_root)
+        _discovery.record_provenance(repo_root=repo_root, state_dir=state, graphify_version="g1")
+        path, verdict = _discovery.resolve_report(
+            repo_root=repo_root, state_dir=state, graphify_version="g2"
+        )
+        assert path is None
+        assert verdict.reason == "version-changed"
+
+    def test_scope_intersect_returns_none(self, repo):
+        repo_root, state = repo
+        self._with_report(repo_root)
+        _discovery.record_provenance(repo_root=repo_root, state_dir=state, graphify_version="g1")
+        _commit(repo_root, "src/a.py", "a = 3\n")
+        path, verdict = _discovery.resolve_report(
+            repo_root=repo_root, state_dir=state, graphify_version="g1",
+            scope_files=("src/a.py",),
+        )
+        assert path is None
+        assert verdict.reason == "scope-intersects"

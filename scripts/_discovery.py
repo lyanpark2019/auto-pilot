@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 PROVENANCE_FILE = "graphify-provenance.json"
+DEFAULT_REPORT_RELPATH = Path("graphify-out/GRAPH_REPORT.md")
 _GIT_TIMEOUT = 30
 
 
@@ -144,3 +145,30 @@ def check_freshness(
     if hits:
         return Freshness(fresh=False, reason="scope-intersects", changed_files=hits)
     return Freshness(fresh=True, reason="no-scope-overlap")
+
+
+def resolve_report(
+    *,
+    repo_root: Path,
+    state_dir: Path,
+    graphify_version: str,
+    scope_files: Sequence[str] = (),
+    report_relpath: Path = DEFAULT_REPORT_RELPATH,
+) -> tuple[Path | None, Freshness]:
+    """Resolve the graphify report to bundle as ``project-context.md``, or None.
+
+    The path is non-None only when the report file exists AND provenance is
+    fresh for the given scope. On a None verdict the PM regenerates graphify,
+    calls :func:`record_provenance`, and resolves again; if still None it
+    proceeds context-blind (``verify_snapshots`` logs that downstream).
+    """
+    report = repo_root / report_relpath
+    if not report.exists():
+        return None, Freshness(fresh=False, reason="report-missing")
+    verdict = check_freshness(
+        repo_root=repo_root, state_dir=state_dir,
+        graphify_version=graphify_version, scope_files=scope_files,
+    )
+    if not verdict.fresh:
+        return None, verdict
+    return report, verdict
