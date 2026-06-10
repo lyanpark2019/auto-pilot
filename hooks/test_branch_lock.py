@@ -114,6 +114,12 @@ def main() -> None:
             ('double-quoted "main"',           'git push origin "main"'),
             ("single-quoted 'main'",           "git push origin 'main'"),
             ("brace group { push main; }",     "{ git push origin main; }"),
+            # shlex ValueError fail-closed: unbalanced quote → __CURRENT__ →
+            # gates HEAD (main here).  Exercises the _mentions fallback path.
+            ('unbalanced quote push "main',    'git push origin "main'),
+            # Multiline + unbalanced quote: _mentions needs re.S to see the
+            # push word across the newline (would fail-open without it).
+            ("multiline unbalanced quote",     'git\npush origin "main'),
         ]
         for label, cmd in deny_main:
             results.append(run_case(label, "DENY", cmd, main_repo))
@@ -148,6 +154,9 @@ def main() -> None:
             ("push REFS/HEADS/main",          "git push origin REFS/HEADS/main"),
             # Sonnet r3: backslash-newline continuation
             ("push origin \\nmain (cont.)",   "git push origin \\\nmain"),
+            # Sonnet r4 P3: --delete is a flag (skipped); main stays the
+            # positional dst → deny.  Feature repo proves dst-gating, not HEAD.
+            ("push origin --delete main",     "git push origin --delete main"),
         ]
         for label, cmd in deny_eval:
             results.append(run_case(label, "DENY", cmd, feat_repo))
@@ -185,6 +194,12 @@ def main() -> None:
         results.append(run_case(
             "subshell bare push on feature", "ALLOW",
             "(git push)", feat_repo))
+        # Documented residual: unbalanced quote fail-closed resolves to
+        # __CURRENT__ (HEAD), so on a feature branch it allows — the literal
+        # "main" in the broken token is NOT treated as dst.
+        results.append(run_case(
+            "unbalanced quote on feature (residual)", "ALLOW",
+            'git push origin "main', feat_repo))
 
     passed = sum(results)
     total = len(results)

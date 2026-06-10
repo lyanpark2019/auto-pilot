@@ -84,7 +84,9 @@ cmd = sys.stdin.read()
 
 # Whether the raw command even mentions a git push/commit — used for the
 # fail-closed path if shlex cannot parse the (likely malformed) string.
-_mentions = re.search(r"(?:^|/|\\\\|\b)git\b.*\b(push|commit)\b", cmd) is not None
+# \b already matches after ^, /, and backslash (all non-word chars); re.S so
+# a malformed MULTILINE command (git\npush + unbalanced quote) still trips it.
+_mentions = re.search(r"\bgit\b.*\b(push|commit)\b", cmd, re.S) is not None
 
 # Fail CLOSED on shell-evaluation constructs a static tokenizer cannot resolve:
 # command-substitution $(...) / backtick, variable expansion ($VAR / ${VAR}),

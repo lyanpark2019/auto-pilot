@@ -91,7 +91,18 @@ print(cmd_val)
       echo "auto-pilot: BLOCKED reviewer ($role) Bash — unparseable or non-dict tool_input (fail-closed)" >&2
       exit 2
     fi
-    if echo "$cmd" | grep -qE '(^|[[:space:]])(/[^ ]*/)?\\?git[[:space:]]+(commit|push|reset|checkout|stash|am|rebase|merge|worktree|restore|clean)|rm[[:space:]]|mv[[:space:]]|chmod[[:space:]]|chown[[:space:]]|tee[[:space:]]|sed[[:space:]]+-i|awk[[:space:]]+-i|curl[[:space:]]|wget[[:space:]]|ssh[[:space:]]|scp[[:space:]]|rsync[[:space:]]'; then
+    # Anchored alternation: every alternative requires a ^ / whitespace / `/`
+    # boundary before the binary name — an unanchored `rm ` matched inside
+    # "perform ", `sed -i` inside "parsed -i" (false-deny on harmless reads).
+    # The `/` boundary keeps path-qualified binaries (/bin/rm) caught.
+    # git allows intermediate -flag [value] pairs so `git -C <path> push` and
+    # `git -c a=b push` cannot bypass, while `git log | grep commit` (non-flag
+    # token after git) stays allowed.  Trailing boundary stops prefix FPs
+    # (`git commitlint`).
+    re_git='(/[^ ]*/)?\\?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+(commit|push|reset|checkout|stash|am|rebase|merge|worktree|restore|clean)([[:space:]]|$)'
+    re_bin='(rm|mv|chmod|chown|tee|curl|wget|ssh|scp|rsync)[[:space:]]'
+    re_inplace='(sed|awk)[[:space:]]+-i'
+    if echo "$cmd" | grep -qE "(^|[[:space:]]|/)($re_git|$re_bin|$re_inplace)"; then
       echo "auto-pilot: BLOCKED reviewer ($role) Bash mutation: $cmd" >&2
       exit 2
     fi

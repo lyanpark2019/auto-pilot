@@ -121,6 +121,69 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": "/usr/bin/git push origin x"},
         }),
     ),
+    # Anchored-regex fixwave: unanchored `rm ` / `sed -i` previously matched
+    # INSIDE words ("perform ", "parsed -i") → false-deny on harmless reads.
+    (
+        "Bash 'echo perform task' (rm substring) → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo perform task"},
+        }),
+    ),
+    (
+        "Bash 'echo parsed -i' (sed -i substring) → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo parsed -i"},
+        }),
+    ),
+    # Anchoring must NOT lose path-qualified binaries or ^-anchored ones.
+    (
+        "Bash rm -rf (start of cmd) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf /tmp/x"},
+        }),
+    ),
+    (
+        "Bash /bin/rm (path-qualified) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "/bin/rm -rf /tmp/x"},
+        }),
+    ),
+    (
+        "Bash sed -i in-place → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "sed -i '' s/a/b/ file.txt"},
+        }),
+    ),
+    # git global-opt bypass: -C/-c flag+value pairs before the subcommand are
+    # skipped, so `git -C <path> push` is still a push.
+    (
+        "Bash git -C path push → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "git -C /repo push origin x"},
+        }),
+    ),
+    # Non-flag token after git breaks the chain — a mutation WORD later in a
+    # read-only pipeline must not deny.
+    (
+        "Bash git log | grep commit → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "git log --oneline | grep commit"},
+        }),
+    ),
 ]
 
 

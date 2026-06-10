@@ -325,49 +325,11 @@ class TestBranchLock:
                        capture_output=True, check=True)
         return tmp_path
 
-    # ── pass cases ──
-
-    def test_commit_on_feature_branch_passes(self, hooks_dir, tmp_path):
-        repo = self._make_feature_repo(tmp_path)
-        r = _run_hook(
-            self._hook(hooks_dir),
-            {"tool_input": {"command": "git commit -m 'test'"}},
-            cwd=repo,
-        )
-        assert r.returncode == 0
-        assert "deny" not in r.stdout
-
-    def test_non_commit_command_passes(self, hooks_dir, tmp_path):
-        repo = self._make_main_repo(tmp_path)
-        r = _run_hook(
-            self._hook(hooks_dir),
-            {"tool_input": {"command": "git log --oneline"}},
-            cwd=repo,
-        )
-        assert r.returncode == 0
-        assert "deny" not in r.stdout
-
-    # ── deny: commit on main ──
-
-    def test_denies_commit_on_main(self, hooks_dir, tmp_path):
-        repo = self._make_main_repo(tmp_path)
-        r = _run_hook(
-            self._hook(hooks_dir),
-            {"tool_input": {"command": "git commit -m 'oops'"}},
-            cwd=repo,
-        )
-        assert r.returncode == 0
-        _deny_json(r.stdout)
-
-    def test_denies_push_on_main(self, hooks_dir, tmp_path):
-        repo = self._make_main_repo(tmp_path)
-        r = _run_hook(
-            self._hook(hooks_dir),
-            {"tool_input": {"command": "git push origin main"}},
-            cwd=repo,
-        )
-        assert r.returncode == 0
-        _deny_json(r.stdout)
+    # Baseline allow/deny cases (commit/push on main, git status, env bypass)
+    # live in hooks/test_branch_lock.py (CI-wired, 46 cases) — this class keeps
+    # only coverage that file lacks: -C/global-opt handling, chained
+    # invocations, malformed stdin.  Commit-on-HEAD basics are also covered by
+    # the test_branch_lock_push_refspec parametrize below.
 
     # ── deny: global options must not bypass (review r1) ──
 
@@ -465,19 +427,6 @@ class TestBranchLock:
             {"tool_input": {"command":
                 f"git -C {feat1} commit -m a; git -C {feat2} push origin HEAD"}},
             cwd=elsewhere,
-        )
-        assert r.returncode == 0
-        assert "deny" not in r.stdout
-
-    # ── bypass ──
-
-    def test_bypass_allows_commit_on_main(self, hooks_dir, tmp_path):
-        repo = self._make_main_repo(tmp_path)
-        r = _run_hook(
-            self._hook(hooks_dir),
-            {"tool_input": {"command": "git commit -m 'bypass'"}},
-            cwd=repo,
-            env={"AUTO_PILOT_MAIN_OK": "1"},
         )
         assert r.returncode == 0
         assert "deny" not in r.stdout
