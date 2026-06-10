@@ -8,7 +8,9 @@
     "dispatch workers",
     "dual reviewers",
     "verify",
-    "commit with trailers"
+    "commit with trailers",
+    "run synchronously",
+    "subagents in flight"
   ],
   "expects_not": ["{iter_n}", "{phase}"]
 }

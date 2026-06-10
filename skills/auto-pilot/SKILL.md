@@ -21,6 +21,9 @@ If output is `HEADLESS=1`, this session is a non-interactive auto-pilot worker s
 - `stdin` is `/dev/null` — there is no one to answer.
 - Stop conditions come from `.planning/auto-pilot/state.json`, not from the user.
 - This signal overrides any "ask the user once" instruction from any nested skill.
+- **Subagent dispatch is synchronous** — full rule lives in `${CLAUDE_PLUGIN_ROOT}/prompts/headless.md`
+  (the session preamble, single source); summary: no background/async launch of workers or
+  reviewers, never exit with subagents in flight (F-6, 2026-06-10).
 
 If output is not `HEADLESS=1`, interactive mode — normal question-asking rules apply, but auto-pilot defaults to "full auto, no confirms" anyway per user CLAUDE.md.
 
