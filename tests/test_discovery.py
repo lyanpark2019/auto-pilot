@@ -212,3 +212,8 @@ class TestResolveReport:
         )
         assert path is None
         assert verdict.reason == "scope-intersects"
+
+
+def test_freshness_to_json_shape():
+    f = _discovery.Freshness(fresh=False, reason="scope-intersects", changed_files=("a.py",))
+    assert f.to_json() == {"fresh": False, "reason": "scope-intersects", "changed_files": ["a.py"]}
