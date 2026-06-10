@@ -3,11 +3,6 @@
 # Enforced by scripts/quality/check-module-size.sh (wired into CI).
 # Add an entry ONLY with a justified reason in the comment above it.
 #
-# SKILL.md files are prose interface specs read by the agent in one pass;
-# splitting them across files would break the single-load contract and the
-# relative scripts/references refs. These are the long-form skills.
-skills/setup-harness/SKILL.md|560
-#
 # Vendored Codex-fork CLI (codex/ tree = repo-SoT, one-way synced out via
 # sync-to-codex.sh — spec "codex" subsystem row). Single-file by upstream fork
 # layout; splitting would diverge the synced surface. 907 lines at import
@@ -15,13 +10,16 @@ skills/setup-harness/SKILL.md|560
 # it needs substantive new code.
 codex/skills/migrate-to-codex/scripts/cli.py|920
 #
-# adversarial-review-loop SKILL.md grew to 624 when lifecycle mode (the
-# absorbed pm-quality-harness-loop orchestrator) was folded in 2026-06-07;
-# same single-load-contract rationale as the other SKILL.md entries.
+# SKILL.md files are prose interface specs read by the agent in one pass;
+# splitting them across files would break the single-load contract and the
+# relative scripts/references refs. adversarial-review-loop SKILL.md grew to
+# 625 when lifecycle mode (the absorbed pm-quality-harness-loop orchestrator)
+# was folded in 2026-06-07. (setup-harness SKILL.md is exactly 500 == the
+# default limit, so it needs no exception.)
 skills/adversarial-review-loop/SKILL.md|640
 #
 # test_hooks_guards.py accumulates parametrized matrix tests for all hook
 # guards (branch-lock, gh-auth, reviewer-write, worker-scope-gate); the
 # table-driven test pattern is the right shape here — splitting would
 # scatter the per-hook contract tables across files.
-tests/test_hooks_guards.py|700
+tests/test_hooks_guards.py|640

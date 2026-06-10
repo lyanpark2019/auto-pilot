@@ -109,27 +109,102 @@ def test_wait_all_times_out(tmp_path):
         rw.wait_all([handle], timeout_sec=1)
 
 
-def test_reviewer_env_strips_secrets(monkeypatch, tmp_path):
-    """_reviewer_env must not forward secret vars to subprocess env."""
+# Full leak list from the 2026-06-10 cold security re-audit. Under the old
+# name-denylist + regex these reached the `claude -p` reviewer subprocess.
+# The default-deny allowlist must drop EVERY one of them.
+_LEAK_VARS = [
+    "STRIPE_SK",
+    "SK_LIVE",
+    "PAT",
+    "GH_PAT",
+    "GITLAB_PAT",
+    "NPM_AUTH",
+    "APIKEY",
+    "ACCESS_KEY_ID",
+    "AWS_ACCESS_KEY_ID",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "SENTRY_DSN",
+    "TWILIO_AUTH",
+    "JWT",
+    "BEARER",
+    "SESSION_COOKIE",
+    "CREDENTIALS",
+    "VAULT_ADDR",
+    "KUBECONFIG",
+    "MONGODB_URI",
+    "MONGO_URL",
+    "RABBITMQ_URL",
+    "AMQP_URL",
+    "BASIC_AUTH",
+    "HTPASSWD",
+    "MYSQL_PASSWORD",
+    # vars the regex-floor caught before — must still be absent under allowlist
+    "GH_CLIENT_ID",
+    "GH_CLIENT_SECRET",
+    "GH_TOKEN",
+    "MY_API_TOKEN",
+    "DB_PASSWORD",
+    "SOME_SECRET",
+    "STRIPE_KEY",
+    "GITHUB_TOKEN",
+    "AWS_SECRET_ACCESS_KEY",
+    "ANTHROPIC_API_KEY",
+]
+
+
+@pytest.mark.parametrize("secret", _LEAK_VARS)
+def test_reviewer_env_strips_secrets(monkeypatch, tmp_path, secret):
+    """Each known leak var must be ABSENT from the reviewer env (leak closed)."""
     import _reviewer_wrapper as rw
 
-    secret_vars = [
-        "GH_CLIENT_ID",
-        "GH_CLIENT_SECRET",
-        "GH_TOKEN",
-        "MY_API_TOKEN",
-        "DB_PASSWORD",
-        "SOME_SECRET",
-        "STRIPE_KEY",
-        "GITHUB_TOKEN",
-    ]
-    for k in secret_vars:
-        monkeypatch.setenv(k, "leak")
-    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv(secret, "SENTINEL_LEAK_VALUE")
 
     env = rw._reviewer_env("codex-reviewer", tmp_path)
 
-    for k in secret_vars:
-        assert k not in env, f"{k} leaked to reviewer env"
-    assert env["PATH"] == "/usr/bin"
+    assert secret not in env, f"{secret} leaked to reviewer env"
     assert env["AUTO_PILOT_SUBAGENT_ROLE"] == "codex-reviewer"
+
+
+def test_reviewer_env_forwards_operational_vars(monkeypatch, tmp_path):
+    """Operational vars a CLI subprocess needs must SURVIVE the allowlist."""
+    import _reviewer_wrapper as rw
+
+    survivors = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/Users/test",
+        "LANG": "en_US.UTF-8",
+        "TMPDIR": "/tmp",
+        "LC_ALL": "C.UTF-8",          # LC_ prefix
+        "CLAUDE_CONFIG_DIR": "/home/test/.claude",  # CLAUDE_ prefix
+        "CLAUDECODE": "1",            # runtime marker
+        "XDG_CONFIG_HOME": "/home/test/.config",    # XDG_ prefix
+    }
+    for k, v in survivors.items():
+        monkeypatch.setenv(k, v)
+
+    env = rw._reviewer_env("codex-reviewer", tmp_path)
+
+    for k, v in survivors.items():
+        assert env.get(k) == v, f"{k} must survive the allowlist"
+
+
+@pytest.mark.parametrize("app_var", ["MY_APP_FEATURE_FLAG", "DATABASE_HOST"])
+def test_reviewer_env_drops_unknown_app_vars(monkeypatch, tmp_path, app_var):
+    """Default-deny: a benign-but-unknown app var is dropped, not just secrets."""
+    import _reviewer_wrapper as rw
+
+    monkeypatch.setenv(app_var, "value")
+
+    env = rw._reviewer_env("codex-reviewer", tmp_path)
+
+    assert app_var not in env, f"{app_var} should be dropped by default-deny"
+
+
+def test_reviewer_env_sets_subagent_role_and_output_dir(monkeypatch, tmp_path):
+    """AUTO_PILOT_SUBAGENT_ROLE / AUTO_PILOT_OUTPUT_DIR are always set."""
+    import _reviewer_wrapper as rw
+
+    env = rw._reviewer_env("claude-reviewer", tmp_path / "out")
+
+    assert env["AUTO_PILOT_SUBAGENT_ROLE"] == "claude-reviewer"
+    assert env["AUTO_PILOT_OUTPUT_DIR"] == str(tmp_path / "out")

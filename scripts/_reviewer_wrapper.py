@@ -102,6 +102,50 @@ class SpawnHandle:
         return self.proc.poll()
 
 
+# --- Env filtering: DEFAULT-DENY ALLOWLIST (2026-06-10 security re-audit) ----
+# A name-denylist can never enumerate every secret naming convention, so the
+# prior denylist+regex leaked ~50% of common secret env vars (STRIPE_SK, PAT,
+# KUBECONFIG, MONGODB_URI, JWT, AWS_ACCESS_KEY_ID, …) into the reviewer
+# subprocess. We now forward ONLY a known-safe operational set and drop
+# everything else by default. This is the permanent fix per the
+# anti-whack-a-mole rule (stop chasing secret names; allow only what runs).
+#
+# The reviewer is a `claude -p` subprocess (see _reviewer_cmd / spawn). It
+# authenticates via HOME (~/.claude config), NOT via an API key — proven by
+# ANTHROPIC_API_KEY already being stripped today while reviewers keep working.
+# So the allowlist only needs what a CLI process + claude config discovery
+# require; no credential env var is needed.
+
+_ALLOWED_ENV_EXACT = frozenset({
+    "PATH",     # locate `claude` and any tool it shells out to
+    "HOME",     # claude reads ~/.claude config + auth from here (live auth path)
+    "USER",     # some CLIs read it for config / temp paths
+    "LOGNAME",  # POSIX login name; same role as USER for some tools
+    "SHELL",    # subprocess/tooling that spawns a shell
+    "TERM",     # terminal capabilities for any TTY-aware output
+    "TMPDIR",   # scratch dir for claude + child processes
+    "TMP",      # Windows/alt scratch dir alias
+    "TEMP",     # Windows/alt scratch dir alias
+    "LANG",     # locale → correct UTF-8 text handling
+    "PWD",      # working-directory awareness for relative paths
+    "COLUMNS",  # terminal width for formatted output
+    "LINES",    # terminal height for formatted output
+    "EDITOR",   # tools that may invoke an editor
+})
+
+# Prefix allowlist: families of operational vars whose exact names vary.
+_ALLOWED_ENV_PREFIXES = (
+    "LC_",          # locale categories (LC_ALL, LC_CTYPE, …)
+    "AUTO_PILOT_",  # our own dispatch contract vars (role/output re-set below)
+    "CLAUDE_",      # claude runtime/config (e.g. CLAUDE_CONFIG_DIR)
+    "CLAUDECODE",   # claude-code runtime marker (CLAUDECODE, CLAUDE_CODE_*)
+    "XDG_",         # config/cache dir discovery (XDG_CONFIG_HOME, …)
+)
+
+# Secondary defense-in-depth FLOOR applied AFTER the allowlist: even a var that
+# survives by prefix (e.g. CLAUDE_API_TOKEN, AUTO_PILOT_SECRET) is dropped if
+# its name matches a secret-class pattern. Belt and suspenders — the allowlist
+# is primary, this catches an allowlisted-prefix var that smells like a secret.
 _ENV_DENYLIST = frozenset({
     "AWS_SECRET_ACCESS_KEY",
     "AWS_SESSION_TOKEN",
@@ -117,11 +161,8 @@ _ENV_DENYLIST = frozenset({
     "REDIS_URL",
 })
 
-# Secondary pattern filter: deny any env var whose name matches a
-# secret-class pattern not covered by the explicit denylist above.
-# Incidental vars (PATH, HOME, LANG, TMPDIR, etc.) pass both filters.
 _SECRET_RE = re.compile(
-    r"(?i)(SECRET|TOKEN|PASSWORD|_KEY$|^GH_CLIENT|DATABASE_URL|REDIS_URL)"
+    r"(?i)(SECRET|TOKEN|PASSWORD|KEY$|CREDENTIAL|^GH_CLIENT|DATABASE_URL|REDIS_URL)"
 )
 
 
@@ -129,7 +170,9 @@ def _reviewer_env(role: str, output_dir: Path) -> dict[str, str]:
     env = {
         k: v
         for k, v in os.environ.items()
-        if k not in _ENV_DENYLIST and not _SECRET_RE.search(k)
+        if (k in _ALLOWED_ENV_EXACT or k.startswith(_ALLOWED_ENV_PREFIXES))
+        and k not in _ENV_DENYLIST
+        and not _SECRET_RE.search(k)
     }
     env["AUTO_PILOT_SUBAGENT_ROLE"] = role
     env["AUTO_PILOT_OUTPUT_DIR"] = str(output_dir)

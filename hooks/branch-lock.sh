@@ -34,18 +34,6 @@ fi
 
 [[ -z "$cmd" ]] && exit 0
 
-# Only fire when command actually contains a commit or push (word boundary check).
-# Tolerate git GLOBAL options before the subcommand (`git -C <path> commit`,
-# `git -c k=v push`, `git --no-pager push`) — review r1: adjacency-only regex
-# let those bypass the lock.
-GIT_OPTS='([[:space:]]+(-C[[:space:]]+[^[:space:];|&]+|-c[[:space:]]+[^[:space:];|&]+|--[A-Za-z0-9-]+(=[^[:space:];|&]*)?))*'
-
-# STRATEGY SHIFT (r4): collect EVERY `git <global-opts> commit|push` invocation
-# and deny if ANY targets a protected branch — order-independent.
-segs=$(printf '%s' "$cmd" | grep -oE "(^|[[:space:];|&])git${GIT_OPTS}[[:space:]]+(commit|push)([[:space:]]|\$)" || echo "")
-
-[[ -z "$segs" ]] && exit 0
-
 # Bypass — hook env OR an explicit env-prefix on the command itself (the hook
 # process inherits the SESSION env, so a tool-call prefix never reaches the
 # check above; accept the literal token as operator intent — r3 fix, same
@@ -77,37 +65,99 @@ fi
 #   push   <c_path_or_NONE> <dst_refspec_or___CURRENT__>
 # Then bash consumes those lines to decide deny/allow.
 #
-# r5 change: push gates on DST refspec, not HEAD branch — fixes false-deny
-# when HEAD=main but pushing a feature branch.
+# STRATEGY SHIFT (fixwave 2026-06-10): tokenize with shlex instead of a
+# regex/str.split() tokenizer.  shlex.split() removes shell quoting so
+# `git push origin "main"` / `'main'` yield the bare token `main`; subshell
+# `()` / brace-group `{}` / separator `;` punctuation is stripped from the
+# command before tokenizing so `(git push origin main)` and
+# `{ git push origin main; }` are detected.  Fail-CLOSED: if shlex raises
+# ValueError (unbalanced quotes) we still emit a conservative __CURRENT__
+# push so a malformed push can't slip the lock.
+#
+# r5 contract preserved: push gates on DST refspec, not HEAD branch.
 # Residual (documented): multiple -C compose in git; we honour the last only.
+# shellcheck disable=SC2016 # python heredoc — $ and backtick are regex literals, not shell expansions
 invocations=$(printf '%s' "$cmd" | python3 -c '
-import sys, re
+import sys, re, shlex
 
 cmd = sys.stdin.read()
 
-# Split the command on shell compound separators (; && || | newline)
-# to find individual simple-command tokens.
-# We process the whole string as a token list instead of splitting by
-# separator, because separators can appear inside quoted strings; a
-# best-effort split is good enough for a bash hook.
-segments = re.split(r";|&&|\|\||[\n(]", cmd)
+# Whether the raw command even mentions a git push/commit — used for the
+# fail-closed path if shlex cannot parse the (likely malformed) string.
+_mentions = re.search(r"\bgit\b.*\b(push|commit)\b", cmd) is not None
 
-for seg in segments:
-    tokens = seg.split()
+# Fail CLOSED on shell-evaluation constructs a static tokenizer cannot resolve:
+# command-substitution $(...) / backtick, variable expansion ($VAR / ${VAR}),
+# or nested-shell (eval / sh -c / bash -c).  A push/commit command containing
+# any of these is treated as a push to a PROTECTED branch (deny; the
+# AUTO_PILOT_MAIN_OK bypass already exited earlier for legit overrides).  Closes
+# the command-substitution evasion `$(printf git) push origin main` (codex
+# re-review 2026-06-10) without per-case whack-a-mole: unanalyzable push = deny.
+# Scope: only PUSH.  A push dst can be obscured by a construct, but a commit
+# gates on the current HEAD read from git directly (the command string cannot
+# lie about it), so a construct in a non-push command (`echo $(date); git
+# status`, the `--skip-git-repo-check` flag, a feature-branch commit) is NOT
+# failed closed — avoids over-firing on the common `$(...)` + non-push case.
+# Include ANSI-C ($\x27) and locale ($") quoting alongside $(, ${, $VAR.
+# \x27 = single-quote; avoids bash string-nesting issues (this Python is
+# inside a bash single-quoted string).
+_eval_construct = re.search(r"\$[\w({\x27\"]|`|\beval\b|\b(?:ba|z)?sh\s+-c\b", cmd)
+if _eval_construct:
+    # 1. Literal "push" word present alongside a construct → fail closed.
+    if re.search(r"\bpush\b", cmd):
+        print("push NONE main")
+        sys.exit(0)
+    # 2. Word-building: a construct delimiter directly adjacent to word chars
+    #    (e.g. p$(...)h, $(cmd)push, pu${X}sh) means the construct is
+    #    fragmenting a token — cannot resolve statically, fail closed when
+    #    "git" also appears.  Catches the `p$(printf us)h` evasion (codex r2).
+    _word_build = re.search(
+        r"\w\$\([^)]*\)|\$\([^)]*\)\w"
+        r"|\w\$\{[^}]*\}|\$\{[^}]*\}\w"
+        r"|\w`[^`]*`|`[^`]*`\w", cmd)
+    if _word_build and re.search(r"\bgit\b", cmd):
+        print("push NONE main")
+        sys.exit(0)
+
+# Normalize backslash-newline continuations (shell line continuation) so the
+# tokens rejoin: `git push origin \\\nmain` → `git push origin main`.
+cmd = cmd.replace("\\\n", "")
+
+# Strip subshell / brace-group / compound-separator punctuation so a wrapped
+# invocation tokenizes the same as a bare one.  These are shell metacharacters,
+# never part of a remote/refspec token.
+sanitized = re.sub(r"[(){}]", " ", cmd)
+sanitized = re.sub(r"&&|\|\||[;&|\n]", " ", sanitized)
+
+try:
+    all_tokens = shlex.split(sanitized)
+    parse_ok = True
+except ValueError:
+    all_tokens = []
+    parse_ok = False
+
+if not parse_ok:
+    # Fail closed: a push/commit we could not parse is treated as a bare
+    # push against the current HEAD so the bash layer still gates on branch.
+    if _mentions:
+        print("push NONE __CURRENT__")
+    sys.exit(0)
+
+# shlex flattened the whole command into one token list (separators were
+# replaced with spaces above).  Walk it and segment on each "git" boundary so
+# multiple chained git invocations are each evaluated.
+VALUE_TAKING = {"-o", "--push-option", "--repo", "--exec", "--receive-pack"}
+
+# Find indices where a git invocation begins.
+git_starts = [k for k, t in enumerate(all_tokens) if t == "git"]
+for gi, gstart in enumerate(git_starts):
+    gend = git_starts[gi + 1] if gi + 1 < len(git_starts) else len(all_tokens)
+    tokens = all_tokens[gstart:gend]
     if not tokens:
-        continue
-    # Skip env-var assignments at the front (VAR=val)
-    start = 0
-    while start < len(tokens) and re.match(r"^[A-Z_][A-Z_0-9]*=", tokens[start]):
-        start += 1
-    if start >= len(tokens):
-        continue
-    # Must start with "git"
-    if tokens[start] != "git":
         continue
 
     # Collect global options (flags and their arguments), then find subcommand
-    i = start + 1
+    i = 1
     c_path = None
     while i < len(tokens):
         t = tokens[i]
@@ -115,7 +165,6 @@ for seg in segments:
             c_path = tokens[i + 1]
             i += 2
         elif t.startswith("-c") and not t.startswith("--"):
-            # -c key=val (may be one or two tokens)
             if t == "-c":
                 i += 2  # skip the value token
             else:
@@ -130,45 +179,48 @@ for seg in segments:
     if i >= len(tokens):
         continue
     subcmd = tokens[i]
-    rest = tokens[i + 1:]  # everything after the subcommand
+    rest = tokens[i + 1:]
 
     c_str = c_path if c_path is not None else "NONE"
 
     if subcmd == "commit":
         print(f"commit {c_str}")
     elif subcmd == "push":
-        # Build POSITIONALS: drop flags AND skip the value token for options
-        # that take a space-separated value (not =-joined).
-        # Value-taking push options: -o/--push-option, --repo, --exec,
-        # --receive-pack.  =-joined forms (--push-option=x) are a single
-        # token starting with '-' and are already dropped by the flag check.
-        VALUE_TAKING = {"-o", "--push-option", "--repo", "--exec", "--receive-pack"}
         positionals = []
+        has_mirror_or_all = False
         j = 0
         while j < len(rest):
             t = rest[j]
             if t in VALUE_TAKING:
-                j += 2  # skip option + its value token
+                j += 2
+            elif t in ("--mirror", "--all"):
+                has_mirror_or_all = True
+                j += 1
             elif t.startswith("-"):
-                j += 1  # drop standalone flags
+                j += 1
             else:
                 positionals.append(t)
                 j += 1
-        if len(positionals) <= 1:
-            # bare push or push <remote> only — dst = current HEAD
+        # --mirror / --all push ALL branches; emit __ALL__ so the bash
+        # layer checks whether ANY local branch is protected.
+        if has_mirror_or_all:
+            print(f"push {c_str} __ALL__")
+        elif len(positionals) <= 1:
             print(f"push {c_str} __CURRENT__")
         else:
-            # Check EVERY refspec (positionals[1:]) for a protected dst.
-            # Emit one line per refspec so the bash loop checks each.
             for refspec in positionals[1:]:
-                # Strip force-push prefix
                 if refspec.startswith("+"):
                     refspec = refspec[1:]
-                # Extract dst: "src:dst" → dst; bare refspec → whole token is dst
                 dst = refspec.split(":", 1)[1] if ":" in refspec else refspec
-                # Strip refs/heads/ prefix (leave refs/tags/ alone)
-                if dst.startswith("refs/heads/"):
+                # Case-insensitive strip of refs/heads/ prefix
+                if dst.lower().startswith("refs/heads/"):
                     dst = dst[len("refs/heads/"):]
+                # Also strip refs/remotes/ paths
+                elif dst.lower().startswith("refs/remotes/"):
+                    dst = dst[len("refs/remotes/"):]
+                    # e.g. refs/remotes/origin/main → strip "origin/"
+                    if "/" in dst:
+                        dst = dst.split("/", 1)[1]
                 print(f"push {c_str} {dst}")
 ' 2>/dev/null || echo "")
 
@@ -193,7 +245,17 @@ while IFS= read -r inv; do
   fi
 
   if [[ "$subcmd" == "push" ]]; then
-    if [[ "$dst" == "__CURRENT__" || "$dst" == "HEAD" ]]; then
+    if [[ "$dst" == "__ALL__" ]]; then
+      # --mirror / --all: check if ANY local branch is protected.
+      all_branches=$(git -C "$target" branch --format='%(refname:short)' 2>/dev/null || echo "")
+      while IFS= read -r b; do
+        lc_b=$(printf '%s' "$b" | tr '[:upper:]' '[:lower:]')
+        if [[ "$lc_b" == "main" || "$lc_b" == "master" ]]; then
+          deny "Refusing git push --mirror/--all: repo contains protected branch '$b' (target: $target). Set AUTO_PILOT_MAIN_OK=1 to override."
+        fi
+      done <<< "$all_branches"
+      continue
+    elif [[ "$dst" == "__CURRENT__" || "$dst" == "HEAD" ]]; then
       branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
     else
       branch="$dst"
@@ -203,7 +265,9 @@ while IFS= read -r inv; do
     branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
   fi
 
-  if [[ "$branch" == "main" || "$branch" == "master" ]]; then
+  # Case-insensitive comparison: Main/MAIN/MaIn all match.
+  lc_branch=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]')
+  if [[ "$lc_branch" == "main" || "$lc_branch" == "master" ]]; then
     deny "Refusing git commit/push on protected branch '$branch' (target: $target). Set AUTO_PILOT_MAIN_OK=1 to override."
   fi
 done <<< "$invocations"

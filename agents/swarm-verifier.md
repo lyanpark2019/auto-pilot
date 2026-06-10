@@ -1,7 +1,7 @@
 ---
 name: swarm-verifier
 description: Independent second-opinion verifier dispatched by the PM after a "merge" verdict. Re-runs acceptance commands, inspects diff for hidden side-effects, attempts adversarial reproductions. Spawn via Task tool only — invoked from pm-verify.md prompt.
-tools: Bash, Read, Grep
+tools: Bash, Read, Grep, Write
 model: opus
 color: red
 ---

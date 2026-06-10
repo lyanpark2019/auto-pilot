@@ -9,9 +9,11 @@ For each citation:
   (b) the cited line number must be ≤ the file's line count.
   (c) best-effort: if a symbol name appears nearby, warn if it is absent
       from that line's surrounding context (10-line window).
+Also enforces inventory counts: live asset-count claims and free-text
+hook-count claims ("(N scripts)" / "N hooks") on the wiring-SoT pages must
+match the real inventory (hooks/hooks.json for hook counts).
 
 Lines containing ``<!-- cite-ignore -->`` are silently skipped.
-
 Exit: non-zero with a list of violations when any are found.
 
 Usage:
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import re
 import sys
 from collections.abc import Iterable, Mapping
@@ -60,6 +63,13 @@ _HISTORICAL_RE = re.compile(
 _SOURCE_COMMENT_RE = re.compile(r"^\s*(#|//|/\*|\*)")
 _SOURCE_COMMENT_ROOTS = ("scripts", "hooks", "swarm", "vault")
 _SOURCE_COMMENT_EXTS = frozenset({".py", ".sh", ".mjs", ".js", ".ts"})
+
+# Free-text hook-count claims ("(22 scripts)" / "22 hooks") tied to the
+# hooks.json enumeration. Narrow on purpose: only the wiring-SoT pages, only
+# lines that name hooks.json, never the asset-count line (own guard).
+_HOOK_DECL_RE = re.compile(r"\b(?P<num>\d+)\s+(?P<kind>scripts|hooks)\b", re.IGNORECASE)
+_HOOK_REF_RE = re.compile(r"hooks/([\w-]+\.(?:sh|py))")
+_HOOK_COUNT_DOCS = ("CLAUDE.md", "docs/architecture.md")
 
 IGNORE_MARKER = "<!-- cite-ignore -->"
 
@@ -110,23 +120,21 @@ def _is_skipped_path(raw_path: str) -> bool:
     return any(raw_path.startswith(pfx) for pfx in _SKIP_PATH_PREFIXES)
 
 
+_ASSET_TYPE_TO_KIND = {
+    "skill": "skills", "agent": "agents", "command": "commands",
+    "hook": "hooks", "codex-skill": "codex-skills",
+}
+
+
 def _asset_counts_from_assets(assets: Iterable[Mapping[str, object]]) -> dict[str, int]:
     counts = {"skills": 0, "agents": 0, "commands": 0, "hooks": 0, "codex-skills": 0}
     shells = 0
     for asset in assets:
         typ = str(asset.get("type", ""))
-        if typ == "skill":
-            counts["skills"] += 1
-        elif typ == "skill-shell":
+        if typ == "skill-shell":
             shells += 1
-        elif typ == "agent":
-            counts["agents"] += 1
-        elif typ == "command":
-            counts["commands"] += 1
-        elif typ == "hook":
-            counts["hooks"] += 1
-        elif typ == "codex-skill":
-            counts["codex-skills"] += 1
+        elif typ in _ASSET_TYPE_TO_KIND:
+            counts[_ASSET_TYPE_TO_KIND[typ]] += 1
     counts["assets"] = sum(counts.values()) + shells
     return counts
 
@@ -172,18 +180,8 @@ def _collect_asset_counts(repo_root: Path) -> dict[str, int]:
 
 
 def _asset_kind(raw_kind: str) -> str:
-    kind = raw_kind.lower().replace(" ", "-")
-    if kind in {"skill", "skills"}:
-        return "skills"
-    if kind in {"agent", "agents"}:
-        return "agents"
-    if kind in {"command", "commands"}:
-        return "commands"
-    if kind in {"hook", "hooks"}:
-        return "hooks"
-    if kind in {"codex-skill", "codex-skills"}:
-        return "codex-skills"
-    return "assets"
+    kind = raw_kind.lower().replace(" ", "-").rstrip("s")
+    return _ASSET_TYPE_TO_KIND.get(kind, "assets")
 
 
 def _has_asset_count_context(raw_line: str) -> bool:
@@ -209,26 +207,59 @@ def _asset_count_claims(raw_line: str) -> list[tuple[str, int, str]]:
     return claims
 
 
+def _actual_hook_count(repo_root: Path) -> int | None:
+    """Unique hooks/<name>.(sh|py) scripts wired in hooks/hooks.json."""
+    try:
+        text = (repo_root / "hooks" / "hooks.json").read_text(encoding="utf-8")
+        blob = json.dumps(json.loads(text))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return len(set(_HOOK_REF_RE.findall(blob)))
+
+
+def _is_hook_count_line(raw_line: str) -> bool:
+    """True only for hooks.json-enumeration lines (not the asset-count line)."""
+    if _HISTORICAL_RE.search(raw_line):
+        return False
+    if "collect_assets" in raw_line or "build_dashboard_data" in raw_line:
+        return False
+    return "hooks.json" in raw_line
+
+
+def _check_hook_count_line(
+    actual: int | None, doc_rel: str, doc_lineno_0: int, raw_line: str,
+) -> list[Violation]:
+    if actual is None or doc_rel not in _HOOK_COUNT_DOCS:
+        return []
+    if not _is_hook_count_line(raw_line):
+        return []
+    return [
+        _violation(
+            doc_rel, doc_lineno_0, m.group(0),
+            f"hook-count mismatch: said {int(m.group('num'))} {m.group('kind')}, "
+            f"actual {actual} (unique hooks/*.sh|.py in hooks/hooks.json)",
+            "update the count to match hooks/hooks.json",
+        )
+        for m in _HOOK_DECL_RE.finditer(raw_line)
+        if int(m.group("num")) != actual
+    ]
+
+
 def _doc_files(repo_root: Path) -> list[Path]:
     """Collect doc files to scan."""
     targets: list[Path] = []
-
     docs_dir = repo_root / "docs"
     if docs_dir.is_dir():
         targets.extend(docs_dir.rglob("*.md"))
-
     claude_md = repo_root / "CLAUDE.md"
     if claude_md.exists():
         targets.append(claude_md)
-
     dot_claude = repo_root / ".claude"
     if dot_claude.is_dir():
         # Exclude ephemeral worktree snapshots — they are not canonical docs.
         worktrees_dir = dot_claude / "worktrees"
-        for p in dot_claude.rglob("*.md"):
-            if not p.is_relative_to(worktrees_dir):
-                targets.append(p)
-
+        targets.extend(p for p in dot_claude.rglob("*.md")
+                       if not p.is_relative_to(worktrees_dir))
     return targets
 
 
@@ -248,10 +279,7 @@ def _source_comment_files(repo_root: Path) -> list[Path]:
 
 
 def _check_asset_count_line(
-    counts: dict[str, int],
-    doc_rel: str,
-    doc_lineno_0: int,
-    raw_line: str,
+    counts: dict[str, int], doc_rel: str, doc_lineno_0: int, raw_line: str,
 ) -> list[Violation]:
     if not _has_asset_count_context(raw_line):
         return []
@@ -288,13 +316,8 @@ class _FileCache:
 
 
 def _warn_symbols(
-    cache: _FileCache,
-    doc_lines: list[str],
-    doc_rel: str,
-    doc_lineno_0: int,
-    target_path: Path,
-    raw_path: str,
-    cited_lineno: int,
+    cache: _FileCache, doc_lines: list[str], doc_rel: str, doc_lineno_0: int,
+    target_path: Path, raw_path: str, cited_lineno: int,
 ) -> None:
     """Emit a WARN to stderr when nearby symbols are absent from the cited line window."""
     nearby = _nearby_symbols(doc_lines, doc_lineno_0)
@@ -312,11 +335,8 @@ def _warn_symbols(
 
 
 def _check_path_resolvable(
-    doc_rel: str,
-    doc_lineno_0: int,
-    citation: str,
-    raw_path: str,
-    repo_root: Path,
+    doc_rel: str, doc_lineno_0: int, citation: str,
+    raw_path: str, repo_root: Path,
 ) -> tuple[Path, None] | tuple[None, Violation]:
     """Validate that raw_path is relative and exists; return (target_path, None) or (None, violation)."""
     if raw_path.startswith("~/") or raw_path.startswith("/"):
@@ -346,14 +366,8 @@ def _violation(
 
 
 def _check_line_bounds(
-    cache: _FileCache,
-    doc_rel: str,
-    doc_lineno_0: int,
-    citation: str,
-    raw_path: str,
-    target_path: Path,
-    line_str: str,
-    end_line_str: str | None,
+    cache: _FileCache, doc_rel: str, doc_lineno_0: int, citation: str,
+    raw_path: str, target_path: Path, line_str: str, end_line_str: str | None,
 ) -> Violation | None:
     """Return a Violation if cited line or range end is out of bounds, else None."""
     cited_lineno = int(line_str)
@@ -378,14 +392,8 @@ def _check_line_bounds(
 
 
 def _check_citation(
-    cache: _FileCache,
-    repo_root: Path,
-    doc_rel: str,
-    doc_lines: list[str],
-    doc_lineno_0: int,
-    raw_path: str,
-    line_str: str,
-    end_line_str: str | None,
+    cache: _FileCache, repo_root: Path, doc_rel: str, doc_lines: list[str],
+    doc_lineno_0: int, raw_path: str, line_str: str, end_line_str: str | None,
     citation: str,
 ) -> Violation | None:
     """Validate one citation match; return a Violation or None (clean / WARN-only)."""
@@ -394,7 +402,6 @@ def _check_citation(
     )
     if path_violation is not None:
         return path_violation
-
     assert target_path is not None
     bounds_violation = _check_line_bounds(
         cache, doc_rel, doc_lineno_0, citation, raw_path,
@@ -402,7 +409,6 @@ def _check_citation(
     )
     if bounds_violation is not None:
         return bounds_violation
-
     _warn_symbols(
         cache, doc_lines, doc_rel, doc_lineno_0,
         target_path, raw_path, int(line_str),
@@ -411,10 +417,8 @@ def _check_citation(
 
 
 def _check_doc_lines(
-    repo_root: Path,
-    cache: _FileCache,
-    asset_counts: dict[str, int],
-    doc_path: Path,
+    repo_root: Path, cache: _FileCache, asset_counts: dict[str, int],
+    hook_count: int | None, doc_path: Path,
 ) -> list[Violation]:
     violations: list[Violation] = []
     doc_lines = cache.get_lines(doc_path)
@@ -425,6 +429,7 @@ def _check_doc_lines(
         if IGNORE_MARKER in raw_line:
             continue
         violations.extend(_check_asset_count_line(asset_counts, doc_rel, lineno_0, raw_line))
+        violations.extend(_check_hook_count_line(hook_count, doc_rel, lineno_0, raw_line))
         for m in _CITE_RE.finditer(raw_line):
             raw_path = m.group(1)
             if _is_skipped_path(raw_path) or not _is_checkable(raw_path):
@@ -439,10 +444,8 @@ def _check_doc_lines(
 
 
 def _check_source_comment_lines(
-    repo_root: Path,
-    cache: _FileCache,
-    asset_counts: dict[str, int],
-    source_path: Path,
+    repo_root: Path, cache: _FileCache,
+    asset_counts: dict[str, int], source_path: Path,
 ) -> list[Violation]:
     source_lines = cache.get_lines(source_path)
     if source_lines is None:
@@ -459,9 +462,10 @@ def check_citations(repo_root: Path) -> list[Violation]:
     """Run all citation checks; return a list of violations."""
     cache = _FileCache()
     asset_counts = _collect_asset_counts(repo_root)
+    hook_count = _actual_hook_count(repo_root)
     violations: list[Violation] = []
     for doc_path in _doc_files(repo_root):
-        violations.extend(_check_doc_lines(repo_root, cache, asset_counts, doc_path))
+        violations.extend(_check_doc_lines(repo_root, cache, asset_counts, hook_count, doc_path))
     for source_path in _source_comment_files(repo_root):
         violations.extend(_check_source_comment_lines(repo_root, cache, asset_counts, source_path))
     return violations
@@ -471,17 +475,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check file:line citations in docs are still valid."
     )
-    parser.add_argument(
-        "--root",
-        default=".",
-        metavar="REPO_ROOT",
-        help="Repo root (default: cwd)",
-    )
+    parser.add_argument("--root", default=".", metavar="REPO_ROOT",
+                        help="Repo root (default: cwd)")
     args = parser.parse_args(argv)
-
     repo_root = Path(args.root).resolve()
     violations = check_citations(repo_root)
-
     if violations:
         sys.stdout.write(f"doc-reference-integrity: {len(violations)} violation(s) found\n\n")
         for v in violations:
