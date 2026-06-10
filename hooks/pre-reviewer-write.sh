@@ -91,7 +91,7 @@ print(cmd_val)
       echo "auto-pilot: BLOCKED reviewer ($role) Bash — unparseable or non-dict tool_input (fail-closed)" >&2
       exit 2
     fi
-    if echo "$cmd" | grep -qE '(^|[[:space:]])(git[[:space:]]+(commit|push|reset|checkout|stash|am|rebase|merge|worktree|restore|clean)|rm[[:space:]]|mv[[:space:]]|chmod[[:space:]]|chown[[:space:]]|tee[[:space:]]|sed[[:space:]]+-i|awk[[:space:]]+-i|curl[[:space:]]|wget[[:space:]]|ssh[[:space:]]|scp[[:space:]]|rsync[[:space:]])'; then
+    if echo "$cmd" | grep -qE '(^|[[:space:]])(/[^ ]*/)?\\?git[[:space:]]+(commit|push|reset|checkout|stash|am|rebase|merge|worktree|restore|clean)|rm[[:space:]]|mv[[:space:]]|chmod[[:space:]]|chown[[:space:]]|tee[[:space:]]|sed[[:space:]]+-i|awk[[:space:]]+-i|curl[[:space:]]|wget[[:space:]]|ssh[[:space:]]|scp[[:space:]]|rsync[[:space:]]'; then
       echo "auto-pilot: BLOCKED reviewer ($role) Bash mutation: $cmd" >&2
       exit 2
     fi

@@ -131,6 +131,10 @@ def main() -> None:
             # Codex r2: construct fragments the word "push" itself
             ("word-build p$(printf us)h",      "git p$(printf us)h origin main"),
             ("word-build $(cmd)push suffix",   "git $(echo pu)sh origin main"),
+            # Opus r4: path-qualified git binary
+            ("abs path /usr/bin/git push",    "/usr/bin/git push origin main"),
+            ("rel path ./git push",           "./git push origin main"),
+            ("homebrew git push",             "/opt/homebrew/bin/git push origin main"),
             # Opus r3: ANSI-C quoting $'push' bypasses construct detect
             ("ANSI-C $'push' quoting",        "git $'push' origin main"),
             # Sonnet r3: --mirror / --all push all branches

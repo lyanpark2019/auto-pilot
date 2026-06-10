@@ -78,13 +78,13 @@ fi
 # Residual (documented): multiple -C compose in git; we honour the last only.
 # shellcheck disable=SC2016 # python heredoc — $ and backtick are regex literals, not shell expansions
 invocations=$(printf '%s' "$cmd" | python3 -c '
-import sys, re, shlex
+import os, sys, re, shlex
 
 cmd = sys.stdin.read()
 
 # Whether the raw command even mentions a git push/commit — used for the
 # fail-closed path if shlex cannot parse the (likely malformed) string.
-_mentions = re.search(r"\bgit\b.*\b(push|commit)\b", cmd) is not None
+_mentions = re.search(r"(?:^|/|\\\\|\b)git\b.*\b(push|commit)\b", cmd) is not None
 
 # Fail CLOSED on shell-evaluation constructs a static tokenizer cannot resolve:
 # command-substitution $(...) / backtick, variable expansion ($VAR / ${VAR}),
@@ -149,7 +149,9 @@ if not parse_ok:
 VALUE_TAKING = {"-o", "--push-option", "--repo", "--exec", "--receive-pack"}
 
 # Find indices where a git invocation begins.
-git_starts = [k for k, t in enumerate(all_tokens) if t == "git"]
+# Match both bare "git" and path-qualified "/usr/bin/git", "./git", etc.
+git_starts = [k for k, t in enumerate(all_tokens)
+              if os.path.basename(t.lstrip("\\\\")) == "git"]
 for gi, gstart in enumerate(git_starts):
     gend = git_starts[gi + 1] if gi + 1 < len(git_starts) else len(all_tokens)
     tokens = all_tokens[gstart:gend]

@@ -112,6 +112,15 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": ["rm", "-rf", "/"]},
         }),
     ),
+    # Opus r4: path-qualified git must also be caught
+    (
+        "Bash /usr/bin/git push (abs path) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "/usr/bin/git push origin x"},
+        }),
+    ),
 ]
 
 
