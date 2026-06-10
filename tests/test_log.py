@@ -41,3 +41,13 @@ def test_event_redacts_gh_token_values(capsys) -> None:
     assert "note=<redacted>" in captured.err
     assert "ghp_abcdefghijklmnop" not in captured.err
     assert "plain=ok" in captured.err
+
+
+def test_event_redacts_authorization_key(capsys) -> None:
+    event("sample.auth", authorization="Basic dXNlcjpwYXNz", visible="yes")
+
+    captured = capsys.readouterr()
+
+    assert "authorization=<redacted>" in captured.err
+    assert "dXNlcjpwYXNz" not in captured.err
+    assert "visible=yes" in captured.err
