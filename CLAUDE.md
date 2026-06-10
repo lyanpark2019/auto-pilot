@@ -19,6 +19,12 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 - **Remote:** `git@github.com:lyanpark2019/auto-pilot.git`
 - **gh CLI account:** active = `lyanpark2019` (verify with `gh auth status`)
 - All `gh repo create`, `gh pr`, `gh release` operations for this repo must run under the `lyanpark2019` account. If the active gh account is anything else, switch first: `gh auth switch -u lyanpark2019`.
+- **Deploy identity assertion (mandatory, every push/release/run-watch):** the active account flip-flops mid-session (concurrent sessions share the host-global keyring — observed Sewhoan and MoneyPick-KO re-switching it within minutes). A switch at session start is NOT sufficient. Immediately before EVERY `git push` / `gh release` / `gh run` command, verify and switch in the same shell invocation:
+  ```bash
+  ACTIVE=$(gh api user --jq .login); [ "$ACTIVE" = "lyanpark2019" ] || gh auth switch --hostname github.com --user lyanpark2019
+  ```
+  Never assume a previous command's switch is still in effect.
+- Actions run-history pruning: `bash scripts/ci/prune_action_runs.sh --keep 4 --apply` (dry-run without `--apply`; refuses to run under any account but `lyanpark2019`).
 
 ## Layout
 
