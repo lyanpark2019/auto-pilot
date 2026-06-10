@@ -105,7 +105,11 @@ def check_caps(args: argparse.Namespace, state: State) -> str | None:
     Checks (in order):
       - accumulated USD vs ``--max-cost-usd``
       - accumulated tokens vs ``--max-tokens``
-      - live ``claude`` pid count vs ``--max-concurrent-claude``
+      - ``claude`` pid GROWTH over ``args.pid_baseline`` vs
+        ``--max-concurrent-claude``. The baseline (pid count at driver start,
+        captured by ``headless-loop.main``) keeps unrelated sessions on a busy
+        host from tripping the fork-bomb signal; absent attribute = baseline 0,
+        which preserves the old absolute-count behavior.
     """
     cost = float(state.get("cost_usd", 0.0))
     tokens = int(state.get("tokens", 0))
@@ -116,7 +120,9 @@ def check_caps(args: argparse.Namespace, state: State) -> str | None:
         event("cap.tokens_exceeded", tokens=tokens, cap=args.max_tokens)
         return "cost-cap"
     pids = count_claude_pids()
-    if pids >= args.max_concurrent_claude:
-        event("cap.pid_count_exceeded", pids=pids, cap=args.max_concurrent_claude)
+    baseline = int(getattr(args, "pid_baseline", 0))
+    if pids - baseline >= args.max_concurrent_claude:
+        event("cap.pid_count_exceeded", pids=pids, baseline=baseline,
+              cap=args.max_concurrent_claude)
         return "cost-cap"
     return None

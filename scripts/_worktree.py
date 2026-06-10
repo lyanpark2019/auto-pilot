@@ -25,6 +25,7 @@ from _log import event
 # Subprocess timeout budget (seconds). Quick git plumbing vs. tree-touching ops.
 _GIT_QUICK_TIMEOUT = 30  # rev-parse, status, branch, merge-base, rev-list, ref-format, prune
 _GIT_TREE_TIMEOUT = 60  # worktree add/remove, am, format-patch, commit --amend (touch large trees)
+_SENTINEL_NAME = ".auto-pilot-worktree"
 
 
 @dataclass(frozen=True)
@@ -123,9 +124,24 @@ class WorktreeManager:
             check=True, capture_output=True, timeout=_GIT_TREE_TIMEOUT,
         )
 
+    def _exclude_sentinel(self, wt_path: Path) -> None:
+        # Untracked sentinel false-trips scope checks (`git status` inside the
+        # worktree); register it in the worktree-local info/exclude.
+        out = subprocess.check_output(
+            ["git", "-C", str(wt_path), "rev-parse", "--git-path", "info/exclude"],
+            text=True, timeout=_GIT_QUICK_TIMEOUT,
+        ).strip()
+        exclude = Path(out)
+        if not exclude.is_absolute():
+            exclude = wt_path / exclude
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a") as fh:
+            fh.write(_SENTINEL_NAME + "\n")
+
     def _write_handle(self, contract_dir: Path, contract_id: str, branch: str, base_sha: str) -> WorktreeHandle:
         wt_path = self.worktree_base / contract_id
-        (wt_path / ".auto-pilot-worktree").write_text(contract_id + "\n")
+        (wt_path / _SENTINEL_NAME).write_text(contract_id + "\n")
+        self._exclude_sentinel(wt_path)
         handle = WorktreeHandle(
             path=wt_path,
             branch=branch,
@@ -375,7 +391,7 @@ class WorktreeManager:
         contracts_root = state_dir / "contracts"
         if not contracts_root.exists():
             return reaped
-        for sentinel in self.worktree_base.rglob(".auto-pilot-worktree"):
+        for sentinel in self.worktree_base.rglob(_SENTINEL_NAME):
             try:
                 if sentinel.stat().st_mtime > cutoff:
                     continue

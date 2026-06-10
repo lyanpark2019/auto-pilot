@@ -38,7 +38,7 @@ class AutoPilotConfig:
         _check_int_bounds("default_max_tokens", self.default_max_tokens, ge=1, le=1_000_000_000)
         # fallback per-iter cost substituted when log has no total — must be positive
         _check_float_bounds("default_per_iter_cost_estimate_usd", self.default_per_iter_cost_estimate_usd, gt=0, le=1_000)
-        # _budget.check_caps: pids >= args.max_concurrent_claude — at least 1 allowed
+        # _budget.check_caps: pid growth over startup baseline >= cap — at least 1 allowed
         _check_int_bounds("default_max_concurrent_claude", self.default_max_concurrent_claude, ge=1, le=64)
         # _dispatch.py: age_sec > PREFLIGHT_TTL_SEC — 60 s minimum to avoid instant expiry
         _check_int_bounds("preflight_ttl_sec", self.preflight_ttl_sec, ge=60, le=86_400)

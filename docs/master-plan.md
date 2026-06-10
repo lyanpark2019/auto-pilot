@@ -60,7 +60,7 @@ Runtime roles (easy to confuse):
 - Test suite, mypy, and ruff were clean at merge time; do not duplicate collected test counts here (pytest output is the SoT).
 
 ### Not yet proven (honest gaps)
-- **Live e2e loop NEVER run** with real subagents — dogfood gate is assertions only.
+- ~~Live e2e loop NEVER run~~ **PROVEN 2026-06-10** (Step 0 below): one full live cycle green — but only 1 phase / 1 contract / trivial 4-line diff / round-1 dual APPROVE. Still unproven: reviewer REJECT → fix round, multi-contract parallel dispatch, merge-conflict path, multi-phase advance.
 - **Loop logic is PM markdown**, not deterministic code → no test covers the dispatch/gate flow.
 - **Context ingestion bundles only spec + CLAUDE.md** (greenfield-shaped) → brownfield PM/workers are blind to existing code. This is the Q1 fix below.
 
@@ -68,10 +68,10 @@ Runtime roles (easy to confuse):
 
 Dual adversarial review (Codex + cold Claude) found the original "graphify first" plan unsound: P0×5, P1×3, P2×3. Two contradictions are fatal and must be resolved before any code — see §6. The corrected sequence proves the core loop live **before** layering graphify.
 
-### Step 0 — prove the bare loop live (was P0-b, now FIRST)
-The loop has never run with real subagents; `test_headless_loop.py` coverage still mocks `run_claude_session` (count with `pytest --collect-only`, do not duplicate here). So:
-1. **Skill-fire smoke:** `claude -p "Run the auto-pilot skill: print state.json status and exit"` — confirm the skill auto-loads in non-interactive `-p` (prose trigger vs explicit `/auto-pilot` — record which works).
-2. **Bare e2e:** a trivial 1-phase / 1-contract **brownfield** spec that EDITS one existing file (not creates a new one — the current `dogfood-smoke.md` is greenfield-shaped). Run live with the **current** bundle (spec + CLAUDE.md only). Get one real `claude -p` → worker → dual-review → verify → merge → commit cycle green. Capture exactly what breaks. This is the only validation the markdown loop has.
+### Step 0 — prove the bare loop live — ✅ DONE 2026-06-10
+1. **Skill-fire smoke:** prose trigger ("Run the auto-pilot skill") FIRES the skill in `claude -p`; explicit `/auto-pilot <args>` as the `-p` prompt does NOT route through the Skill tool (answered ad-hoc). headless-loop's prose iteration prompt is the validated mechanism.
+2. **Bare e2e:** spec `docs/specs/2026-06-10-step0-brownfield-smoke.md` ran live end-to-end → commit `f4a2f59` on origin/main, CI green. Full chain exercised with real subagents: preflight → contract scaffold/sign → tech-critic → worktree → Sonnet worker → frozen diff → risk_assess → dual reviewers (codex 0 findings, claude 1 P2) → verify trio → `apply_to_main` + trailers → push → reap. ~10 min, 1 round.
+   Breaks captured (fixed same-day): pid-cap counted host-global claude processes (→ baseline-delta in `_budget.check_caps`); `.auto-pilot-worktree` sentinel untracked → false scope-trip (→ worktree-local `info/exclude`). Open P2/P3: cap-abort poisons state.json terminally; `phases[].approved` never bumps; driver prompt says 0-indexed phase; `pm-final-report-*.md` unrotated (~117); specialist-pool maps tests-only diffs to unported reviewer.
 
 ### Step 1 — deterministic discovery seam + schema (after Step 0 green)
 - `orchestrator.py discover --check` — pure git/mtime comparison, genuinely deterministic + unit-testable. `discover --record` — writes `.build-commit` + graphify version + timestamp AFTER the PM ran graphify. **Python never "snapshots the graph"** (that input is nondeterministic); it only records provenance.

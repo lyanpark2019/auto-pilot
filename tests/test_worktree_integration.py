@@ -11,8 +11,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import _worktree  # noqa: E402
 
 
-def test_full_lifecycle(tmp_path):
-    """create -> worker edits -> collect_patches -> apply_to_main -> cleanup."""
+def _init_repo(tmp_path):
+    """Init a tiny repo + contract fixture; return (repo, contract, mgr, contract_dir)."""
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
@@ -38,6 +38,12 @@ def test_full_lifecycle(tmp_path):
         "snapshot_shas": {"base_sha": base, "spec": "0" * 64, "claude_md_chain": []},
     }
     mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    return repo, contract, mgr, contract_dir
+
+
+def test_full_lifecycle(tmp_path):
+    """create -> worker edits -> collect_patches -> apply_to_main -> cleanup."""
+    repo, contract, mgr, contract_dir = _init_repo(tmp_path)
 
     # 1. create
     handle = mgr.create(contract, contract_dir=contract_dir)
@@ -63,3 +69,18 @@ def test_full_lifecycle(tmp_path):
     # 6. cleanup
     mgr.cleanup(handle, prune_branch=True)
     assert not handle.path.exists()
+
+
+def test_sentinel_excluded_from_status(tmp_path):
+    """`.auto-pilot-worktree` sentinel must not appear in `git status --porcelain`.
+
+    Live Step-0 regression — the untracked sentinel false-tripped
+    assert_reviewer_was_scoped inside the worktree.
+    """
+    _repo, contract, mgr, contract_dir = _init_repo(tmp_path)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    porcelain = subprocess.check_output(
+        ["git", "-C", str(handle.path), "status", "--porcelain"], text=True
+    )
+    assert ".auto-pilot-worktree" not in porcelain
+    mgr.cleanup(handle, prune_branch=True)

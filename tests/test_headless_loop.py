@@ -222,6 +222,49 @@ class TestCostCap:
         assert result == "cost-cap"
         rcs.assert_not_called()
 
+    def test_pid_cap_ignores_preexisting_baseline(self, loop_module, state_dir):
+        """Busy host: pids already running at driver start must not trip the cap.
+
+        Live Step-0 regression — 11 unrelated claude sessions on the host made
+        the loop unstartable with the default cap of 4.
+        """
+        import _budget
+        _write_state(state_dir, status="running")
+        args = _args(max_concurrent_claude=4, pid_baseline=11)
+        with patch.object(loop_module, "run_claude_session", return_value=0) as rcs, \
+             patch.object(loop_module, "git_head", return_value="cafe"), \
+             patch.object(_budget, "count_claude_pids", return_value=11), \
+             patch.object(_budget, "parse_session_usage", return_value=(0.0, 0)):
+            result = loop_module.loop_iteration(1, args)
+        assert result != "cost-cap"
+        rcs.assert_called_once()
+
+    def test_pid_cap_fires_on_growth_above_baseline(self, loop_module, state_dir):
+        """Fork-bomb signal = growth over the startup baseline, not absolute count."""
+        import _budget
+        _write_state(state_dir, status="running")
+        args = _args(max_concurrent_claude=4, pid_baseline=11)
+        with patch.object(loop_module, "run_claude_session") as rcs, \
+             patch.object(_budget, "count_claude_pids", return_value=15):
+            result = loop_module.loop_iteration(1, args)
+        assert result == "cost-cap"
+        rcs.assert_not_called()
+
+    def test_main_captures_pid_baseline(self, loop_module, state_dir):
+        """main() records the startup claude pid count onto args before iterating."""
+        import _budget
+        _write_state(state_dir, status="running")
+        seen = {}
+
+        def fake_iter(n, args):
+            seen["baseline"] = args.pid_baseline
+            return "success"
+
+        with patch.object(loop_module, "loop_iteration", side_effect=fake_iter), \
+             patch.object(_budget, "count_claude_pids", return_value=7):
+            loop_module.main(["--once"])
+        assert seen["baseline"] == 7
+
     def test_cost_accumulates_after_session(self, loop_module, state_dir):
         import _budget
         _write_state(state_dir, status="running")

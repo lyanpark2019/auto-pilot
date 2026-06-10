@@ -15,10 +15,10 @@ from evals.oracle_api import load_case_oracle
 _REPO = Path(__file__).resolve().parent.parent.parent
 _INIT = "scripts/orchestrator.py"
 _LOOP = "scripts/headless-loop.py"
-# The headless loop's fork-bomb guard (check_caps -> pgrep -x claude) counts ALL
-# system claude processes; an eval intentionally spawns agents and runs one
-# case-loop at a time (sequential), so it is inherently bounded. Pass a large cap
-# to disable that guard for eval-spawned loops (no core-file edit).
+# The headless loop's fork-bomb guard (check_caps) measures claude pid GROWTH
+# over the driver-start baseline; an eval intentionally spawns agents and runs
+# one case-loop at a time (sequential), so it is inherently bounded. Keep the
+# large cap to fully disable the guard for eval-spawned loops.
 _UNCAPPED_CONCURRENCY = 10_000
 
 

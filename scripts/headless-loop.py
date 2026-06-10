@@ -336,6 +336,9 @@ def main(argv: list[str] | None = None) -> int:
         event("loop.no_state_file")
         return 2
 
+    args.pid_baseline = _budget.count_claude_pids()
+    event("loop.pid_baseline", pids=args.pid_baseline)
+
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     for n in range(1, args.max_iter + 1):

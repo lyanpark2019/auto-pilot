@@ -174,7 +174,7 @@ auto-pilot/
 
 `.planning/auto-pilot/state.json` — SoT for loop state. Owned by `scripts/_state.py`. Writers hold `flock(LOCK_EX)` on `state.lock`; reads hold `LOCK_SH`. Writes use `_contract.atomic_write_text` (tempfile + fsync + rename, `F_FULLFSYNC` on Darwin) — never a partial file. Resume-safe: PM reads `current_phase` + `phases[last]`, continues from next contract.
 
-Accumulates `cost_usd` + `tokens` across iters. Exceeds `--max-cost-usd` or `--max-tokens` → terminal `cost-cap`. `pgrep -x claude` count above `--max-concurrent-claude` → same exit (fork-bomb guard).
+Accumulates `cost_usd` + `tokens` across iters. Exceeds `--max-cost-usd` or `--max-tokens` → terminal `cost-cap`. `pgrep -x claude` GROWTH over the driver-start baseline (`args.pid_baseline`, captured in `headless-loop.main`) above `--max-concurrent-claude` → same exit (fork-bomb guard; ambient sessions on a busy host don't count).
 
 Failure recovery is intentionally non-destructive: `headless-loop.py` snapshots pre-phase HEAD, but `status=failed` / timeout stashes dirty `$ROOT` state with a recoverable `auto-pilot-iter-N-{failed,timeout}` label instead of a destructive hard reset; per-worker worktree cleanup is the recovery unit.
 
@@ -237,7 +237,7 @@ Two independent gates — never conflated:
 
 Key constraints locked by adversarial review:
 - Each case uses a **separate clone** (not a linked worktree) — inner `WorktreeManager` would create branch/rebase-apply namespace collisions across a shared gitdir.
-- `_budget.py check_caps` counts ALL system `claude` pids; evals pass `--max-concurrent-claude UNCAPPED` so the fork-bomb guard doesn't trip on ambient sessions.
+- `_budget.py check_caps` measures `claude` pid growth over the driver-start baseline (Step-0 live fix 2026-06-10); evals still pass `--max-concurrent-claude UNCAPPED` as belt-and-suspenders.
 - `run_case` returns `CaseAttempt(oracle: OracleResult, run: RunResult)` so per-case cost is surfaced for the total-cost ceiling.
 - Deterministic oracle only (no LLM-judge). `error` outcome counts as non-pass.
 
