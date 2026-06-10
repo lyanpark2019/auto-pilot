@@ -69,6 +69,34 @@ Full contract schemas and enforcement contracts: see README "Binding contracts i
 **(b) Self-improvement loop** — round-N SCORE → … → dual review (plugin targets itself):
 retro appends evidence-cited gotchas to vault `intent/gotchas/` when a vault exists and to repo `.claude/insights.md` as the always-present memory surface. Converges via same stopping rule as product loop (same finding ≥2 rounds = escalation).
 
+### Hermes ledger (discover-only self-improvement, shipped 2026-06-09/10)
+
+Structured layer under loop (b): `scripts/learning_miner.py` + `scripts/_improvement.py` +
+`schemas/improvement-ticket.schema.json`. Deterministic Python (no LLM), CLI shape mirrors
+`scripts/risk_assess.py` (advisory exit 0, `--fail-on` exit 2, one-line JSON verdict).
+Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
+
+- **Discover-only** — writes `state=candidate` tickets; acting on a `promotable` verdict stays
+  human. Full FSM (candidate→…→promoted) declared in the schema for format stability, not enforced.
+- **Durable ledger OUTSIDE the target repo** — `~/.claude/projects/<slug>/improvements/<fp>.json`.
+  Brownfield driver must never pollute the driven repo's VCS; `--commit-to` is the explicit opt-in.
+  Evidence is self-contained (snippet + run_id, never a dangling `path:line` into gitignored scratch).
+- **Fingerprint** = sha256(source ‖ file_basename ‖ normalized_issue ‖ asset); normalization strips
+  paths / line numbers / ISO dates / `phase-N`, keeps FULL issue text (8-token truncation collided).
+- **Gate on `distinct_runs`, not raw occurrences** — reviewer-finding ≥2, doom-loop/insight/other ≥3
+  → `promotable`; a worker re-tripping the same finding within one run cannot inflate the gate.
+- **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
+  `insights.jsonl` — retro's structured sidecar where a `class` tag (not wording, not file) drives
+  identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
+  it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class) —
+  promotion machinery stays deferred until live runs accumulate real `distinct_runs`.
+- **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded).
+  Once-per-session is sufficient: evidence dedups on (run_id, snippet), so re-fires cannot inflate.
+  SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected (enforce with code).
+- **No run identity → non-persisting scan** (ADR `docs/adr/0001-empty-run-id-non-persisting.md`):
+  empty/non-string `run_id` projects a verdict but persists nothing — a `""` phantom run otherwise
+  shortcuts the `distinct_runs` gate by one run. No fallback id synthesis (re-imports the gaming).
+
 ### Memory 3-layer
 
 | Layer | Location | Role |
@@ -168,6 +196,37 @@ Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/auto-p
 4. `codex exec --sandbox read-only` — model-layer deterrent (not OS-level).
 
 Parallel reviewers use `scripts/_reviewer_wrapper.py` (isolated env per subprocess — prevents env-var signal race).
+
+## Enforcement-guard behavior contracts (2026-06-10 campaign + F1 fixwave)
+
+Six-dimension cold audit (Arch 84 · Docs 78 · Tests 76 · Agents 74 · Sec 71 · Enf 67) → 13 P1
+closed across 5 clusters, then the F1 fixwave hardened the same guards via 4-round multi-model
+adversarial review (different models found different bug classes). Durable contracts:
+
+- **branch-lock**: `push` gates on the REFSPEC DST, never HEAD (post-merge `push origin feature`
+  from main is legal); `commit` gates on HEAD. shlex tokenization (quoting evasions stripped);
+  unanalyzable push (command-substitution / word-building / unbalanced quote) = fail-CLOSED deny;
+  `--mirror/--all` denies if ANY local branch is protected; branch compare case-insensitive;
+  path-qualified (`/usr/bin/git`) caught. `AUTO_PILOT_MAIN_OK=1` as hook env OR literal command
+  prefix = operator intent (the hook inherits session env, so a tool-call prefix is the only way
+  a per-command override can reach it).
+- **gh-auth-preflight**: fires only when a segment's FIRST token basename-resolves to `gh`
+  (env-prefix/wrapper aware); fail-toward-firing on `$(...)`/backtick next to a gh token
+  (advisory — extra check harmless, missed wrong-account gh is not); 300s owner-keyed cache,
+  purged on `gh auth switch`.
+- **pre-reviewer-write**: fail-closed on unparseable payload / non-dict tool_input / non-string
+  command; mutation deny-list fully boundary-anchored (substring FPs like "perform " fixed
+  2026-06-10); `git -flag value` pairs skipped so `git -C <path> push` cannot bypass.
+- **guard-destructive**: best-effort literal-pattern speed bump against accidents — NOT a sandbox;
+  obfuscation (base64, var-indirection, `curl|sh`) is a documented architectural limit, not chased.
+- **worker-scope-gate**: edit-time scope enforcement, inert until a dispatch path sets
+  `AUTO_PILOT_SCOPE_FILES` (documented residual).
+- **reviewer env** (`scripts/_reviewer_wrapper.py`): default-deny ALLOWLIST — F1 reversed the
+  campaign's pattern-denylist decision after it leaked ~50% of common secret names; allow only
+  what a `claude -p` subprocess needs (auth rides HOME, no credential var forwarded), secret-name
+  regex kept as a second floor.
+- **retro**: Tier-2 protected paths (e.g. this file) are report-to-PM, never direct agent edits
+  (`hooks/pre-edit-human-only.sh`); retro's canonical output-target list is single-sourced.
 
 ## Evals harness (cut1 landed, cut2 advisory)
 
