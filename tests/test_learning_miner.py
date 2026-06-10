@@ -361,6 +361,28 @@ def test_null_run_id_does_not_persist(
     assert _ledger_tickets(tmp_path / "home", root) == []
 
 
+@pytest.mark.parametrize("payload", ["5", "[]", '"r1"', "null"])
+def test_nondict_state_json_does_not_crash(tmp_path: Path, payload: str) -> None:
+    """A non-dict state.json (JSON scalar/array) must yield '' not AttributeError."""
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    (d / "state.json").write_text(payload)
+    assert lm.current_run_id(root) == ""
+
+
+def test_promotion_thresholds_matches_source_enum() -> None:
+    """PROMOTION_THRESHOLDS keys must mirror the schema source enum (no drift).
+
+    A source added to the schema but not here would silently never promote
+    (PROMOTION_THRESHOLDS.get(...) -> None); a key here absent from the schema
+    is dead config.
+    """
+    schema = json.loads(lm.imp.SCHEMA_PATH.read_text())
+    enum = set(schema["properties"]["source"]["enum"])
+    assert set(lm.PROMOTION_THRESHOLDS) == enum
+
+
 def test_numeric_run_id_does_not_persist(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
