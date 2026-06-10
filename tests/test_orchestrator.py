@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -279,3 +280,40 @@ def test_phase_start_allocates_run_id_if_missing(monkeypatch, tmp_path):
     state2 = _state.load_state()
     assert isinstance(state2.get("run_id"), str)
     assert len(state2["run_id"]) >= 8
+
+
+class TestDiscover:
+    @staticmethod
+    def _git_repo_in_cwd() -> None:
+        subprocess.run(["git", "init", "-q", "-b", "main"], check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "config", "user.name", "T"], check=True)
+        Path("src").mkdir()
+        Path("src/a.py").write_text("a = 1\n")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], check=True)
+
+    def test_record_then_check_fresh(self, in_tmp_cwd, capsys):
+        self._git_repo_in_cwd()
+        assert _run(["discover", "--record", "--graphify-version", "g1"]) == 0
+        rec = json.loads(capsys.readouterr().out)
+        assert rec["ok"] is True and rec["graphify_version"] == "g1"
+        rc = _run(["discover", "--check", "--graphify-version", "g1",
+                   "--scope-files", "src/"])
+        out = json.loads(capsys.readouterr().out)
+        assert rc == 0
+        assert out["fresh"] is True and out["reason"] == "same-commit"
+
+    def test_check_stale_exits_1(self, in_tmp_cwd, capsys):
+        self._git_repo_in_cwd()
+        assert _run(["discover", "--record", "--graphify-version", "g1"]) == 0
+        capsys.readouterr()
+        Path("src/a.py").write_text("a = 2\n")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "edit"], check=True)
+        rc = _run(["discover", "--check", "--graphify-version", "g1",
+                   "--scope-files", "src/"])
+        out = json.loads(capsys.readouterr().out)
+        assert rc == 1
+        assert out["fresh"] is False and out["reason"] == "scope-intersects"
+        assert out["changed_files"] == ["src/a.py"]

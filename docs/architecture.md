@@ -184,6 +184,10 @@ Artifacts under `.planning/auto-pilot/contracts/iter-{N}/phase-{P}/contract-{K}/
 
 PM reads `done.marker` → `exit-code.txt` → `review.json | status.json` (PR1 invariant: never parses free-form output).
 
+### Discovery seam (Step 1, 2026-06-10)
+
+`scripts/_discovery.py` + `orchestrator.py discover --record|--check`. The PM runs graphify itself, then `--record` persists provenance only (`graphify-provenance.json`: build_commit + graphify_version + recorded_at — the graph is never SHA-pinned; its LLM layer is non-reproducible). `--check --scope-files a,b,dir/` returns a pure-git diff-relevance verdict (exit 0 fresh / 1 stale): regen is needed only when the recorded-commit..HEAD diff intersects the next phase's scope or the graphify version changed — plain commit inequality would force a regen after every phase merge.
+
 ## Worktree lifecycle (PR2)
 
 Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/auto-pilot/iter-N/phase-P/…`. PM mutates `$ROOT` only through `WorktreeManager.apply_to_main` (`main-apply.lock`) via `git format-patch | git am --3way --trailer auto-pilot-{iter,phase,contract,idempotency}`. Conflict → `git am --abort`, increment `merge_attempts`; 3 failures → `merge_pivot_needed`.

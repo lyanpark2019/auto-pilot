@@ -27,6 +27,7 @@ from typing import Any
 
 from _log import event
 from _state import (
+    STATE_DIR,
     PhaseEntry,
     State,
     load_state,
@@ -352,6 +353,34 @@ def cmd_round_budget(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_discover(args: argparse.Namespace) -> int:
+    """Graphify-context discovery seam: record provenance or check freshness.
+
+    ``--record`` exits 0; ``--check`` exits 0 when fresh, 1 when stale.
+    """
+    import _discovery
+
+    repo_root = Path.cwd()
+    if args.record:
+        payload = _discovery.record_provenance(
+            repo_root=repo_root, state_dir=STATE_DIR,
+            graphify_version=args.graphify_version,
+        )
+        event("discover.recorded", build_commit=payload["build_commit"][:8],
+              graphify_version=args.graphify_version)
+        _emit_json({"ok": True, **payload}, indent=2)
+        return 0
+
+    scope = tuple(s.strip() for s in args.scope_files.split(",") if s.strip())
+    verdict = _discovery.check_freshness(
+        repo_root=repo_root, state_dir=STATE_DIR,
+        graphify_version=args.graphify_version, scope_files=scope,
+    )
+    event("discover.checked", fresh=verdict.fresh, reason=verdict.reason)
+    _emit_json(verdict.to_json(), indent=2)
+    return 0 if verdict.fresh else 1
+
+
 _PHASE_HEADING = re.compile(r"^#{1,3}\s+Phase\b")
 
 
@@ -428,6 +457,15 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     p_rb.add_argument("--score-dir", required=True)
     p_rb.add_argument("--round", type=int, required=True)
     p_rb.set_defaults(func=cmd_round_budget)
+
+    p_disc = sub.add_parser("discover")
+    disc_mode = p_disc.add_mutually_exclusive_group(required=True)
+    disc_mode.add_argument("--check", action="store_true")
+    disc_mode.add_argument("--record", action="store_true")
+    p_disc.add_argument("--graphify-version", required=True)
+    p_disc.add_argument("--scope-files", default="",
+                        help="comma-separated; trailing-slash entries match as dir prefixes")
+    p_disc.set_defaults(func=cmd_discover)
     return parser
 
 
