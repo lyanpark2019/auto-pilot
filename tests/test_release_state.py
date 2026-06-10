@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EXPECTED_VERSION = "0.8.7"
-EXPECTED_COMMIT = "e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb"
-EXPECTED_CI_RUN = 27138414829
-EXPECTED_RELEASE_URL = "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.7"
+EXPECTED_VERSION = "0.8.8"
+EXPECTED_COMMIT = "e2ec0e14549f44ac3d5fef621bc1a06d7a823203"
+EXPECTED_CI_RUN = 27273499973
+EXPECTED_RELEASE_URL = "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.8"
 
 
 def _load_json(path: str) -> dict[str, object]:
@@ -58,21 +58,21 @@ def test_release_state_invariant_derives_version_from_manifest() -> None:
     next_marketplace = deepcopy(marketplace)
     next_state = deepcopy(state)
 
-    next_plugin["version"] = "0.8.8"
+    next_plugin["version"] = "0.9.9"
     marketplace_plugin = _marketplace_plugin(next_marketplace)
-    marketplace_plugin["version"] = "0.8.8"
+    marketplace_plugin["version"] = "0.9.9"
 
     release = next_state["release"]
     assert isinstance(release, dict)
-    release["tag"] = "v0.8.8"
-    release["plugin_version"] = "0.8.8"
-    release["marketplace_version"] = "0.8.8"
-    next_state["current_state"] = "RELEASED_V0_8_8"
+    release["tag"] = "v0.9.9"
+    release["plugin_version"] = "0.9.9"
+    release["marketplace_version"] = "0.9.9"
+    next_state["current_state"] = "RELEASED_V0_9_9"
 
     _assert_release_state_consistency(next_plugin, next_marketplace, next_state)
 
 
-def test_v087_release_state_matches_plugin_manifests() -> None:
+def test_current_release_state_matches_plugin_manifests() -> None:
     plugin = _load_json(".claude-plugin/plugin.json")
     marketplace = _load_json(".claude-plugin/marketplace.json")
     state = _load_json(".planning/quality/score-state.json")

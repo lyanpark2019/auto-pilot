@@ -4,10 +4,10 @@
   "project_root": "/Users/lyan/Documents/Project/auto-pilot",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "RELEASED_V0_8_7",
+  "current_state": "RELEASED_V0_8_8",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 release shipped after dual adversarial rescore >=90, local full gates, hosted CI green, release tag, and plugin manifest update",
-  "head_sha": "e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb",
+  "head_sha": "e2ec0e14549f44ac3d5fef621bc1a06d7a823203",
   "baseline_weighted_score": 84.4,
   "weighted_score": 90.04,
   "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Release metadata commit e3200cb passed hosted CI run 27138414829 and shipped as v0.8.7.",
@@ -153,14 +153,12 @@
   "claude_wave11_weighted_score": 90.04,
   "claude_wave11_verdict": "MEETS_90_TARGET",
   "release": {
-    "tag": "v0.8.7",
-    "url": "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.7",
-    "commit": "e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb",
-    "ci_run": 27138414829,
-    "plugin_version": "0.8.7",
-    "marketplace_version": "0.8.7",
-    "pr": 22,
-    "pr_ci_run": 27138212879,
-    "main_merge_ci_run": 27138280499
+    "tag": "v0.8.8",
+    "url": "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.8",
+    "commit": "e2ec0e14549f44ac3d5fef621bc1a06d7a823203",
+    "ci_run": 27273499973,
+    "ci_run_note": "red on tests/test_release_state.py only (release-metadata gate this follow-up completes; same lag pattern as v0.8.7 890e16f); all other gates green on that run",
+    "plugin_version": "0.8.8",
+    "marketplace_version": "0.8.8"
   }
 }
