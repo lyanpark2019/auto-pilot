@@ -26,3 +26,7 @@ def test_terminal_set():
     assert _status.WorkerStatus.BLOCKED in _status.TERMINAL
     assert _status.WorkerStatus.FAILED in _status.TERMINAL
     assert _status.WorkerStatus.CANCELED in _status.TERMINAL
+
+
+def test_terminal_is_all_but_partial():
+    assert _status.TERMINAL == frozenset(_status.WorkerStatus) - {_status.WorkerStatus.PARTIAL}
