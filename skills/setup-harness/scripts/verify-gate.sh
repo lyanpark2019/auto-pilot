@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse(Write|Edit): Default-FAIL gate for test-results.json and similar criteria files.
 # Block writes claiming "passes": true unless the agent has Read an evidence file this session.
-# Pattern from anthropics/cwc-long-running-agents (March 2026 harness).
+# Pattern from anthropics/cwc-long-running-agents, March 2026 harness (Apache-2.0, Copyright Anthropic PBC).
+# Reimplementation of the pattern — no upstream text retained.
 set -uo pipefail
 input="$(cat 2>/dev/null || echo '{}')"
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"

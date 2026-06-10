@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # UserPromptSubmit OR SessionStart: inject .claude/STEER.md content into the agent's context
 # so an operator can steer the autonomous loop between iterations without restarting.
-# Pattern from anthropics/cwc-long-running-agents.
+# Pattern from anthropics/cwc-long-running-agents (Apache-2.0, Copyright Anthropic PBC).
+# Reimplementation of the pattern — no upstream text retained.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 STEER="$ROOT/.claude/STEER.md"

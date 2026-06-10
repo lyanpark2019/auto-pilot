@@ -164,8 +164,8 @@ For each phase in the spec:
 ## Inspired by
 
 - [greatSumini/cc-system](https://github.com/greatSumini/cc-system) — `run-server.py` infinite loop pattern, `tech-critic-lead`, HARNESS_HEADLESS env signal, iter-id commit trailers; auto-pilot replaces destructive rollback with recoverable stash-on-fail
-- [obra/superpowers](https://github.com/obra/superpowers) — 7-phase template, TDD-first hard rule (deletes pre-test code)
-- [everything-claude-code](https://github.com/JonathanRosenberg/everything-claude-code) — specialist agent pool (security/database/tdd-guide/etc.)
+- [obra/superpowers](https://github.com/obra/superpowers) — workflow-phase concept (brainstorm→plan→execute→finish) + TDD-first hard rule (deletes pre-test code); the 7-phase expansion is auto-pilot's own synthesis
+- [everything-claude-code](https://github.com/affaan-m/everything-claude-code) — specialist agent pool concept (security/database/tdd-guide/etc.); gate text independently written
 - [LiorCohen/sdd](https://github.com/LiorCohen/sdd) — Spec-driven development phasing
 - Lessons from `/insights` (381 sessions over 14 days) — every friction class is a guard
 

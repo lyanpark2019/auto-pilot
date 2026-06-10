@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Stop hook: auto-commit any uncommitted progress at session end.
 # Provides the cross-session continuity Anthropic's harness depends on (git log = source of truth).
-# Pattern from anthropics/cwc-long-running-agents.
+# Pattern from anthropics/cwc-long-running-agents (Apache-2.0, Copyright Anthropic PBC).
+# Reimplementation of the pattern — no upstream text retained.
 set -uo pipefail
 input="$(cat 2>/dev/null || echo '{}')"
 [ "$(jq -r '.stop_hook_active // false' <<< "$input")" = "true" ] && exit 0

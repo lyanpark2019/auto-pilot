@@ -7,7 +7,7 @@ manual_edit: false
 
 # 7-Phase fallback template
 
-When auto-pilot is invoked on a repo whose spec has NO `## Phase N` headers, the `auto-pilot` skill tells the PM to fall back to this Superpowers-derived 7-phase template, mapping the spec body into each phase's scope. This is a PM/skill instruction template, not a separate Python phase-expansion helper.
+When auto-pilot is invoked on a repo whose spec has NO `## Phase N` headers, the `auto-pilot` skill tells the PM to fall back to this 7-phase template (workflow concept influenced by obra/superpowers' skill family; the 7-step sequence itself is auto-pilot's own synthesis), mapping the spec body into each phase's scope. This is a PM/skill instruction template, not a separate Python phase-expansion helper.
 
 ## Phases
 

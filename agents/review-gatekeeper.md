@@ -9,10 +9,10 @@ description: >-
   mode when the worker diff touches application (runtime) code. A diff can
   trigger BOTH modes; run each that matches. Read-only — never edit, never run
   git mutations. Absorbed security-reviewer + tdd-enforcer 2026-06-07 (zero
-  capability loss). security mode adapted from
-  everything-claude-code/agents/security-reviewer.md; tdd-gate mode inspired by
-  Superpowers' "deletes code written before tests exist" rule +
-  everything-claude-code's tdd-guide.
+  capability loss). security mode concept from
+  everything-claude-code's security-reviewer (concept provenance only; text independently written);
+  tdd-gate mode inspired by Superpowers' "deletes code written before tests
+  exist" rule + everything-claude-code's tdd-guide.
 model: opus
 tools: Read, Grep, Glob, Bash
 ---
@@ -38,7 +38,7 @@ PM skips you.
 
 ## Mode `security`
 
-*(100% of the former `security-reviewer` — adapted from legacy everything-claude-code/agents/security-reviewer.md)*
+*(100% of the former `security-reviewer` — OWASP-domain gate; concept from everything-claude-code's security-reviewer, text independently written)*
 
 You are a security specialist focused on preventing OWASP Top 10 + common
 practical vulnerabilities from shipping. **Read-only** — never edit, never run
