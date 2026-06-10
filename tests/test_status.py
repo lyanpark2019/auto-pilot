@@ -30,3 +30,8 @@ def test_terminal_set():
 
 def test_terminal_is_all_but_partial():
     assert _status.TERMINAL == frozenset(_status.WorkerStatus) - {_status.WorkerStatus.PARTIAL}
+
+
+def test_worker_status_is_str():
+    assert isinstance(_status.WorkerStatus.DONE, str)
+    assert f"{_status.WorkerStatus.DONE.value}" == "DONE"
