@@ -31,3 +31,13 @@ def test_event_redacts_secret_like_values(capsys) -> None:
     assert "message=<redacted>" in captured.err
     assert "Bearer abcdefghijklmnop" not in captured.err
     assert "url=https://example.test" in captured.err
+
+
+def test_event_redacts_gh_token_values(capsys) -> None:
+    event("sample.gh", note="ghp_abcdefghijklmnop", plain="ok")
+
+    captured = capsys.readouterr()
+
+    assert "note=<redacted>" in captured.err
+    assert "ghp_abcdefghijklmnop" not in captured.err
+    assert "plain=ok" in captured.err
