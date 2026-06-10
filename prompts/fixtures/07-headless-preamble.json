@@ -8,7 +8,9 @@
     "HARNESS_HEADLESS",
     "Never call AskUserQuestion",
     "stdin is /dev/null",
-    "${HARNESS_HEADLESS:-0}"
+    "${HARNESS_HEADLESS:-0}",
+    "SYNCHRONOUS",
+    "NEVER exit with subagents in flight"
   ],
   "expects_not": ["{iter_n}", "{phase}", "auto-pilot-iter:"]
 }
