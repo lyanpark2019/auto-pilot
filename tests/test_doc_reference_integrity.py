@@ -180,6 +180,90 @@ class TestAssetCountClaims:
         assert r.returncode == 0
 
 
+def _write_hooks_json(repo: Path, names: list[str]) -> None:
+    """Write a hooks/hooks.json wiring the given hook script names."""
+    hooks = repo / "hooks"
+    hooks.mkdir(exist_ok=True)
+    entries = ", ".join(
+        f'{{"hooks": [{{"command": "${{CLAUDE_PLUGIN_ROOT}}/hooks/{n}"}}]}}'
+        for n in names
+    )
+    (hooks / "hooks.json").write_text(f'{{"PreToolUse": [{entries}]}}\n')
+
+
+class TestHookCountClaims:
+    """Free-text '(N scripts)' / 'N hooks' claims tied to hooks.json must match."""
+
+    def test_correct_hook_count_in_claude_md_is_ok(self, repo: Path) -> None:
+        _write_hooks_json(repo, ["a.sh", "b.sh", "c.py"])
+        (repo / "CLAUDE.md").write_text(
+            "wiring SoT = `hooks/hooks.json` (3 scripts)\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+        assert "0 violations" in r.stdout
+
+    def test_correct_hook_count_in_architecture_is_ok(self, repo: Path) -> None:
+        _write_hooks_json(repo, ["a.sh", "b.py"])
+        (repo / "docs" / "architecture.md").write_text(
+            "hooks/  (2 scripts, P; hooks/hooks.json is wiring SoT)\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+    def test_wrong_scripts_count_is_violation(self, repo: Path) -> None:
+        _write_hooks_json(repo, ["a.sh", "b.sh", "c.py"])
+        (repo / "docs" / "architecture.md").write_text(
+            "hooks/  (21 scripts, P; hooks/hooks.json is wiring SoT)\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1
+        assert "hook-count mismatch" in r.stdout
+        assert "said 21" in r.stdout
+        assert "actual 3" in r.stdout
+
+    def test_wrong_hooks_count_is_violation(self, repo: Path) -> None:
+        _write_hooks_json(repo, ["a.sh", "b.sh"])
+        (repo / "CLAUDE.md").write_text(
+            "full wiring SoT = `hooks/hooks.json` (9 hooks)\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1
+        assert "hook-count mismatch" in r.stdout
+        assert "actual 2" in r.stdout
+
+    def test_count_without_hooks_json_context_is_ignored(self, repo: Path) -> None:
+        """A '(N scripts)' line that does NOT name hooks.json never fires."""
+        _write_hooks_json(repo, ["a.sh"])
+        (repo / "docs" / "architecture.md").write_text(
+            "The PR1-PR5 modules (99 scripts) live under scripts/.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+    def test_asset_count_line_not_double_counted_as_hooks(self, repo: Path) -> None:
+        """The live-asset-count line (collect_assets) is exempt from the hook guard."""
+        _write_minimal_assets(repo)
+        _write_hooks_json(repo, ["a.sh"])
+        # asset line claims 1 hooks (matches _write_minimal_assets' single hook),
+        # but hooks.json wires only a.sh — the hook guard must NOT fire here.
+        (repo / "docs" / "architecture.md").write_text(
+            "Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): "
+            "1 skills · 1 agents · 1 commands · 1 hooks · 1 codex-skills = "
+            "5 assets total. See `hooks/hooks.json`.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+    def test_historical_hook_count_is_allowed(self, repo: Path) -> None:
+        _write_hooks_json(repo, ["a.sh"])
+        (repo / "docs" / "architecture.md").write_text(
+            "Legacy round-1 wiring: hooks/hooks.json once had (21 scripts).\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+
 class TestScanScope:
     def test_claude_md_at_root_is_scanned(self, repo: Path) -> None:
         (repo / "CLAUDE.md").write_text(

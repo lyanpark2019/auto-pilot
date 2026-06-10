@@ -37,30 +37,60 @@ fi
 
 [[ -z "$cmd" ]] && exit 0
 
-# Fire only when some segment's FIRST token is exactly `gh`.
-# Split on ; && || | newline ( to get simple-command segments, then check
-# whether any segment's leading token is `gh`.  This prevents false-fires
-# from substrings inside comments, strings, or other command args.
+# Fire only when some segment's FIRST (real) token resolves to `gh`.
+# STRATEGY SHIFT (fixwave 2026-06-10): tokenize each segment with shlex so
+# quoting evasions are stripped (`"gh"`, `'gh'`), resolve a leading
+# command/builtin/exec wrapper, strip a backslash-escape (`\gh`), and match the
+# BASENAME of the first token so `/usr/bin/gh` and `\gh` are detected (DEFECT 3).
+# On a match, emit a NORMALIZED `gh <args...>` line (dequoted, shlex-joined) so
+# the downstream `gh auth` / `gh auth switch` skip logic keeps working.
 # shellcheck disable=SC2016 # python heredoc — not a shell expansion context
 gh_segment=$(printf '%s' "$cmd" | python3 -c '
-import sys, re
+import sys, re, shlex, os
 cmd = sys.stdin.read()
-# Split on compound separators; strip leading whitespace per segment.
-segments = re.split(r";|&&|\|\||[|\n(]", cmd)
+# Split on compound separators / subshell-group punctuation to get segments.
+segments = re.split(r";|&&|\|\||[|\n(){}]", cmd)
+WRAPPERS = {"command", "builtin", "exec"}
 gh_seg = ""
 for seg in segments:
-    tokens = seg.split()
+    try:
+        tokens = shlex.split(seg)
+    except ValueError:
+        # Unparseable segment — fall back to a naive split so a genuine gh
+        # command is not silently skipped (fail toward firing the gate).
+        tokens = seg.split()
     if not tokens:
         continue
-    # Skip leading env-var assignments (VAR=val or VAR=) before first-token check.
+    # Skip leading env-var assignments (VAR=val or VAR=).
     start = 0
     while start < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[start]):
         start += 1
+    # Resolve command/builtin/exec wrappers (possibly stacked).
+    while start < len(tokens) and tokens[start] in WRAPPERS:
+        start += 1
     if start >= len(tokens):
         continue
-    if tokens[start] == "gh":
-        gh_seg = seg.strip()
+    first = tokens[start]
+    # Strip a leading backslash-escape (\gh) and resolve a path basename.
+    if first.startswith("\\"):
+        first = first[1:]
+    base = os.path.basename(first)
+    if base == "gh":
+        # Normalize: emit `gh <remaining args>` (dequoted, re-quoted safely).
+        rest = tokens[start + 1:]
+        gh_seg = " ".join(["gh", *(shlex.quote(t) for t in rest)]).strip()
         break
+
+# Fail TOWARD firing on shell-eval constructs that could expand to `gh` (command
+# substitution $(...) / backtick) which the static first-token check cannot
+# resolve.  If no clean gh segment was found but a construct sits next to a `gh`
+# token, run the auth check anyway (advisory hook — an extra cached check is
+# harmless; a missed wrong-account gh is not).  Closes the `\`gh\`` / `$(... gh)`
+# evasion (codex re-review 2026-06-10).
+if not gh_seg and re.search(r"\$\(|`", cmd):
+    stripped = re.sub(r"[\\`\"\x27(){}]|\$\(", " ", cmd)
+    if any(os.path.basename(t) == "gh" for t in stripped.split()):
+        gh_seg = "gh"
 print(gh_seg)
 ' 2>/dev/null || echo "")
 

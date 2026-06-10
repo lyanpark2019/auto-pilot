@@ -125,9 +125,10 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (21 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (22 scripts, P④; hooks/hooks.json is wiring SoT)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
+│   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
 │   └── guard-destructive.py + codex-conductor-guard.py + test_*.py (self-tests)
 ├── schemas/                           # PR1: contract/ticket/review/preflight JSON Schema 2020-12
 ├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers, build_dashboard_data.py

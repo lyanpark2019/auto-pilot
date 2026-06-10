@@ -82,6 +82,36 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": "rm -rf /tmp/x"},
         }),
     ),
+    # DEFECT 2: Bash branch with a STRING (non-dict) tool_input previously raised
+    # an uncaught AttributeError → empty cmd → grep no-match → exit 0 (mutation
+    # allowed).  Must fail-closed → DENY.
+    (
+        "Bash string tool_input (non-dict) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": "git push origin x",
+        }),
+    ),
+    # Control: dict tool_input with a SAFE (read-only) Bash command → ALLOW.
+    (
+        "Bash dict tool_input, safe read cmd → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "git status"},
+        }),
+    ),
+    # codex re-review: a non-string command (list) str()-renders to a form the
+    # mutation grep never matches → must fail-closed → DENY.
+    (
+        "Bash list-type command (non-string) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": ["rm", "-rf", "/"]},
+        }),
+    ),
 ]
 
 

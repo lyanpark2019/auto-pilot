@@ -44,10 +44,19 @@ case "$tool_name" in
 import json, sys
 try:
     d = json.load(sys.stdin)
-except json.JSONDecodeError:
+except (json.JSONDecodeError, ValueError):
+    print("__PARSE_FAIL__")
     sys.exit(0)
-print(d.get("tool_input", {}).get("file_path", ""))
+ti = d.get("tool_input")
+if not isinstance(ti, dict):
+    print("__PARSE_FAIL__")
+    sys.exit(0)
+print(ti.get("file_path", ""))
 ')
+    if [ "$file_path" = "__PARSE_FAIL__" ]; then
+      echo "auto-pilot: BLOCKED reviewer ($role) $tool_name — unparseable or non-dict tool_input (fail-closed)" >&2
+      exit 2
+    fi
     case "$file_path" in
       "$allowed_output_dir"/*) exit 0 ;;
       *)
@@ -60,10 +69,28 @@ print(d.get("tool_input", {}).get("file_path", ""))
 import json, sys
 try:
     d = json.load(sys.stdin)
-except json.JSONDecodeError:
+except (json.JSONDecodeError, ValueError):
+    print("__PARSE_FAIL__")
     sys.exit(0)
-print(d.get("tool_input", {}).get("command", ""))
+ti = d.get("tool_input")
+if not isinstance(ti, dict):
+    # DEFECT 2: a non-dict tool_input (e.g. a string) must fail-closed, not
+    # silently yield an empty command that the grep below never matches.
+    print("__PARSE_FAIL__")
+    sys.exit(0)
+cmd_val = ti.get("command", "")
+if not isinstance(cmd_val, str):
+    # A non-string command (list/dict) would str()-render to a form the grep
+    # below never matches → mutation slips through.  Fail-closed (codex
+    # re-review 2026-06-10).
+    print("__PARSE_FAIL__")
+    sys.exit(0)
+print(cmd_val)
 ')
+    if [ "$cmd" = "__PARSE_FAIL__" ]; then
+      echo "auto-pilot: BLOCKED reviewer ($role) Bash — unparseable or non-dict tool_input (fail-closed)" >&2
+      exit 2
+    fi
     if echo "$cmd" | grep -qE '(^|[[:space:]])(git[[:space:]]+(commit|push|reset|checkout|stash|am|rebase|merge|worktree|restore|clean)|rm[[:space:]]|mv[[:space:]]|chmod[[:space:]]|chown[[:space:]]|tee[[:space:]]|sed[[:space:]]+-i|awk[[:space:]]+-i|curl[[:space:]]|wget[[:space:]]|ssh[[:space:]]|scp[[:space:]]|rsync[[:space:]])'; then
       echo "auto-pilot: BLOCKED reviewer ($role) Bash mutation: $cmd" >&2
       exit 2

@@ -18,6 +18,9 @@ def _run_hook(
     env: dict | None = None,
 ) -> subprocess.CompletedProcess[str]:
     full_env = os.environ.copy()
+    # Strip ambient bypass vars so they don't leak from the outer shell.
+    # Tests that need them pass them explicitly via `env`.
+    full_env.pop("AUTO_PILOT_MAIN_OK", None)
     if env:
         full_env.update(env)
     return subprocess.run(
