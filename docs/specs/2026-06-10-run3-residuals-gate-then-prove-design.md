@@ -51,7 +51,7 @@ Principle violated: **evidence over trust** / **enforce with code, not prompts**
 
 ## §2 Entry gate fail-closed (reviewer-scoped)
 
-Workers dispatch as `subagent_type: general-purpose` (pm-orchestrator.md:99) —
+Workers dispatch as `subagent_type: general-purpose` (agents/pm-orchestrator.md:99) —
 indistinguishable from legit non-worker dispatch by type, so they CANNOT be
 gated on type. Reviewers always carry a fixed type and are always ticketed.
 So `hooks/dispatch-contract-gate.sh` marker-absent branch (current `exit 0` at
