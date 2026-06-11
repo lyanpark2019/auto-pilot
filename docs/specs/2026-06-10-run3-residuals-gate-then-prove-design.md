@@ -22,7 +22,8 @@ non-determinism. Two structural holes:
 1. `scripts/_dispatch.py:384` — `_expected_agents` derives the expected set from
    dirs that exist; an undispatched reviewer is never expected, never validated.
 2. `scripts/orchestrator.py:169` — `cmd_phase_end` accepts `--status success`
-   with zero evidence validation.
+   with zero evidence validation. (`_expected_agents` at `_dispatch.py:384`
+   feeds only the wait loop — not an evidence check — so it is left as-is.)
 3. `hooks/dispatch-contract-gate.sh` — documented "marker absent → allow" bypass
    lets ticket-less dispatch through.
 
@@ -39,22 +40,32 @@ Principle violated: **evidence over trust** / **enforce with code, not prompts**
      `diff_sha256` equal to that value.
   3. both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist,
      schema-valid, `contract_id` == the round's contract id, verdict present.
-- `_expected_agents` fix: review rounds expect BOTH reviewers unconditionally
-  (dual review is a plugin invariant), not "whatever dirs exist".
+- `_expected_agents` (`_dispatch.py:384`) is deliberately NOT changed: forcing
+  both reviewers as always-expected would hang `collect_round_outcome` on
+  worker-only collections. Presence-of-both is enforced at the exit gate below,
+  not in the wait loop.
 - `cmd_phase_end --status success`: walk the current phase's contract round
   dirs; final round must pass `assert_round_evidence` AND both verdicts APPROVE.
   Fail → exit 2, `BLOCKED` on stderr, state untouched (no partial write).
   `--status failed|stopped` exempt.
 
-## §2 Entry gate fail-closed
+## §2 Entry gate fail-closed (reviewer-scoped)
 
-`hooks/dispatch-contract-gate.sh` marker-absent branch: deny when
-`tool_input.subagent_type` matches the auto-pilot worker/reviewer set AND an
-active run exists in the cwd repo (`state.json` status init/running). Deny
-reason instructs: prepare ticket via `prepare_subagent_ticket`, dispatch with
-`TICKET=` marker. No active run or foreign agent type → allow (preserves the
-foreign-repo false-deny fix history). Unparseable stdin → fail-open (repo
-convention).
+Workers dispatch as `subagent_type: general-purpose` (pm-orchestrator.md:99) —
+indistinguishable from legit non-worker dispatch by type, so they CANNOT be
+gated on type. Reviewers always carry a fixed type and are always ticketed.
+So `hooks/dispatch-contract-gate.sh` marker-absent branch (current `exit 0` at
+line 68): deny when `tool_input.subagent_type` contains
+`auto-pilot-codex-reviewer` or `auto-pilot-claude-reviewer` AND no `TICKET=`
+path / `contract_dir=` marker in the prompt AND an active run exists in the cwd
+repo (`.planning/auto-pilot/state.json` status == `running`). Deny reason:
+prepare via `prepare_subagent_ticket`, dispatch with `TICKET=<path>`. No active
+run / non-reviewer type / unparseable stdin → allow (preserves foreign-repo
+false-deny history + fail-open convention).
+
+This catches "reviewer dispatched ad-hoc, bypassing the ticket/diff-sha
+binding". It does NOT catch "reviewer never dispatched at all" — that is the
+§1 exit gate's job (defense-in-depth, the two are complementary).
 
 ## §3 Headless background-dispatch guard
 
