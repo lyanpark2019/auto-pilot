@@ -37,7 +37,7 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
     """Materialize a contract round dir with a full (or partially broken) evidence chain.
 
     drop selects a defect: "" (none), "codex-ticket", "claude-review",
-    "sha", "verdict", "contract-id".
+    "sha", "verdict", "contract-id", "empty-review", "bad-json-contract".
     """
     cdir = tmp_path / "round-1"
     (cdir / "review-input").mkdir(parents=True)
@@ -46,7 +46,10 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
     (cdir / "review-input" / "frozen.diff").write_bytes(diff_text)
     sha_to_write = sha if drop != "sha" else "0" * 64
     (cdir / "review-input" / "frozen.diff.sha256").write_text(sha_to_write + "\n")
-    (cdir / "contract.json").write_text(json.dumps({"id": contract_id}))
+    if drop == "bad-json-contract":
+        (cdir / "contract.json").write_text("{ not json")
+    else:
+        (cdir / "contract.json").write_text(json.dumps({"id": contract_id}))
     for role in REVIEWERS:
         if drop == "codex-ticket" and role == "codex-reviewer":
             continue
@@ -58,6 +61,8 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
         rid = contract_id if drop != "contract-id" else "iter-9/phase-9/contract-9/round-9"
         v = verdict if drop != "verdict" else "REJECT"
         (out / "review.json").write_text(json.dumps(_review(rid, v)))
+        if drop == "empty-review" and role == "claude-reviewer":
+            (out / "review.json").write_text("")
     return cdir
 
 
@@ -66,7 +71,8 @@ def test_full_chain_passes(tmp_path):
     _evidence.assert_round_evidence(cdir)  # no raise
 
 
-@pytest.mark.parametrize("drop", ["codex-ticket", "claude-review", "sha", "verdict", "contract-id"])
+@pytest.mark.parametrize("drop", ["codex-ticket", "claude-review", "sha", "verdict",
+                                  "contract-id", "empty-review", "bad-json-contract"])
 def test_each_defect_rejects(tmp_path, drop):
     cdir = _build_round(tmp_path, drop=drop)
     with pytest.raises(_evidence.EvidenceError):

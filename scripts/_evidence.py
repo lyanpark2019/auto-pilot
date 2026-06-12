@@ -25,7 +25,13 @@ class EvidenceError(Exception):
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    return dict(json.loads(path.read_text()))
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        raise EvidenceError(f"{path}: unreadable JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise EvidenceError(f"{path}: expected JSON object, got {type(data).__name__}")
+    return data
 
 
 def assert_round_evidence(contract_dir: Path) -> None:
@@ -67,8 +73,8 @@ def assert_round_evidence(contract_dir: Path) -> None:
             continue
         try:
             data = _dispatch.read_review(review)
-        except _dispatch.MalformedReviewError as exc:
-            failures.append(f"{role}: review.json schema-invalid: {exc}")
+        except (_dispatch.MalformedReviewError, json.JSONDecodeError) as exc:
+            failures.append(f"{role}: review.json unreadable/invalid: {exc}")
             continue
         if data.get("verdict") != "APPROVE":
             failures.append(f"{role}: verdict={data.get('verdict')!r} (need APPROVE)")
