@@ -101,6 +101,34 @@ def test_latest_round_dirs_empty_when_no_contracts(tmp_path):
     assert _evidence.latest_round_dirs_for_active_phase(tmp_path / "nope") == []
 
 
+def test_latest_round_dirs_scopes_to_current_iteration(tmp_path):
+    """C1 regression: a later iteration on a LOWER phase must not be masked by an
+    earlier iteration that reached a higher phase."""
+    root = tmp_path / "contracts"
+    for rel in [
+        "iter-1/phase-1/contract-1/round-1",
+        "iter-1/phase-2/contract-1/round-1",   # iter-1 reached phase 2
+        "iter-2/phase-1/contract-1/round-1",   # current iteration, phase 1
+    ]:
+        (root / rel).mkdir(parents=True)
+    dirs = _evidence.latest_round_dirs_for_active_phase(root)
+    names = sorted(str(d.relative_to(root)) for d in dirs)
+    assert names == ["iter-2/phase-1/contract-1/round-1"], names
+
+
+def test_latest_round_dirs_ignores_archive_iter_dirs(tmp_path):
+    """A non-iter-prefixed dir (e.g. archive-step0-iter-9) must never be selected."""
+    root = tmp_path / "contracts"
+    for rel in [
+        "iter-1/phase-1/contract-1/round-1",
+        "archive-step0-iter-9/phase-9/contract-1/round-1",
+    ]:
+        (root / rel).mkdir(parents=True)
+    dirs = _evidence.latest_round_dirs_for_active_phase(root)
+    names = sorted(str(d.relative_to(root)) for d in dirs)
+    assert names == ["iter-1/phase-1/contract-1/round-1"], names
+
+
 # --- gate_phase_end unit tests ---
 
 def test_gate_phase_end_no_contracts_tree(tmp_path):

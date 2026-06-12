@@ -111,17 +111,33 @@ def _phase_num(phase_dir: Path) -> int:
         return -1
 
 
-def latest_round_dirs_for_active_phase(contracts_root: Path) -> list[Path]:
-    """Return the latest round-* dir of each contract under the highest phase-N.
+def _iter_num(iter_dir: Path) -> int:
+    try:
+        return int(iter_dir.name.split("-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
 
-    Sequential phase execution means the max phase dir present is the one being
-    closed. Returns [] when no contracts tree exists.
+
+def latest_round_dirs_for_active_phase(contracts_root: Path) -> list[Path]:
+    """Latest round-* dir of each contract under the CURRENT iteration's max phase.
+
+    Scopes to the max iter-N dir (the current iteration — iter numbers increment
+    monotonically per outer-loop pass), THEN the max phase-N within it. A global
+    max phase across iterations would validate a stale earlier iteration's
+    evidence while the current iteration's phase is evidence-free (the exact
+    bypass this gate exists to close). Returns [] when no iter-*/phase-* tree
+    exists; the caller treats [] as BLOCKED (fail-closed). Requires the
+    iter-N/phase-M/contract-K/round-R layout — a flat phase-* layout (no iter-*
+    parent) returns [] and is therefore blocked (documented residual; the live
+    loop always uses the iter-N layout).
     """
     if not contracts_root.exists():
         return []
-    phase_dirs: list[Path] = []
-    for iter_dir in sorted(contracts_root.glob("iter-*")):
-        phase_dirs.extend(p for p in iter_dir.glob("phase-*") if p.is_dir())
+    iter_dirs = [d for d in contracts_root.glob("iter-*") if d.is_dir()]
+    if not iter_dirs:
+        return []
+    current_iter = max(iter_dirs, key=_iter_num)
+    phase_dirs = [p for p in current_iter.glob("phase-*") if p.is_dir()]
     if not phase_dirs:
         return []
     max_phase = max(_phase_num(p) for p in phase_dirs)
