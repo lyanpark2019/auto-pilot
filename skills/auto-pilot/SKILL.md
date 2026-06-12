@@ -110,23 +110,41 @@ At phase end `scripts/orchestrator.py ledger-append` runs automatically (wired i
      echo "auto-pilot: git $v < 2.32 — required for commit --trailer" >&2; exit 2
    fi
    ```
-7. **Subagent discovery probe** (presence health-check — hardened pair is required):
+7. **Subagent registry presence check** (hardened pair is required):
    ```bash
-   # `claude --list-agents` does not exist; probe via no-op dispatch with sentinel token.
-   probe_result=$(timeout 30 claude -p --max-turns 1 \
-      "@subagent:auto-pilot-claude-reviewer reply with literal token AUTOPILOT_PROBE_OK" 2>&1)
-   if ! echo "$probe_result" | grep -q AUTOPILOT_PROBE_OK; then
-     echo "auto-pilot: subagent discovery probe failed; hardened reviewer pair unavailable — aborting (no legacy fallback)" >&2
+   # `claude --list-agents` does not exist, and a `claude -p` dispatch probe
+   # cannot work: a Task dispatch + reply needs >=2 turns (--max-turns 1 can
+   # never read the reply), and an @subagent mention does not dispatch in
+   # headless -p — that probe always false-negatives and spuriously aborts.
+   # Check the plugin agent registry on disk instead: BOTH hardened reviewer
+   # contracts must ship with a frontmatter `name:` matching their dispatch id.
+   : "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT unset — cannot locate plugin agents}"
+   missing=""
+   for agent in auto-pilot-claude-reviewer auto-pilot-codex-reviewer; do
+     f="${CLAUDE_PLUGIN_ROOT}/agents/${agent}.md"
+     # Anchor the name match to the leading frontmatter block (line 2..closing
+     # ---) so an exact `name:` line in the body cannot mask a mangled
+     # frontmatter name (the one input class this check exists to catch).
+     if [ ! -f "$f" ] || ! sed -n '2,/^---$/p' "$f" | grep -qx "name: ${agent}"; then
+       missing="${missing} ${agent}"
+     fi
+   done
+   if [ -n "$missing" ]; then
+     echo "auto-pilot: hardened reviewer pair unavailable —${missing} (aborting; no legacy fallback)" >&2
      exit 3
    fi
    ```
-8. **Codex sandbox probe**:
+8. **Codex sandbox probe** (capability check via `--help`, NOT a live `codex exec`):
    ```bash
-   if codex exec --sandbox read-only --json --prompt "ping" 2>&1 | grep -qi 'unknown\|invalid'; then
-     echo "auto-pilot: codex does not support --sandbox read-only; layer 4 deterrent disabled" >&2
-     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=0
-   else
+   # Detect --sandbox support from the help text. A real `codex exec` probe
+   # would inherit the TTY and hang, and parsing its error string is brittle
+   # (`--prompt` is not a flag — argv parse fails with "unexpected argument",
+   # matching neither unknown nor invalid → the old probe always passed).
+   if codex exec --help 2>&1 | grep -q -- '--sandbox'; then
      export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=1
+   else
+     echo "auto-pilot: codex lacks --sandbox; layer 4 deterrent disabled" >&2
+     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=0
    fi
    ```
 
