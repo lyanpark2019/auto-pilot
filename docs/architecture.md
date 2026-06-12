@@ -153,7 +153,7 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (22 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (23 scripts, P④; hooks/hooks.json is wiring SoT)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
