@@ -271,3 +271,45 @@ def test_hard_kill_fallback_on_routing_error(restore_rw_module, monkeypatch):
     assert rw.HARD_KILL_SEC == 480, (
         f"Expected fallback 480, got {rw.HARD_KILL_SEC}"
     )
+
+
+def test_reviewer_cmd_uses_equals_form_so_prompt_not_swallowed(tmp_path):
+    """--allowedTools and --disallowedTools must use equals-form single tokens.
+
+    claude CLI >=2.1.175 treats --disallowedTools as variadic: space-form
+    causes the following positional (the prompt) to be consumed as an extra
+    disallowed-tool name, producing a promptless reviewer session.
+    """
+    import _reviewer_wrapper as rw
+
+    ticket = tmp_path / "contract.json"
+    allowed = "Read,Bash,Write"
+    disallowed = "WebFetch,Agent"
+
+    cmd = rw._reviewer_cmd(ticket, allowed, disallowed)
+
+    # 1. Both flags must be single equals-form tokens.
+    assert f"--allowedTools={allowed}" in cmd, (
+        f"expected equals-form --allowedTools={allowed!r} in {cmd}"
+    )
+    assert f"--disallowedTools={disallowed}" in cmd, (
+        f"expected equals-form --disallowedTools={disallowed!r} in {cmd}"
+    )
+
+    # 2. Space-form (bare flag) must be absent — the variadic bug.
+    assert "--allowedTools" not in cmd or all(
+        e != "--allowedTools" for e in cmd
+    ), "bare --allowedTools found; space-form is the variadic bug"
+    assert "--disallowedTools" not in cmd or all(
+        e != "--disallowedTools" for e in cmd
+    ), "bare --disallowedTools found; space-form is the variadic bug"
+
+    # 3. The prompt is the last element and is a distinct token (not embedded
+    #    inside a flag value).
+    last = cmd[-1]
+    assert f"TICKET={ticket}" in last, (
+        f"prompt must be last element containing TICKET=<path>; got {last!r}"
+    )
+    assert last.startswith("--") is False, (
+        "last element must be the prompt positional, not a flag"
+    )
