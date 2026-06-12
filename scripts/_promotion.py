@@ -63,18 +63,19 @@ def _locked_update(ledger: Path, fp: str, mutate: Any) -> Ticket:
     lock.parent.mkdir(parents=True, exist_ok=True)
     lock.touch(exist_ok=True)
     fd = lock.open("r+")
+    result: Ticket
     try:
         fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
-        ticket = json.loads(path.read_text())
-        ticket = mutate(ticket)
-        validate_ticket(ticket)
-        atomic_write_text(path, json.dumps(ticket, indent=2, sort_keys=True) + "\n")
+        raw: Ticket = json.loads(path.read_text())
+        result = mutate(raw)
+        validate_ticket(result)
+        atomic_write_text(path, json.dumps(result, indent=2, sort_keys=True) + "\n")
     finally:
         try:
             fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
         finally:
             fd.close()
-    return ticket
+    return result
 
 
 def set_gate_field(ledger: Path, fp: str, field: str, value: bool) -> Ticket:
@@ -186,7 +187,7 @@ def cmd_improvements_list(args: Any) -> int:
         gate = t.get("promotion_gate", {})
         gate_summary = ",".join(
             f"{k[0]}={'T' if v is True else 'F' if v is False else '?'}"
-            for k, v in gate.items()  # type: ignore[union-attr]
+            for k, v in gate.items()
         )
         print(f"{fp_short:10}  {pattern:30}  {asset:8}  {runs:4}  {state:11}  {gate_summary}")
     return 0

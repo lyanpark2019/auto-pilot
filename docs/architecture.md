@@ -88,8 +88,13 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
   `insights.jsonl` — retro's structured sidecar where a `class` tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
-  it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class) —
-  promotion machinery stays deferred until live runs accumulate real `distinct_runs`.
+  it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
+- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:1`, three orchestrator
+  subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
+  state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
+  requires all three `promotion_gate` fields (`tests_pass`, `ci_pass`, `user_approved`) to be
+  `True` before the transition is accepted. Asset authoring and approval stay human — `user_approved`
+  is only set on an explicit user directive; the CLI records and validates, never auto-decides.
 - **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded).
   Once-per-session is sufficient: evidence dedups on (run_id, snippet), so re-fires cannot inflate.
   SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected (enforce with code).

@@ -6,7 +6,6 @@ improvements-set-state.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from _promotion import (  # noqa: E402
     GATE_FIELDS,
-    TRANSITIONS,
     PromotionError,
     load_tickets,
     resolve_fingerprint,
@@ -192,7 +190,7 @@ class TestImprovementsListCLI:
         _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
         rc = _run(["improvements-list", "--repo-root", str(repo_root), "--json"])
         assert rc == 0
-        lines = [l for l in capsys.readouterr().out.strip().splitlines() if l]
+        lines = [ln for ln in capsys.readouterr().out.strip().splitlines() if ln]
         assert len(lines) == 1
         ticket = json.loads(lines[0])
         assert ticket["fingerprint"] == FP_A
@@ -204,7 +202,7 @@ class TestImprovementsListCLI:
         rc = _run(["improvements-list", "--repo-root", str(repo_root),
                    "--state", "accepted", "--json"])
         assert rc == 0
-        lines = [l for l in capsys.readouterr().out.strip().splitlines() if l]
+        lines = [ln for ln in capsys.readouterr().out.strip().splitlines() if ln]
         assert len(lines) == 1
         assert json.loads(lines[0])["state"] == "accepted"
 
