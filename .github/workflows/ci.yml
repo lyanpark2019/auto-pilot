@@ -99,7 +99,7 @@ jobs:
         run: bash scripts/quality/check-module-size.sh
 
   bats:
-    name: bats gates (adversarial-review-loop + setup-harness)
+    name: bats gates (auto-pilot + adversarial-review-loop + setup-harness)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -116,6 +116,10 @@ jobs:
           curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz | tar -xJ
           sudo install -m755 shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
           shellcheck --version | grep version
+
+      - name: bats (auto-pilot skill snippets)
+        working-directory: skills/auto-pilot
+        run: bats tests/
 
       - name: bats (ARL orchestration + helpers)
         working-directory: skills/adversarial-review-loop
