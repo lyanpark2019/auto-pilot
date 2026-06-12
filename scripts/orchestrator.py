@@ -14,6 +14,7 @@ Usage:
     python orchestrator.py stop
     python orchestrator.py dispatch-contract-check --contract <path>
     python orchestrator.py round-budget --score-dir .planning/score --round N
+    python orchestrator.py review-status
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import _evidence
+import _round_budget
 from _log import event
 from _state import (
     STATE_DIR,
@@ -310,22 +312,6 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def _load_findings(score_dir: Path, r: int) -> dict[str, Any]:
-    """Load a findings-round-N.json file; return {} and log if missing."""
-    p = score_dir / f"findings-round-{r}.json"
-    if not p.exists():
-        event("round_budget.missing_file", path=str(p))
-        return {}
-    parsed: dict[str, Any] = json.loads(p.read_text())
-    return parsed
-
-
-def _count_findings(data: dict[str, Any]) -> int:
-    """Sum reviewer finding counts from a findings file payload."""
-    reviewers: dict[str, Any] = data.get("reviewers", {})
-    return sum(int(v.get("count", 0)) for v in reviewers.values())
-
-
 def _emit_hard_stop(n: int, c_prev: int, c_curr: int) -> int:
     """Print HARD-STOP verdict to stdout+stderr and return exit 3."""
     msg = "HARD-STOP: 전략 전환 필요"
@@ -350,24 +336,31 @@ def cmd_round_budget(args: argparse.Namespace) -> int:
     score_dir = Path(args.score_dir)
     n = args.round
     if n < 3:
-        data_n = _load_findings(score_dir, n)
+        data_n = _round_budget.load_findings(score_dir, n)
         if not data_n:
             return 2
-        c = _count_findings(data_n)
+        c = _round_budget.count_findings(data_n)
         _emit_json({"round": n, "count": c, "status": "informational"}, indent=2)
         return 0
-    data_prev = _load_findings(score_dir, n - 1)
-    data_curr = _load_findings(score_dir, n)
+    data_prev = _round_budget.load_findings(score_dir, n - 1)
+    data_curr = _round_budget.load_findings(score_dir, n)
     if not data_prev or not data_curr:
         return 2
-    c_prev = _count_findings(data_prev)
-    c_curr = _count_findings(data_curr)
+    c_prev = _round_budget.count_findings(data_prev)
+    c_curr = _round_budget.count_findings(data_curr)
     if c_curr >= c_prev:
         return _emit_hard_stop(n, c_prev, c_curr)
     _emit_json({
         "round": n, "count_prev": c_prev, "count_curr": c_curr,
         "verdict": "round 4 = final cap",
     }, indent=2)
+    return 0
+
+
+def cmd_review_status(_: argparse.Namespace) -> int:
+    """Print the reviewer heartbeat table for the active phase (§4 PM visibility)."""
+    import _heartbeat
+    _emit(_heartbeat.render_table(STATE_DIR / "contracts"))
     return 0
 
 
@@ -466,6 +459,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("stop").set_defaults(func=cmd_stop)
+    sub.add_parser("review-status").set_defaults(func=cmd_review_status)
 
     p_dcc = sub.add_parser("dispatch-contract-check")
     p_dcc.add_argument("--contract", required=True)

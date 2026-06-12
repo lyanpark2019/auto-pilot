@@ -91,6 +91,8 @@ def _round_rows(round_dir: Path, root: Path) -> list[list[str]]:
             age = f"{beat_age}s"
         except (ValueError, TypeError):
             age = "?"
+        raw_elapsed = data.get("elapsed_s")
+        elapsed_str = f"{raw_elapsed}s" if raw_elapsed is not None else "?"
         done = "yes" if (status_file.parent / "done.marker").exists() else "no"
         rows.append(
             [
@@ -98,7 +100,7 @@ def _round_rows(round_dir: Path, root: Path) -> list[list[str]]:
                 str(data.get("role") or status_file.parent.name),
                 str(data.get("phase") or "?"),
                 str(data.get("risk_tier") or "-"),
-                f"{data.get('elapsed_s', '?')}s",
+                elapsed_str,
                 age,
                 done,
             ]

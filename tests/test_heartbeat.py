@@ -127,6 +127,17 @@ def test_write_beat_naive_started_at_no_crash(tmp_path):
     assert data["elapsed_s"] >= 0
 
 
+def test_write_beat_fresh_start_semantics(tmp_path):
+    """Carry-in: fresh write_beat — started_at is UTC ISO and elapsed_s is 0."""
+    out = tmp_path / "fresh"
+    data_written = _heartbeat.write_beat(out, "claude-reviewer", "review-start")
+    data = json.loads(data_written.read_text())
+    assert data["started_at"].endswith("+00:00"), (
+        f"expected UTC offset in started_at, got {data['started_at']!r}"
+    )
+    assert data["elapsed_s"] == 0
+
+
 def test_render_table_naive_last_beat_shows_question_mark(tmp_path):
     """P3: status.json with naive last_beat — render_table shows '?' beat-age, no crash."""
     root = tmp_path / "contracts"
@@ -144,4 +155,8 @@ def test_render_table_naive_last_beat_shows_question_mark(tmp_path):
     (out / "status.json").write_text(json.dumps(payload))
     table = _heartbeat.render_table(root)
     assert "claude-reviewer" in table
-    assert "?" in table  # beat-age falls back to "?"
+    # Split the data row (second line after header) and assert beat-age column (index 5) is "?"
+    lines = [ln for ln in table.splitlines() if "claude-reviewer" in ln]
+    assert lines, "expected a data row containing claude-reviewer"
+    cols = lines[0].split()
+    assert cols[5] == "?", f"expected col[5]=='?' got {cols[5]!r}"
