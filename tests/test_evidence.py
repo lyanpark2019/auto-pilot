@@ -77,3 +77,25 @@ def test_each_defect_rejects(tmp_path, drop):
     cdir = _build_round(tmp_path, drop=drop)
     with pytest.raises(_evidence.EvidenceError):
         _evidence.assert_round_evidence(cdir)
+
+
+def test_latest_round_dirs_picks_max_phase_latest_round(tmp_path):
+    root = tmp_path / "contracts"
+    # phase-1 (older), phase-2 (current); phase-2/contract-1 has rounds 1 and 2
+    for rel in [
+        "iter-1/phase-1/contract-1/round-1",
+        "iter-1/phase-2/contract-1/round-1",
+        "iter-1/phase-2/contract-1/round-2",
+        "iter-1/phase-2/contract-2/round-1",
+    ]:
+        (root / rel).mkdir(parents=True)
+    dirs = _evidence.latest_round_dirs_for_active_phase(root)
+    names = sorted(str(d.relative_to(root)) for d in dirs)
+    assert names == [
+        "iter-1/phase-2/contract-1/round-2",
+        "iter-1/phase-2/contract-2/round-1",
+    ]
+
+
+def test_latest_round_dirs_empty_when_no_contracts(tmp_path):
+    assert _evidence.latest_round_dirs_for_active_phase(tmp_path / "nope") == []

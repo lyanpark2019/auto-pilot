@@ -83,3 +83,35 @@ def assert_round_evidence(contract_dir: Path) -> None:
 
     if failures:
         raise EvidenceError(f"{contract_dir}: " + "; ".join(failures))
+
+
+def _phase_num(phase_dir: Path) -> int:
+    try:
+        return int(phase_dir.name.split("-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
+
+
+def latest_round_dirs_for_active_phase(contracts_root: Path) -> list[Path]:
+    """Return the latest round-* dir of each contract under the highest phase-N.
+
+    Sequential phase execution means the max phase dir present is the one being
+    closed. Returns [] when no contracts tree exists.
+    """
+    if not contracts_root.exists():
+        return []
+    phase_dirs: list[Path] = []
+    for iter_dir in sorted(contracts_root.glob("iter-*")):
+        phase_dirs.extend(p for p in iter_dir.glob("phase-*") if p.is_dir())
+    if not phase_dirs:
+        return []
+    max_phase = max(_phase_num(p) for p in phase_dirs)
+    out: list[Path] = []
+    for phase_dir in phase_dirs:
+        if _phase_num(phase_dir) != max_phase:
+            continue
+        for contract_dir in sorted(phase_dir.glob("contract-*")):
+            rounds = sorted(contract_dir.glob("round-*"), key=lambda d: d.name)
+            if rounds:
+                out.append(rounds[-1])
+    return out
