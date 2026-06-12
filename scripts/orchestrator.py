@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import _evidence
 from _log import event
 from _state import (
     STATE_DIR,
@@ -175,8 +177,25 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
 
     current = _active_phase(state)
     if current is None or current["phase"] != args.phase:
-        event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
+        event("phase_end.phase_mismatch", requested=args.phase,
+              active=current["phase"] if current else None)
         return 2
+
+    if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
+        contracts_root = STATE_DIR / "contracts"
+        round_dirs = _evidence.latest_round_dirs_for_active_phase(contracts_root)
+        if not round_dirs:
+            _warn(f"BLOCKED phase-end --status success: no contract round dirs under {contracts_root}")
+            event("phase_end.no_evidence_dirs", phase=args.phase)
+            return 2
+        for round_dir in round_dirs:
+            try:
+                _evidence.assert_round_evidence(round_dir)
+            except _evidence.EvidenceError as exc:
+                _warn(f"BLOCKED phase-end --status success: {exc}")
+                event("phase_end.evidence_failed", phase=args.phase, detail=str(exc))
+                return 2
+
     _close_phase(current, args.status, args.commits)
     _update_run_status(state, args.status)
     save_state(state)
