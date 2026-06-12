@@ -351,7 +351,6 @@ class TestResume:
         state["status"] = status
         state["cost_usd"] = 1.23
         state["tokens"] = 5000
-        from _state import save_state
         import _state as _s
         import os
         os.chdir(str(in_tmp_cwd))
