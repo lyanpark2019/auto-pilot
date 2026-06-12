@@ -141,7 +141,7 @@ BINDING_CONTRACTS = [
     ("worker contract", "schemas/contract.schema.json",
      "v2: target_repo · target_layer · hard_constraints · snapshot_shas · additionalProperties:false fail-closed"),
     ("reviewer contract", "agents/auto-pilot-codex-reviewer.md + auto-pilot-claude-reviewer.md",
-     "read-only sandbox + frozen diff + structured APPROVE/REJECT + round-budget gate"),
+     "read-only sandbox + frozen diff + structured APPROVE/REJECT/ABSTAIN + round-budget gate"),
     ("PM contract", "agents/pm-orchestrator.md",
      "reporting format · prohibited actions · code-edit 0"),
     ("preflight contract", "schemas/preflight.schema.json",
