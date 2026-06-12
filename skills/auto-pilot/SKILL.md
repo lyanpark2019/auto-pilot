@@ -70,6 +70,7 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 10. **REPEAT** until spec's last phase verify passes or hard stop fires
 
 At phase end the PM MAY dispatch the `retro` agent (`agents/retro.md`) — appends evidence-cited doom-loop/wasted-pattern lessons to the project's `.claude/insights.md`; no verdicts, never blocks the loop.
+At phase end `scripts/orchestrator.py ledger-append` runs automatically (wired in `cmd_phase_end`). At iteration end the PM runs `ledger-rebalance` to surface model-assignment proposals; human judgment required before `--apply`.
 
 ### Hard stops
 

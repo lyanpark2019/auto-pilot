@@ -189,3 +189,19 @@ def test_verifier_agents_empty_list_raises(tmp_path):
     cfg.write_text("verifier_agents: []\n")
     with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
         _routing.verifier_agents(config=cfg)
+
+
+# --- tier_ladder ---
+
+
+def test_tier_ladder_returns_list():
+    ladder = _routing.tier_ladder()
+    assert isinstance(ladder, list)
+    assert len(ladder) >= 2
+    assert "fable" in ladder
+    assert "haiku-4.5" in ladder
+
+
+def test_tier_ladder_missing_yaml_raises(tmp_path):
+    with pytest.raises(_routing.RoutingConfigError):
+        _routing.tier_ladder(config=tmp_path / "absent.yaml")
