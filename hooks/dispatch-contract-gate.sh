@@ -58,21 +58,6 @@ if [[ -z "$contract_dir" ]]; then
     if [[ -f "$cand_dir/contract.json" ]]; then
       contract_dir="$cand_dir"
     else
-      # TICKET= present. If this is a reviewer subagent (always ticketed in protocol),
-      # the ticket path itself is sufficient proof of proper dispatch — reviewer agents
-      # do not own a contract.json tree, they read a frozen diff bound by the ticket.
-      # Allow and let the reviewer proceed; no contract sha check needed.
-      ticket_subagent=$(printf '%s' "$payload" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print((d.get("tool_input") or {}).get("subagent_type") or "")
-except Exception:
-    print("")
-' 2>/dev/null || echo "")
-      if printf '%s' "$ticket_subagent" | grep -qE 'auto-pilot-(codex|claude)-reviewer'; then
-        exit 0
-      fi
       # TICKET= present = worker dispatch; missing contract.json at the derived
       # dir means the PM skipped contract prep → deny rather than silently allow.
       deny "TICKET marker present but no contract.json at derived contract_dir=$cand_dir. Run orchestrator dispatch-contract-check first."
