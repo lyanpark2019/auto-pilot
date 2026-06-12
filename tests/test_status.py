@@ -37,3 +37,7 @@ def test_worker_status_is_str():
     # str-mixin equality: artifact strings compare directly against members
     assert _status.WorkerStatus.DONE == "DONE"
     assert "DONE" == _status.WorkerStatus.DONE
+
+
+def test_worker_status_terminal_set_nonempty() -> None:
+    assert len(_status.TERMINAL) >= 1
