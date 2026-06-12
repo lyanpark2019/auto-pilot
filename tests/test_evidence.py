@@ -16,7 +16,8 @@ REVIEWERS = ("codex-reviewer", "claude-reviewer")
 
 def _review(contract_id: str, verdict: str = "APPROVE",
             abstain_reason: str | None = None,
-            scope_check: str | None = None) -> dict:
+            scope_check: str | None = None,
+            reviewer: str = "codex-reviewer") -> dict:
     meta: dict[str, str] = {
         "model": "test",
         "started_at": "2026-06-10T00:00:00+00:00",
@@ -29,7 +30,7 @@ def _review(contract_id: str, verdict: str = "APPROVE",
     )
     return {
         "schema_version": 1,
-        "reviewer": "codex-reviewer",
+        "reviewer": reviewer,
         "contract_id": contract_id,
         "verdict": verdict,
         "scope_check": resolved_scope_check,
@@ -44,7 +45,8 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
                  drop: str = "",
                  per_role_verdict: dict | None = None,
                  abstain_reason: str | None = None,
-                 scope_check_override: dict | None = None) -> Path:
+                 scope_check_override: dict | None = None,
+                 reviewer_override: dict | None = None) -> Path:
     """Materialize a contract round dir with a full (or partially broken) evidence chain.
 
     drop selects a defect: "" (none), "codex-ticket", "codex-review",
@@ -55,6 +57,7 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
     per_role_verdict overrides verdict for specific roles: {"codex-reviewer": "ABSTAIN"}.
     abstain_reason is included in reviewer_meta when a role's verdict is ABSTAIN.
     scope_check_override overrides scope_check for specific roles: {"claude-reviewer": "SKIPPED"}.
+    reviewer_override writes a wrong reviewer field: {"claude-reviewer": "codex-reviewer"}.
     """
     cdir = tmp_path / "round-1"
     (cdir / "review-input").mkdir(parents=True)
@@ -82,9 +85,10 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
         if per_role_verdict and role in per_role_verdict:
             v = per_role_verdict[role]
         sc = (scope_check_override or {}).get(role)
+        rv = (reviewer_override or {}).get(role, role)
         (out / "review.json").write_text(
             json.dumps(_review(rid, v, abstain_reason if v == "ABSTAIN" else None,
-                               scope_check=sc)))
+                               scope_check=sc, reviewer=rv)))
         if drop == "empty-review" and role == "claude-reviewer":
             (out / "review.json").write_text("")
     return cdir
@@ -245,4 +249,38 @@ def test_abstain_with_scope_check_skipped_passes(tmp_path):
                         per_role_verdict={"codex-reviewer": "ABSTAIN"},
                         abstain_reason="codex-timeout")
     # scope_check is SKIPPED by default in _review when verdict==ABSTAIN
+    _evidence.assert_round_evidence(cdir)  # no raise
+
+
+# --- Task 1: reviewer field ↔ role dir cross-check ---
+
+def test_reviewer_field_mismatch_blocks(tmp_path):
+    """claude-reviewer dir holding reviewer=codex-reviewer must be rejected."""
+    cdir = _build_round(tmp_path,
+                        reviewer_override={"claude-reviewer": "codex-reviewer"})
+    with pytest.raises(_evidence.EvidenceError,
+                       match="claude-reviewer.*codex-reviewer.*role dir"):
+        _evidence.assert_round_evidence(cdir)
+
+
+def test_reviewer_field_match_passes(tmp_path):
+    """Each role dir has matching reviewer field — no raise."""
+    cdir = _build_round(tmp_path)
+    _evidence.assert_round_evidence(cdir)  # no raise
+
+
+# --- Task 2: APPROVE must carry scope_check=PASS ---
+
+def test_approve_with_scope_check_fail_blocks(tmp_path):
+    """APPROVE + scope_check=FAIL is contradictory evidence and must be rejected."""
+    cdir = _build_round(tmp_path,
+                        scope_check_override={"claude-reviewer": "FAIL"})
+    with pytest.raises(_evidence.EvidenceError,
+                       match="out-of-scope diff cannot be approved"):
+        _evidence.assert_round_evidence(cdir)
+
+
+def test_approve_with_scope_check_pass_passes(tmp_path):
+    """APPROVE + scope_check=PASS (correct reviewer fields) must pass end-to-end."""
+    cdir = _build_round(tmp_path)
     _evidence.assert_round_evidence(cdir)  # no raise

@@ -29,7 +29,7 @@ PM has frozen the diff at `$TICKET.diff_path` with sha at `$TICKET.diff_sha256`.
 ```bash
 DIFF_FILE=$(jq -r .diff_path "$TICKET")
 DIFF_SHA=$(jq -r .diff_sha256 "$TICKET")
-ACTUAL=$(sha256sum "$DIFF_FILE" | cut -d' ' -f1)
+ACTUAL=$(shasum -a 256 "$DIFF_FILE" | cut -d' ' -f1)
 [ "$ACTUAL" = "$DIFF_SHA" ] || { echo "diff tampered" >&2; exit 90; }
 ```
 
@@ -90,7 +90,7 @@ codex invocation lacking that flag. The wrapper also writes
 
 ## Output (RC=0 path)
 
-Same protocol as claude reviewer: atomic_write_output → write_exit_code → mark_done.
+Same protocol as claude reviewer: atomic_write_output → write_exit_code → mark_done. The `reviewer` field MUST be exactly `"codex-reviewer"` (the gate checks this matches the output dir role).
 
 ## Sandbox enforcement
 
