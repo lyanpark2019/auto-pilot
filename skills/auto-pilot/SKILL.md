@@ -110,13 +110,23 @@ At phase end `scripts/orchestrator.py ledger-append` runs automatically (wired i
      echo "auto-pilot: git $v < 2.32 — required for commit --trailer" >&2; exit 2
    fi
    ```
-7. **Subagent discovery probe** (presence health-check — hardened pair is required):
+7. **Subagent registry presence check** (hardened pair is required):
    ```bash
-   # `claude --list-agents` does not exist; probe via no-op dispatch with sentinel token.
-   probe_result=$(timeout 30 claude -p --max-turns 1 \
-      "@subagent:auto-pilot-claude-reviewer reply with literal token AUTOPILOT_PROBE_OK" 2>&1)
-   if ! echo "$probe_result" | grep -q AUTOPILOT_PROBE_OK; then
-     echo "auto-pilot: subagent discovery probe failed; hardened reviewer pair unavailable — aborting (no legacy fallback)" >&2
+   # `claude --list-agents` does not exist, and a `claude -p` dispatch probe
+   # cannot work: a Task dispatch + reply needs >=2 turns (--max-turns 1 can
+   # never read the reply), and an @subagent mention does not dispatch in
+   # headless -p — that probe always false-negatives and spuriously aborts.
+   # Check the plugin agent registry on disk instead: BOTH hardened reviewer
+   # contracts must ship with a frontmatter `name:` matching their dispatch id.
+   missing=""
+   for agent in auto-pilot-claude-reviewer auto-pilot-codex-reviewer; do
+     f="${CLAUDE_PLUGIN_ROOT}/agents/${agent}.md"
+     if [ ! -f "$f" ] || ! grep -qx "name: ${agent}" "$f"; then
+       missing="${missing} ${agent}"
+     fi
+   done
+   if [ -n "$missing" ]; then
+     echo "auto-pilot: hardened reviewer pair unavailable —${missing} (aborting; no legacy fallback)" >&2
      exit 3
    fi
    ```
