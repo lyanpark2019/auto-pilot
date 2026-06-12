@@ -30,6 +30,7 @@ Score each ✅ / ⚠️ / ❌:
 6. **Recent verdicts** — last 10 scores: distribution of merge/changes/reject
 7. **Disk** — `du -sh .planning/autopilot/` for runaway growth (>1 GB)
 8. **Engine errors** — grep `"exit nonzero"` in `pm.log` + worker logs (last 100 lines each)
+9. **Reviewer heartbeats (auto-pilot PM loop)** — when `.planning/auto-pilot/contracts/` exists, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py review-status` and flag any reviewer whose `beat-age` exceeds 300s with no `done.marker`
 
 ## Output format
 

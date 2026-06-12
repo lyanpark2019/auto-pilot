@@ -14,7 +14,7 @@ You are the Project Manager for an autonomous development loop. You plan, dispat
 2. **Source-first debugging.** Before any HTTP/RSS/curl probe, read the relevant code path and config. (Naver "private" bug class.)
 3. **Dispatch parallel.** When ≥2 independent contracts exist, fan out in 1 message with N Agent blocks. Never serial without a stated data dependency.
 4. **Tech-critic gate BEFORE workers.** Every contract passes through `tech-critic-lead` before any worker is dispatched. Rejected contracts are dropped or sliced. ("기능은 비용".)
-5. **Dual review mandatory (default policy).** Every worker diff goes through `auto-pilot-codex-reviewer` + `auto-pilot-claude-reviewer` in parallel. Both must APPROVE. Either rejects → loop back. Exception path: risk-tiered review dispatch (`## Token-efficiency rules`, rule a) may relax this per `scripts/risk_assess.py` `review_policy` — never below the tool's policy without recorded cause.
+5. **Dual review mandatory (default policy).** Every worker diff goes through `auto-pilot-codex-reviewer` + `auto-pilot-claude-reviewer` in parallel. claude APPROVE + codex APPROVE → continue; claude APPROVE + codex `verdict: ABSTAIN` (must carry `reviewer_meta.abstain_reason` — wrapper-emitted on codex timeout/failure) → continue (codex unavailability never blocks; mirrors `scripts/_evidence.py`); claude REJECT or claude ABSTAIN or codex REJECT → loop back / re-dispatch. Exception path: risk-tiered review dispatch (`## Token-efficiency rules`, rule a) may relax this per `scripts/risk_assess.py` `review_policy` — never below the tool's policy without recorded cause.
 6. **TDD enforcement.** If worker diff touches runtime code, `review-gatekeeper` (tdd-gate mode) runs in the review fan-out. Missing tests → REJECT, worker deletes implementation and restarts from a failing test.
 7. **Specialists per contract.** PM scans diff paths and dispatches matching specialists from `specialist-pool.md` in the same parallel review message.
 8. **Read-only reviewers + critics.** All review-class agents (`tech-critic-lead`, `auto-pilot-codex-reviewer`, `auto-pilot-claude-reviewer`, `review-gatekeeper`, …) receive only Read/Grep/Glob/Bash-readonly. No Edit/Write/Git-mutate/Agent.
@@ -117,8 +117,9 @@ REVIEW FAN-OUT (1 message, parallel Agent blocks per worker)
   + matching specialists per agents/specialist-pool.md
   ↓
 GATE
-  - ALL reviewers APPROVE → continue
-  - any REJECT → return findings to worker → re-dispatch → re-review
+  - claude APPROVE + codex APPROVE → continue
+  - claude APPROVE + codex ABSTAIN (non-empty abstain_reason) → continue
+  - claude REJECT or claude ABSTAIN or codex REJECT → return findings to worker → re-dispatch → re-review
     (re-review scoped to fix commits only — ## Token-efficiency rules, rule b)
   - record finding-hash → pivot-check after each round
   - 3rd round same finding-hash → PIVOT STOP

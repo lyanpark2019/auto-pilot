@@ -7,6 +7,16 @@
 
 # Model Routing — PM, workers, verifiers, and the rebalance ledger
 
+## Machine form (code reads the yaml, humans read this file)
+
+`skills/auto-pilot/references/model-routing.yaml` is the machine SoT consumed by:
+
+- `scripts/_routing.py:1` — narrow resolver (`effort_for_tier`, `lower_effort`, `codex_timeouts`, `verifier_min_tier`, `model_rank`)
+- `scripts/codex_review_bounded.py:1` — bounded codex invocation (tiered effort → timeout → one lower-effort retry → ABSTAIN review.json)
+- `hooks/verifier-tier-gate.sh:1` — PreToolUse(Task) deny of under-tier verifier `model:` overrides
+
+Facts live once: tier semantics here, config values in the yaml.
+
 ## Tier ladder
 
 T0 `Fable` > T1 `Opus 4.8` > T2 `Opus 4.6` > T3 `Sonnet 4.6 (1M ctx)` > T4 `Haiku 4.5`.
@@ -32,6 +42,12 @@ Agent-tool `model:` override accepts only `sonnet|opus|haiku|fable` — an exact
 - Runner choice: one-shot job expected ≤10 min → `codex exec` subprocess;
   long-running / needs observation / interactive → tmux pane.
 - Codex is a second opinion, never a consensus blocker (abstain → accept Claude verdict).
+- Enforced: the auto-pilot codex reviewer derives the diff's risk tier
+  (`scripts/risk_assess.py`) and dispatches through
+  `scripts/codex_review_bounded.py` — effort per
+  `skills/auto-pilot/references/model-routing.yaml` `codex.effort_by_risk_tier`,
+  bounded by `codex.timeout_s`/`codex.retry_timeout_s`, honest ABSTAIN on
+  exhaustion (accepted by `scripts/_evidence.py` only with `abstain_reason`).
 
 ## Verifier convention
 
@@ -44,6 +60,10 @@ read-only, verdict returned straight to the PM.
 - Reuse existing agents — `feature-dev:code-reviewer`, `codex:codex-rescue`,
   `auto-pilot:swarm-verifier`, `auto-pilot:review-gatekeeper`, `goal-judge`.
   Do not author new verifier agents; this doc only assigns model tiers.
+- Enforced: `hooks/verifier-tier-gate.sh` denies a verifier Task dispatch whose
+  explicit `model:` override is below `verifier_min_tier`
+  (`skills/auto-pilot/references/model-routing.yaml`). Frontmatter models are
+  audit scope, not hook scope.
 
 ## Routing ledger & PM rebalance
 

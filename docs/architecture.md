@@ -55,7 +55,7 @@ Full contract schemas and enforcement contracts: see README "Binding contracts i
 | Contract | Form | Binds |
 |----------|------|-------|
 | worker | `schemas/contract.schema.json` v2 — target_repo · target_layer · hard_constraints · pattern_refs · snapshot_shas.project_context; `additionalProperties:false` fail-closed | worker scope · evidence · deadline |
-| reviewer | read-only sandbox + frozen diff + structured APPROVE/REJECT (round-2: pre-mortem · liveness triage · 4 heuristics · round-budget gate); ticket roles are limited to live agents/modes (`codex-reviewer`, `claude-reviewer`, `review-gatekeeper`) plus worker/critic roles | Codex + cold Claude reviewers + gatekeeper modes |
+| reviewer | read-only sandbox + frozen diff + structured APPROVE/REJECT (+wrapper-emitted ABSTAIN) (round-2: pre-mortem · liveness triage · 4 heuristics · round-budget gate); ticket roles are limited to live agents/modes (`codex-reviewer`, `claude-reviewer`, `review-gatekeeper`) plus worker/critic roles | Codex + cold Claude reviewers + gatekeeper modes |
 | PM | `agents/pm-orchestrator.md` — reporting format · prohibited actions · code-edit 0 | PM main session |
 | round-2 additions | `schemas/preflight.schema.json` (phase-key · TTL 900s · head_sha) · dispatch required fields · creation gate (asset_registry_check) · dispatch-manifest gate | all pre-dispatch stages |
 
@@ -124,7 +124,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 23 hooks · 12 codex-skills = 69 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 24 hooks · 12 codex-skills = 70 assets total.
 
 ```
 auto-pilot/
@@ -153,7 +153,7 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (23 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (24 scripts, P④; hooks/hooks.json is wiring SoT)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
@@ -199,7 +199,7 @@ Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/auto-p
 3. PM `assert_reviewer_was_scoped` — `git status --porcelain` empty after every reviewer return. **Real wall.**
 4. `codex exec --sandbox read-only` — model-layer deterrent (not OS-level).
 
-Parallel reviewers use `scripts/_reviewer_wrapper.py` (isolated env per subprocess — prevents env-var signal race).
+Parallel reviewers use `scripts/_reviewer_wrapper.py` (isolated env per subprocess — prevents env-var signal race). Reviewers also write `outputs/<role>/status.json` heartbeats (`scripts/_heartbeat.py:1`), surfaced by `scripts/orchestrator.py review-status`; codex review is bounded with ABSTAIN fallback (`scripts/codex_review_bounded.py:1`).
 
 ## Enforcement-guard behavior contracts (2026-06-10 campaign + F1 fixwave)
 

@@ -53,7 +53,7 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
    - If diff touches runtime code: + `review-gatekeeper` mode `tdd-gate`
    - If diff touches trust boundary (auth/API/secrets/SQL/migrations/payments): + `review-gatekeeper` mode `security`
    - Additional specialists per `agents/specialist-pool.md` mapping
-   - All dispatched reviewers/modes must APPROVE. Any REJECT → return findings → worker fix → re-review
+   - claude APPROVE + codex APPROVE → continue; claude APPROVE + codex ABSTAIN (non-empty `abstain_reason`) → continue (codex unavailability non-blocking); claude REJECT or claude ABSTAIN or codex REJECT → return findings → worker fix → re-review
    - 3rd-round same finding → pivot-check trips → status=pivot-needed → STOP
 8. **VERIFY GATE** — phase checklist (project-specific, parsed from spec or `CLAUDE.md`):
    - `pnpm test && pnpm lint && pnpm typecheck && pnpm build` for Next.js

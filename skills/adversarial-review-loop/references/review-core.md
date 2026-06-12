@@ -71,7 +71,14 @@ Scope policy SoT: `agents/pm-orchestrator.md` § Token-efficiency rules, rule b.
 
 ## Severity + verdict conventions
 
-- **Verdict is binary:** `APPROVE` | `REJECT`. A tripped hard gate (§1–2), a failing verify re-run (§4), or a verify-log hash mismatch forces REJECT.
+- **Verdict:** `APPROVE` | `REJECT` (reviewers); `ABSTAIN` exists only as the codex wrapper's timeout fallback — see below. A tripped hard gate (§1–2), a failing verify re-run (§4), or a verify-log hash mismatch forces REJECT.
+
+**ABSTAIN is wrapper-emitted only.** `verdict: ABSTAIN` exists for the bounded
+codex path (`scripts/codex_review_bounded.py` writes it on double
+timeout/failure, with `reviewer_meta.abstain_reason`). A reviewer never
+self-selects ABSTAIN: codex-side it is the wrapper's deterministic fallback;
+the cold-Claude verdict is load-bearing and must be APPROVE or REJECT — the
+evidence gate (`scripts/_evidence.py`) rejects a claude ABSTAIN outright.
 - **Severity ladder:** `P0` (blocker — broken behavior, security, hard-gate/spec violation; must fix), `P1` (serious defect — should fix before approve), `P2` (minor / advisory).
 - **Every finding carries:** severity + `file:line` + concrete issue + concrete fix.
   - Legacy shells render the markdown table `| Sev | File:Line | Issue | Fix |`.

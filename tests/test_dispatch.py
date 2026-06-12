@@ -273,3 +273,63 @@ def test_assert_reviewer_was_scoped_raises_on_dirty(tmp_path):
 
     with pytest.raises(_dispatch.ScopeViolation):
         _dispatch.assert_reviewer_was_scoped(repo, repo, tmp_path / "outputs")
+
+
+def _abstain_review() -> dict:
+    return {
+        "schema_version": 1,
+        "reviewer": "codex-reviewer",
+        "contract_id": "iter-1/phase-1/contract-1/round-1",
+        "verdict": "ABSTAIN",
+        "scope_check": "SKIPPED",
+        "findings": [],
+        "verify_rerun": {"cmd": "codex exec --sandbox read-only", "exit_code": 124},
+        "reviewer_meta": {
+            "model": "codex",
+            "started_at": "2026-06-12T00:00:00+00:00",
+            "ended_at": "2026-06-12T00:04:00+00:00",
+            "abstain_reason": "codex-timeout",
+            "risk_tier": "medium",
+            "effort": "medium",
+        },
+    }
+
+
+def test_read_review_accepts_abstain(tmp_path):
+    import _dispatch
+    p = tmp_path / "review.json"
+    p.write_text(json.dumps(_abstain_review()))
+    data = _dispatch.read_review(p)
+    assert data["verdict"] == "ABSTAIN"
+    assert data["reviewer_meta"]["abstain_reason"] == "codex-timeout"
+
+
+def test_read_review_rejects_unknown_verdict(tmp_path):
+    import _dispatch
+    review = _abstain_review()
+    review["verdict"] = "MAYBE"
+    p = tmp_path / "review.json"
+    p.write_text(json.dumps(review))
+    with pytest.raises(_dispatch.MalformedReviewError):
+        _dispatch.read_review(p)
+
+
+def test_abstain_without_reason_is_schema_valid(tmp_path):
+    """Pairing ABSTAIN<->abstain_reason is gate-enforced (_evidence), not schema-enforced."""
+    import _dispatch
+    review = _abstain_review()
+    del review["reviewer_meta"]["abstain_reason"]
+    p = tmp_path / "review.json"
+    p.write_text(json.dumps(review))
+    assert _dispatch.read_review(p)["verdict"] == "ABSTAIN"
+
+
+def test_abstain_empty_reason_is_schema_invalid(tmp_path):
+    """abstain_reason: "" violates minLength:1 — the schema closes the empty-string hole."""
+    import _dispatch
+    review = _abstain_review()
+    review["reviewer_meta"]["abstain_reason"] = ""
+    p = tmp_path / "review.json"
+    p.write_text(json.dumps(review))
+    with pytest.raises(_dispatch.MalformedReviewError):
+        _dispatch.read_review(p)

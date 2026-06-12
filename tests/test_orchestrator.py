@@ -321,3 +321,24 @@ class TestDiscover:
         assert rc == 1
         assert out["fresh"] is False and out["reason"] == "scope-intersects"
         assert out["changed_files"] == ["src/a.py"]
+
+
+class TestReviewStatus:
+    def test_review_status_renders_active_round(self, tmp_path, monkeypatch, capsys):
+        import _heartbeat
+        monkeypatch.setattr(orchestrator, "STATE_DIR", tmp_path, raising=False)
+        out = (tmp_path / "contracts" / "iter-1" / "phase-1" / "contract-1"
+               / "round-1" / "outputs" / "claude-reviewer")
+        out.mkdir(parents=True)
+        _heartbeat.write_beat(out, "claude-reviewer", "review-start", risk_tier="medium")
+        rc = orchestrator.main(["review-status"])
+        captured = capsys.readouterr().out
+        assert rc == 0
+        assert "claude-reviewer" in captured
+        assert "review-start" in captured
+
+    def test_review_status_empty_tree(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(orchestrator, "STATE_DIR", tmp_path, raising=False)
+        rc = orchestrator.main(["review-status"])
+        assert rc == 0
+        assert "no reviewer status" in capsys.readouterr().out

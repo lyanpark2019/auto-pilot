@@ -29,6 +29,7 @@ codex exec Bash timeout + Task deadline (residual risk documented here).
 from __future__ import annotations
 
 import os
+import signal
 import re
 import subprocess
 import time
@@ -38,8 +39,16 @@ from typing import Protocol, cast, runtime_checkable
 
 from _log import event
 
+try:
+    import _routing
+    _codex_t, _codex_r = _routing.codex_timeouts()
+    # Hard kill must outlast the full codex budget (timeout + retry) by ≥120 s.
+    HARD_KILL_SEC: int = max(480, _codex_t + _codex_r + 120)
+    del _codex_t, _codex_r
+except Exception:  # RoutingConfigError, ImportError, or yaml absence — fail-open
+    HARD_KILL_SEC = 480
+
 SOFT_WARN_SEC = 300
-HARD_KILL_SEC = 480
 KILL_GRACE_SEC = 10
 _PROGRESS_INTERVAL_TICKS = 300  # 300 × 0.1 s = 30 s between progress events
 
@@ -191,11 +200,16 @@ def _reviewer_cmd(ticket: Path, allowed_tools: str, disallowed_tools: str) -> li
 
 def spawn(*, role: str, ticket: Path, output_dir: Path,
           allowed_tools: str, disallowed_tools: str) -> SpawnHandle:
-    """Spawn a `claude -p` subprocess for one reviewer dispatch."""
+    """Spawn a `claude -p` subprocess for one reviewer dispatch.
+
+    start_new_session=True puts the subprocess in its own process group so
+    _hard_kill can reap the entire grandchild tree (e.g. nested codex workers).
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
         _reviewer_cmd(ticket, allowed_tools, disallowed_tools),
         env=_reviewer_env(role, output_dir),
+        start_new_session=True,
     )
     return SpawnHandle(role=role, ticket=ticket, output_dir=output_dir,
                        proc=proc, allowed_tools=allowed_tools,
@@ -214,15 +228,45 @@ def _respawn(handle: SpawnHandle) -> SpawnHandle:
 
 
 def _hard_kill(proc: subprocess.Popen[bytes], role: str) -> None:
-    """terminate → wait 10 s → kill."""
+    """Send SIGTERM to the process group, wait grace period, then SIGKILL the group.
+
+    Spawning with start_new_session=True puts the subprocess in its own process
+    group; killpg reaps grandchildren (e.g. nested codex workers) that a plain
+    proc.terminate() would orphan.
+
+    Safety: only use killpg when the subprocess is in a DIFFERENT process group
+    than the current process — otherwise we would kill the caller itself (e.g. a
+    test runner that spawns procs without start_new_session).
+    """
     event("watchdog.hard_kill", role=role, pid=proc.pid)
-    proc.terminate()
+    try:
+        pgid = os.getpgid(proc.pid)
+        own_pgid = os.getpgrp()
+        use_pg = pgid != own_pgid
+    except ProcessLookupError:
+        pgid = None
+        use_pg = False
+
+    if use_pg and pgid is not None:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            proc.terminate()
+    else:
+        proc.terminate()
+
     try:
         proc.wait(timeout=KILL_GRACE_SEC)
     except subprocess.TimeoutExpired:
         event("watchdog.sigkill", role=role, pid=proc.pid,
               error_type="TimeoutExpired")
-        proc.kill()
+        if use_pg and pgid is not None:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except ProcessLookupError:
+                proc.kill()
+        else:
+            proc.kill()
         proc.wait()
 
 

@@ -155,6 +155,17 @@
         ]
       },
       {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/verifier-tier-gate.sh",
+            "description": "Deny verifier/reviewer Task dispatches whose model: override is below verifier_min_tier (model-routing.yaml)",
+            "timeout": 8
+          }
+        ]
+      },
+      {
         "matcher": "Skill",
         "hooks": [
           {

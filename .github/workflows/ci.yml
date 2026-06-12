@@ -80,6 +80,9 @@ jobs:
           shellcheck hooks/*.sh
           git ls-files '*.sh' | grep -vE '^hooks/' | xargs -r shellcheck -S warning
 
+      - name: deps for verifier-tier-gate self-test
+        run: python3 -m pip install --quiet 'PyYAML>=6.0'
+
       - name: hook self-tests (script-style)
         run: |
           python3 hooks/test_guard_destructive.py
@@ -90,6 +93,7 @@ jobs:
           python3 hooks/test_worker_scope_gate.py
           python3 hooks/test_branch_lock.py
           python3 hooks/test_gh_auth_preflight.py
+          python3 hooks/test_verifier_tier_gate.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh

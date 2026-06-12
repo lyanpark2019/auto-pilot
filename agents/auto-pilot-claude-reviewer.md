@@ -19,6 +19,12 @@ python ${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py} \
 
 If `TicketShaMismatchError` → exit non-zero. Refuse to act.
 
+```bash
+# Heartbeat: PM visibility (orchestrator.py review-status)
+python3 "$(dirname "${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py}")/_heartbeat.py" beat \
+    --out-dir "$AUTO_PILOT_OUTPUT_DIR" --role claude-reviewer --phase review-start
+```
+
 ## Allowed tools
 
 - `Read`, `Grep`, `Glob` (full)
@@ -44,6 +50,7 @@ Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-c
 Use `schemas/review.schema.json` shape. Required fields: `schema_version, reviewer, contract_id, verdict, scope_check, findings, verify_rerun, reviewer_meta`. Compute `finding_hash` via `_subagent_helpers.compute_finding_hash(file, line, issue)`.
 
 On exit:
+0. Beat before the verify re-run (the long step): `python3 "$(dirname "${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py}")/_heartbeat.py" beat --out-dir "$AUTO_PILOT_OUTPUT_DIR" --role claude-reviewer --phase verify-rerun`
 1. `_subagent_helpers.atomic_write_output($AUTO_PILOT_OUTPUT_DIR, "review.json", review)`
 2. `_subagent_helpers.write_exit_code($AUTO_PILOT_OUTPUT_DIR, 0)`
 3. `_subagent_helpers.mark_done($AUTO_PILOT_OUTPUT_DIR)` — LAST
