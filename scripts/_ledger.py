@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +20,7 @@ import yaml
 
 import _contract
 import _evidence
-from _rebalance import evaluate_rebalance  # re-export for backward compat
+from _rebalance import evaluate_rebalance, _utc_now_iso  # re-export + S3 dedup
 
 __all__ = [
     "LedgerError",
@@ -120,10 +119,6 @@ def save_ledger(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
     _contract.atomic_write_text(path, text)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _read_review_json(path: Path) -> dict[str, Any]:

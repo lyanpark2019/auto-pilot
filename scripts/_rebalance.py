@@ -17,10 +17,9 @@ from typing import Any
 
 import _routing
 
-_REAL_SEVERITIES = frozenset({"P0", "P1"})
-
 
 def _utc_now_iso() -> str:
+    # Canonical UTC ISO-8601 helper; _ledger.py imports this instead of duplicating it (S3).
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
@@ -136,6 +135,27 @@ def _latest_rebalance_for_group(
     return result
 
 
+def _proposal(
+    now: str,
+    role: str,
+    task_class: str,
+    from_model: str,
+    to_model: str,
+    rule: str,
+    evidence: list[str],
+) -> dict[str, Any]:
+    # S1: shared constructor for all four proposal types; avoids four near-identical dicts.
+    return {
+        "ts": now,
+        "role": role,
+        "task_class": task_class,
+        "from_model": from_model,
+        "to_model": to_model,
+        "rule": rule,
+        "evidence": evidence,
+    }
+
+
 def evaluate_rebalance(
     ledger: dict[str, Any],
     ladder: list[str],
@@ -231,15 +251,10 @@ def evaluate_rebalance(
                 ]
                 if failing_recs:
                     revert_to = latest_rb_entry.get("from_model", "")
-                    proposals.append({
-                        "ts": now,
-                        "role": role,
-                        "task_class": task_class,
-                        "from_model": current_model,
-                        "to_model": revert_to,
-                        "rule": "revert-trial",
-                        "evidence": [failing_recs[-1]["task_id"]],
-                    })
+                    proposals.append(_proposal(
+                        now, role, task_class, current_model, revert_to,
+                        "revert-trial", [failing_recs[-1]["task_id"]],
+                    ))
                     revert_fired = True
 
         # F8: per-group flag — at most one promote rule per evaluate_rebalance call.
@@ -253,35 +268,29 @@ def evaluate_rebalance(
                 not rec.get("outcome", {}).get("gates_first_try", True)
                 for rec in last_two
             ):
+                # B1: set promote_fired on CONDITION detection, not on proposal emission.
+                # A ceiling group (fable) has no step-up, so no proposal, but the signal
+                # must still suppress the demotion branch below.
+                promote_fired = True
                 to_model = _ladder_step_up(current_model, ladder)
                 if to_model is not None:
-                    proposals.append({
-                        "ts": now,
-                        "role": role,
-                        "task_class": task_class,
-                        "from_model": current_model,
-                        "to_model": to_model,
-                        "rule": "promote-2x-gate-fail",
-                        "evidence": [r["task_id"] for r in last_two],
-                    })
-                    promote_fired = True
+                    proposals.append(_proposal(
+                        now, role, task_class, current_model, to_model,
+                        "promote-2x-gate-fail", [r["task_id"] for r in last_two],
+                    ))
 
         # --- promote-real-p0 ---
         if not promote_fired:
             for rec in fresh_recs:
                 if rec.get("outcome", {}).get("p0_escaped") is True:
+                    # B1: set promote_fired on CONDITION detection (same fix as above).
+                    promote_fired = True
                     to_model = _ladder_step_up(current_model, ladder)
                     if to_model is not None:
-                        proposals.append({
-                            "ts": now,
-                            "role": role,
-                            "task_class": task_class,
-                            "from_model": current_model,
-                            "to_model": to_model,
-                            "rule": "promote-real-p0",
-                            "evidence": [rec["task_id"]],
-                        })
-                        promote_fired = True
+                        proposals.append(_proposal(
+                            now, role, task_class, current_model, to_model,
+                            "promote-real-p0", [rec["task_id"]],
+                        ))
                     break  # one proposal per group per evaluate call
 
         # --- trial-demotion-3x-clean ---
@@ -314,14 +323,9 @@ def evaluate_rebalance(
             if all_clean:
                 to_model = _ladder_step_down(current_model, ladder)
                 if to_model is not None:
-                    proposals.append({
-                        "ts": now,
-                        "role": role,
-                        "task_class": task_class,
-                        "from_model": current_model,
-                        "to_model": to_model,
-                        "rule": "trial-demotion-3x-clean",
-                        "evidence": [r["task_id"] for r in last_three],
-                    })
+                    proposals.append(_proposal(
+                        now, role, task_class, current_model, to_model,
+                        "trial-demotion-3x-clean", [r["task_id"] for r in last_three],
+                    ))
 
     return proposals
