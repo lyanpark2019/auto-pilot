@@ -169,7 +169,12 @@ def _update_run_status(state: State, status: str) -> None:
 
 
 def cmd_phase_end(args: argparse.Namespace) -> int:
-    """Close out the active phase with a final status and commit list."""
+    """Close out the active phase with a final status and commit list.
+
+    On --status success, refuses (exit 2, no state write) unless the active
+    phase's evidence chain is complete (see _evidence.gate_phase_end).
+    AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the gate — unit tests only, never prod.
+    """
     state = load_state()
     if not state or not state.get("phases"):
         event("phase_end.no_active_phase")
@@ -177,24 +182,18 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
 
     current = _active_phase(state)
     if current is None or current["phase"] != args.phase:
-        event("phase_end.phase_mismatch", requested=args.phase,
-              active=current["phase"] if current else None)
+        event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
         return 2
 
     if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
-        contracts_root = STATE_DIR / "contracts"
-        round_dirs = _evidence.latest_round_dirs_for_active_phase(contracts_root)
-        if not round_dirs:
-            _warn(f"BLOCKED phase-end --status success: no contract round dirs under {contracts_root}")
-            event("phase_end.no_evidence_dirs", phase=args.phase)
+        # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
+        # (tests fabricate state without a real contracts tree). Never set in prod.
+        blocked = _evidence.gate_phase_end(STATE_DIR / "contracts")
+        if blocked is not None:
+            suffix, message = blocked
+            _warn(message)
+            event(f"phase_end.{suffix}", phase=args.phase)
             return 2
-        for round_dir in round_dirs:
-            try:
-                _evidence.assert_round_evidence(round_dir)
-            except _evidence.EvidenceError as exc:
-                _warn(f"BLOCKED phase-end --status success: {exc}")
-                event("phase_end.evidence_failed", phase=args.phase, detail=str(exc))
-                return 2
 
     _close_phase(current, args.status, args.commits)
     _update_run_status(state, args.status)

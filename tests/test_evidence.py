@@ -99,3 +99,33 @@ def test_latest_round_dirs_picks_max_phase_latest_round(tmp_path):
 
 def test_latest_round_dirs_empty_when_no_contracts(tmp_path):
     assert _evidence.latest_round_dirs_for_active_phase(tmp_path / "nope") == []
+
+
+# --- gate_phase_end unit tests ---
+
+def test_gate_phase_end_no_contracts_tree(tmp_path):
+    """Empty / missing contracts root → returns no_evidence_dirs tuple."""
+    result = _evidence.gate_phase_end(tmp_path / "contracts")
+    assert result is not None
+    assert result[0] == "no_evidence_dirs"
+
+
+def test_gate_phase_end_complete_chain(tmp_path):
+    """Latest round with a valid complete chain → returns None (gate passes)."""
+    root = tmp_path / "contracts"
+    contract_dir = root / "iter-1" / "phase-1" / "contract-1"
+    contract_dir.mkdir(parents=True)
+    _build_round(contract_dir)  # creates contract_dir/round-1 with full chain
+    result = _evidence.gate_phase_end(root)
+    assert result is None
+
+
+def test_gate_phase_end_broken_chain(tmp_path):
+    """Latest round missing codex-ticket → returns evidence_failed tuple."""
+    root = tmp_path / "contracts"
+    contract_dir = root / "iter-1" / "phase-1" / "contract-1"
+    contract_dir.mkdir(parents=True)
+    _build_round(contract_dir, drop="codex-ticket")  # broken chain
+    result = _evidence.gate_phase_end(root)
+    assert result is not None
+    assert result[0] == "evidence_failed"

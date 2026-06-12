@@ -160,14 +160,16 @@ class TestPhaseLifecycle:
         assert "event=phase_end.phase_mismatch" in capsys.readouterr().err
         assert _state()["phases"][-1]["status"] == "running"
 
-    def test_phase_end_success_midway_keeps_running(self, in_tmp_cwd, sample_spec):
+    def test_phase_end_success_midway_keeps_running(self, in_tmp_cwd, sample_spec, monkeypatch):
+        monkeypatch.setenv("AUTO_PILOT_SKIP_EVIDENCE", "1")
         _run(["init", "--spec", str(sample_spec)])
         _run(["phase-start", "--phase", "1", "--contracts", "1"])
         _run(["phase-end", "--phase", "1", "--status", "success"])
         assert _state()["status"] == "running"
 
-    def test_two_phase_spec_phase1_keeps_running(self, in_tmp_cwd, tmp_path):
+    def test_two_phase_spec_phase1_keeps_running(self, in_tmp_cwd, tmp_path, monkeypatch):
         """Regression: phase 1 of 2 must not mark status=success."""
+        monkeypatch.setenv("AUTO_PILOT_SKIP_EVIDENCE", "1")
         spec = tmp_path / "two.md"
         spec.write_text("## Phase 1\n## Phase 2\n")
         _run(["init", "--spec", str(spec)])
