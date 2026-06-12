@@ -9,7 +9,7 @@ manual_edit: false
 
 ## One-line
 
-Opus 4.7 PM (main session) dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
+The main-session PM dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
 ## Purpose (locked 2026-05-29)
 
@@ -124,7 +124,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 22 hooks · 12 codex-skills = 68 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 23 hooks · 12 codex-skills = 69 assets total.
 
 ```
 auto-pilot/
@@ -153,7 +153,7 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (22 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (23 scripts, P④; hooks/hooks.json is wiring SoT)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)

@@ -93,7 +93,8 @@ def test_phase_start_within_budget(benchmark, initialized_state, capsys):
     _assert_benchmark_budget(benchmark, "test_phase_start_within_budget", "cmd_phase_start")
 
 
-def test_phase_end_within_budget(benchmark, initialized_state, capsys):
+def test_phase_end_within_budget(benchmark, initialized_state, monkeypatch, capsys):
+    monkeypatch.setenv("AUTO_PILOT_SKIP_EVIDENCE", "1")
     orchestrator.main(["phase-start", "--phase", "1", "--contracts", "1"])
 
     def _run():

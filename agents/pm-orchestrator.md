@@ -1,6 +1,6 @@
 ---
 name: pm-orchestrator
-description: PM-only orchestrator for the auto-pilot loop. NOT typically invoked as a subagent — the main Opus 4.7 session IS the PM. This file documents the PM contract so the main session can self-reference it.
+description: PM-only orchestrator for the auto-pilot loop. NOT typically invoked as a subagent — the main session IS the PM (its model is operator-selected). This file documents the PM contract so the main session can self-reference it.
 model: opus
 ---
 

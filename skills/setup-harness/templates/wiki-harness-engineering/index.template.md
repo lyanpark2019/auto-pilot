@@ -10,7 +10,7 @@ sources:
 
 # Harness Engineering — {{PROJECT_NAME}}
 
-> Single entry point for the harness engineering knowledge base. Built {{DATE}} by an Opus 4.7 PM supervising five Codex 5.5 xhigh workers via codex exec + file message bus.
+> Single entry point for the harness engineering knowledge base. Built {{DATE}} by a main-session PM (interactive Claude Code, operator-selected model) supervising five Codex 5.5 xhigh workers via codex exec + file message bus.
 
 ## What is "Harness Engineering"
 

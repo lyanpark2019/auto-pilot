@@ -1,6 +1,6 @@
 # auto-pilot
 
-Unified automated AI coding system for Claude Code. Core: a self-driving development loop — Opus 4.7 PM + Sonnet 4.6 (1M) parallel workers + Codex/Claude dual adversarial review + phase verify gates, full auto, no confirms. Around it: quality lift, harness bootstrap, graphify-native doc management (flagship), a swarm tmux parallel backend, a SHA-pin deploy standard, codex conductor mode, and a vault export layer.
+Unified automated AI coding system for Claude Code. Core: a self-driving development loop — an operator-selected main-session PM + Sonnet 4.6 (1M) parallel workers + Codex/Claude dual adversarial review + phase verify gates, full auto, no confirms. Around it: quality lift, harness bootstrap, graphify-native doc management (flagship), a swarm tmux parallel backend, a SHA-pin deploy standard, codex conductor mode, and a vault export layer.
 
 Built from `/insights` friction analysis on 381 sessions — every recurring failure mode is hardcoded as a guard.
 
@@ -99,7 +99,7 @@ python3 ~/.claude/plugins/auto-pilot/scripts/headless-loop.py --once   # smoke t
 
 ## Requirements
 
-- Claude Code with Opus 4.7 access (PM session)
+- Claude Code with a high-capability PM model (Fable 5 or Opus 4.8 tier) for the PM session
 - Sonnet 4.6 1M-context tier (for workers via `Agent({model: "sonnet"})`)
 - `codex` CLI on PATH (`brew install codex` or per Codex docs) — for adversarial reviewer
 - A spec at `docs/specs/*-*.md` or `SPEC.md` with `## Phase N` headers

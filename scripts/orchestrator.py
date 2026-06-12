@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """auto-pilot orchestrator helper.
 
-The actual PM loop runs in the Claude Code main session (Opus 4.7) — this file
+The actual PM loop runs in the Claude Code main session (operator-selected model) — this file
 is a state-management and reporting helper invoked by the skill/command. It does
 NOT itself dispatch agents (only the main session can call the Agent tool).
 
@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import _evidence
 from _log import event
 from _state import (
     STATE_DIR,
@@ -167,7 +169,12 @@ def _update_run_status(state: State, status: str) -> None:
 
 
 def cmd_phase_end(args: argparse.Namespace) -> int:
-    """Close out the active phase with a final status and commit list."""
+    """Close out the active phase with a final status and commit list.
+
+    On --status success, refuses (exit 2, no state write) unless the active
+    phase's evidence chain is complete (see _evidence.gate_phase_end).
+    AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the gate — unit tests only, never prod.
+    """
     state = load_state()
     if not state or not state.get("phases"):
         event("phase_end.no_active_phase")
@@ -177,6 +184,17 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
     if current is None or current["phase"] != args.phase:
         event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
         return 2
+
+    if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
+        # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
+        # (tests fabricate state without a real contracts tree). Never set in prod.
+        blocked = _evidence.gate_phase_end(STATE_DIR / "contracts")
+        if blocked is not None:
+            suffix, message = blocked
+            _warn(message)
+            event(f"phase_end.{suffix}", phase=args.phase)
+            return 2
+
     _close_phase(current, args.status, args.commits)
     _update_run_status(state, args.status)
     save_state(state)

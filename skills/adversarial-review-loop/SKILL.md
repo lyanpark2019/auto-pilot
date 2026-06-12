@@ -406,7 +406,7 @@ Else: `iteration++`, loop to Step 1.
 
 # multi-agent mode
 
-> Opt-in dispatch layer on top of codebase mode. Opus 4.7 main session = PM (dispatch, board read, user gate, **no code edits**) + hybrid Worker pool (dim-routed Codex CLI `codex exec` / Claude general-purpose) + Reviewer pool (cold Claude). Reuses codebase-mode state, contracts, rubric, RESCORE, CHECK — replaces ONLY Step 4 EXECUTE.
+> Opt-in dispatch layer on top of codebase mode. The main-session PM (dispatch, board read, user gate, **no code edits**) + hybrid Worker pool (dim-routed Codex CLI `codex exec` / Claude general-purpose) + Reviewer pool (cold Claude). Reuses codebase-mode state, contracts, rubric, RESCORE, CHECK — replaces ONLY Step 4 EXECUTE.
 
 ## Activation gate
 
@@ -426,7 +426,7 @@ Below gate → fall back to codebase mode `execution=parallel` (or `execution=se
 
 | Role | Model | Tool | Allowed |
 |---|---|---|---|
-| **PM** | Opus 4.7 (main session) | direct | board read, dispatch, user gate, final summary. **Zero code edits except user-explicit escalation.** |
+| **PM** | main session (operator-selected model) | direct | board read, dispatch, user gate, final summary. **Zero code edits except user-explicit escalation.** |
 | **Worker** | Codex 5.5 xhigh | `Bash(codex exec -c model_reasoning_effort=high -s workspace-write, run_in_background=true)` | code edits, test, lint, commit, PR |
 | **Worker** | Claude Sonnet | `Agent(subagent_type=general-purpose, run_in_background=true)` | same; used for architecture/documentation contracts + Codex hang fallback |
 | **Reviewer** | Claude (cold) | `Agent(subagent_type=general-purpose)` | diff-only cold review, verdict + findings |

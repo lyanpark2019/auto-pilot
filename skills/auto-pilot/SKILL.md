@@ -1,6 +1,6 @@
 ---
 name: auto-pilot
-description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (Opus 4.7) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis — bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
+description: Self-driving development loop. Triggers on /auto-pilot, "auto pilot", "자율 주행", "자율 루프", "자동 개발", "self-driving", "autonomous build", "PM 워커 루프", or when user wants the PM (main session) to dispatch Sonnet 4.6 (1M context) workers in parallel, run Codex+Claude dual adversarial review on every diff, execute phase verify gates (test/lint/typecheck/build), and advance through a spec's phases automatically until done. Full auto by default — no confirms. Stops on spec completion, time-box, or hard failure. Built from /insights friction analysis — bakes in path preflight, composition-root guard, code-first debug rule, read-only adversarial constraint, dual-review verdict catching.
 argument-hint: "[start|status|resume|stop|eval|handoff] [--spec PATH] [--max-workers N] [--time-box DURATION]"
 ---
 
@@ -38,7 +38,7 @@ User invokes `/auto-pilot start` (or aliases: "자율 주행 시작", "autopilot
 
 ## What this skill does
 
-Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The PM stays in the main session (Opus 4.7) and dispatches all subagents via the `Agent` tool.
+Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The PM stays in the main session (model operator-selected) and dispatches all subagents via the `Agent` tool.
 
 ### Loop (per phase)
 

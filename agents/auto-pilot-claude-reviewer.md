@@ -1,6 +1,6 @@
 ---
 name: auto-pilot-claude-reviewer
-description: Cold Claude Opus 4.7 reviewer for the auto-pilot loop. Read-only by sandbox enforcement (frontmatter tools whitelist + pre-reviewer-write.sh hook + PM post-check). Reads ticket from CONTRACT_DIR, writes schema-valid review.json to outputs/claude-reviewer/, exits.
+description: Cold Claude reviewer for the auto-pilot loop. Read-only by sandbox enforcement (frontmatter tools whitelist + pre-reviewer-write.sh hook + PM post-check). Reads ticket from CONTRACT_DIR, writes schema-valid review.json to outputs/claude-reviewer/, exits.
 model: opus
 tools: Read, Grep, Glob, Bash, Write
 ---
