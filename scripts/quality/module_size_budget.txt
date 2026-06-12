@@ -23,3 +23,11 @@ skills/adversarial-review-loop/SKILL.md|640
 # table-driven test pattern is the right shape here — splitting would
 # scatter the per-hook contract tables across files.
 tests/test_hooks_guards.py|640
+#
+# orchestrator.py is the single composition root for all CLI subcommands; it
+# cannot be split without introducing circular-import risk (all cmd_* functions
+# share STATE_DIR, _emit, _warn helpers from the same module). Slice C adds
+# cmd_ledger_append + cmd_ledger_rebalance (thin glue; all logic in _ledger.py)
+# + phase-end try/except wiring (~60 lines). Cap 570 = current 561 + 9-line
+# headroom for parser-docstring tweaks; no new subcommands without another ADR.
+scripts/orchestrator.py|570

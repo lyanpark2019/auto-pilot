@@ -15,6 +15,8 @@ Usage:
     python orchestrator.py dispatch-contract-check --contract <path>
     python orchestrator.py round-budget --score-dir .planning/score --round N
     python orchestrator.py review-status
+    python orchestrator.py ledger-append [--project-root PATH]
+    python orchestrator.py ledger-rebalance [--apply] [--project-root PATH]
 """
 from __future__ import annotations
 
@@ -197,6 +199,12 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
             event(f"phase_end.{suffix}", phase=args.phase)
             return 2
 
+    # Auto-append ledger records — telemetry; never blocks phase-end.
+    try:
+        import _ledger  # noqa: PLC0415
+        _ledger.append_phase_records(Path.cwd(), STATE_DIR / "contracts")
+    except Exception as exc:  # noqa: BLE001
+        _warn(f"ledger auto-append failed (telemetry, non-blocking): {exc}")
     _close_phase(current, args.status, args.commits)
     _update_run_status(state, args.status)
     save_state(state)
@@ -392,22 +400,74 @@ def cmd_discover(args: argparse.Namespace) -> int:
     return 0 if verdict.fresh else 1
 
 
+def cmd_ledger_append(args: argparse.Namespace) -> int:
+    """Auto-append phase-end ledger records for finished contracts (telemetry)."""
+    import _ledger  # noqa: PLC0415
+    project_root = Path(args.project_root) if args.project_root else Path.cwd()
+    # F-C: STATE_DIR is relative — append directly so --project-root works.
+    contracts_root = project_root / STATE_DIR / "contracts" if not STATE_DIR.is_absolute() else STATE_DIR / "contracts"
+    try:
+        count = _ledger.append_phase_records(project_root, contracts_root)
+    except Exception as exc:  # noqa: BLE001
+        _warn(f"ledger-append: {exc}")
+        return 1
+    _emit(f"ledger: appended {count} record(s)")
+    return 0
+
+
+def cmd_ledger_rebalance(args: argparse.Namespace) -> int:
+    """Evaluate (and optionally apply) model rebalance proposals."""
+    import _ledger  # noqa: PLC0415
+    import _routing  # noqa: PLC0415
+    project_root = Path(args.project_root) if args.project_root else Path.cwd()
+    ledger_path = project_root / ".claude" / "routing" / "ledger.yaml"
+    try:
+        ledger = _ledger.load_ledger(ledger_path)
+        # F11: validate before evaluating — catches schema drift early.
+        _ledger.validate_ledger(ledger)
+        ladder = _routing.tier_ladder()
+    except (_ledger.LedgerError, _routing.RoutingConfigError) as exc:
+        _warn(f"ledger-rebalance: {exc}")
+        return 2
+    proposals = _ledger.evaluate_rebalance(ledger, ladder)
+    if not proposals:
+        _emit("ledger-rebalance: no proposals")
+        return 0
+    _emit(f"{'role':<24} {'task_class':<20} {'rule':<28} {'from':<12} {'to':<12} evidence")
+    for p in proposals:
+        ev = ",".join(p.get("evidence") or [])
+        _emit(
+            f"{p.get('role',''):<24} {p.get('task_class',''):<20} "
+            f"{p.get('rule',''):<28} {p.get('from_model',''):<12} "
+            f"{p.get('to_model',''):<12} {ev}"
+        )
+    if args.apply:
+        rebalance_log = ledger.setdefault("rebalance_log", [])
+        assignments = ledger.setdefault("assignments", {})
+        for p in proposals:
+            rebalance_log.append(p)
+            role = p.get("role", "")
+            task_class = p.get("task_class", "")
+            to_model = p.get("to_model", "")
+            if role and to_model:
+                # F9: key by composite "<role>/<task_class>" so different task
+                # classes within the same role get independent assignments.
+                comp_key = f"{role}/{task_class}" if task_class else role
+                assignments.setdefault(comp_key, {})["model"] = to_model
+        try:
+            _ledger.save_ledger(ledger_path, ledger)
+        except (_ledger.LedgerError, OSError) as exc:
+            _warn(f"ledger-rebalance --apply save failed: {exc}")
+            return 2
+        _emit(f"ledger-rebalance: applied {len(proposals)} proposal(s)")
+    return 0
+
+
 _PHASE_HEADING = re.compile(r"^#{1,3}\s+Phase\b")
 
 
 def _count_phases(spec_path: Path) -> int:
-    """Count ``# Phase``, ``## Phase``, ``### Phase`` headings outside code fences.
-
-    Skips lines inside ```` ``` ```` or ``~~~`` fenced blocks so example markdown
-    embedded in the spec does not inflate the count. Floors at 1 so the loop
-    always has work.
-
-    Args:
-        spec_path: path to the spec file.
-
-    Returns:
-        Number of phase headings (>= 1).
-    """
+    """Count Phase headings outside code fences; floors at 1."""
     text = spec_path.read_text()
     count = 0
     in_fence = False
@@ -478,6 +538,15 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     p_disc.add_argument("--scope-files", default="",
                         help="comma-separated; trailing-slash entries match as dir prefixes")
     p_disc.set_defaults(func=cmd_discover)
+
+    p_la = sub.add_parser("ledger-append")
+    p_la.add_argument("--project-root", default=None)
+    p_la.set_defaults(func=cmd_ledger_append)
+
+    p_lr = sub.add_parser("ledger-rebalance")
+    p_lr.add_argument("--apply", action="store_true")
+    p_lr.add_argument("--project-root", default=None)
+    p_lr.set_defaults(func=cmd_ledger_rebalance)
     return parser
 
 

@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "routing-ledger.schema.json",
   "title": "Routing ledger (per-project, YAML on disk)",
   "description": "Dispatch-history ledger the PM appends at phase end and reads to rebalance role-to-model assignments. Policy SoT: skills/auto-pilot/references/model-routing.md. Field names reuse contract.schema.json / review.schema.json vocabulary (model, P0/P1/P2, reviewers).",
@@ -47,6 +47,7 @@
               "rejects_real": { "type": "integer", "minimum": 0, "description": "REJECT verdicts that surfaced a real defect (not noise)." },
               "rejects_false": { "type": "integer", "minimum": 0 },
               "abstained": { "type": "boolean" },
+              "p0_escaped": { "type": "boolean", "description": "True when a P0 finding reached the PM after the worker shipped — triggers promote-real-p0 rebalance rule." },
               "duration_min": { "type": ["number", "null"] },
               "tokens_est": { "type": ["string", "null"], "enum": ["low", "mid", "high", null] }
             }

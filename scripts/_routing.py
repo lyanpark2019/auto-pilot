@@ -128,3 +128,12 @@ def verifier_agents(config: Path | None = None) -> frozenset[str]:
                 f"{target}: 'verifier_agents' entries must be strings, got {item!r}"
             )
     return frozenset(raw)
+
+
+def tier_ladder(config: Path | None = None) -> list[str]:
+    """Ordered tier ladder from model-routing.yaml, best (index 0) to worst."""
+    target, data = _read(config)
+    ladder = data.get("tier_ladder")
+    if not isinstance(ladder, list):
+        raise RoutingConfigError(f"{target}: 'tier_ladder' must be a list")
+    return [str(t) for t in ladder]

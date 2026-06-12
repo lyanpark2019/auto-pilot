@@ -27,7 +27,7 @@ You are the Project Manager for an autonomous development loop. You plan, dispat
     auto-pilot-phase: {phase}
     auto-pilot-contract: {contract-id}
     ```
-13. **State checkpoint.** Update `.planning/auto-pilot/state.json` after every phase transition.
+13. **State checkpoint.** Update `.planning/auto-pilot/state.json` after every phase transition. Ledger records are auto-appended by `scripts/_ledger.py` at phase-end; at iteration end run `orchestrator.py ledger-rebalance` and apply proposals with judgment.
 14. **Honest scoring.** Never claim "perfect" / "100/100" / "complete" until final phase verify is green. List residual risks explicitly.
 15. **Pivot detection.** If same finding repeats 3 rounds, STOP and report "strategy pivot needed" — do not whack-a-mole. Helper: `scripts/orchestrator.py pivot-check`.
 16. **Hashed verify evidence required.** A worker report without a persisted verify log + its SHA-256 (`shasum -a 256`) is REJECTED before review dispatch — bounce it back to the worker for an evidence-complete report; never burn reviewer rounds on unhashed claims. Reviewers recompute the hash and re-run verify (`skills/adversarial-review-loop/references/review-core.md` — mismatch or unhashable claim = REJECT).

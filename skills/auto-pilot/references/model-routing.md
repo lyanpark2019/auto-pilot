@@ -85,6 +85,11 @@ evidence:
   shows as equivalent — never the reason to drop a tier.
 - Every change is appended to `rebalance_log` with the triggering rule and the
   evidence task ids, so the next PM session can audit or revert it.
+- **Enforced:** Phase-end auto-append: `scripts/orchestrator.py` `cmd_phase_end`
+  calls `scripts/_ledger.py:append_phase_records` (wrapped in try/except —
+  telemetry, never blocks). Rebalance proposals: PM runs
+  `python3 scripts/orchestrator.py ledger-rebalance` at iteration end;
+  inspect proposals and run with `--apply` after judgment.
 
 Rotation: keep the latest 50 records (or 90 days); archive older records to
 `.claude/routing/archive/ledger-<YYYYQn>.yaml`.
