@@ -9,7 +9,8 @@ from pathlib import Path
 HOOK = str(Path(__file__).parent / "headless-sync-dispatch-guard.sh")
 
 
-def run_case(label, headless, tool_name, run_in_background, expect) -> bool:
+def run_case(label: str, headless: bool, tool_name: str,
+             run_in_background: bool | None, expect: str) -> bool:
     payload = {"tool_name": tool_name,
                "tool_input": {"run_in_background": run_in_background, "prompt": "x", "command": "x"}}
     env = os.environ.copy()

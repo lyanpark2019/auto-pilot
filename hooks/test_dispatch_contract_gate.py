@@ -44,7 +44,8 @@ def _real_contract(cwd: Path) -> str:
     return str(ticket_path)
 
 
-def run_case(label, subagent_type, prompt, active_run, build_contract, expect) -> bool:
+def run_case(label: str, subagent_type: str, prompt: str | None,
+             active_run: bool, build_contract: bool, expect: str) -> bool:
     with tempfile.TemporaryDirectory() as td:
         cwd = Path(td)
         if active_run:
