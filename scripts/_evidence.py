@@ -41,10 +41,11 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
     """None when the verdict is acceptable for this role, else failure text.
 
     codex-reviewer may ABSTAIN (honest bounded-timeout: verdict ABSTAIN plus a
-    non-empty reviewer_meta.abstain_reason) — codex is a second opinion, never
-    a merge blocker. claude-reviewer is the load-bearing verdict: APPROVE
-    only. A MISSING/empty review.json stays blocked in the caller regardless
-    (run-3 hardening — an absent file is never an implicit abstain).
+    non-empty reviewer_meta.abstain_reason) — codex unavailability (honest
+    ABSTAIN) never blocks; a codex REJECT still does. claude-reviewer is the
+    load-bearing verdict: APPROVE only. A MISSING/empty review.json stays
+    blocked in the caller regardless (run-3 hardening — an absent file is
+    never an implicit abstain).
     """
     verdict = data.get("verdict")
     if verdict == "APPROVE":

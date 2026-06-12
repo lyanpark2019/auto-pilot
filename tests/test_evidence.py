@@ -36,14 +36,17 @@ def _review(contract_id: str, verdict: str = "APPROVE",
 
 
 def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-1/round-1",
-                 verdict: str = "APPROVE", diff_text: bytes = b"diff --git a b\n",
+                 diff_text: bytes = b"diff --git a b\n",
                  drop: str = "",
                  per_role_verdict: dict | None = None,
                  abstain_reason: str | None = None) -> Path:
     """Materialize a contract round dir with a full (or partially broken) evidence chain.
 
-    drop selects a defect: "" (none), "codex-ticket", "claude-review",
-    "sha", "verdict", "contract-id", "empty-review", "bad-json-contract".
+    drop selects a defect: "" (none), "codex-ticket", "codex-review",
+    "claude-review", "sha", "verdict", "contract-id", "empty-review",
+    "bad-json-contract".
+    "codex-review": ticket IS written for codex-reviewer, but its review.json
+    is skipped — mirrors "claude-review" which does the same for claude.
     per_role_verdict overrides verdict for specific roles: {"codex-reviewer": "ABSTAIN"}.
     abstain_reason is included in reviewer_meta when a role's verdict is ABSTAIN.
     """
@@ -66,8 +69,10 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
         out.mkdir(parents=True)
         if drop == "claude-review" and role == "claude-reviewer":
             continue
+        if drop == "codex-review" and role == "codex-reviewer":
+            continue
         rid = contract_id if drop != "contract-id" else "iter-9/phase-9/contract-9/round-9"
-        v = verdict if drop != "verdict" else "REJECT"
+        v = "REJECT" if drop == "verdict" else "APPROVE"
         if per_role_verdict and role in per_role_verdict:
             v = per_role_verdict[role]
         (out / "review.json").write_text(
@@ -82,8 +87,9 @@ def test_full_chain_passes(tmp_path):
     _evidence.assert_round_evidence(cdir)  # no raise
 
 
-@pytest.mark.parametrize("drop", ["codex-ticket", "claude-review", "sha", "verdict",
-                                  "contract-id", "empty-review", "bad-json-contract"])
+@pytest.mark.parametrize("drop", ["codex-ticket", "codex-review", "claude-review", "sha",
+                                  "verdict", "contract-id", "empty-review",
+                                  "bad-json-contract"])
 def test_each_defect_rejects(tmp_path, drop):
     cdir = _build_round(tmp_path, drop=drop)
     with pytest.raises(_evidence.EvidenceError):
@@ -188,7 +194,7 @@ def test_claude_abstain_always_blocks(tmp_path):
     """The cold-Claude verdict is load-bearing — only codex may abstain."""
     cdir = _build_round(tmp_path,
                         per_role_verdict={"claude-reviewer": "ABSTAIN"},
-                        abstain_reason="codex-timeout")
+                        abstain_reason="any-reason")
     with pytest.raises(_evidence.EvidenceError, match="claude-reviewer"):
         _evidence.assert_round_evidence(cdir)
 
@@ -204,6 +210,6 @@ def test_codex_abstain_with_claude_reject_blocks(tmp_path):
 
 def test_codex_review_missing_still_blocks_in_abstain_era(tmp_path):
     """Run-3 hardening intact: MISSING codex review.json is never an implicit abstain."""
-    cdir = _build_round(tmp_path, drop="codex-ticket")
-    with pytest.raises(_evidence.EvidenceError):
+    cdir = _build_round(tmp_path, drop="codex-review")
+    with pytest.raises(_evidence.EvidenceError, match="codex-reviewer: review.json missing"):
         _evidence.assert_round_evidence(cdir)
