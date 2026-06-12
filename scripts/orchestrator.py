@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """auto-pilot orchestrator helper.
 
-The actual PM loop runs in the Claude Code main session (Opus 4.7) — this file
+The actual PM loop runs in the Claude Code main session (operator-selected model) — this file
 is a state-management and reporting helper invoked by the skill/command. It does
 NOT itself dispatch agents (only the main session can call the Agent tool).
 
