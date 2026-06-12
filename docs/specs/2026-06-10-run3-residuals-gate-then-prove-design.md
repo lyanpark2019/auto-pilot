@@ -22,7 +22,7 @@ non-determinism. Two structural holes:
 1. `scripts/_dispatch.py:384` — `_expected_agents` derives the expected set from
    dirs that exist; an undispatched reviewer is never expected, never validated.
 2. `scripts/orchestrator.py:169` — `cmd_phase_end` accepts `--status success`
-   with zero evidence validation. (`_expected_agents` at `_dispatch.py:384`
+   with zero evidence validation. (`_expected_agents` at `scripts/_dispatch.py:384`
    feeds only the wait loop — not an evidence check — so it is left as-is.)
 3. `hooks/dispatch-contract-gate.sh` — documented "marker absent → allow" bypass
    lets ticket-less dispatch through.
@@ -31,7 +31,8 @@ Principle violated: **evidence over trust** / **enforce with code, not prompts**
 
 ## §1 Exit evidence gate (load-bearing)
 
-- New `assert_round_evidence(contract_dir)` in `scripts/_dispatch.py`. Evidence
+- New `assert_round_evidence(contract_dir)` in a new module `scripts/_evidence.py`
+  (not appended to `scripts/_dispatch.py`, which is at 471/500 lines). Evidence
   chain (no schema change — `review.schema.json` carries no diff sha; binding
   goes through the reviewer ticket):
   1. `review-input/frozen.diff` exists; recomputed SHA-256 ==
@@ -40,7 +41,7 @@ Principle violated: **evidence over trust** / **enforce with code, not prompts**
      `diff_sha256` equal to that value.
   3. both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist,
      schema-valid, `contract_id` == the round's contract id, verdict present.
-- `_expected_agents` (`_dispatch.py:384`) is deliberately NOT changed: forcing
+- `_expected_agents` (`scripts/_dispatch.py:384`) is deliberately NOT changed: forcing
   both reviewers as always-expected would hang `collect_round_outcome` on
   worker-only collections. Presence-of-both is enforced at the exit gate below,
   not in the wait loop.
