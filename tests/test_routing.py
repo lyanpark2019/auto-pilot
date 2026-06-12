@@ -182,3 +182,11 @@ def test_verifier_agents_non_string_entry_raises(tmp_path):
     cfg.write_text("verifier_agents:\n  - valid-agent\n  - 42\n")
     with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
         _routing.verifier_agents(config=cfg)
+
+
+def test_verifier_agents_empty_list_raises(tmp_path):
+    """`verifier_agents: []` — empty list -> RoutingConfigError (fail-closed)."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("verifier_agents: []\n")
+    with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
+        _routing.verifier_agents(config=cfg)

@@ -118,6 +118,10 @@ def verifier_agents(config: Path | None = None) -> frozenset[str]:
         raise RoutingConfigError(
             f"{target}: 'verifier_agents' must be a list, got {type(raw).__name__}"
         )
+    if not raw:
+        raise RoutingConfigError(
+            f"{target}: 'verifier_agents' must not be empty"
+        )
     for item in raw:
         if not isinstance(item, str):
             raise RoutingConfigError(
