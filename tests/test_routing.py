@@ -144,3 +144,48 @@ def test_verifier_min_tier_explicit_null_returns_opus(tmp_path):
     cfg = tmp_path / "cfg.yaml"
     cfg.write_text("verifier_min_tier:\n")
     assert _routing.verifier_min_tier(config=cfg) == "opus"
+
+
+# --- verifier_agents ---
+
+
+def test_verifier_agents_from_repo_yaml():
+    # Only pin the load-bearing reviewer pair — full membership pinning would
+    # break this unit test whenever model-routing.yaml adds or removes an entry.
+    agents = _routing.verifier_agents()
+    assert isinstance(agents, frozenset)
+    assert len(agents) > 0
+    assert "auto-pilot-codex-reviewer" in agents
+    assert "auto-pilot-claude-reviewer" in agents
+
+
+def test_verifier_agents_missing_key_raises(tmp_path):
+    """yaml without verifier_agents: key -> RoutingConfigError (fail-closed)."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("verifier_min_tier: opus\nagent_model_rank:\n  opus: 1\n")
+    with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
+        _routing.verifier_agents(config=cfg)
+
+
+def test_verifier_agents_non_list_raises(tmp_path):
+    """`verifier_agents: not-a-list` -> RoutingConfigError."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("verifier_agents: some-string\n")
+    with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
+        _routing.verifier_agents(config=cfg)
+
+
+def test_verifier_agents_non_string_entry_raises(tmp_path):
+    """A non-string entry in verifier_agents -> RoutingConfigError."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("verifier_agents:\n  - valid-agent\n  - 42\n")
+    with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
+        _routing.verifier_agents(config=cfg)
+
+
+def test_verifier_agents_empty_list_raises(tmp_path):
+    """`verifier_agents: []` — empty list -> RoutingConfigError (fail-closed)."""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("verifier_agents: []\n")
+    with pytest.raises(_routing.RoutingConfigError, match="verifier_agents"):
+        _routing.verifier_agents(config=cfg)

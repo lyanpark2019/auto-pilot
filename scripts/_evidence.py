@@ -7,6 +7,18 @@ the load-bearing catch for the run-3 bypass (phase advanced with a missing
 reviewer ticket and an empty reviewer output dir, yet state.json recorded
 APPROVE).
 
+Chain checks (in order):
+1. frozen.diff + .sha256 present and sha matches recomputed value.
+2. contract.json present and readable.
+3. Per role: ticket present and ticket.diff_sha256 == actual sha.
+4. Per role: review.json present and schema-valid.
+5. Per role: review.json reviewer field == role dir name (copy-across-roles guard).
+6. Verdict check: claude-reviewer APPROVE; codex-reviewer APPROVE or honest
+   ABSTAIN (non-empty abstain_reason). APPROVE requires scope_check=PASS —
+   scope_check=FAIL (contradictory evidence) and scope_check=SKIPPED (abstain-
+   only field) both block.
+7. Per role: contract_id matches contract.json id.
+
 Principle: evidence over trust — the gate recomputes the diff SHA and refuses
 trust in any artifact it cannot verify. A MISSING/empty review.json is never
 an implicit abstain — run-3 hardening is the reason this gate exists.
@@ -46,11 +58,19 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
     load-bearing verdict: APPROVE only. A MISSING/empty review.json stays
     blocked in the caller regardless (run-3 hardening — an absent file is
     never an implicit abstain).
+
+    APPROVE is acceptable only with scope_check=PASS. scope_check=FAIL means
+    the reviewer flagged an out-of-scope diff and approving it is contradictory
+    evidence — blocked. scope_check=SKIPPED is only valid on ABSTAIN.
     """
     verdict = data.get("verdict")
     if verdict == "APPROVE":
-        if data.get("scope_check") == "SKIPPED":
+        sc = data.get("scope_check")
+        if sc == "SKIPPED":
             return f"{role}: scope_check=SKIPPED only valid with verdict=ABSTAIN"
+        if sc == "FAIL":
+            return (f"{role}: scope_check=FAIL — an out-of-scope diff cannot be "
+                    f"approved evidence (contradictory)")
         return None
     if role == "codex-reviewer" and verdict == "ABSTAIN":
         meta = data.get("reviewer_meta")
@@ -65,9 +85,10 @@ def assert_round_evidence(contract_dir: Path) -> None:
     """Raise EvidenceError unless contract_dir holds a complete evidence chain.
 
     Chain: frozen.diff sha matches its recorded .sha256; both reviewer tickets
-    bind that sha; both review.json are schema-valid; claude-reviewer APPROVE
-    and codex-reviewer APPROVE or honest ABSTAIN (non-empty abstain_reason);
-    both carry the round's contract id.
+    bind that sha; both review.json are schema-valid; review.json reviewer field
+    matches the role dir name (copy-across-roles guard); claude-reviewer APPROVE
+    (with scope_check=PASS) and codex-reviewer APPROVE or honest ABSTAIN
+    (non-empty abstain_reason); both carry the round's contract id.
     """
     failures: list[str] = []
 
@@ -104,6 +125,12 @@ def assert_round_evidence(contract_dir: Path) -> None:
         except (_dispatch.MalformedReviewError, json.JSONDecodeError) as exc:
             failures.append(f"{role}: review.json unreadable/invalid: {exc}")
             continue
+        reviewer_value = str(data.get("reviewer") or "")
+        if reviewer_value != role:
+            failures.append(
+                f"{role}: review.json reviewer field {reviewer_value!r} != role dir "
+                f"(review copied across roles?)"
+            )
         verdict_failure = _verdict_failure(role, data)
         if verdict_failure is not None:
             failures.append(verdict_failure)

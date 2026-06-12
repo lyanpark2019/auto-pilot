@@ -6,6 +6,11 @@ done.marker. Documented shape, no JSON schema: role, started_at, elapsed_s,
 last_beat, phase, risk_tier. Written at reviewer start and on every codex
 retry/transition (scripts/codex_review_bounded.py imports write_beat).
 
+render_table scopes to reviewer dirs only (parent dir name in
+_evidence.REVIEWERS). Worker beats are written to outputs/worker/ and share
+the same shape, but are intentionally excluded from the review-status table —
+worker progress belongs to the worker-status view.
+
 Residual (spec): the interactive PM dispatches reviewers via the BLOCKING
 Agent tool — beats are pollable mid-flight only from the headless path or a
 parallel monitor; a blocking round sees the trail on return.
@@ -75,6 +80,8 @@ def write_beat(
 def _round_rows(round_dir: Path, root: Path) -> list[list[str]]:
     rows: list[list[str]] = []
     for status_file in sorted(round_dir.glob(f"outputs/*/{STATUS_NAME}")):
+        if status_file.parent.name not in _evidence.REVIEWERS:
+            continue
         try:
             data = json.loads(status_file.read_text())
         except (json.JSONDecodeError, OSError):
@@ -109,7 +116,11 @@ def _round_rows(round_dir: Path, root: Path) -> list[list[str]]:
 
 
 def render_table(contracts_root: Path) -> str:
-    """Compact reviewer-status table for the active phase's latest rounds."""
+    """Compact reviewer-status table for the active phase's latest rounds.
+
+    Only dirs whose name is in _evidence.REVIEWERS are included.
+    Worker beats (outputs/worker/) are excluded by design.
+    """
     header = ["round", "role", "phase", "tier", "elapsed", "beat-age", "done"]
     rows: list[list[str]] = []
     for round_dir in _evidence.latest_round_dirs_for_active_phase(contracts_root):

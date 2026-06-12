@@ -47,7 +47,7 @@ Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-c
 
 ## Output (write to `$AUTO_PILOT_OUTPUT_DIR/review.json`)
 
-Use `schemas/review.schema.json` shape. Required fields: `schema_version, reviewer, contract_id, verdict, scope_check, findings, verify_rerun, reviewer_meta`. Compute `finding_hash` via `_subagent_helpers.compute_finding_hash(file, line, issue)`.
+Use `schemas/review.schema.json` shape. Required fields: `schema_version, reviewer, contract_id, verdict, scope_check, findings, verify_rerun, reviewer_meta`. The `reviewer` field MUST be exactly `"claude-reviewer"` (the gate checks this matches the output dir role). Compute `finding_hash` via `_subagent_helpers.compute_finding_hash(file, line, issue)`.
 
 On exit:
 0. Beat before the verify re-run (the long step): `python3 "$(dirname "${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py}")/_heartbeat.py" beat --out-dir "$AUTO_PILOT_OUTPUT_DIR" --role claude-reviewer --phase verify-rerun`

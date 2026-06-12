@@ -20,7 +20,7 @@
 #   default        → <origin owner itself>
 #
 # On gh-user mismatch: auto-switch via `gh auth switch` then re-verify.
-# Exit codes: 0 = ok, 1 = error.
+# Exit codes: 0 = ok, 1 = error, 2 = model-routing.yaml invalid.
 
 set -euo pipefail
 
@@ -105,7 +105,7 @@ if [[ "$ACTUAL_GH_USER" != "$EXPECTED_GH_USER" ]] && \
 fi
 
 # ── model-routing.yaml validity ──────────────────────────────────────────────
-python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT/scripts'); import _routing; _routing.codex_timeouts()" || {
+python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT/scripts'); import _routing; _routing.codex_timeouts(); _routing.verifier_agents(); _routing.verifier_min_tier()" || {
   echo "BLOCKED: model-routing.yaml invalid or unreadable" >&2
   exit 2
 }

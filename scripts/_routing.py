@@ -1,11 +1,12 @@
 """Narrow resolver over skills/auto-pilot/references/model-routing.yaml.
 
 v1 is deliberately minimal (YAGNI): codex effort lookup, effort downgrade,
-codex timeout budgets, and the verifier tier floor. No role-x-task dispatch
-resolver — slice C's rebalance consumes structured ledger records, not this
-module. Missing or invalid YAML raises RoutingConfigError (fail-closed for
-library callers; hooks/verifier-tier-gate.sh catches it and fails open so a
-config typo never bricks all Task dispatch).
+codex timeout budgets, verifier tier floor, and the verifier agent name set.
+No role-x-task dispatch resolver — slice C's rebalance consumes structured
+ledger records, not this module. Missing or invalid YAML raises
+RoutingConfigError (fail-closed for library callers;
+hooks/verifier-tier-gate.sh catches it and fails open so a config typo never
+bricks all Task dispatch).
 """
 from __future__ import annotations
 
@@ -97,3 +98,33 @@ def model_rank(token: str, config: Path | None = None) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value
+
+
+def verifier_agents(config: Path | None = None) -> frozenset[str]:
+    """Subagent_type names subject to verifier-tier-gate enforcement.
+
+    Reads the ``verifier_agents`` list from model-routing.yaml.
+    Missing key, empty list, non-list value, or any non-string entry raises
+    RoutingConfigError (fail-closed for library callers; the hook catches and
+    fails open — a routing-config typo must never brick all Task dispatch).
+    """
+    target, data = _read(config)
+    raw = data.get("verifier_agents")
+    if raw is None:
+        raise RoutingConfigError(
+            f"{target}: 'verifier_agents' key is missing"
+        )
+    if not isinstance(raw, list):
+        raise RoutingConfigError(
+            f"{target}: 'verifier_agents' must be a list, got {type(raw).__name__}"
+        )
+    if not raw:
+        raise RoutingConfigError(
+            f"{target}: 'verifier_agents' must not be empty"
+        )
+    for item in raw:
+        if not isinstance(item, str):
+            raise RoutingConfigError(
+                f"{target}: 'verifier_agents' entries must be strings, got {item!r}"
+            )
+    return frozenset(raw)
