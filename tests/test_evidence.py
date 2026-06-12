@@ -15,7 +15,8 @@ REVIEWERS = ("codex-reviewer", "claude-reviewer")
 
 
 def _review(contract_id: str, verdict: str = "APPROVE",
-            abstain_reason: str | None = None) -> dict:
+            abstain_reason: str | None = None,
+            scope_check: str | None = None) -> dict:
     meta: dict[str, str] = {
         "model": "test",
         "started_at": "2026-06-10T00:00:00+00:00",
@@ -23,12 +24,15 @@ def _review(contract_id: str, verdict: str = "APPROVE",
     }
     if abstain_reason is not None:
         meta["abstain_reason"] = abstain_reason
+    resolved_scope_check = scope_check if scope_check is not None else (
+        "SKIPPED" if verdict == "ABSTAIN" else "PASS"
+    )
     return {
         "schema_version": 1,
         "reviewer": "codex-reviewer",
         "contract_id": contract_id,
         "verdict": verdict,
-        "scope_check": "SKIPPED" if verdict == "ABSTAIN" else "PASS",
+        "scope_check": resolved_scope_check,
         "findings": [],
         "verify_rerun": {"cmd": "pytest", "exit_code": 0},
         "reviewer_meta": meta,
@@ -39,7 +43,8 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
                  diff_text: bytes = b"diff --git a b\n",
                  drop: str = "",
                  per_role_verdict: dict | None = None,
-                 abstain_reason: str | None = None) -> Path:
+                 abstain_reason: str | None = None,
+                 scope_check_override: dict | None = None) -> Path:
     """Materialize a contract round dir with a full (or partially broken) evidence chain.
 
     drop selects a defect: "" (none), "codex-ticket", "codex-review",
@@ -49,6 +54,7 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
     is skipped — mirrors "claude-review" which does the same for claude.
     per_role_verdict overrides verdict for specific roles: {"codex-reviewer": "ABSTAIN"}.
     abstain_reason is included in reviewer_meta when a role's verdict is ABSTAIN.
+    scope_check_override overrides scope_check for specific roles: {"claude-reviewer": "SKIPPED"}.
     """
     cdir = tmp_path / "round-1"
     (cdir / "review-input").mkdir(parents=True)
@@ -75,8 +81,10 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
         v = "REJECT" if drop == "verdict" else "APPROVE"
         if per_role_verdict and role in per_role_verdict:
             v = per_role_verdict[role]
+        sc = (scope_check_override or {}).get(role)
         (out / "review.json").write_text(
-            json.dumps(_review(rid, v, abstain_reason if v == "ABSTAIN" else None)))
+            json.dumps(_review(rid, v, abstain_reason if v == "ABSTAIN" else None,
+                               scope_check=sc)))
         if drop == "empty-review" and role == "claude-reviewer":
             (out / "review.json").write_text("")
     return cdir
@@ -221,3 +229,20 @@ def test_codex_abstain_whitespace_only_reason_blocks(tmp_path):
                         abstain_reason="   ")
     with pytest.raises(_evidence.EvidenceError, match="abstain_reason"):
         _evidence.assert_round_evidence(cdir)
+
+
+def test_approve_with_scope_check_skipped_is_blocked(tmp_path):
+    """APPROVE + scope_check=SKIPPED is invalid — SKIPPED only allowed on ABSTAIN."""
+    cdir = _build_round(tmp_path,
+                        scope_check_override={"claude-reviewer": "SKIPPED"})
+    with pytest.raises(_evidence.EvidenceError, match="SKIPPED"):
+        _evidence.assert_round_evidence(cdir)
+
+
+def test_abstain_with_scope_check_skipped_passes(tmp_path):
+    """codex ABSTAIN+reason + scope_check=SKIPPED is the normal wrapper-emitted shape."""
+    cdir = _build_round(tmp_path,
+                        per_role_verdict={"codex-reviewer": "ABSTAIN"},
+                        abstain_reason="codex-timeout")
+    # scope_check is SKIPPED by default in _review when verdict==ABSTAIN
+    _evidence.assert_round_evidence(cdir)  # no raise

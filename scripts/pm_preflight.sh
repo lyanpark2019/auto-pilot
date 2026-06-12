@@ -104,6 +104,12 @@ if [[ "$ACTUAL_GH_USER" != "$EXPECTED_GH_USER" ]] && \
   fi
 fi
 
+# ── model-routing.yaml validity ──────────────────────────────────────────────
+python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT/scripts'); import _routing; _routing.codex_timeouts()" || {
+  echo "BLOCKED: model-routing.yaml invalid or unreadable" >&2
+  exit 2
+}
+
 # ── tool_versions ─────────────────────────────────────────────────────────────
 _ver() { "$@" --version 2>/dev/null | head -1 || echo "unavailable"; }
 PY_VER="$(_ver python3)"

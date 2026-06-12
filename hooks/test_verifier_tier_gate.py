@@ -151,6 +151,33 @@ def run_big_payload_case() -> bool:
     return ok
 
 
+def run_deny_json_valid_case() -> bool:
+    """Deny output must be parseable JSON (escaping correctness check)."""
+    label = "deny JSON valid: haiku override emits parseable JSON"
+    payload = _make_payload("auto-pilot-claude-reviewer", "haiku")
+    env = os.environ.copy()
+    env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
+    result = subprocess.run(["bash", HOOK], input=payload,
+                            capture_output=True, text=True, env=env)
+    stdout = result.stdout.strip()
+    ok = False
+    try:
+        parsed = json.loads(stdout)
+        ok = (
+            result.returncode == 0
+            and parsed.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+        )
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    print(
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} "
+        f"expect=DENY+valid-JSON got={'valid-JSON' if ok else 'invalid/ALLOW'}"
+    )
+    if not ok:
+        print(f"       rc={result.returncode} stdout={stdout!r}")
+    return ok
+
+
 def main() -> None:
     results = [run_case(*c) for c in CASES]
     results.append(run_case("unparseable stdin (fail-open)", None, None,
@@ -158,6 +185,7 @@ def main() -> None:
     results.append(run_concurrency_case())
     results.append(run_temp_hygiene_case())
     results.append(run_big_payload_case())
+    results.append(run_deny_json_valid_case())
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)

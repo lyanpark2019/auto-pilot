@@ -53,11 +53,12 @@ except Exception as exc:
 if rank is None or floor is None:
     print("allow")
 elif rank > floor:
-    print(
-        f"deny:verifier-tier-gate: {name} dispatched with model={model} below "
+    reason = (
+        f"verifier-tier-gate: {name} dispatched with model={model} below "
         f"verifier_min_tier={floor_token} (model-routing.yaml). Verification "
         f"must run at or above the PM tier — drop the model override or raise it."
     )
+    print("deny:" + json.dumps(reason)[1:-1])
 else:
     print("allow")
 PY
@@ -68,7 +69,7 @@ case "$result" in
   deny:*)
     reason="${result#deny:}"
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}' \
-      "${reason//\"/\\\"}"
+      "$reason"
     exit 0
     ;;
   warn:*)

@@ -49,6 +49,8 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
     """
     verdict = data.get("verdict")
     if verdict == "APPROVE":
+        if data.get("scope_check") == "SKIPPED":
+            return f"{role}: scope_check=SKIPPED only valid with verdict=ABSTAIN"
         return None
     if role == "codex-reviewer" and verdict == "ABSTAIN":
         meta = data.get("reviewer_meta")

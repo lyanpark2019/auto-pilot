@@ -208,3 +208,35 @@ def test_reviewer_env_sets_subagent_role_and_output_dir(monkeypatch, tmp_path):
 
     assert env["AUTO_PILOT_SUBAGENT_ROLE"] == "claude-reviewer"
     assert env["AUTO_PILOT_OUTPUT_DIR"] == str(tmp_path / "out")
+
+
+def test_hard_kill_derived_from_routing(monkeypatch):
+    """HARD_KILL_SEC must be >= sum(codex_timeouts()) + 120 when routing is available."""
+    import importlib
+    import _reviewer_wrapper as rw
+    import _routing
+
+    # Monkeypatch _routing.codex_timeouts to return (240, 180); expected floor = 540.
+    monkeypatch.setattr(_routing, "codex_timeouts", lambda config=None: (240, 180))
+
+    # Force re-import to pick up the monkeypatched value.
+    importlib.reload(rw)
+    assert rw.HARD_KILL_SEC >= 540, (
+        f"HARD_KILL_SEC={rw.HARD_KILL_SEC} < 540 (240+180+120)"
+    )
+
+
+def test_hard_kill_fallback_on_routing_error(monkeypatch):
+    """RoutingConfigError during import must fall back to static 480 s."""
+    import importlib
+    import _reviewer_wrapper as rw
+    import _routing
+
+    monkeypatch.setattr(_routing, "codex_timeouts",
+                        lambda config=None: (_ for _ in ()).throw(
+                            _routing.RoutingConfigError("yaml missing")))
+
+    importlib.reload(rw)
+    assert rw.HARD_KILL_SEC == 480, (
+        f"Expected fallback 480, got {rw.HARD_KILL_SEC}"
+    )
