@@ -56,3 +56,8 @@ def test_event_redacts_authorization_key(capsys) -> None:
 def test_log_event_emits_to_stderr_a(capsys) -> None:
     event("smoke.a", k="v")
     assert "smoke.a" in capsys.readouterr().err
+
+
+def test_log_event_emits_to_stderr_b(capsys) -> None:
+    event("smoke.b", k="v")
+    assert "smoke.b" in capsys.readouterr().err
