@@ -51,9 +51,11 @@ def _run(env, codex_cmd: str, tier: str = "medium") -> int:
 
 
 def test_build_argv_hardcodes_sandbox_and_effort():
-    argv = crb.build_argv("high")
-    assert "--sandbox" in argv and "read-only" in argv
-    assert "model_reasoning_effort=high" in " ".join(argv)
+    assert crb.build_argv("high") == [
+        "codex", "exec", "--sandbox", "read-only", "--json",
+        "-c", "model_reasoning_effort=high",
+        "--prompt-file", "-",
+    ]
 
 
 def test_success_path_saves_raw_and_exits_zero(env):
@@ -95,6 +97,26 @@ def test_exec_failure_abstains_with_exec_reason(env):
     assert rc == 3
     review = json.loads((env["out"] / "review.json").read_text())
     assert review["reviewer_meta"]["abstain_reason"] == "codex-exec-failed"
+    assert review["verify_rerun"]["exit_code"] == 1  # `false` exits 1, not 124
+
+
+def test_timeout_abstain_exit_code_is_124(env):
+    rc = _run(env, "sleep 30")
+    assert rc == 3
+    review = json.loads((env["out"] / "review.json").read_text())
+    assert review["verify_rerun"]["exit_code"] == 124
+
+
+def test_unicode_decode_error_is_usage_error(env, tmp_path):
+    bad_prompt = tmp_path / "bad_prompt.bin"
+    bad_prompt.write_bytes(bytes([0xFF, 0xFE, 0x00]))
+    rc = crb.main([
+        "--ticket", str(env["ticket"]), "--tier", "medium",
+        "--prompt-file", str(bad_prompt),
+        "--config", str(env["config"]),
+        "--codex-cmd", "cat",
+    ])
+    assert rc == 2
 
 
 def test_missing_ticket_is_usage_error(env, tmp_path):

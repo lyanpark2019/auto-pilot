@@ -80,6 +80,7 @@ def _abstain_review(
     effort: str,
     reason: str,
     started_at: str,
+    rc: int = _TIMEOUT_RC,
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -88,7 +89,7 @@ def _abstain_review(
         "verdict": "ABSTAIN",
         "scope_check": "SKIPPED",
         "findings": [],
-        "verify_rerun": {"cmd": shlex.join(argv), "exit_code": _TIMEOUT_RC},
+        "verify_rerun": {"cmd": shlex.join(argv), "exit_code": rc},
         "reviewer_meta": {
             "model": "codex",
             "codex_invocation": shlex.join(argv),
@@ -114,7 +115,7 @@ def run(
         out_dir = Path(str(ticket["output_dir"]))
         contract_id = str(ticket["contract_id"])
         prompt = prompt_file.read_text()
-    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError) as exc:
         sys.stderr.write(f"codex_review_bounded: bad ticket/prompt: {exc}\n")
         return 2
 
@@ -128,6 +129,7 @@ def run(
         return 2
 
     reason = ""
+    rc = _TIMEOUT_RC
     for attempt, (effort, timeout_s) in enumerate(zip(efforts, timeouts), start=1):
         argv = shlex.split(codex_cmd) if codex_cmd else build_argv(effort)
         _heartbeat.write_beat(
@@ -144,7 +146,7 @@ def run(
             return 0
 
     final_argv = shlex.split(codex_cmd) if codex_cmd else build_argv(efforts[-1])
-    review = _abstain_review(contract_id, final_argv, tier, efforts[-1], reason, started_at)
+    review = _abstain_review(contract_id, final_argv, tier, efforts[-1], reason, started_at, rc=rc)
     _subagent_helpers.atomic_write_output(out_dir, "review.json", review)
     _heartbeat.write_beat(
         out_dir, "codex-reviewer", f"abstained:{reason}", risk_tier=tier
