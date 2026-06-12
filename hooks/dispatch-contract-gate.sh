@@ -58,6 +58,21 @@ if [[ -z "$contract_dir" ]]; then
     if [[ -f "$cand_dir/contract.json" ]]; then
       contract_dir="$cand_dir"
     else
+      # TICKET= present. If this is a reviewer subagent (always ticketed in protocol),
+      # the ticket path itself is sufficient proof of proper dispatch — reviewer agents
+      # do not own a contract.json tree, they read a frozen diff bound by the ticket.
+      # Allow and let the reviewer proceed; no contract sha check needed.
+      ticket_subagent=$(printf '%s' "$payload" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print((d.get("tool_input") or {}).get("subagent_type") or "")
+except Exception:
+    print("")
+' 2>/dev/null || echo "")
+      if printf '%s' "$ticket_subagent" | grep -qE 'auto-pilot-(codex|claude)-reviewer'; then
+        exit 0
+      fi
       # TICKET= present = worker dispatch; missing contract.json at the derived
       # dir means the PM skipped contract prep → deny rather than silently allow.
       deny "TICKET marker present but no contract.json at derived contract_dir=$cand_dir. Run orchestrator dispatch-contract-check first."
@@ -65,8 +80,37 @@ if [[ -z "$contract_dir" ]]; then
   fi
 fi
 
-# No marker at all → allow (non-worker dispatch)
-[[ -z "$contract_dir" ]] && exit 0
+# No contract marker. Reviewer dispatches are ALWAYS ticketed in the protocol —
+# a reviewer subagent_type without a TICKET marker during an active run is an
+# ad-hoc bypass of the diff-sha binding -> deny. Workers dispatch as
+# general-purpose (no reliable type signal) and are caught by the phase-end
+# exit gate instead, so they are not gated here.
+if [[ -z "$contract_dir" ]]; then
+  subagent_type=$(printf '%s' "$payload" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print((d.get("tool_input") or {}).get("subagent_type") or "")
+except Exception:
+    print("")
+' 2>/dev/null || echo "")
+  if printf '%s' "$subagent_type" | grep -qE 'auto-pilot-(codex|claude)-reviewer'; then
+    state_file="$(pwd)/.planning/auto-pilot/state.json"
+    if [[ -f "$state_file" ]]; then
+      run_status=$(python3 -c '
+import sys, json
+try:
+    print(json.load(open(sys.argv[1])).get("status") or "")
+except Exception:
+    print("")
+' "$state_file" 2>/dev/null || echo "")
+      if [[ "$run_status" == "running" ]]; then
+        deny "Reviewer dispatch ($subagent_type) during an active run must carry a ticket-path marker. Prepare it with prepare_subagent_ticket so the review is bound to a frozen diff sha."
+      fi
+    fi
+  fi
+  exit 0
+fi
 
 # ── ⓓ-7③: contract-check.json verification ──
 contract_file="$contract_dir/contract.json"
