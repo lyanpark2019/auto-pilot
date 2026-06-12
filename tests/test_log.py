@@ -51,3 +51,8 @@ def test_event_redacts_authorization_key(capsys) -> None:
     assert "authorization=<redacted>" in captured.err
     assert "dXNlcjpwYXNz" not in captured.err
     assert "visible=yes" in captured.err
+
+
+def test_log_event_emits_to_stderr_a(capsys) -> None:
+    event("smoke.a", k="v")
+    assert "smoke.a" in capsys.readouterr().err
