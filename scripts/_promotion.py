@@ -111,6 +111,30 @@ def transition(ledger: Path, fp: str, new_state: str) -> Ticket:
     return _locked_update(ledger, fp, mutate)
 
 
+def register_cli_subparsers(sub: Any) -> None:
+    """Register improvements-list/gate/set-state subparsers onto ``sub``."""
+    p_il = sub.add_parser("improvements-list")
+    p_il.add_argument("--repo-root", default=None, dest="repo_root")
+    p_il.add_argument("--json", action="store_true")
+    p_il.add_argument("--state", default=None)
+    p_il.add_argument("--promotable", action="store_true")
+    p_il.set_defaults(func=cmd_improvements_list)
+
+    p_ig = sub.add_parser("improvements-gate")
+    p_ig.add_argument("prefix")
+    p_ig.add_argument("--field", required=True,
+                      choices=list(GATE_FIELDS))
+    p_ig.add_argument("--value", required=True, choices=["true", "false"])
+    p_ig.add_argument("--repo-root", default=None, dest="repo_root")
+    p_ig.set_defaults(func=cmd_improvements_gate)
+
+    p_iss = sub.add_parser("improvements-set-state")
+    p_iss.add_argument("prefix")
+    p_iss.add_argument("new_state")
+    p_iss.add_argument("--repo-root", default=None, dest="repo_root")
+    p_iss.set_defaults(func=cmd_improvements_set_state)
+
+
 def cmd_improvements_list(args: Any) -> int:
     """Print ledger tickets as table or JSON lines."""
     import sys

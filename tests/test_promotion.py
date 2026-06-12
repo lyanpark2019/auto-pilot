@@ -1,7 +1,12 @@
-"""Tests for scripts/_promotion.py — Hermes ticket FSM + promotion gates."""
+"""Tests for scripts/_promotion.py — Hermes ticket FSM + promotion gates.
+
+Also covers orchestrator.py CLI shims: improvements-list, improvements-gate,
+improvements-set-state.
+"""
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -140,3 +145,117 @@ class TestTransition:
         out = transition(tmp_path, FP_A, "accepted")
         from _improvement import validate_ticket
         validate_ticket(out)
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator CLI shims
+# ---------------------------------------------------------------------------
+
+import orchestrator  # type: ignore[import-not-found]  # noqa: E402
+
+
+def _run(argv: list[str]) -> int:
+    return orchestrator.main(argv)
+
+
+def _make_ledger(tmp_path: Path, fp: str, state: str = "candidate") -> tuple[Path, Path]:
+    """Seed a ticket and return (ledger_dir, repo_root).
+
+    HOME is NOT monkeypatched here — callers must do that.
+    """
+    slug = str(tmp_path / "repo").replace("/", "-")
+    ledger = tmp_path / "home" / ".claude" / "projects" / slug / "improvements"
+    _seed_ticket(ledger, fp, state=state)
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+    return ledger, repo_root
+
+
+class TestImprovementsListCLI:
+    def test_list_empty_ledger(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        repo = tmp_path / "repo"
+        repo.mkdir(parents=True)
+        rc = _run(["improvements-list", "--repo-root", str(repo)])
+        assert rc == 0
+
+    def test_list_shows_ticket(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        rc = _run(["improvements-list", "--repo-root", str(repo_root)])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert FP_A[:8] in out
+
+    def test_list_json_flag(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        rc = _run(["improvements-list", "--repo-root", str(repo_root), "--json"])
+        assert rc == 0
+        lines = [l for l in capsys.readouterr().out.strip().splitlines() if l]
+        assert len(lines) == 1
+        ticket = json.loads(lines[0])
+        assert ticket["fingerprint"] == FP_A
+
+    def test_list_state_filter(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A, state="accepted")
+        _seed_ticket(_ledger_dir, FP_B, state="candidate")
+        rc = _run(["improvements-list", "--repo-root", str(repo_root),
+                   "--state", "accepted", "--json"])
+        assert rc == 0
+        lines = [l for l in capsys.readouterr().out.strip().splitlines() if l]
+        assert len(lines) == 1
+        assert json.loads(lines[0])["state"] == "accepted"
+
+
+class TestImprovementsGateCLI:
+    def test_sets_gate_field(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        rc = _run(["improvements-gate", "--repo-root", str(repo_root),
+                   FP_A[:8], "--field", "tests_pass", "--value", "true"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        gate = json.loads(out)
+        assert gate["tests_pass"] is True
+
+    def test_unknown_field_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        with pytest.raises(SystemExit) as exc_info:
+            _run(["improvements-gate", "--repo-root", str(repo_root),
+                  FP_A[:8], "--field", "vibes", "--value", "true"])
+        assert exc_info.value.code != 0
+
+    def test_ambiguous_prefix_returns_1(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        _seed_ticket(_ledger_dir, FP_B)
+        rc = _run(["improvements-gate", "--repo-root", str(repo_root),
+                   "a", "--field", "tests_pass", "--value", "true"])
+        assert rc == 1
+
+
+class TestImprovementsSetStateCLI:
+    def test_valid_transition(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        rc = _run(["improvements-set-state", "--repo-root", str(repo_root),
+                   FP_A[:8], "accepted"])
+        assert rc == 0
+        assert "accepted" in capsys.readouterr().out
+
+    def test_illegal_transition_returns_1(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        rc = _run(["improvements-set-state", "--repo-root", str(repo_root),
+                   FP_A[:8], "promoted"])
+        assert rc == 1
+
+    def test_unknown_state_returns_1(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        _ledger_dir, repo_root = _make_ledger(tmp_path, FP_A)
+        rc = _run(["improvements-set-state", "--repo-root", str(repo_root),
+                   FP_A[:8], "nope"])
+        assert rc == 1
