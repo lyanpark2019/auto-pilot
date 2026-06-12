@@ -1,0 +1,49 @@
+# Machine form of model-routing.md — the .md is the human SoT and cites this
+# file; this file is what code reads (scripts/_routing.py,
+# scripts/codex_review_bounded.py, hooks/verifier-tier-gate.sh).
+# Two-tree rule: facts live once. Tier semantics are documented in the .md;
+# keys here are load-bearing config only.
+schema_version: 1
+
+# Mirror of the .md tier ladder (T0..T4), best -> worst. Human-traceable list;
+# code uses agent_model_rank below.
+tier_ladder:
+  - fable          # T0
+  - opus-4.8       # T1
+  - opus-4.6       # T2
+  - sonnet-4.6-1m  # T3
+  - haiku-4.5      # T4
+
+# Agent-tool `model:` override tokens -> tier rank (lower = higher tier).
+# The opus token resolves to the best available Opus (T1).
+agent_model_rank:
+  fable: 0
+  opus: 1
+  sonnet: 3
+  haiku: 4
+
+# Role -> default model (machine form of the .md role x model matrix).
+roles:
+  pm: fable
+  worker_heavy: opus
+  worker_primary: sonnet
+  worker_mechanical: haiku
+  worker_narrow_codex: gpt-5.5
+  verifier: opus
+
+# Verifier convention floor: a Task `model:` override on a verifier/reviewer
+# subagent below this token rank is denied by hooks/verifier-tier-gate.sh.
+verifier_min_tier: opus
+
+codex:
+  # risk_assess.py tier -> codex model_reasoning_effort
+  effort_by_risk_tier:
+    none: low
+    low: low
+    medium: medium
+    high: high
+    critical: xhigh
+  # Bounded invocation budgets (seconds): first attempt / single retry at
+  # one-lower effort. On exhaustion the wrapper writes an ABSTAIN review.
+  timeout_s: 240
+  retry_timeout_s: 180
