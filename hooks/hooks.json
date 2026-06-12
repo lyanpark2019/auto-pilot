@@ -220,6 +220,16 @@
         ]
       },
       {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/shellcheck-on-write.sh",
+            "description": "Advisory (never blocks): run shellcheck -S warning on any *.sh file written or edited; surfaces findings on stderr"
+          }
+        ]
+      },
+      {
         "matcher": "Write",
         "hooks": [
           {
