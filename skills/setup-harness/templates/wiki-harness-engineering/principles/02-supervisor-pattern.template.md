@@ -29,7 +29,7 @@ Doctrine: [[01-doctrine#P1]] fan-out, [[01-doctrine#P2]] model diversity, [[01-d
 
 | Role | Model | Responsibility | Output |
 |------|-------|----------------|--------|
-| **PM** | Opus 4.7 (interactive Claude Code session) | friction map, ticket dispatch, outbox review, doctrine curation, vault publish gate | `.planning/harness-rewrite/ledger.md`, ticket JSON, merge decisions |
+| **PM** | main session (interactive Claude Code, operator-selected model) | friction map, ticket dispatch, outbox review, doctrine curation, vault publish gate | `.planning/harness-rewrite/ledger.md`, ticket JSON, merge decisions |
 | **Worker × N** | Codex 5.5 xhigh (`codex exec`) | mechanical layer/module analysis, draft authoring, dependency mapping | `.planning/harness-rewrite/outbox/worker-{N}/*.md` |
 
 PM **never** writes worker output. Worker **never** writes PM ledger.
