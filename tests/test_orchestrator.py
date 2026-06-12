@@ -342,3 +342,41 @@ class TestReviewStatus:
         rc = orchestrator.main(["review-status"])
         assert rc == 0
         assert "no reviewer status" in capsys.readouterr().out
+
+
+class TestResume:
+    def _seed_state(self, in_tmp_cwd: Path, status: str, sample_spec: Path) -> None:
+        _run(["init", "--spec", str(sample_spec)])
+        state = _state()
+        state["status"] = status
+        state["cost_usd"] = 1.23
+        state["tokens"] = 5000
+        from _state import save_state
+        import _state as _s
+        import os
+        os.chdir(str(in_tmp_cwd))
+        _s.save_state(state)
+
+    def test_resume_clears_cost_cap(self, in_tmp_cwd, sample_spec):
+        self._seed_state(in_tmp_cwd, "cost-cap", sample_spec)
+        rc = _run(["resume"])
+        assert rc == 0
+        state = _state()
+        assert state["status"] == "running"
+        # preserved fields untouched
+        assert state["cost_usd"] == 1.23
+        assert state["tokens"] == 5000
+
+    def test_resume_running_exits_1(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        rc = _run(["resume"])
+        assert rc == 1
+        state = _state()
+        assert state["status"] == "running"
+
+    def test_resume_failed_exits_1(self, in_tmp_cwd, sample_spec, capsys):
+        self._seed_state(in_tmp_cwd, "failed", sample_spec)
+        rc = _run(["resume"])
+        assert rc == 1
+        state = _state()
+        assert state["status"] == "failed"
