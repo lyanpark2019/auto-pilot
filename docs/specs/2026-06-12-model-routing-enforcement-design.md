@@ -28,7 +28,7 @@ codex dispatch, verifier convention, ledger rules) and cited by global
    which that watchdog never sees).
 3. No reviewer progress signal — workers write `outputs/worker/status.json`;
    reviewers write nothing, so the PM is blind until `done.marker`.
-4. "Verifier ≥ PM tier" (model-routing.md:38) is unenforced — a verifier could
+4. "Verifier ≥ PM tier" (skills/auto-pilot/references/model-routing.md:38) is unenforced — a verifier could
    be dispatched under-tier with no guard.
 
 Principle: **enforce with code, not prompts.**
@@ -66,7 +66,7 @@ default 240; retry budget 180), not hardcoded. On timeout:
 1. retry **once** at one-lower effort (xhigh→high→medium→low);
 2. still over budget → write a schema-valid `review.json` with `verdict: ABSTAIN`
    + a `reviewer_meta.abstain_reason: codex-timeout`. Codex is a second opinion,
-   never a blocker (model-routing.md:34) — ABSTAIN means the PM accepts the Claude
+   never a blocker (skills/auto-pilot/references/model-routing.md:34) — ABSTAIN means the PM accepts the Claude
    verdict and sees the full heartbeat trail to decide a manual re-run. Never an
    infinite hang; never a blind merge-block.
 
@@ -153,7 +153,7 @@ config typo never bricks all dispatch).
 ## Non-goals
 
 No slice-C ledger/rebalance code (deferred spec). No new verifier agents (reuse
-existing per model-routing.md:44). No worker-model routing changes. No
+existing per skills/auto-pilot/references/model-routing.md:44). No worker-model routing changes. No
 ticket-schema change (codex agent self-derives tier).
 
 ## Disposal
