@@ -1565,8 +1565,8 @@ After the opening comment block (below the `# Model Routing` heading), insert:
 `skills/auto-pilot/references/model-routing.yaml` is the machine SoT consumed by:
 
 - `scripts/_routing.py:1` — narrow resolver (`effort_for_tier`, `lower_effort`, `codex_timeouts`, `verifier_min_tier`, `model_rank`)
-- `scripts/codex_review_bounded.py:1` — bounded codex invocation (tiered effort → timeout → one lower-effort retry → ABSTAIN review.json)
-- `hooks/verifier-tier-gate.sh:1` — PreToolUse(Task) deny of under-tier verifier `model:` overrides
+- `scripts/codex_review_bounded.py:1` — bounded codex invocation (tiered effort → timeout → one lower-effort retry → ABSTAIN review.json) <!-- cite-ignore -->
+- `hooks/verifier-tier-gate.sh:1` — PreToolUse(Task) deny of under-tier verifier `model:` overrides <!-- cite-ignore -->
 
 Facts live once: tier semantics here, config values in the yaml.
 ```
@@ -1611,7 +1611,9 @@ In `## Verifier convention`, append:
 
 - Line 127: `23 hooks` → `24 hooks`; `69 assets total` → `70 assets total`. Verify the real counts by running `python3 -m pytest tests/test_asset_registry.py tests/test_asset_registry_check.py -q` — if those tests compute different numbers, the test failure output is the source of truth; write THOSE numbers into the doc, never guess.
 - Line 156: `hooks/  (23 scripts, ...)` → `(24 scripts, ...)`.
-- In the review-loop section (around line 198), add one sentence where reviewer outputs are described: reviewers now also write `outputs/<role>/status.json` heartbeats (`scripts/_heartbeat.py:1`), surfaced by `scripts/orchestrator.py review-status`; codex review is bounded with ABSTAIN fallback (`scripts/codex_review_bounded.py:1`).
+- In the review-loop section (around line 198), add one sentence where reviewer outputs are described: reviewers now also write `outputs/<role>/status.json` heartbeats (`scripts/_heartbeat.py:1`), surfaced by `scripts/orchestrator.py review-status`; codex review is bounded with ABSTAIN fallback (`scripts/codex_review_bounded.py:1`). <!-- cite-ignore -->
+
+> Plan-doc note: the `cite-ignore` markers on the citation lines above exist because this PLAN predates the files (forward refs trip `scripts/docs/check_doc_reference_integrity.py` per-commit). When copying this text into `model-routing.md`/`architecture.md` in Task 9, DROP the markers — the cited files exist by then and the citations must resolve for real.
 
 - [ ] **Step 4: Full gate**
 

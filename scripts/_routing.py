@@ -27,7 +27,7 @@ class RoutingConfigError(Exception):
     """model-routing.yaml is missing or structurally invalid."""
 
 
-def _read(config: Path | None) -> dict[str, Any]:
+def _read(config: Path | None) -> tuple[Path, dict[str, Any]]:
     target = config if config is not None else ROUTING_YAML
     try:
         data = yaml.safe_load(target.read_text())
@@ -37,12 +37,31 @@ def _read(config: Path | None) -> dict[str, Any]:
         raise RoutingConfigError(
             f"{target}: expected mapping, got {type(data).__name__}"
         )
-    return data
+    return target, data
+
+
+def _section(data: dict[str, Any], key: str, target: Path) -> dict[str, Any]:
+    value = data.get(key) or {}
+    if not isinstance(value, dict):
+        raise RoutingConfigError(f"{target}: '{key}' must be a mapping")
+    return value
+
+
+def _timeout(section: dict[str, Any], key: str, default: int, target: Path) -> int:
+    value = section.get(key)
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise RoutingConfigError(
+            f"{target}: '{key}' must be an integer (got {value!r})"
+        )
+    return int(value)
 
 
 def effort_for_tier(tier: str, config: Path | None = None) -> str:
     """codex model_reasoning_effort for a risk_assess tier; unknown -> medium."""
-    codex = _read(config).get("codex") or {}
+    target, data = _read(config)
+    codex = _section(data, "codex", target)
     efforts = codex.get("effort_by_risk_tier") or {}
     effort = str(efforts.get(tier, _DEFAULT_EFFORT))
     return effort if effort in _EFFORT_LADDER else _DEFAULT_EFFORT
@@ -57,17 +76,24 @@ def lower_effort(effort: str) -> str:
 
 def codex_timeouts(config: Path | None = None) -> tuple[int, int]:
     """(timeout_s, retry_timeout_s) budgets for the bounded codex invocation."""
-    codex = _read(config).get("codex") or {}
-    return int(codex.get("timeout_s", 240)), int(codex.get("retry_timeout_s", 180))
+    target, data = _read(config)
+    codex = _section(data, "codex", target)
+    timeout_s = _timeout(codex, "timeout_s", 240, target)
+    retry_s = _timeout(codex, "retry_timeout_s", 180, target)
+    return timeout_s, retry_s
 
 
 def verifier_min_tier(config: Path | None = None) -> str:
     """Agent-tool model token verifier dispatches must be at or above."""
-    return str(_read(config).get("verifier_min_tier", "opus"))
+    _, data = _read(config)
+    return str(data.get("verifier_min_tier") or "opus")
 
 
 def model_rank(token: str, config: Path | None = None) -> int | None:
     """Agent-tool model token -> tier rank (lower = higher); unknown -> None."""
-    ranks = _read(config).get("agent_model_rank") or {}
+    target, data = _read(config)
+    ranks = _section(data, "agent_model_rank", target)
     value = ranks.get(token)
-    return int(value) if isinstance(value, int) else None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
