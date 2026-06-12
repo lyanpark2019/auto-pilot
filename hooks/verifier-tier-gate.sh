@@ -45,15 +45,21 @@ try:
     sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
     import _routing
     verifiers = _routing.verifier_agents(config=cfg)
+except Exception as exc:
+    print(f"warn:routing resolver unavailable: {exc}")
+    raise SystemExit(0)
+
+# Early-exit for non-verifiers: skip the remaining yaml loads entirely.
+if name not in verifiers:
+    print("allow")
+    raise SystemExit(0)
+
+try:
     floor_token = _routing.verifier_min_tier(config=cfg)
     rank = _routing.model_rank(model, config=cfg)
     floor = _routing.model_rank(floor_token, config=cfg)
 except Exception as exc:
     print(f"warn:routing resolver unavailable: {exc}")
-    raise SystemExit(0)
-
-if name not in verifiers:
-    print("allow")
     raise SystemExit(0)
 
 if rank is None or floor is None:

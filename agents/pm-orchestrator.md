@@ -117,8 +117,10 @@ REVIEW FAN-OUT (1 message, parallel Agent blocks per worker)
   + matching specialists per agents/specialist-pool.md
   ↓
 GATE
-  - claude APPROVE + codex APPROVE → continue
-  - claude APPROVE + codex ABSTAIN (non-empty abstain_reason) → continue
+  - claude APPROVE (scope_check=PASS) + codex APPROVE → continue
+  - claude APPROVE (scope_check=PASS) + codex ABSTAIN (non-empty abstain_reason) → continue
+  - any APPROVE with scope_check=FAIL or scope_check=SKIPPED → treated as REJECT (contradictory
+    or incomplete evidence; role-agnostic — mirrors _evidence.py _verdict_failure scope_check enforcement)
   - claude REJECT or claude ABSTAIN or codex REJECT → return findings to worker → re-dispatch → re-review
     (re-review scoped to fix commits only — ## Token-efficiency rules, rule b)
   - record finding-hash → pivot-check after each round

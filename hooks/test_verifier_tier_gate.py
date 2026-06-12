@@ -182,7 +182,7 @@ def _make_temp_root(
     tmpdir: str,
     *,
     include_verifier_agents: bool = True,
-    extra_verifier_agents: list[str] | None = None,
+    verifier_agents_override: list[str] | None = None,
     verifier_min_tier: str = "opus",
 ) -> str:
     """Build a minimal plugin root under tmpdir for yaml-driven tests."""
@@ -208,7 +208,7 @@ def _make_temp_root(
         f"verifier_min_tier: {verifier_min_tier}",
     ]
     if include_verifier_agents:
-        agents = extra_verifier_agents if extra_verifier_agents is not None else [
+        agents = verifier_agents_override if verifier_agents_override is not None else [
             "auto-pilot-codex-reviewer",
             "auto-pilot-claude-reviewer",
             "review-gatekeeper",
@@ -258,7 +258,7 @@ def run_yaml_driven_custom_agent_deny_case() -> bool:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = _make_temp_root(
             tmpdir,
-            extra_verifier_agents=["my-custom-verifier"],
+            verifier_agents_override=["my-custom-verifier"],
             verifier_min_tier="opus",
         )
         payload = _make_payload("my-custom-verifier", "haiku")

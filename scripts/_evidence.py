@@ -85,9 +85,10 @@ def assert_round_evidence(contract_dir: Path) -> None:
     """Raise EvidenceError unless contract_dir holds a complete evidence chain.
 
     Chain: frozen.diff sha matches its recorded .sha256; both reviewer tickets
-    bind that sha; both review.json are schema-valid; claude-reviewer APPROVE
-    and codex-reviewer APPROVE or honest ABSTAIN (non-empty abstain_reason);
-    both carry the round's contract id.
+    bind that sha; both review.json are schema-valid; review.json reviewer field
+    matches the role dir name (copy-across-roles guard); claude-reviewer APPROVE
+    (with scope_check=PASS) and codex-reviewer APPROVE or honest ABSTAIN
+    (non-empty abstain_reason); both carry the round's contract id.
     """
     failures: list[str] = []
 

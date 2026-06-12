@@ -61,7 +61,7 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 | `scripts/_budget.py` | PR5 | cost / token / pid caps for headless driver (extracted from `headless-loop.py`) |
 | `scripts/_discovery.py` | Step 1+2 | graphify provenance record, diff-relevance freshness check (`orchestrator.py discover`), `resolve_report` bundle seam |
 | `scripts/risk_assess.py` | v0.7.1 | diff → risk tier + `review_policy` JSON (advisory gate for review dispatch; SoT for tier/policy tokens) |
-| `scripts/_routing.py` | A+B | model-routing.yaml resolver: codex effort by risk tier, verifier tier floor |
+| `scripts/_routing.py` | A+B | model-routing.yaml resolver: codex effort by risk tier, verifier tier floor, verifier agent list |
 | `scripts/_heartbeat.py` | A+B | reviewer status.json beats + review-status table renderer |
 | `scripts/codex_review_bounded.py` | A+B | bounded codex exec: tiered effort → timeout → retry → ABSTAIN |
 | `scripts/_round_budget.py` | A+B | round-budget findings loaders (extracted from orchestrator for size) |

@@ -11,7 +11,7 @@
 
 `skills/auto-pilot/references/model-routing.yaml` is the machine SoT consumed by:
 
-- `scripts/_routing.py:1` — narrow resolver (`effort_for_tier`, `lower_effort`, `codex_timeouts`, `verifier_min_tier`, `model_rank`)
+- `scripts/_routing.py:1` — narrow resolver (`effort_for_tier`, `lower_effort`, `codex_timeouts`, `verifier_min_tier`, `model_rank`, `verifier_agents`)
 - `scripts/codex_review_bounded.py:1` — bounded codex invocation (tiered effort → timeout → one lower-effort retry → ABSTAIN review.json)
 - `hooks/verifier-tier-gate.sh:1` — PreToolUse(Task) deny of under-tier verifier `model:` overrides
 
