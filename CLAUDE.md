@@ -86,7 +86,8 @@ python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_gu
 # vault export-layer suite
 ( cd vault && python3 -m pytest tests/ -q )
 
-# bats: ARL helpers + setup-harness hooks/CLI (do not duplicate collected counts here)
+# bats: auto-pilot snippet pins + ARL helpers + setup-harness hooks/CLI (do not duplicate collected counts here)
+( cd skills/auto-pilot && bats tests/ )
 ( cd skills/adversarial-review-loop && bats tests/ )
 ( cd skills/setup-harness && bats tests/ )
 
