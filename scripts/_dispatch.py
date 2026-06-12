@@ -35,6 +35,7 @@ from typing import cast
 import jsonschema
 
 import _contract
+import _contract_check
 from _log import event
 
 # Matches _worktree.py timeout budget convention.
@@ -100,19 +101,11 @@ def _check_contract_check_artifact(contract_dir: Path) -> None:
             f"contract-check artifact missing: {artifact_path}; "
             "run `orchestrator.py dispatch-contract-check --contract <path>` first"
         )
-    artifact = json.loads(artifact_path.read_text())
-    if artifact.get("result") != "pass":
-        raise ContractCheckMissing(
-            f"contract-check artifact result is not 'pass': {artifact.get('result')!r}"
-        )
-    contract_path = contract_dir / "contract.json"
-    actual_sha = _contract._sha256(contract_path.read_bytes())
-    recorded_sha = artifact.get("contract_sha256", "")
-    if actual_sha != recorded_sha:
-        raise ContractCheckMissing(
-            f"contract file modified since last dispatch-contract-check "
-            f"(expected={recorded_sha!r}, actual={actual_sha!r})"
-        )
+    try:
+        artifact = json.loads(artifact_path.read_text())
+        _contract_check.assert_artifact_fresh(contract_dir, artifact)
+    except (OSError, json.JSONDecodeError, _contract_check.ContractCheckError) as exc:
+        raise ContractCheckMissing(str(exc)) from exc
 
 
 def _locate_repo_root(contract_dir: Path) -> Path:

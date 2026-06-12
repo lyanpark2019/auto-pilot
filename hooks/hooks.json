@@ -149,7 +149,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch-contract-gate.sh",
-            "description": "Verify contract_dir marker, contract-check.json sha256, and preflight freshness for worker Task dispatches",
+            "description": "Verify contract_dir marker, contract-check.json sha256 + PM-SIGNATURE status, and preflight freshness for worker Task dispatches",
             "timeout": 10
           }
         ]

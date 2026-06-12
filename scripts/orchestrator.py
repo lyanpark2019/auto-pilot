@@ -25,7 +25,6 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -282,16 +281,8 @@ def _validate_contract_for_dispatch(contract_path: Path) -> tuple[bool, str]:
 
 
 def _dispatch_contract_artifact(contract_path: Path) -> dict[str, Any]:
-    import hashlib
-
-    contract_bytes = contract_path.read_bytes()
-    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
-    return {
-        "contract_sha256": contract_sha,
-        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "schema_version": json.loads(contract_bytes.decode()).get("schema_version", 1),
-        "result": "pass",
-    }
+    import _contract_check
+    return _contract_check.build_artifact(contract_path)
 
 
 def _write_dispatch_artifact(contract_path: Path, artifact: dict[str, Any]) -> Path:
@@ -313,7 +304,13 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
         _emit_json({"ok": False, "error": error}, indent=2)
         return 1
 
-    artifact = _dispatch_contract_artifact(contract_path)
+    import _contract_check
+    try:
+        artifact = _dispatch_contract_artifact(contract_path)
+    except _contract_check.ContractCheckError as exc:
+        event("dispatch_contract_check.invalid", error=str(exc), error_type="ContractCheckError")
+        _emit_json({"ok": False, "error": str(exc)}, indent=2)
+        return 1
     artifact_path = _write_dispatch_artifact(contract_path, artifact)
     event("dispatch_contract_check.ok", sha=artifact["contract_sha256"][:16], artifact=str(artifact_path))
     _emit_json({"ok": True, "artifact": str(artifact_path), **artifact}, indent=2)
