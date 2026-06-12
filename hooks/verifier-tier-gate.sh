@@ -26,7 +26,7 @@ VERIFIERS = {
     "review-gatekeeper", "swarm-verifier", "tech-critic-lead",
 }
 try:
-    data = json.loads(sys.argv[2])
+    data = json.load(sys.stdin)
     tool_input = data.get("tool_input") or {}
     subagent = str(tool_input.get("subagent_type") or "")
     model = str(tool_input.get("model") or "")
@@ -62,7 +62,7 @@ else:
     print("allow")
 PY
 
-result=$(python3 "$tmppy" "$PLUGIN_ROOT" "$payload" 2>/dev/null || echo "allow")
+result=$(printf '%s' "$payload" | python3 "$tmppy" "$PLUGIN_ROOT" 2>/dev/null || echo "allow")
 
 case "$result" in
   deny:*)

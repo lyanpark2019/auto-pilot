@@ -42,6 +42,7 @@ CASES: list[tuple[str, str | None, str | None, str]] = [
     ("non-verifier + haiku", "auto-pilot-worker", "haiku", "ALLOW"),
     ("verifier, no model override", "auto-pilot-claude-reviewer", None, "ALLOW"),
     ("verifier + unknown model token", "swarm-verifier", "gpt-5.5", "ALLOW"),
+    ("whitespace strip: ' swarm-verifier ' + ' haiku '", " swarm-verifier ", " haiku ", "DENY"),
 ]
 
 
@@ -89,10 +90,47 @@ def run_concurrency_case() -> bool:
     return all_ok
 
 
-def run_whitespace_case() -> bool:
-    """Padded subagent_type and model tokens must still trigger DENY."""
-    label = "whitespace strip: ' swarm-verifier ' + ' haiku '"
-    payload = _make_payload(" swarm-verifier ", " haiku ")
+def run_temp_hygiene_case() -> bool:
+    """No vtg_* temp files must remain in TMPDIR after hook exit; must also DENY."""
+    label = "temp hygiene: no vtg_* files remain after run"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        payload = _make_payload("auto-pilot-claude-reviewer", "haiku")
+        env = os.environ.copy()
+        env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
+        env["TMPDIR"] = tmpdir
+        result = subprocess.run(
+            ["bash", HOOK],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        leftover = glob.glob(os.path.join(tmpdir, "vtg_*"))
+    stdout = result.stdout.strip()
+    is_deny = stdout and '"deny"' in stdout
+    no_leftovers = len(leftover) == 0
+    ok = bool(is_deny) and no_leftovers and result.returncode == 0
+    print(
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} "
+        f"expect=DENY+0 leftover got={'DENY' if is_deny else 'ALLOW'}+{len(leftover)}"
+    )
+    if not ok:
+        print(f"       rc={result.returncode} stdout={stdout!r} stderr={result.stderr.strip()!r}")
+        if not no_leftovers:
+            print(f"       leftover files: {leftover}")
+    return ok
+
+
+def run_big_payload_case() -> bool:
+    """512KiB filler in tool_input.prompt must not crash stdin path; must DENY."""
+    label = "big payload (512KiB prompt field): swarm-verifier+haiku"
+    tool_input: dict[str, object] = {
+        "prompt": "A" * (512 * 1024),
+        "description": "x",
+        "subagent_type": "swarm-verifier",
+        "model": "haiku",
+    }
+    payload = json.dumps({"tool_name": "Task", "tool_input": tool_input})
     env = os.environ.copy()
     env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
     result = subprocess.run(
@@ -106,37 +144,10 @@ def run_whitespace_case() -> bool:
     actual = "DENY" if (stdout and '"deny"' in stdout) else "ALLOW"
     ok = actual == "DENY" and result.returncode == 0
     print(
-        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} "
-        f"expect=DENY  got={actual:5s}"
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} expect=DENY  got={actual:5s}"
     )
     if not ok:
         print(f"       rc={result.returncode} stdout={stdout!r} stderr={result.stderr.strip()!r}")
-    return ok
-
-
-def run_temp_hygiene_case() -> bool:
-    """No vtg_* temp files must remain in TMPDIR after hook exit."""
-    label = "temp hygiene: no vtg_* files remain after run"
-    with tempfile.TemporaryDirectory() as tmpdir:
-        payload = _make_payload("auto-pilot-claude-reviewer", "haiku")
-        env = os.environ.copy()
-        env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
-        env["TMPDIR"] = tmpdir
-        subprocess.run(
-            ["bash", HOOK],
-            input=payload,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-        leftover = glob.glob(os.path.join(tmpdir, "vtg_*"))
-    ok = len(leftover) == 0
-    print(
-        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} "
-        f"expect=0 leftover got={len(leftover)}"
-    )
-    if not ok:
-        print(f"       leftover files: {leftover}")
     return ok
 
 
@@ -145,8 +156,8 @@ def main() -> None:
     results.append(run_case("unparseable stdin (fail-open)", None, None,
                             "ALLOW", raw_stdin="{ not json"))
     results.append(run_concurrency_case())
-    results.append(run_whitespace_case())
     results.append(run_temp_hygiene_case())
+    results.append(run_big_payload_case())
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)
