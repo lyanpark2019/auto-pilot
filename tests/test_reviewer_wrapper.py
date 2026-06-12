@@ -296,13 +296,13 @@ def test_reviewer_cmd_uses_equals_form_so_prompt_not_swallowed(tmp_path):
         f"expected equals-form --disallowedTools={disallowed!r} in {cmd}"
     )
 
-    # 2. Space-form (bare flag) must be absent — the variadic bug.
-    assert "--allowedTools" not in cmd or all(
-        e != "--allowedTools" for e in cmd
-    ), "bare --allowedTools found; space-form is the variadic bug"
-    assert "--disallowedTools" not in cmd or all(
-        e != "--disallowedTools" for e in cmd
-    ), "bare --disallowedTools found; space-form is the variadic bug"
+    # 2. No bare (space-form) flag token — that is the variadic-swallow bug.
+    assert "--allowedTools" not in cmd, (
+        "bare --allowedTools found; space-form is the variadic bug"
+    )
+    assert "--disallowedTools" not in cmd, (
+        "bare --disallowedTools found; space-form is the variadic bug"
+    )
 
     # 3. The prompt is the last element and is a distinct token (not embedded
     #    inside a flag value).

@@ -190,9 +190,10 @@ def _reviewer_env(role: str, output_dir: Path) -> dict[str, str]:
 
 def _reviewer_cmd(ticket: Path, allowed_tools: str, disallowed_tools: str) -> list[str]:
     prompt = f"TICKET={ticket}\nRead ticket. Refuse if ticket_sha mismatch."
-    # Equals-form is mandatory: claude >=2.1.175 treats --disallowedTools as
-    # variadic so the space-form would consume the trailing prompt positional
-    # as an extra disallowed-tool name, producing a promptless reviewer session.
+    # Equals-form is mandatory: claude's --disallowedTools is variadic
+    # (observed on 2.1.175), so the space-form would consume the trailing
+    # prompt positional as an extra disallowed-tool name, producing a
+    # promptless reviewer session.
     return [
         "claude", "-p",
         f"--allowedTools={allowed_tools}",
