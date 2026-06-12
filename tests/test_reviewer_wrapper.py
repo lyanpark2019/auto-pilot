@@ -210,7 +210,38 @@ def test_reviewer_env_sets_subagent_role_and_output_dir(monkeypatch, tmp_path):
     assert env["AUTO_PILOT_OUTPUT_DIR"] == str(tmp_path / "out")
 
 
-def test_hard_kill_derived_from_routing(monkeypatch):
+@pytest.fixture()
+def restore_rw_module():
+    """Reload _reviewer_wrapper AFTER monkeypatch teardown restores _routing.
+
+    Ordering: list this fixture BEFORE monkeypatch in the test signature.
+    Pytest finalizes fixtures in reverse setup order, so this fixture tears
+    down LAST — its reload therefore runs after monkeypatch has restored
+    _routing.codex_timeouts to the real function.
+
+    The post-reload assertion inside this fixture confirms the trap is closed:
+    HARD_KILL_SEC must match the value derived from the live routing config.
+    """
+    import importlib
+    import _reviewer_wrapper as rw
+    import _routing
+
+    yield
+
+    # monkeypatch has already restored _routing.codex_timeouts by now.
+    importlib.reload(rw)
+    try:
+        _t, _r = _routing.codex_timeouts()
+        expected = max(480, _t + _r + 120)
+    except Exception:
+        expected = 480
+    assert rw.HARD_KILL_SEC == expected, (
+        f"after reload HARD_KILL_SEC={rw.HARD_KILL_SEC}, expected {expected} "
+        f"(derived from live routing config — ordering trap not closed)"
+    )
+
+
+def test_hard_kill_derived_from_routing(restore_rw_module, monkeypatch):
     """HARD_KILL_SEC must be >= sum(codex_timeouts()) + 120 when routing is available."""
     import importlib
     import _reviewer_wrapper as rw
@@ -226,7 +257,7 @@ def test_hard_kill_derived_from_routing(monkeypatch):
     )
 
 
-def test_hard_kill_fallback_on_routing_error(monkeypatch):
+def test_hard_kill_fallback_on_routing_error(restore_rw_module, monkeypatch):
     """RoutingConfigError during import must fall back to static 480 s."""
     import importlib
     import _reviewer_wrapper as rw

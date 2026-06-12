@@ -138,6 +138,24 @@ def test_write_beat_fresh_start_semantics(tmp_path):
     assert data["elapsed_s"] == 0
 
 
+def test_render_table_excludes_worker_rows(tmp_path):
+    """Worker status.json must NOT appear in the review-status table."""
+    root = tmp_path / "contracts"
+    round_dir = root / "iter-1/phase-1/contract-1/round-1"
+    # reviewer row — should appear
+    reviewer_out = round_dir / "outputs" / "codex-reviewer"
+    reviewer_out.mkdir(parents=True)
+    _heartbeat.write_beat(reviewer_out, "codex-reviewer", "review-start", risk_tier="low")
+    # worker row — must be excluded
+    worker_out = round_dir / "outputs" / "worker"
+    worker_out.mkdir(parents=True)
+    _heartbeat.write_beat(worker_out, "worker", "impl", risk_tier=None)
+
+    table = _heartbeat.render_table(root)
+    assert "codex-reviewer" in table, "reviewer row must be present"
+    assert "worker" not in table, "worker row must be excluded from review-status table"
+
+
 def test_render_table_naive_last_beat_shows_question_mark(tmp_path):
     """P3: status.json with naive last_beat — render_table shows '?' beat-age, no crash."""
     root = tmp_path / "contracts"
