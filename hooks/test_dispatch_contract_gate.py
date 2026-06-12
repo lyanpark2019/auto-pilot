@@ -23,7 +23,7 @@ def _running_state(cwd: Path) -> None:
     (sd / "state.json").write_text(json.dumps({"status": "running"}))
 
 
-def _real_contract(cwd: Path) -> str:
+def _real_contract(cwd: Path, *, signed: bool = True) -> str:
     """Build a valid contract tree the hook's strong path accepts; return ticket path."""
     base = cwd / ".planning" / "auto-pilot"
     contract_dir = base / "contracts" / "phase-1"
@@ -33,6 +33,18 @@ def _real_contract(cwd: Path) -> str:
     contract_json.write_text(json.dumps({"id": "phase-1", "phase": "1", "scope": []}))
     sha = hashlib.sha256(contract_json.read_bytes()).hexdigest()
     (contract_dir / "contract-check.json").write_text(json.dumps({"contract_sha256": sha}))
+    bundle = contract_dir / "context-bundle"
+    bundle.mkdir()
+    manifest = bundle / "MANIFEST.txt"
+    manifest.write_text("fixture manifest\n")
+    if signed:
+        sig = {
+            "contract_sha": sha,
+            "manifest_sha": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+            "run_id": "test-run",
+            "signed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        (contract_dir / "PM-SIGNATURE").write_text(json.dumps(sig) + "\n")
     ticket_path = tickets_dir / "claude-reviewer.json"
     ticket_path.write_text("{}")
     preflight_dir = base / "preflight"
@@ -45,13 +57,14 @@ def _real_contract(cwd: Path) -> str:
 
 
 def run_case(label: str, subagent_type: str, prompt: str | None,
-             active_run: bool, build_contract: bool, expect: str) -> bool:
+             active_run: bool, build_contract: bool, expect: str,
+             signed_contract: bool = True) -> bool:
     with tempfile.TemporaryDirectory() as td:
         cwd = Path(td)
         if active_run:
             _running_state(cwd)
         if build_contract:
-            prompt = "TICKET=" + _real_contract(cwd) + " review"
+            prompt = "TICKET=" + _real_contract(cwd, signed=signed_contract) + " review"
         payload = {"tool_name": "Task",
                    "tool_input": {"subagent_type": subagent_type, "prompt": prompt}}
         result = subprocess.run(["bash", HOOK], input=json.dumps(payload),
@@ -66,19 +79,23 @@ def run_case(label: str, subagent_type: str, prompt: str | None,
     return ok
 
 
-# label, subagent_type, prompt, active_run, build_contract, expect
-CASES = [
-    ("reviewer, no marker, active run", "auto-pilot-codex-reviewer", "review this diff", True, False, "DENY"),
-    ("reviewer, no marker, NO active run", "auto-pilot-codex-reviewer", "review this diff", False, False, "ALLOW"),
-    ("reviewer, REAL contract+ticket, active run", "auto-pilot-claude-reviewer", None, True, True, "ALLOW"),
+Case = tuple[str, str, str | None, bool, bool, str, bool]
+
+
+# label, subagent_type, prompt, active_run, build_contract, expect, signed_contract
+CASES: list[Case] = [
+    ("reviewer, no marker, active run", "auto-pilot-codex-reviewer", "review this diff", True, False, "DENY", True),
+    ("reviewer, no marker, NO active run", "auto-pilot-codex-reviewer", "review this diff", False, False, "ALLOW", True),
+    ("reviewer, REAL contract+ticket, active run", "auto-pilot-claude-reviewer", None, True, True, "ALLOW", True),
+    ("reviewer, unsigned contract+ticket, active run", "auto-pilot-claude-reviewer", None, True, True, "DENY", False),
     ("reviewer, ticket path but NO contract.json", "auto-pilot-claude-reviewer",
-     "TICKET=" + "/tmp/nope/tickets/claude-reviewer.json review", True, False, "DENY"),
-    ("non-reviewer general-purpose, active run", "general-purpose", "do work", True, False, "ALLOW"),
-    ("tech-critic-lead, active run", "tech-critic-lead", "gate contract", True, False, "ALLOW"),
+     "TICKET=" + "/tmp/nope/tickets/claude-reviewer.json review", True, False, "DENY", True),
+    ("non-reviewer general-purpose, active run", "general-purpose", "do work", True, False, "ALLOW", True),
+    ("tech-critic-lead, active run", "tech-critic-lead", "gate contract", True, False, "ALLOW", True),
     # Prose TICKET= value that is slashed but NOT tickets-shape → must ALLOW (false-positive fix).
     # e.g. "TICKET=docs/foo.md" appears in a non-dispatch planning prompt.
     ("prose TICKET=docs/foo.md slashed, not tickets-shape", "general-purpose",
-     "see TICKET=docs/foo.md for context", True, False, "ALLOW"),
+     "see TICKET=docs/foo.md for context", True, False, "ALLOW", True),
 ]
 
 

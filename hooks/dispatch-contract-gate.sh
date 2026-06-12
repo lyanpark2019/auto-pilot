@@ -7,7 +7,8 @@
 # If marker is PRESENT:
 #   1. (ⓓ-7③) Require <contract_dir>/contract-check.json with contract_sha256
 #      matching shasum -a 256 <contract_dir>/contract.json → else deny.
-#   2. (ⓓ-9) Check .planning/auto-pilot/preflight/phase-<N>.json:
+#   2. Require <contract_dir>/PM-SIGNATURE to verify the MANIFEST + contract shas.
+#   3. (ⓓ-9) Check .planning/auto-pilot/preflight/phase-<N>.json:
 #      - exists, fresh (TTL 900s via generated_ts), head_sha == current HEAD
 #      - N parsed from contract.json id/phase field
 #      → else deny "run scripts/pm_preflight.sh"
@@ -15,6 +16,9 @@
 # Note: SessionStart alternative rejected — preflight is per-phase, not per-session.
 # Unparseable stdin → allow (fail-open repo convention).
 set -euo pipefail
+
+hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+plugin_root="$(dirname "$hook_dir")"
 
 deny() {
   local reason="$1"
@@ -142,6 +146,21 @@ except Exception:
 if [[ -z "$stored_sha" ]] || [[ "$stored_sha" != "$expected_sha" ]]; then
   deny "contract_sha256 mismatch in $check_file (expected=$expected_sha, stored=$stored_sha). Run orchestrator dispatch-contract-check first."
 fi
+
+signature_result=$(PYTHONPATH="$plugin_root/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 - "$contract_dir" <<'PY' 2>&1
+import sys
+from pathlib import Path
+
+import _contract
+
+try:
+    _contract.verify_pm_signature(Path(sys.argv[1]))
+except Exception as exc:
+    print(f"{type(exc).__name__}: {exc}")
+    sys.exit(1)
+print("OK")
+PY
+) || deny "PM-SIGNATURE invalid in $contract_dir: $signature_result"
 
 # ── ⓓ-9: preflight phase check ──
 # Parse phase from contract.json (id or phase field)

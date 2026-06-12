@@ -51,7 +51,7 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
 
     drop selects a defect: "" (none), "codex-ticket", "codex-review",
     "claude-review", "sha", "verdict", "contract-id", "empty-review",
-    "bad-json-contract".
+    "bad-json-contract", "pm-signature", "signature-tamper".
     "codex-review": ticket IS written for codex-reviewer, but its review.json
     is skipped — mirrors "claude-review" which does the same for claude.
     per_role_verdict overrides verdict for specific roles: {"codex-reviewer": "ABSTAIN"}.
@@ -70,6 +70,16 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
         (cdir / "contract.json").write_text("{ not json")
     else:
         (cdir / "contract.json").write_text(json.dumps({"id": contract_id}))
+    if drop != "pm-signature":
+        bundle = cdir / "context-bundle"
+        bundle.mkdir()
+        (bundle / "MANIFEST.txt").write_text("fixture manifest\n")
+        _contract.write_pm_signature(cdir, run_id="test-run")
+        if drop == "signature-tamper":
+            sig_path = cdir / "PM-SIGNATURE"
+            sig = json.loads(sig_path.read_text())
+            sig["contract_sha"] = "0" * 64
+            sig_path.write_text(json.dumps(sig) + "\n")
     for role in REVIEWERS:
         if drop == "codex-ticket" and role == "codex-reviewer":
             continue
@@ -97,6 +107,18 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
 def test_full_chain_passes(tmp_path):
     cdir = _build_round(tmp_path)
     _evidence.assert_round_evidence(cdir)  # no raise
+
+
+def test_missing_pm_signature_rejects(tmp_path):
+    cdir = _build_round(tmp_path, drop="pm-signature")
+    with pytest.raises(_evidence.EvidenceError, match="PM-SIGNATURE"):
+        _evidence.assert_round_evidence(cdir)
+
+
+def test_tampered_pm_signature_rejects(tmp_path):
+    cdir = _build_round(tmp_path, drop="signature-tamper")
+    with pytest.raises(_evidence.EvidenceError, match="PM-SIGNATURE"):
+        _evidence.assert_round_evidence(cdir)
 
 
 @pytest.mark.parametrize("drop", ["codex-ticket", "codex-review", "claude-review", "sha",
@@ -186,6 +208,17 @@ def test_gate_phase_end_broken_chain(tmp_path):
     result = _evidence.gate_phase_end(root)
     assert result is not None
     assert result[0] == "evidence_failed"
+
+
+def test_gate_phase_end_missing_pm_signature_blocks(tmp_path):
+    root = tmp_path / "contracts"
+    contract_dir = root / "iter-1" / "phase-1" / "contract-1"
+    contract_dir.mkdir(parents=True)
+    _build_round(contract_dir, drop="pm-signature")
+    result = _evidence.gate_phase_end(root)
+    assert result is not None
+    assert result[0] == "evidence_failed"
+    assert "PM-SIGNATURE" in result[1]
 
 
 def test_codex_abstain_with_reason_passes(tmp_path):
