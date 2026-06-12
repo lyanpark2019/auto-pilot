@@ -1,12 +1,15 @@
 """Exit-gate evidence validation for auto-pilot review rounds.
 
 A review round may only count toward a successful phase when it carries a
-complete, sha-bound, dual-APPROVE evidence chain. This is the load-bearing
-catch for the run-3 bypass (phase advanced with a missing reviewer ticket and
-an empty reviewer output dir, yet state.json recorded APPROVE).
+complete evidence chain: claude-reviewer APPROVE plus codex-reviewer APPROVE
+or honest ABSTAIN (bounded-timeout with a non-empty abstain_reason). This is
+the load-bearing catch for the run-3 bypass (phase advanced with a missing
+reviewer ticket and an empty reviewer output dir, yet state.json recorded
+APPROVE).
 
 Principle: evidence over trust — the gate recomputes the diff SHA and refuses
-trust in any artifact it cannot verify.
+trust in any artifact it cannot verify. A MISSING/empty review.json is never
+an implicit abstain — run-3 hardening is the reason this gate exists.
 """
 from __future__ import annotations
 
@@ -34,12 +37,34 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data
 
 
+def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
+    """None when the verdict is acceptable for this role, else failure text.
+
+    codex-reviewer may ABSTAIN (honest bounded-timeout: verdict ABSTAIN plus a
+    non-empty reviewer_meta.abstain_reason) — codex is a second opinion, never
+    a merge blocker. claude-reviewer is the load-bearing verdict: APPROVE
+    only. A MISSING/empty review.json stays blocked in the caller regardless
+    (run-3 hardening — an absent file is never an implicit abstain).
+    """
+    verdict = data.get("verdict")
+    if verdict == "APPROVE":
+        return None
+    if role == "codex-reviewer" and verdict == "ABSTAIN":
+        meta = data.get("reviewer_meta")
+        reason = str(meta.get("abstain_reason") or "") if isinstance(meta, dict) else ""
+        if reason:
+            return None
+        return f"{role}: verdict=ABSTAIN without reviewer_meta.abstain_reason"
+    return f"{role}: verdict={verdict!r} (need APPROVE)"
+
+
 def assert_round_evidence(contract_dir: Path) -> None:
-    """Raise EvidenceError unless contract_dir holds a complete dual-APPROVE chain.
+    """Raise EvidenceError unless contract_dir holds a complete evidence chain.
 
     Chain: frozen.diff sha matches its recorded .sha256; both reviewer tickets
-    bind that sha; both review.json are schema-valid, APPROVE, and carry the
-    round's contract id.
+    bind that sha; both review.json are schema-valid; claude-reviewer APPROVE
+    and codex-reviewer APPROVE or honest ABSTAIN (non-empty abstain_reason);
+    both carry the round's contract id.
     """
     failures: list[str] = []
 
@@ -76,8 +101,9 @@ def assert_round_evidence(contract_dir: Path) -> None:
         except (_dispatch.MalformedReviewError, json.JSONDecodeError) as exc:
             failures.append(f"{role}: review.json unreadable/invalid: {exc}")
             continue
-        if data.get("verdict") != "APPROVE":
-            failures.append(f"{role}: verdict={data.get('verdict')!r} (need APPROVE)")
+        verdict_failure = _verdict_failure(role, data)
+        if verdict_failure is not None:
+            failures.append(verdict_failure)
         if str(data.get("contract_id") or "") != contract_id:
             failures.append(f"{role}: contract_id {data.get('contract_id')!r} != {contract_id!r}")
 

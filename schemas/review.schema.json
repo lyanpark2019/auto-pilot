@@ -61,7 +61,7 @@
         "codex_invocation":  { "type": ["string", "null"] },
         "started_at":        { "type": "string", "format": "date-time" },
         "ended_at":          { "type": "string", "format": "date-time" },
-        "abstain_reason":    { "type": ["string", "null"] },
+        "abstain_reason":    { "type": "string", "minLength": 1 },
         "risk_tier":         { "type": ["string", "null"] },
         "effort":            { "type": ["string", "null"] }
       },

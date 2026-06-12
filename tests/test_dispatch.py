@@ -312,3 +312,24 @@ def test_read_review_rejects_unknown_verdict(tmp_path):
     p.write_text(json.dumps(review))
     with pytest.raises(_dispatch.MalformedReviewError):
         _dispatch.read_review(p)
+
+
+def test_abstain_without_reason_is_schema_valid(tmp_path):
+    """Pairing ABSTAIN<->abstain_reason is gate-enforced (_evidence), not schema-enforced."""
+    import _dispatch
+    review = _abstain_review()
+    del review["reviewer_meta"]["abstain_reason"]
+    p = tmp_path / "review.json"
+    p.write_text(json.dumps(review))
+    assert _dispatch.read_review(p)["verdict"] == "ABSTAIN"
+
+
+def test_abstain_empty_reason_is_schema_invalid(tmp_path):
+    """abstain_reason: "" violates minLength:1 — the schema closes the empty-string hole."""
+    import _dispatch
+    review = _abstain_review()
+    review["reviewer_meta"]["abstain_reason"] = ""
+    p = tmp_path / "review.json"
+    p.write_text(json.dumps(review))
+    with pytest.raises(_dispatch.MalformedReviewError):
+        _dispatch.read_review(p)
