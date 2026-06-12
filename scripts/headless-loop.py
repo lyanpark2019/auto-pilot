@@ -134,6 +134,25 @@ def commit_trailer(iter_n: int, phase: int) -> str:
     return f"\n\nauto-pilot-iter: {iter_n}\nauto-pilot-phase: {phase}\n"
 
 
+def phase_for_next_session(state: State) -> int:
+    """Return the phase number the next headless PM session should execute."""
+    current = int(state.get("current_phase", 0) or 0)
+    total = int(state.get("total_phases", 0) or 0)
+    if current < 1:
+        return 1
+    phases = state.get("phases", [])
+    active = phases[-1] if phases else None
+    if (
+        active is not None
+        and active.get("phase") == current
+        and active.get("status") == "success"
+        and active.get("ended")
+        and current < total
+    ):
+        return current + 1
+    return current
+
+
 def _timed_stream(proc: subprocess.Popen[str], lf: IO[str], timeout_sec: float) -> bool:
     """Stream proc stdout to *lf* and stdout; kill proc if timeout fires.
 
@@ -227,6 +246,27 @@ def _handle_timeout(iter_n: int, pre_head: str, state_after: State) -> str:
     return "failed"
 
 
+def _completed_active_phase(state: State) -> bool:
+    current = int(state.get("current_phase", 0) or 0)
+    phases = state.get("phases", [])
+    active = phases[-1] if phases else None
+    return bool(
+        active is not None
+        and active.get("phase") == current
+        and active.get("status") == "success"
+        and active.get("ended")
+    )
+
+
+def _timeout_preserved_status(state_after: State) -> str | None:
+    status = state_after.get("status")
+    if status == "success":
+        return "success"
+    if status == "running" and _completed_active_phase(state_after):
+        return "running"
+    return None
+
+
 def _early_exit_status(state: State, args: argparse.Namespace) -> str | None:
     """Return a terminal status string if iteration should be skipped, else None."""
     current: str | None = state.get("status")
@@ -261,7 +301,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     if early is not None:
         return early
 
-    phase = state.get("current_phase", 0)
+    phase = phase_for_next_session(state)
     pre_head = git_head()
     event("iter.start", n=iter_n, phase=phase, pre_head=pre_head[:8])
 
@@ -273,6 +313,10 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     _accumulate_usage(log, args, state_after)
 
     if rc == 124:
+        preserved = _timeout_preserved_status(state_after)
+        if preserved is not None:
+            event("iter.timeout_preserved_state", n=iter_n, status=preserved)
+            return preserved
         return _handle_timeout(iter_n, pre_head, state_after)
 
     status = (load_state() or {}).get("status", "running")
