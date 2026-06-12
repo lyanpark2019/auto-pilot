@@ -20,7 +20,7 @@
 #   default        → <origin owner itself>
 #
 # On gh-user mismatch: auto-switch via `gh auth switch` then re-verify.
-# Exit codes: 0 = ok, 1 = error.
+# Exit codes: 0 = ok, 1 = error, 2 = model-routing.yaml invalid.
 
 set -euo pipefail
 

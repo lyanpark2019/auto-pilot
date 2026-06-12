@@ -75,6 +75,10 @@ CASES = [
      "TICKET=" + "/tmp/nope/tickets/claude-reviewer.json review", True, False, "DENY"),
     ("non-reviewer general-purpose, active run", "general-purpose", "do work", True, False, "ALLOW"),
     ("tech-critic-lead, active run", "tech-critic-lead", "gate contract", True, False, "ALLOW"),
+    # Prose TICKET= value that is slashed but NOT tickets-shape → must ALLOW (false-positive fix).
+    # e.g. "TICKET=docs/foo.md" appears in a non-dispatch planning prompt.
+    ("prose TICKET=docs/foo.md slashed, not tickets-shape", "general-purpose",
+     "see TICKET=docs/foo.md for context", True, False, "ALLOW"),
 ]
 
 

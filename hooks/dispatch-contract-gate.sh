@@ -47,19 +47,33 @@ contract_dir=$(printf '%s' "$prompt" | grep -oE 'contract_dir=[^[:space:]]+' | h
 # Fallback (review r1): live dispatch prompts carry TICKET=<contract_dir>/tickets/<role>.json
 # (pm-orchestrator.md template) — keying only on contract_dir= left the gate inert
 # for every real worker dispatch. Derive contract_dir from the ticket path.
+#
+# Shape requirement (r3 false-positive fix): a real pm-orchestrator dispatch ticket
+# is always at the canonical path <contract_dir>/tickets/<role>.json, so the
+# extracted value MUST match the glob */tickets/*.json.  Any other slashed value
+# (e.g. TICKET=docs/foo.md in a planning prompt, or TICKET=PROJ-123 in a prose
+# mention) is NOT a dispatch marker and must be ignored — falling through to the
+# reviewer-subagent check below (or plain ALLOW for non-reviewer types).
+#
+# Residual: the primary contract_dir= marker can still prose-trip if prose happens
+# to contain "contract_dir=<word>" — its value has no canonical shape to narrow to
+# beyond what already exists, so we document the residual and accept it.
 if [[ -z "$contract_dir" ]]; then
   ticket_path=$(printf '%s' "$prompt" | grep -oE 'TICKET=[^[:space:]]+' | head -1 | sed 's/TICKET=//' || echo "")
-  # Only path-valued TICKET= markers count (contain a slash) — a prose mention
-  # like `TICKET=PROJ-123` in a foreign-repo prompt must not trip the gate
-  # (r2 review false-deny finding). Real dispatches always use a ticket path.
-  [[ "$ticket_path" != */* ]] && ticket_path=""
+  # Require the pm-orchestrator canonical shape: */tickets/*.json.
+  # Any non-matching value (prose mention, JIRA key, doc path, …) → clear and
+  # fall through; do NOT treat as a dispatch.
+  case "$ticket_path" in
+    */tickets/*.json) ;;  # valid dispatch shape — keep
+    *) ticket_path="" ;;  # not a real ticket path — ignore
+  esac
   if [[ -n "$ticket_path" ]]; then
     cand_dir="$(dirname "$(dirname "$ticket_path")")"
     if [[ -f "$cand_dir/contract.json" ]]; then
       contract_dir="$cand_dir"
     else
-      # TICKET= present = worker dispatch; missing contract.json at the derived
-      # dir means the PM skipped contract prep → deny rather than silently allow.
+      # TICKET= in dispatch shape but contract.json missing at the derived dir →
+      # the PM skipped contract prep; deny rather than silently allow.
       deny "TICKET marker present but no contract.json at derived contract_dir=$cand_dir. Run orchestrator dispatch-contract-check first."
     fi
   fi
