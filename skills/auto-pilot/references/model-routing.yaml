@@ -35,6 +35,15 @@ roles:
 # subagent below this token rank is denied by hooks/verifier-tier-gate.sh.
 verifier_min_tier: opus
 
+# Agent subagent_type names that are subject to the verifier-tier-gate.
+# Read by hooks/verifier-tier-gate.sh via _routing.verifier_agents().
+verifier_agents:
+  - auto-pilot-codex-reviewer
+  - auto-pilot-claude-reviewer
+  - review-gatekeeper
+  - swarm-verifier
+  - tech-critic-lead
+
 codex:
   # risk_assess.py tier -> codex model_reasoning_effort
   effort_by_risk_tier:

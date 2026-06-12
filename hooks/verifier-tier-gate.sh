@@ -6,6 +6,9 @@
 # override (agent frontmatter model wins) or at/above tier -> allow.
 # Unparseable stdin / resolver errors -> fail-open with stderr warn — a
 # routing-config typo must never brick all Task dispatch.
+# Verifier agent names are driven by model-routing.yaml `verifier_agents:` key
+# (read via _routing.verifier_agents(config=cfg)); if the yaml is unreadable or
+# the key is missing, the gate fails open even for known verifier names.
 # Residual (spec §5): an under-tier FRONTMATTER model is not an override and
 # is not caught here — that is the agent-contract audit's job.
 set -euo pipefail
@@ -21,10 +24,6 @@ import json
 import sys
 from pathlib import Path
 
-VERIFIERS = {
-    "auto-pilot-codex-reviewer", "auto-pilot-claude-reviewer",
-    "review-gatekeeper", "swarm-verifier", "tech-critic-lead",
-}
 try:
     data = json.load(sys.stdin)
     tool_input = data.get("tool_input") or {}
@@ -36,18 +35,25 @@ except Exception:
 
 name = subagent.split(":")[-1].strip()
 model = model.strip()
-if name not in VERIFIERS or not model:
+# Cheap path: no model override -> allow without reading yaml.
+if not model:
     print("allow")
     raise SystemExit(0)
 
+cfg = Path(sys.argv[1]) / "skills" / "auto-pilot" / "references" / "model-routing.yaml"
 try:
     sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
     import _routing
-    floor_token = _routing.verifier_min_tier()
-    rank = _routing.model_rank(model)
-    floor = _routing.model_rank(floor_token)
+    verifiers = _routing.verifier_agents(config=cfg)
+    floor_token = _routing.verifier_min_tier(config=cfg)
+    rank = _routing.model_rank(model, config=cfg)
+    floor = _routing.model_rank(floor_token, config=cfg)
 except Exception as exc:
     print(f"warn:routing resolver unavailable: {exc}")
+    raise SystemExit(0)
+
+if name not in verifiers:
+    print("allow")
     raise SystemExit(0)
 
 if rank is None or floor is None:

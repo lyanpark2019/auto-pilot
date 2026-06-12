@@ -178,6 +178,110 @@ def run_deny_json_valid_case() -> bool:
     return ok
 
 
+def _make_temp_root(
+    tmpdir: str,
+    *,
+    include_verifier_agents: bool = True,
+    extra_verifier_agents: list[str] | None = None,
+    verifier_min_tier: str = "opus",
+) -> str:
+    """Build a minimal plugin root under tmpdir for yaml-driven tests."""
+    import shutil
+
+    root = os.path.join(tmpdir, "root")
+    scripts_dir = os.path.join(root, "scripts")
+    yaml_dir = os.path.join(root, "skills", "auto-pilot", "references")
+    os.makedirs(scripts_dir, exist_ok=True)
+    os.makedirs(yaml_dir, exist_ok=True)
+
+    # Copy real _routing.py so the embedded Python can import it.
+    real_routing = str(Path(__file__).resolve().parent.parent / "scripts" / "_routing.py")
+    shutil.copy(real_routing, os.path.join(scripts_dir, "_routing.py"))
+
+    yaml_parts = [
+        "schema_version: 1",
+        "agent_model_rank:",
+        "  fable: 0",
+        "  opus: 1",
+        "  sonnet: 3",
+        "  haiku: 4",
+        f"verifier_min_tier: {verifier_min_tier}",
+    ]
+    if include_verifier_agents:
+        agents = extra_verifier_agents if extra_verifier_agents is not None else [
+            "auto-pilot-codex-reviewer",
+            "auto-pilot-claude-reviewer",
+            "review-gatekeeper",
+            "swarm-verifier",
+            "tech-critic-lead",
+        ]
+        yaml_parts.append("verifier_agents:")
+        for agent in agents:
+            yaml_parts.append(f"  - {agent}")
+
+    yaml_content = "\n".join(yaml_parts) + "\n"
+    with open(os.path.join(yaml_dir, "model-routing.yaml"), "w") as f:
+        f.write(yaml_content)
+
+    return root
+
+
+def run_yaml_driven_missing_key_case() -> bool:
+    """yaml without verifier_agents: key -> fail-open ALLOW for a verifier+haiku."""
+    label = "yaml missing verifier_agents: -> fail-open ALLOW"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = _make_temp_root(tmpdir, include_verifier_agents=False)
+        payload = _make_payload("auto-pilot-claude-reviewer", "haiku")
+        env = os.environ.copy()
+        env["CLAUDE_PLUGIN_ROOT"] = root
+        result = subprocess.run(
+            ["bash", HOOK],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and '"deny"' in stdout) else "ALLOW"
+    ok = actual == "ALLOW" and result.returncode == 0
+    print(
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} expect=ALLOW got={actual:5s}"
+    )
+    if not ok:
+        print(f"       rc={result.returncode} stdout={stdout!r} stderr={result.stderr.strip()!r}")
+    return ok
+
+
+def run_yaml_driven_custom_agent_deny_case() -> bool:
+    """Custom yaml with my-custom-verifier in verifier_agents + haiku -> DENY."""
+    label = "yaml custom agent my-custom-verifier+haiku -> DENY"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = _make_temp_root(
+            tmpdir,
+            extra_verifier_agents=["my-custom-verifier"],
+            verifier_min_tier="opus",
+        )
+        payload = _make_payload("my-custom-verifier", "haiku")
+        env = os.environ.copy()
+        env["CLAUDE_PLUGIN_ROOT"] = root
+        result = subprocess.run(
+            ["bash", HOOK],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and '"deny"' in stdout) else "ALLOW"
+    ok = actual == "DENY" and result.returncode == 0
+    print(
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} expect=DENY  got={actual:5s}"
+    )
+    if not ok:
+        print(f"       rc={result.returncode} stdout={stdout!r} stderr={result.stderr.strip()!r}")
+    return ok
+
+
 def main() -> None:
     results = [run_case(*c) for c in CASES]
     results.append(run_case("unparseable stdin (fail-open)", None, None,
@@ -186,6 +290,8 @@ def main() -> None:
     results.append(run_temp_hygiene_case())
     results.append(run_big_payload_case())
     results.append(run_deny_json_valid_case())
+    results.append(run_yaml_driven_missing_key_case())
+    results.append(run_yaml_driven_custom_agent_deny_case())
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)
