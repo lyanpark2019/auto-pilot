@@ -9,7 +9,7 @@ manual_edit: false
 
 ## One-line
 
-Opus 4.7 PM (main session) dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
+The main-session PM dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
 ## Purpose (locked 2026-05-29)
 
