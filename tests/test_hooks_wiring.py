@@ -95,6 +95,18 @@ class TestHooksJsonWiring:
         assert entry is not None, "ruff-import-integrity.sh not in PostToolUse"
         assert "Bash" in entry["matcher"]
 
+    def test_headless_sync_dispatch_guard_wired(self):
+        data = self._load()
+        pre = data["hooks"]["PreToolUse"]
+        entry = next(
+            (e for e in pre if any(
+                "headless-sync-dispatch-guard.sh" in h["command"] for h in e["hooks"])),
+            None,
+        )
+        assert entry is not None, "headless-sync-dispatch-guard.sh not wired"
+        for tool in ("Task", "Bash"):
+            assert tool in entry["matcher"], f"{tool} missing from matcher"
+
 
 class TestWorkerHHooksJsonWiring:
     """hooks.json wiring for artifact-ledger.sh + context-watch.sh."""
