@@ -52,7 +52,12 @@ def _now_iso() -> str:
 def _attempt(
     argv: list[str], prompt: str, raw_path: Path, timeout_s: int
 ) -> tuple[int, str]:
-    """Run one codex attempt; returns (0, "") on success, else (rc, reason)."""
+    """Run one codex attempt; returns (0, "") on success, else (rc, reason).
+
+    On non-zero exit, the last 2000 chars of stderr are written to
+    <raw_path>.stderr for triage.  On timeout there is no captured stderr —
+    that sibling file is not written.
+    """
     raw_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         proc = subprocess.run(
@@ -67,8 +72,11 @@ def _attempt(
         return _TIMEOUT_RC, "codex-timeout"
     except FileNotFoundError:
         return 127, "codex-exec-failed"
-    raw_path.write_text(proc.stdout)
+    raw_path.write_text(proc.stdout, encoding="utf-8")
     if proc.returncode != 0:
+        stderr_tail = proc.stderr[-2000:] if proc.stderr else ""
+        if stderr_tail:
+            Path(str(raw_path) + ".stderr").write_text(stderr_tail, encoding="utf-8")
         return proc.returncode, "codex-exec-failed"
     return 0, ""
 
@@ -80,7 +88,7 @@ def _abstain_review(
     effort: str,
     reason: str,
     started_at: str,
-    rc: int = _TIMEOUT_RC,
+    rc: int,
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -111,10 +119,19 @@ def run(
 ) -> int:
     """Drive attempt -> retry(lower effort) -> ABSTAIN. See module docstring."""
     try:
-        ticket = json.loads(ticket_path.read_text())
-        out_dir = Path(str(ticket["output_dir"]))
+        ticket = json.loads(ticket_path.read_text(encoding="utf-8"))
+        raw_out_dir = ticket.get("output_dir")
+        if not raw_out_dir:
+            sys.stderr.write("codex_review_bounded: ticket output_dir is empty\n")
+            return 2
+        out_dir = Path(str(raw_out_dir))
+        if not out_dir.is_absolute():
+            sys.stderr.write(
+                f"codex_review_bounded: ticket output_dir must be absolute, got: {raw_out_dir!r}\n"
+            )
+            return 2
         contract_id = str(ticket["contract_id"])
-        prompt = prompt_file.read_text()
+        prompt = prompt_file.read_text(encoding="utf-8")
     except (OSError, json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError) as exc:
         sys.stderr.write(f"codex_review_bounded: bad ticket/prompt: {exc}\n")
         return 2
@@ -128,22 +145,26 @@ def run(
         sys.stderr.write(f"codex_review_bounded: bad routing config: {exc}\n")
         return 2
 
-    reason = ""
-    rc = _TIMEOUT_RC
-    for attempt, (effort, timeout_s) in enumerate(zip(efforts, timeouts), start=1):
-        argv = shlex.split(codex_cmd) if codex_cmd else build_argv(effort)
-        _heartbeat.write_beat(
-            out_dir, "codex-reviewer", f"codex-attempt-{attempt}:{effort}",
-            risk_tier=tier,
-        )
-        raw = out_dir / f"codex-raw-attempt-{attempt}.json"
-        rc, reason = _attempt(argv, prompt, raw, timeout_s)
-        if rc == 0:
+    try:
+        reason = ""
+        rc = _TIMEOUT_RC
+        for attempt, (effort, timeout_s) in enumerate(zip(efforts, timeouts), start=1):
+            argv = shlex.split(codex_cmd) if codex_cmd else build_argv(effort)
             _heartbeat.write_beat(
-                out_dir, "codex-reviewer", f"codex-done:{effort}",
+                out_dir, "codex-reviewer", f"codex-attempt-{attempt}:{effort}",
                 risk_tier=tier,
             )
-            return 0
+            raw = out_dir / f"codex-raw-attempt-{attempt}.json"
+            rc, reason = _attempt(argv, prompt, raw, timeout_s)
+            if rc == 0:
+                _heartbeat.write_beat(
+                    out_dir, "codex-reviewer", f"codex-done:{effort}",
+                    risk_tier=tier,
+                )
+                return 0
+    except OSError as exc:
+        sys.stderr.write(f"codex_review_bounded: I/O error in run: {exc}\n")
+        return 2
 
     final_argv = shlex.split(codex_cmd) if codex_cmd else build_argv(efforts[-1])
     review = _abstain_review(contract_id, final_argv, tier, efforts[-1], reason, started_at, rc=rc)

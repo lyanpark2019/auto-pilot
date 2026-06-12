@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -136,3 +137,110 @@ def test_broken_config_is_usage_error(env, tmp_path):
         "--codex-cmd", "cat",
     ])
     assert rc == 2
+
+
+# ---------------------------------------------------------------------------
+# Finding 1: out_dir I/O failures honor the 0/3/2 exit contract
+# ---------------------------------------------------------------------------
+
+def test_out_dir_is_existing_file_returns_rc2(env, tmp_path):
+    """out_dir path points at an existing regular file → rc 2 (not traceback)."""
+    file_as_dir = tmp_path / "collision"
+    file_as_dir.write_text("I am a file, not a dir")
+    ticket = tmp_path / "ticket_collision.json"
+    ticket.write_text(json.dumps({
+        "contract_id": "iter-1/phase-1/contract-1/round-1",
+        "output_dir": str(file_as_dir),
+        "diff_path": str(tmp_path / "d.diff"),
+    }))
+    rc = crb.main([
+        "--ticket", str(ticket), "--tier", "medium",
+        "--prompt-file", str(env["prompt"]),
+        "--config", str(env["config"]),
+        "--codex-cmd", "cat",
+    ])
+    assert rc == 2
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="chmod 555 has no effect as root")
+def test_unwritable_out_dir_parent_returns_rc2(env, tmp_path):
+    """Unwritable parent dir → PermissionError → rc 2."""
+    locked_parent = tmp_path / "locked"
+    locked_parent.mkdir()
+    out_dir = locked_parent / "outputs" / "codex-reviewer"
+    ticket = tmp_path / "ticket_locked.json"
+    ticket.write_text(json.dumps({
+        "contract_id": "iter-1/phase-1/contract-1/round-1",
+        "output_dir": str(out_dir),
+        "diff_path": str(tmp_path / "d.diff"),
+    }))
+    locked_parent.chmod(0o555)
+    try:
+        rc = crb.main([
+            "--ticket", str(ticket), "--tier", "medium",
+            "--prompt-file", str(env["prompt"]),
+            "--config", str(env["config"]),
+            "--codex-cmd", "cat",
+        ])
+        assert rc == 2
+    finally:
+        locked_parent.chmod(0o755)
+
+
+# ---------------------------------------------------------------------------
+# Finding 2: empty / relative output_dir rejected at parse time
+# ---------------------------------------------------------------------------
+
+def _make_ticket(tmp_path: Path, out_dir_value: object) -> Path:
+    t = tmp_path / "ticket_bad_outdir.json"
+    t.write_text(json.dumps({
+        "contract_id": "iter-1/phase-1/contract-1/round-1",
+        "output_dir": out_dir_value,
+        "diff_path": str(tmp_path / "d.diff"),
+    }))
+    return t
+
+
+def test_empty_output_dir_returns_rc2(env, tmp_path):
+    ticket = _make_ticket(tmp_path, "")
+    rc = crb.main([
+        "--ticket", str(ticket), "--tier", "medium",
+        "--prompt-file", str(env["prompt"]),
+        "--config", str(env["config"]),
+        "--codex-cmd", "cat",
+    ])
+    assert rc == 2
+
+
+def test_relative_output_dir_returns_rc2(env, tmp_path):
+    ticket = _make_ticket(tmp_path, "relative/path")
+    rc = crb.main([
+        "--ticket", str(ticket), "--tier", "medium",
+        "--prompt-file", str(env["prompt"]),
+        "--config", str(env["config"]),
+        "--codex-cmd", "cat",
+    ])
+    assert rc == 2
+
+
+# ---------------------------------------------------------------------------
+# Finding 4: attempt stderr persisted to <raw>.stderr on non-zero exit
+# ---------------------------------------------------------------------------
+
+def test_attempt_stderr_persisted_on_failure(env):
+    """codex-cmd that writes to stderr and exits non-zero → .stderr sidecar."""
+    rc = _run(env, "sh -c 'echo boom >&2; exit 7'")
+    assert rc == 3  # ABSTAIN
+    review = json.loads((env["out"] / "review.json").read_text())
+    assert review["verify_rerun"]["exit_code"] == 7
+    stderr_file = env["out"] / "codex-raw-attempt-1.json.stderr"
+    assert stderr_file.exists(), "stderr sidecar not written"
+    assert "boom" in stderr_file.read_text()
+
+
+def test_timeout_does_not_write_stderr_sidecar(env):
+    """On timeout there is no captured stderr — sidecar must not be written."""
+    _run(env, "sleep 30")
+    # Neither attempt should have a .stderr sidecar
+    assert not (env["out"] / "codex-raw-attempt-1.json.stderr").exists()
+    assert not (env["out"] / "codex-raw-attempt-2.json.stderr").exists()
