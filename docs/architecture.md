@@ -2,7 +2,7 @@
 type: architecture
 topic: unified-coding-system
 source_commit: 52776f7440fe2dd2bf472784717549be258b7c75
-manual_edit: false
+manual_edit: true
 ---
 
 # auto-pilot architecture
@@ -244,6 +244,97 @@ Key constraints locked by adversarial review:
 - `_budget.py check_caps` measures `claude` pid growth over the driver-start baseline (Step-0 live fix 2026-06-10); evals still pass `--max-concurrent-claude UNCAPPED` as belt-and-suspenders.
 - `run_case` returns `CaseAttempt(oracle: OracleResult, run: RunResult)` so per-case cost is surfaced for the total-cost ceiling.
 - Deterministic oracle only (no LLM-judge). `error` outcome counts as non-pass.
+
+## Dispatch trust chain & evidence gates (run-3 hardening, 2026-06-10)
+
+Three complementary layers that together make the contract dispatch path fail-closed:
+
+### Entry gate — dispatch-contract-check (PR-A, 2026-06-12)
+
+The PM follows this sequence before any reviewer dispatch (`agents/pm-orchestrator.md`):
+
+```
+write contract.json
+→ write PM-SIGNATURE
+→ orchestrator.py dispatch-contract-check --contract <contract.json>
+→ creates/validates contract-check.json (contract hash + PM-SIGNATURE status)
+→ _dispatch.prepare_subagent_ticket(contract_dir, worktree, subagent_role, ...)
+→ dispatch with prompt markers:
+     TICKET=<ticket_path>
+     contract_dir=<contract_dir>
+```
+
+`hooks/dispatch-contract-gate.sh` derives the contract directory from those markers and rejects reviewer dispatch (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) during an active run when no `TICKET=` or `contract_dir=` marker is present — catching ad-hoc reviewer bypasses that skip the frozen-diff sha binding. Workers dispatch as `general-purpose` (non-reviewer type) and are covered by the exit gate instead.
+
+Regression pins: `tests/test_pm_protocol_contract_dispatch.py` asserts `dispatch-contract-check` appears before `prepare_subagent_ticket` in the protocol section, and that `TICKET={ticket_path}` / `contract_dir={contract_dir}` literals are preserved.
+
+### Exit gate — evidence chain (run-3 residuals, shipped 2026-06-10)
+
+`scripts/_evidence.py:assert_round_evidence(contract_dir)` — load-bearing gate for the run-3 bypass where phase 2 advanced to success with a missing reviewer ticket and empty reviewer output dir. Evidence chain that must hold for every latest-round dir before `phase-end --status success` can write state:
+
+1. `review-input/frozen.diff` exists; recomputed SHA-256 == `review-input/frozen.diff.sha256` content.
+2. Both `tickets/{codex-reviewer,claude-reviewer}.json` exist with `diff_sha256` equal to that value.
+3. Both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist, schema-valid, `contract_id` matches the round, `verdict == "APPROVE"`.
+
+`scripts/orchestrator.py cmd_phase_end` calls `_evidence.latest_round_dirs_for_active_phase(contracts_root)` to locate round dirs, then `assert_round_evidence` on each. Failure → exit 2, `BLOCKED` stderr, state untouched. `AUTO_PILOT_SKIP_EVIDENCE=1` escape hatch exists for unit tests that fabricate state without contract dirs (test-only, never for live runs).
+
+Proven live in run-4 (2026-06-10/12): dual APPROVE with sha-bound evidence required before phase advanced; deliberate missing-trailer REJECT in phase 1 proved the round-2 recovery path.
+
+### F-6 headless background-dispatch guard (deterministic, 2026-06-10)
+
+`hooks/headless-sync-dispatch-guard.sh` (PreToolUse Task|Bash): under `HARNESS_HEADLESS=1`, denies `run_in_background=true` dispatch — the F-6 failure mode where a headless PM background-dispatched reviewers then exited, orphaning them. Guard wired in `hooks/hooks.json`. Self-test: `hooks/test_headless_sync_dispatch_guard.py`. Documented residual: Bash trailing-`&` backgrounding not covered (fuzzy detection, deferred deliberately).
+
+## Headless timeout preservation (PR-B, 2026-06-12)
+
+`scripts/headless-loop.py` timeout handling (`rc == 124`) is state-aware:
+
+```
+run_claude_session(...) returns rc
+→ reload state
+→ accumulate usage
+→ if rc == 124:
+     if state already records success OR active phase ended successfully:
+         preserve state and return the recorded status (never overwrite)
+     else:
+         keep existing fail-closed timeout path (stash + mark failed)
+```
+
+Helpers: `_timeout_preserved_status(state_after)` checks `status == "success"` or `_completed_active_phase(state_after)` (active phase entry has `status=success` + `ended` timestamp). The phase-for-next-session helper (`phase_for_next_session(state)`) advances `current_phase + 1` only when the active phase completed successfully — initial `current_phase=0` renders as phase 1 in prompts.
+
+Invariant: phase-end evidence gates remain the authority for success. Timeout preservation only applies when state already proves success before the wrapper timed out — it cannot turn stranded reviewer outputs into success.
+
+Regression tests: `tests/test_headless_loop.py::test_timeout_preserves_terminal_success_state` and `test_timeout_preserves_completed_phase_when_run_continues`.
+
+## Routing ledger & model-tier assignment (Slice C, 2026-06-12)
+
+### Module split
+
+**`scripts/_ledger.py`** — IO layer + schema validation. Public API: `load_ledger`, `validate_ledger`, `save_ledger`, `build_record_from_round_dirs`, `append_phase_records`. Re-exports `evaluate_rebalance` from `_rebalance.py` for backward-compat callers. Schema: `schemas/routing-ledger.schema.json` (JSON Schema 2020-12; `p0_escaped` OPTIONAL boolean added).
+
+**`scripts/_rebalance.py`** — pure rule engine. Zero IO; operates on plain dicts only. `evaluate_rebalance(ledger, ladder, config)` returns proposed `rebalance_log` entries (never written unless `--apply`).
+
+### Four rebalance rules
+
+| Rule | Trigger | Effect |
+|------|---------|--------|
+| `promote-2x-gate-fail` | ≥2× rejects in group | propose model upgrade |
+| `promote-real-p0` | any record has `p0_escaped=True` | propose model upgrade |
+| `trial-demotion-3x-clean` | ≥3 consecutive clean rounds after a trial | propose demotion confirmation |
+| `revert-trial` | clean-run ratio drops after trial-demotion | propose revert to prior tier |
+
+`revert-trial` takes precedence: when it fires for a group, promote rules are suppressed for that group in the same pass. At most one promote rule fires per group per call (double-promote prevention).
+
+### Composite key convention
+
+`ledger-rebalance --apply` writes `assignments` keyed by `"<role>/<task_class>"` (e.g., `"worker-primary/feature-multi-file"`). Plain role keys remain valid — `_current_model_for_group` checks composite key first, then plain role as fallback.
+
+### Phase-end auto-append
+
+`orchestrator.py cmd_phase_end` calls `_ledger.append_phase_records` after the evidence gate, before `_close_phase`, wrapped in `try/except`. On failure: one-line `_warn()`, continue. Ledger is telemetry — never a gate (`scripts/orchestrator.py`).
+
+### v1 limitation (honest)
+
+The contract schema (`schemas/contract.schema.json`, `additionalProperties:false`) carries no `role` or `task_class` fields. Auto-records from `append_phase_records` collapse into one group (`worker-primary/feature-multi-file`). Per-group rebalance is only meaningful for **hand-authored** ledger records. Role+task_class fields in the contract schema would fix this in v2.
 
 ## Toolkit consolidation (v0.4.0, decisions locked 2026-05-29)
 
