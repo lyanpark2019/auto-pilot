@@ -13,7 +13,7 @@ set -euo pipefail
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 payload=$(cat)
-tmppy=$(mktemp /tmp/vtg_XXXXXX.py)
+tmppy=$(mktemp "${TMPDIR:-/tmp}/vtg_XXXXXX")
 trap 'rm -f "$tmppy"' EXIT
 
 cat > "$tmppy" <<'PY'
@@ -34,7 +34,8 @@ except Exception:
     print("allow")
     raise SystemExit(0)
 
-name = subagent.split(":")[-1]
+name = subagent.split(":")[-1].strip()
+model = model.strip()
 if name not in VERIFIERS or not model:
     print("allow")
     raise SystemExit(0)

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Self-test for verifier-tier-gate.sh."""
+import glob
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HOOK = str(Path(__file__).parent / "verifier-tier-gate.sh")
@@ -43,10 +45,108 @@ CASES: list[tuple[str, str | None, str | None, str]] = [
 ]
 
 
+def _make_payload(subagent_type: str, model: str) -> str:
+    tool_input: dict[str, object] = {
+        "prompt": "x",
+        "description": "x",
+        "subagent_type": subagent_type,
+        "model": model,
+    }
+    return json.dumps({"tool_name": "Task", "tool_input": tool_input})
+
+
+def run_concurrency_case() -> bool:
+    """8 simultaneous hook invocations must ALL return deny (rc=0)."""
+    label = "concurrency: 8 parallel swarm-verifier+haiku invocations"
+    payload = _make_payload("swarm-verifier", "haiku")
+    env = os.environ.copy()
+    env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
+    procs: list[subprocess.Popen[str]] = [
+        subprocess.Popen(
+            ["bash", HOOK],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+        for _ in range(8)
+    ]
+    outcomes: list[bool] = []
+    for proc in procs:
+        stdout, _stderr = proc.communicate(input=payload)
+        is_deny = '"deny"' in stdout
+        rc_ok = proc.returncode == 0
+        outcomes.append(is_deny and rc_ok)
+    all_ok = all(outcomes)
+    deny_count = sum(outcomes)
+    print(
+        f"[{'OK  ' if all_ok else 'FAIL'}] {label:52s} "
+        f"expect=DENY*8 got=DENY*{deny_count}"
+    )
+    if not all_ok:
+        print(f"       individual outcomes={outcomes}")
+    return all_ok
+
+
+def run_whitespace_case() -> bool:
+    """Padded subagent_type and model tokens must still trigger DENY."""
+    label = "whitespace strip: ' swarm-verifier ' + ' haiku '"
+    payload = _make_payload(" swarm-verifier ", " haiku ")
+    env = os.environ.copy()
+    env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
+    result = subprocess.run(
+        ["bash", HOOK],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and '"deny"' in stdout) else "ALLOW"
+    ok = actual == "DENY" and result.returncode == 0
+    print(
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} "
+        f"expect=DENY  got={actual:5s}"
+    )
+    if not ok:
+        print(f"       rc={result.returncode} stdout={stdout!r} stderr={result.stderr.strip()!r}")
+    return ok
+
+
+def run_temp_hygiene_case() -> bool:
+    """No vtg_* temp files must remain in TMPDIR after hook exit."""
+    label = "temp hygiene: no vtg_* files remain after run"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        payload = _make_payload("auto-pilot-claude-reviewer", "haiku")
+        env = os.environ.copy()
+        env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
+        env["TMPDIR"] = tmpdir
+        subprocess.run(
+            ["bash", HOOK],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        leftover = glob.glob(os.path.join(tmpdir, "vtg_*"))
+    ok = len(leftover) == 0
+    print(
+        f"[{'OK  ' if ok else 'FAIL'}] {label:52s} "
+        f"expect=0 leftover got={len(leftover)}"
+    )
+    if not ok:
+        print(f"       leftover files: {leftover}")
+    return ok
+
+
 def main() -> None:
     results = [run_case(*c) for c in CASES]
     results.append(run_case("unparseable stdin (fail-open)", None, None,
                             "ALLOW", raw_stdin="{ not json"))
+    results.append(run_concurrency_case())
+    results.append(run_whitespace_case())
+    results.append(run_temp_hygiene_case())
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)
