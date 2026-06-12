@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "routing-ledger.schema.json",
+  "title": "Routing ledger (per-project, YAML on disk)",
+  "description": "Dispatch-history ledger the PM appends at phase end and reads to rebalance role-to-model assignments. Policy SoT: skills/auto-pilot/references/model-routing.md. Field names reuse contract.schema.json / review.schema.json vocabulary (model, P0/P1/P2, reviewers).",
+  "type": "object",
+  "required": ["schema_version", "assignments", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "assignments": {
+      "description": "Currently effective role-to-model routing (the state rebalance mutates).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["model"],
+        "additionalProperties": false,
+        "properties": {
+          "model": { "type": "string" },
+          "effort": { "type": ["string", "null"], "enum": ["none", "minimal", "low", "medium", "high", "xhigh", null] },
+          "runner": { "type": "string", "enum": ["agent-tool", "codex-exec", "tmux-pane"] },
+          "mode": { "type": "string" }
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ts", "task_id", "role", "task_class", "model", "outcome"],
+        "additionalProperties": false,
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "task_id": { "type": "string", "description": "PR number, contract id (iter-N/phase-N/contract-N/round-N), or ticket slug." },
+          "role": { "type": "string", "description": "Matrix role, e.g. worker-primary | worker-heavy | worker-mechanical | worker-narrow | verifier." },
+          "task_class": { "type": "string", "enum": ["feature-multi-file", "narrow-port", "mechanical", "arch-refactor", "docs", "review"] },
+          "model": { "type": "string" },
+          "effort": { "type": ["string", "null"] },
+          "runner": { "type": "string", "enum": ["agent-tool", "codex-exec", "tmux-pane"] },
+          "outcome": {
+            "type": "object",
+            "required": ["gates_first_try", "review_rounds", "rejects_real"],
+            "additionalProperties": false,
+            "properties": {
+              "gates_first_try": { "type": "boolean", "description": "All verify gates green on the worker's first report." },
+              "review_rounds": { "type": "integer", "minimum": 0 },
+              "rejects_real": { "type": "integer", "minimum": 0, "description": "REJECT verdicts that surfaced a real defect (not noise)." },
+              "rejects_false": { "type": "integer", "minimum": 0 },
+              "abstained": { "type": "boolean" },
+              "duration_min": { "type": ["number", "null"] },
+              "tokens_est": { "type": ["string", "null"], "enum": ["low", "mid", "high", null] }
+            }
+          },
+          "cost_band": { "type": "string", "enum": ["low", "mid", "high"] },
+          "reviewers": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "rebalance_log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ts", "role", "task_class", "from_model", "to_model", "rule", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "role": { "type": "string" },
+          "task_class": { "type": "string" },
+          "from_model": { "type": "string" },
+          "to_model": { "type": "string" },
+          "rule": { "type": "string", "enum": ["promote-2x-gate-fail", "promote-real-p0", "trial-demotion-3x-clean", "revert-trial"] },
+          "evidence": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        }
+      }
+    }
+  }
+}

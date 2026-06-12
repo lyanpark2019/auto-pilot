@@ -38,7 +38,7 @@ User invokes `/auto-pilot start` (or aliases: "자율 주행 시작", "autopilot
 
 ## What this skill does
 
-Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The PM stays in the main session (model operator-selected) and dispatches all subagents via the `Agent` tool.
+Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The PM stays in the main session (model operator-selected) and dispatches all subagents via the `Agent` tool. Model selection per role (PM / workers / verifiers), fallback chains, and the evidence-based rebalance ledger are specified in `references/model-routing.md` (wire-in SoT; ledger schema: `schemas/routing-ledger.schema.json`).
 
 ### Loop (per phase)
 
