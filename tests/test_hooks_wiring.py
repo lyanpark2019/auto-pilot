@@ -107,6 +107,21 @@ class TestHooksJsonWiring:
         for tool in ("Task", "Bash"):
             assert tool in entry["matcher"], f"{tool} missing from matcher"
 
+    def test_verifier_tier_gate_wired_on_task(self):
+        data = self._load()
+        pre = data["hooks"]["PreToolUse"]
+        entry = next(
+            (e for e in pre if any(
+                "verifier-tier-gate.sh" in h["command"] for h in e["hooks"])),
+            None,
+        )
+        assert entry is not None, "verifier-tier-gate.sh not wired"
+        assert entry["matcher"] == "Task"
+        # file must exist and be executable
+        hook_path = Path(__file__).parent.parent / "hooks" / "verifier-tier-gate.sh"
+        assert hook_path.exists(), "verifier-tier-gate.sh missing on disk"
+        assert hook_path.stat().st_mode & 0o111, "verifier-tier-gate.sh not executable"
+
 
 class TestWorkerHHooksJsonWiring:
     """hooks.json wiring for artifact-ledger.sh + context-watch.sh."""
