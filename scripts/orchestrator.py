@@ -188,6 +188,7 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
         event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
         return 2
 
+    approved_count = 0
     if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
         # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
         # (tests fabricate state without a real contracts tree). Never set in prod.
@@ -197,6 +198,13 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
             _warn(message)
             event(f"phase_end.{suffix}", phase=args.phase)
             return 2
+        round_dirs = _evidence.latest_round_dirs_for_active_phase(STATE_DIR / "contracts")
+        for rdir in round_dirs:
+            try:
+                _evidence.assert_round_evidence(rdir)
+                approved_count += 1
+            except _evidence.EvidenceError:
+                pass
 
     # Auto-append ledger records — telemetry; never blocks phase-end.
     try:
@@ -204,6 +212,7 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
         _ledger.append_phase_records(Path.cwd(), STATE_DIR / "contracts")
     except Exception as exc:  # noqa: BLE001
         _warn(f"ledger auto-append failed (telemetry, non-blocking): {exc}")
+    current["approved"] = approved_count
     _close_phase(current, args.status, args.commits)
     _update_run_status(state, args.status)
     save_state(state)
