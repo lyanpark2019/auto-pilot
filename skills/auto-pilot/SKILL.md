@@ -118,10 +118,14 @@ At phase end `scripts/orchestrator.py ledger-append` runs automatically (wired i
    # headless -p — that probe always false-negatives and spuriously aborts.
    # Check the plugin agent registry on disk instead: BOTH hardened reviewer
    # contracts must ship with a frontmatter `name:` matching their dispatch id.
+   : "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT unset — cannot locate plugin agents}"
    missing=""
    for agent in auto-pilot-claude-reviewer auto-pilot-codex-reviewer; do
      f="${CLAUDE_PLUGIN_ROOT}/agents/${agent}.md"
-     if [ ! -f "$f" ] || ! grep -qx "name: ${agent}" "$f"; then
+     # Anchor the name match to the leading frontmatter block (line 2..closing
+     # ---) so an exact `name:` line in the body cannot mask a mangled
+     # frontmatter name (the one input class this check exists to catch).
+     if [ ! -f "$f" ] || ! sed -n '2,/^---$/p' "$f" | grep -qx "name: ${agent}"; then
        missing="${missing} ${agent}"
      fi
    done
@@ -130,13 +134,17 @@ At phase end `scripts/orchestrator.py ledger-append` runs automatically (wired i
      exit 3
    fi
    ```
-8. **Codex sandbox probe**:
+8. **Codex sandbox probe** (capability check via `--help`, NOT a live `codex exec`):
    ```bash
-   if codex exec --sandbox read-only --json --prompt "ping" 2>&1 | grep -qi 'unknown\|invalid'; then
-     echo "auto-pilot: codex does not support --sandbox read-only; layer 4 deterrent disabled" >&2
-     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=0
-   else
+   # Detect --sandbox support from the help text. A real `codex exec` probe
+   # would inherit the TTY and hang, and parsing its error string is brittle
+   # (`--prompt` is not a flag — argv parse fails with "unexpected argument",
+   # matching neither unknown nor invalid → the old probe always passed).
+   if codex exec --help 2>&1 | grep -q -- '--sandbox'; then
      export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=1
+   else
+     echo "auto-pilot: codex lacks --sandbox; layer 4 deterrent disabled" >&2
+     export AUTO_PILOT_CODEX_SANDBOX_AVAILABLE=0
    fi
    ```
 
