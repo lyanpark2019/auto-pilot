@@ -51,12 +51,14 @@ def _run(env, codex_cmd: str, tier: str = "medium") -> int:
     ])
 
 
-def test_build_argv_hardcodes_sandbox_and_effort():
-    assert crb.build_argv("high") == [
+def test_build_argv_hardcodes_sandbox_effort_and_stdin_prompt():
+    argv = crb.build_argv("high")
+    assert argv == [
         "codex", "exec", "--sandbox", "read-only", "--json",
         "-c", "model_reasoning_effort=high",
-        "--prompt-file", "-",
+        "-",
     ]
+    assert "--prompt-file" not in argv
 
 
 def test_success_path_saves_raw_and_exits_zero(env):

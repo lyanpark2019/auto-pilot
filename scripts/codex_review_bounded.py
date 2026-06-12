@@ -41,7 +41,7 @@ def build_argv(effort: str) -> list[str]:
     return [
         "codex", "exec", "--sandbox", "read-only", "--json",
         "-c", f"model_reasoning_effort={effort}",
-        "--prompt-file", "-",
+        "-",
     ]
 
 
