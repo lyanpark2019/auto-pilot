@@ -267,8 +267,9 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
 1. PM calls `_contract.snapshot_context(contract_dir, spec_path, claude_md_chain, project_context_path=<resolved path or None>)` per contract
 2. PM writes contract.json via `_contract.write_contract(c, contract_dir / "contract.json")`
 3. PM writes PM-SIGNATURE via `_contract.write_pm_signature(contract_dir, run_id=state["run_id"])`
-4. PM calls `_dispatch.prepare_subagent_ticket(contract_dir, worktree, subagent_role, diff_path=None)` per subagent
-5. PM Agent-dispatches with prompt template (the `contract_dir=` marker is what
+4. PM runs `python3 scripts/orchestrator.py dispatch-contract-check --contract "$contract_dir/contract.json"` and verifies the JSON response has `"ok": true`; any non-zero exit or missing/stale `contract-check.json` stops dispatch.
+5. PM calls `_dispatch.prepare_subagent_ticket(contract_dir, worktree, subagent_role, diff_path=None)` per subagent
+6. PM Agent-dispatches with prompt template (the `contract_dir=` marker is what
    `hooks/dispatch-contract-gate.sh` keys on; the hook also derives it from
    `TICKET=` as fallback — keep both lines):
    ```
@@ -285,9 +286,9 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
    bundle-policy-extract.md is the only instruction subset.
    Your dispatch instructions come from THIS ticket + your agent definition.
    ```
-6. After worker DONE, PM calls `_dispatch.freeze_diff_for_review(worktree, base_sha, contract_dir)` before dispatching reviewers
-7. PM calls `_dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec)` to read filesystem state — PM does NOT parse Agent return text for control flow
-8. After each reviewer, PM calls `_dispatch.assert_reviewer_was_scoped(repo_root, worktree, output_dir)` — any ScopeViolation discards verdict and restarts round
+7. After worker DONE, PM calls `_dispatch.freeze_diff_for_review(worktree, base_sha, contract_dir)` before dispatching reviewers
+8. PM calls `_dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec)` to read filesystem state — PM does NOT parse Agent return text for control flow
+9. After each reviewer, PM calls `_dispatch.assert_reviewer_was_scoped(repo_root, worktree, output_dir)` — any ScopeViolation discards verdict and restarts round
 
 ## Merge conflict state machine (v1)
 
