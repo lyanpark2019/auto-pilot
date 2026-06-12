@@ -7,8 +7,9 @@
 # If marker is PRESENT:
 #   1. (ⓓ-7③) Require <contract_dir>/contract-check.json with contract_sha256
 #      matching shasum -a 256 <contract_dir>/contract.json → else deny.
-#   2. Require <contract_dir>/PM-SIGNATURE to verify the MANIFEST + contract shas.
-#   3. (ⓓ-9) Check .planning/auto-pilot/preflight/phase-<N>.json:
+#   2. Require contract-check.json pm_signature status to match PM-SIGNATURE.
+#   3. Require <contract_dir>/PM-SIGNATURE to verify the MANIFEST + contract shas.
+#   4. (ⓓ-9) Check .planning/auto-pilot/preflight/phase-<N>.json:
 #      - exists, fresh (TTL 900s via generated_ts), head_sha == current HEAD
 #      - N parsed from contract.json id/phase field
 #      → else deny "run scripts/pm_preflight.sh"
@@ -146,6 +147,24 @@ except Exception:
 if [[ -z "$stored_sha" ]] || [[ "$stored_sha" != "$expected_sha" ]]; then
   deny "contract_sha256 mismatch in $check_file (expected=$expected_sha, stored=$stored_sha). Run orchestrator dispatch-contract-check first."
 fi
+
+check_status_result=$(PYTHONPATH="$plugin_root/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 - "$contract_dir" <<'PY' 2>&1
+import json
+import sys
+from pathlib import Path
+
+import _contract_check
+
+try:
+    contract_dir = Path(sys.argv[1])
+    artifact = json.loads((contract_dir / "contract-check.json").read_text())
+    _contract_check.assert_artifact_fresh(contract_dir, artifact)
+except Exception as exc:
+    print(f"{type(exc).__name__}: {exc}")
+    sys.exit(1)
+print("OK")
+PY
+) || deny "contract-check PM-SIGNATURE status invalid in $contract_dir: $check_status_result"
 
 signature_result=$(PYTHONPATH="$plugin_root/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 - "$contract_dir" <<'PY' 2>&1
 import sys

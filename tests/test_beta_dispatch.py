@@ -34,7 +34,19 @@ def _make_contract_dir(tmp_path: Path) -> Path:
     return dest
 
 
-def _write_contract_check(contract_dir: Path) -> None:
+def _signature_status(contract_dir: Path) -> dict[str, object]:
+    import _contract
+    sig_path = contract_dir / "PM-SIGNATURE"
+    sig = json.loads(sig_path.read_text())
+    return {
+        "verified": True,
+        "signature_sha256": _contract._sha256(sig_path.read_bytes()),
+        "contract_sha256": sig["contract_sha"],
+        "manifest_sha256": sig["manifest_sha"],
+    }
+
+
+def _write_contract_check(contract_dir: Path, *, include_signature: bool = True) -> None:
     """Write a valid contract-check.json beside the contract file."""
     import hashlib
     contract_path = contract_dir / "contract.json"
@@ -46,6 +58,8 @@ def _write_contract_check(contract_dir: Path) -> None:
         "schema_version": schema_v,
         "result": "pass",
     }
+    if include_signature:
+        artifact["pm_signature"] = _signature_status(contract_dir)
     (contract_dir / "contract-check.json").write_text(
         json.dumps(artifact, indent=2, sort_keys=True) + "\n"
     )
@@ -100,6 +114,21 @@ class TestDispatchContractCheck:
         assert len(artifact["contract_sha256"]) == 64
         assert "checked_at" in artifact
         assert artifact["schema_version"] == 2
+        sig = artifact["pm_signature"]
+        assert sig["verified"] is True
+        assert len(sig["signature_sha256"]) == 64
+        assert sig["contract_sha256"] == artifact["contract_sha256"]
+        assert len(sig["manifest_sha256"]) == 64
+
+    def test_missing_signature_returns_1_without_pass_artifact(self, in_tmp_cwd, tmp_path):
+        import orchestrator
+        contract_dir = _make_contract_dir(tmp_path)
+        (contract_dir / "PM-SIGNATURE").unlink()
+        rc = orchestrator.main([
+            "dispatch-contract-check", "--contract", str(contract_dir / "contract.json")
+        ])
+        assert rc == 1
+        assert not (contract_dir / "contract-check.json").exists()
 
     def test_missing_contract_returns_2(self, in_tmp_cwd, tmp_path):
         import orchestrator
@@ -140,6 +169,34 @@ class TestDispatchContractCheck:
             "result": "pass",
         }) + "\n")
         with pytest.raises(_dispatch.ContractCheckMissing, match="modified"):
+            _dispatch.prepare_subagent_ticket(
+                contract_dir=contract_dir,
+                worktree=tmp_path / "wt",
+                subagent_role="worker",
+                skip_preflight=True,
+            )
+
+    def test_layer2_gate_legacy_artifact_missing_signature_status(self, tmp_path):
+        import _dispatch
+        contract_dir = _make_contract_dir(tmp_path)
+        _write_contract_check(contract_dir, include_signature=False)
+        with pytest.raises(_dispatch.ContractCheckMissing, match="PM-SIGNATURE status"):
+            _dispatch.prepare_subagent_ticket(
+                contract_dir=contract_dir,
+                worktree=tmp_path / "wt",
+                subagent_role="worker",
+                skip_preflight=True,
+            )
+
+    def test_layer2_gate_stale_signature_status(self, tmp_path):
+        import _dispatch
+        contract_dir = _make_contract_dir(tmp_path)
+        _write_contract_check(contract_dir)
+        sig_path = contract_dir / "PM-SIGNATURE"
+        sig = json.loads(sig_path.read_text())
+        sig["run_id"] = "tampered-after-check"
+        sig_path.write_text(json.dumps(sig) + "\n")
+        with pytest.raises(_dispatch.ContractCheckMissing, match="PM-SIGNATURE modified"):
             _dispatch.prepare_subagent_ticket(
                 contract_dir=contract_dir,
                 worktree=tmp_path / "wt",

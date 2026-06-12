@@ -35,15 +35,23 @@ def _make_contract_dir(tmp_path: Path) -> Path:
 
 def _write_contract_check(contract_dir: Path) -> None:
     """Write a valid contract-check.json beside the contract file."""
-    import hashlib
+    import _contract
     contract_path = contract_dir / "contract.json"
-    sha = hashlib.sha256(contract_path.read_bytes()).hexdigest()
+    sig_path = contract_dir / "PM-SIGNATURE"
+    sig = json.loads(sig_path.read_text())
+    sha = _contract._sha256(contract_path.read_bytes())
     schema_v = json.loads(contract_path.read_text()).get("schema_version", 2)
     artifact = {
         "contract_sha256": sha,
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "schema_version": schema_v,
         "result": "pass",
+        "pm_signature": {
+            "verified": True,
+            "signature_sha256": _contract._sha256(sig_path.read_bytes()),
+            "contract_sha256": sig["contract_sha"],
+            "manifest_sha256": sig["manifest_sha"],
+        },
     }
     (contract_dir / "contract-check.json").write_text(
         json.dumps(artifact, indent=2, sort_keys=True) + "\n"

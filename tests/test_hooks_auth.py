@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hashlib
 import os
 
 import json
@@ -42,6 +43,28 @@ def _deny_json(stdout: str) -> dict:
     data = json.loads(stdout)
     assert data["hookSpecificOutput"]["permissionDecision"] == "deny"
     return data
+
+
+def _write_signed_contract_check(contract_dir: Path, contract_json: Path) -> str:
+    sha = hashlib.sha256(contract_json.read_bytes()).hexdigest()
+    bundle = contract_dir / "context-bundle"
+    bundle.mkdir()
+    manifest = bundle / "MANIFEST.txt"
+    manifest.write_text("fixture manifest\n")
+    manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    sig_path = contract_dir / "PM-SIGNATURE"
+    sig_path.write_text(json.dumps({"contract_sha": sha, "manifest_sha": manifest_sha}) + "\n")
+    (contract_dir / "contract-check.json").write_text(json.dumps({
+        "contract_sha256": sha,
+        "result": "pass",
+        "pm_signature": {
+            "verified": True,
+            "signature_sha256": hashlib.sha256(sig_path.read_bytes()).hexdigest(),
+            "contract_sha256": sha,
+            "manifest_sha256": manifest_sha,
+        },
+    }))
+    return sha
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -229,13 +252,7 @@ class TestDispatchContractGate:
         contract_json = contract_dir / "contract.json"
         contract_json.write_text('{"id": "phase-1", "phase": "1"}')
 
-        # Compute real sha
-        sha = subprocess.check_output(
-            ["shasum", "-a", "256", str(contract_json)], text=True
-        ).split()[0]
-        (contract_dir / "contract-check.json").write_text(
-            json.dumps({"contract_sha256": sha})
-        )
+        _write_signed_contract_check(contract_dir, contract_json)
 
         # Get current HEAD (may fail in a non-git cwd)
         try:
@@ -264,8 +281,8 @@ class TestDispatchContractGate:
             cwd=tmp_path,
         )
         assert r.returncode == 0
-        # With correct sha + fresh preflight: allow (head_sha mismatch only if hook reads
-        # different git HEAD than what we wrote — acceptable in isolated tmp_path context)
+        # With correct sha + signature status + fresh preflight: allow.
+        assert "deny" not in r.stdout
 
     # ── TICKET= marker (the REAL dispatch prompt shape) fires the gate ──
 
@@ -329,12 +346,7 @@ class TestDispatchContractGate:
         contract_json = contract_dir / "contract.json"
         contract_json.write_text('{"id": "phase-2", "phase": "2"}')
 
-        sha = subprocess.check_output(
-            ["shasum", "-a", "256", str(contract_json)], text=True
-        ).split()[0]
-        (contract_dir / "contract-check.json").write_text(
-            json.dumps({"contract_sha256": sha})
-        )
+        _write_signed_contract_check(contract_dir, contract_json)
 
         # Write stale preflight (> 900s old), ISO-8601 like the real producer
         preflight_dir = tmp_path / ".planning" / "auto-pilot" / "preflight"

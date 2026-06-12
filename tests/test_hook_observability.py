@@ -247,9 +247,6 @@ class TestDispatchContractGateFailOpen:
         sha = subprocess.check_output(
             ["shasum", "-a", "256", str(contract_json)], text=True
         ).split()[0]
-        (contract_dir / "contract-check.json").write_text(
-            json.dumps({"contract_sha256": sha})
-        )
         bundle = contract_dir / "context-bundle"
         bundle.mkdir()
         manifest = bundle / "MANIFEST.txt"
@@ -257,9 +254,21 @@ class TestDispatchContractGateFailOpen:
         manifest_sha = subprocess.check_output(
             ["shasum", "-a", "256", str(manifest)], text=True
         ).split()[0]
-        (contract_dir / "PM-SIGNATURE").write_text(
-            json.dumps({"contract_sha": sha, "manifest_sha": manifest_sha})
-        )
+        sig_path = contract_dir / "PM-SIGNATURE"
+        sig_path.write_text(json.dumps({"contract_sha": sha, "manifest_sha": manifest_sha}))
+        sig_sha = subprocess.check_output(
+            ["shasum", "-a", "256", str(sig_path)], text=True
+        ).split()[0]
+        (contract_dir / "contract-check.json").write_text(json.dumps({
+            "contract_sha256": sha,
+            "result": "pass",
+            "pm_signature": {
+                "verified": True,
+                "signature_sha256": sig_sha,
+                "contract_sha256": sha,
+                "manifest_sha256": manifest_sha,
+            },
+        }))
 
         r = _run_hook(
             self._hook(),
