@@ -53,7 +53,7 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
     if role == "codex-reviewer" and verdict == "ABSTAIN":
         meta = data.get("reviewer_meta")
         reason = str(meta.get("abstain_reason") or "") if isinstance(meta, dict) else ""
-        if reason:
+        if reason.strip():
             return None
         return f"{role}: verdict=ABSTAIN without reviewer_meta.abstain_reason"
     return f"{role}: verdict={verdict!r} (need APPROVE)"

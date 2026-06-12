@@ -213,3 +213,11 @@ def test_codex_review_missing_still_blocks_in_abstain_era(tmp_path):
     cdir = _build_round(tmp_path, drop="codex-review")
     with pytest.raises(_evidence.EvidenceError, match="codex-reviewer: review.json missing"):
         _evidence.assert_round_evidence(cdir)
+
+
+def test_codex_abstain_whitespace_only_reason_blocks(tmp_path):
+    """Carry-in Task-3 review: whitespace-only abstain_reason is not a valid reason."""
+    cdir = _build_round(tmp_path, per_role_verdict={"codex-reviewer": "ABSTAIN"},
+                        abstain_reason="   ")
+    with pytest.raises(_evidence.EvidenceError, match="abstain_reason"):
+        _evidence.assert_round_evidence(cdir)
