@@ -9,15 +9,16 @@ APPROVE).
 
 Chain checks (in order):
 1. frozen.diff + .sha256 present and sha matches recomputed value.
-2. contract.json present and readable.
-3. Per role: ticket present and ticket.diff_sha256 == actual sha.
-4. Per role: review.json present and schema-valid.
-5. Per role: review.json reviewer field == role dir name (copy-across-roles guard).
-6. Verdict check: claude-reviewer APPROVE; codex-reviewer APPROVE or honest
+2. contract.json present and PM-SIGNATURE validates the context/contract shas.
+3. contract.json readable.
+4. Per role: ticket present and ticket.diff_sha256 == actual sha.
+5. Per role: review.json present and schema-valid.
+6. Per role: review.json reviewer field == role dir name (copy-across-roles guard).
+7. Verdict check: claude-reviewer APPROVE; codex-reviewer APPROVE or honest
    ABSTAIN (non-empty abstain_reason). APPROVE requires scope_check=PASS —
    scope_check=FAIL (contradictory evidence) and scope_check=SKIPPED (abstain-
    only field) both block.
-7. Per role: contract_id matches contract.json id.
+8. Per role: contract_id matches contract.json id.
 
 Principle: evidence over trust — the gate recomputes the diff SHA and refuses
 trust in any artifact it cannot verify. A MISSING/empty review.json is never
@@ -84,8 +85,9 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
 def assert_round_evidence(contract_dir: Path) -> None:
     """Raise EvidenceError unless contract_dir holds a complete evidence chain.
 
-    Chain: frozen.diff sha matches its recorded .sha256; both reviewer tickets
-    bind that sha; both review.json are schema-valid; review.json reviewer field
+    Chain: frozen.diff sha matches its recorded .sha256; PM-SIGNATURE binds
+    the context-bundle manifest and contract bytes; both reviewer tickets bind
+    that sha; both review.json are schema-valid; review.json reviewer field
     matches the role dir name (copy-across-roles guard); claude-reviewer APPROVE
     (with scope_check=PASS) and codex-reviewer APPROVE or honest ABSTAIN
     (non-empty abstain_reason); both carry the round's contract id.
@@ -100,6 +102,11 @@ def assert_round_evidence(contract_dir: Path) -> None:
         raise EvidenceError(f"{contract_dir}: missing frozen.diff or frozen.diff.sha256")
     if not contract_file.exists():
         raise EvidenceError(f"{contract_dir}: missing contract.json")
+    try:
+        _contract.verify_pm_signature(contract_dir)
+    except (OSError, json.JSONDecodeError, KeyError, TypeError,
+            _contract.PMSignatureMismatchError) as exc:
+        failures.append(f"PM-SIGNATURE invalid: {exc}")
 
     recorded_sha = sha_file.read_text().strip()
     actual_sha = _contract._sha256(frozen.read_bytes())
