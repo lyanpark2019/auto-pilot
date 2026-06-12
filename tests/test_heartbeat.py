@@ -72,3 +72,76 @@ def test_beat_cli(tmp_path):
         capture_output=True, text=True)
     assert rc.returncode == 0, rc.stderr
     assert json.loads((out / "status.json").read_text())["risk_tier"] == "high"
+
+
+# --- regression: P2 non-dict status.json ---
+
+def test_write_beat_list_shaped_existing_status(tmp_path):
+    """P2: existing status.json is a JSON list — write_beat must fresh-start, not crash."""
+    out = tmp_path / "o"
+    out.mkdir()
+    (out / "status.json").write_text("[1, 2, 3]")
+    _heartbeat.write_beat(out, "codex-reviewer", "review-start")
+    data = json.loads((out / "status.json").read_text())
+    assert data["role"] == "codex-reviewer"
+    assert data["started_at"]  # fresh started_at written
+
+
+def test_render_table_skips_list_shaped_status_keeps_valid(tmp_path):
+    """P2: round with one list-shaped + one valid status.json — table includes valid role only."""
+    root = tmp_path / "contracts"
+    round_dir = root / "iter-1/phase-1/contract-1/round-1"
+    # valid reviewer
+    valid_out = round_dir / "outputs" / "claude-reviewer"
+    valid_out.mkdir(parents=True)
+    _heartbeat.write_beat(valid_out, "claude-reviewer", "review-start", risk_tier="low")
+    # list-shaped reviewer
+    bad_out = round_dir / "outputs" / "codex-reviewer"
+    bad_out.mkdir(parents=True)
+    (bad_out / "status.json").write_text("[1, 2, 3]")
+    table = _heartbeat.render_table(root)
+    assert "claude-reviewer" in table
+    assert "codex-reviewer" not in table
+
+
+# --- regression: P3 naive (tz-less) timestamps ---
+
+def test_write_beat_naive_started_at_no_crash(tmp_path):
+    """P3: existing status.json has naive ISO started_at — write_beat must not raise TypeError."""
+    out = tmp_path / "o"
+    out.mkdir()
+    existing = {
+        "role": "claude-reviewer",
+        "started_at": "2026-06-12T00:00:00",
+        "elapsed_s": 0,
+        "last_beat": "2026-06-12T00:00:00",
+        "phase": "review-start",
+        "risk_tier": None,
+    }
+    (out / "status.json").write_text(json.dumps(existing))
+    # Must not raise; shape must be intact
+    _heartbeat.write_beat(out, "claude-reviewer", "review-retry")
+    data = json.loads((out / "status.json").read_text())
+    assert data["role"] == "claude-reviewer"
+    assert data["started_at"]
+    assert data["elapsed_s"] >= 0
+
+
+def test_render_table_naive_last_beat_shows_question_mark(tmp_path):
+    """P3: status.json with naive last_beat — render_table shows '?' beat-age, no crash."""
+    root = tmp_path / "contracts"
+    round_dir = root / "iter-1/phase-1/contract-1/round-1"
+    out = round_dir / "outputs" / "claude-reviewer"
+    out.mkdir(parents=True)
+    payload = {
+        "role": "claude-reviewer",
+        "started_at": "2026-06-12T00:00:00",
+        "elapsed_s": 10,
+        "last_beat": "2026-06-12T00:00:00",  # naive — no tz
+        "phase": "review-start",
+        "risk_tier": "low",
+    }
+    (out / "status.json").write_text(json.dumps(payload))
+    table = _heartbeat.render_table(root)
+    assert "claude-reviewer" in table
+    assert "?" in table  # beat-age falls back to "?"

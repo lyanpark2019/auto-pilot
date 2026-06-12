@@ -44,7 +44,9 @@ def write_beat(
     started_at: str = ""
     if target.exists():
         try:
-            started_at = str(json.loads(target.read_text()).get("started_at") or "")
+            parsed = json.loads(target.read_text())
+            if isinstance(parsed, dict):
+                started_at = str(parsed.get("started_at") or "")
         except (json.JSONDecodeError, OSError):
             started_at = ""
     now = _now()
@@ -54,7 +56,7 @@ def write_beat(
         elapsed = max(
             int((now - datetime.fromisoformat(started_at)).total_seconds()), 0
         )
-    except ValueError:
+    except (ValueError, TypeError):
         started_at, elapsed = _iso(now), 0
     payload: dict[str, Any] = {
         "role": role,
@@ -77,6 +79,8 @@ def _round_rows(round_dir: Path, root: Path) -> list[list[str]]:
             data = json.loads(status_file.read_text())
         except (json.JSONDecodeError, OSError):
             continue
+        if not isinstance(data, dict):
+            continue
         try:
             beat_age = int(
                 (
@@ -85,7 +89,7 @@ def _round_rows(round_dir: Path, root: Path) -> list[list[str]]:
                 ).total_seconds()
             )
             age = f"{beat_age}s"
-        except ValueError:
+        except (ValueError, TypeError):
             age = "?"
         done = "yes" if (status_file.parent / "done.marker").exists() else "no"
         rows.append(
