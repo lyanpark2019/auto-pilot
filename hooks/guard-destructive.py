@@ -233,9 +233,11 @@ def main() -> None:
     """Run the guard-destructive command-line entry point."""
     payload = _load_payload(sys.stdin.read())
     if payload is None:
+        print("[hook:guard-destructive] fail-open: unparseable or non-mapping stdin", file=sys.stderr)
         sys.exit(0)
     command = _bash_command(payload)
     if command is None:
+        print("[hook:guard-destructive] fail-open: not a Bash tool call or missing command key", file=sys.stderr)
         sys.exit(0)
     now = datetime.now()
     scanned = scrub_text_arguments(command)

@@ -133,8 +133,71 @@ def run_case(label: str, expect: str, command: str | None) -> bool:
     return pass_fail == "PASS"
 
 
+def run_raw(label: str, raw_stdin: str, expect_allow: bool, expect_advisory: bool) -> bool:
+    """Feed raw (potentially garbage) stdin and check exit 0 + advisory presence."""
+    with tempfile.TemporaryDirectory() as isolated_tmp:
+        env = os.environ.copy()
+        env["TMPDIR"] = isolated_tmp
+        result = subprocess.run(
+            ["python3", HOOK],
+            input=raw_stdin,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    stdout = result.stdout.strip()
+    stderr = result.stderr.strip()
+    exited_zero = result.returncode == 0
+    is_allow = exited_zero and "deny" not in stdout
+    advisory_present = "[hook:guard-destructive] fail-open" in stderr
+    ok = (is_allow == expect_allow) and (advisory_present == expect_advisory)
+    icon = "OK  " if ok else "FAIL"
+    print(
+        f"[{icon}] {label:50s}"
+        f"  allow={'Y' if is_allow else 'N'}(want={'Y' if expect_allow else 'N'})"
+        f"  advisory={'Y' if advisory_present else 'N'}(want={'Y' if expect_advisory else 'N'})"
+    )
+    if not ok:
+        print(f"       stdout: {stdout!r}")
+        print(f"       stderr: {stderr!r}")
+        print(f"       rc: {result.returncode}")
+    return ok
+
+
 def main() -> None:
     results = [run_case(*c) for c in CASES]
+
+    # ── Advisory / fail-open cases ──────────────────────────────────────────
+    # N. Garbage stdin → fail-open ALLOW + advisory on stderr
+    results.append(run_raw(
+        "N garbage stdin → ALLOW + advisory",
+        raw_stdin="not valid json {{{{",
+        expect_allow=True,
+        expect_advisory=True,
+    ))
+    # O. Valid JSON but non-mapping (list) → _load_payload returns None → advisory
+    results.append(run_raw(
+        "O non-mapping JSON (list) → ALLOW + advisory",
+        raw_stdin="[1, 2, 3]",
+        expect_allow=True,
+        expect_advisory=True,
+    ))
+    # P. Valid JSON, non-Bash tool_name → _bash_command returns None → advisory
+    #    (shape mismatch: no "command" key, tool_name != "Bash")
+    results.append(run_raw(
+        "P Edit tool payload → ALLOW + advisory (shape mismatch)",
+        raw_stdin=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "/tmp/x"}}),
+        expect_allow=True,
+        expect_advisory=True,
+    ))
+    # Q. Valid Bash tool, safe command → legit-allow, NO advisory (no spam)
+    results.append(run_raw(
+        "Q legit-allow safe Bash command → ALLOW + NO advisory",
+        raw_stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "git status"}}),
+        expect_allow=True,
+        expect_advisory=False,
+    ))
+
     passed = sum(results)
     total = len(results)
     print(f"\n{passed}/{total} passed")

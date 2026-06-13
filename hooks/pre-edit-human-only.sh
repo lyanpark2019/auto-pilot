@@ -44,7 +44,11 @@ except Exception:
 ' 2>/dev/null || echo "")
 
 if [[ -z "$file_path" ]]; then
-  # Unparseable or no file_path → allow
+  # Distinguish: truly unparseable stdin (fail-open advisory) vs valid payload
+  # with no file_path key (legit non-edit tool call — silent allow).
+  if ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+    printf '[hook:pre-edit-human-only] fail-open: unparseable stdin\n' >&2
+  fi
   exit 0
 fi
 
