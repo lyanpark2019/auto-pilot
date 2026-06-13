@@ -247,6 +247,8 @@ VERDICT: APPROVE or REJECT + findings table.
 }
 ```
 
+`phases[].approved` is set by `orchestrator.py phase-end --status success` to the count of contracts whose evidence chain passed `_evidence.assert_round_evidence`; it stays 0 on `--status failed` or when the evidence gate is bypassed (`AUTO_PILOT_SKIP_EVIDENCE=1`).
+
 ## Dispatch-manifest gate (v2)
 
 Before dispatching any worker, verify the contract manifest is complete. Required fields:
