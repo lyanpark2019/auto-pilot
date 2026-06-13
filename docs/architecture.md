@@ -77,7 +77,8 @@ Structured layer under loop (b): `scripts/learning_miner.py` + `scripts/_improve
 Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
 
 - **Discover-only** — writes `state=candidate` tickets; acting on a `promotable` verdict stays
-  human. Full FSM (candidate→…→promoted) declared in the schema for format stability, not enforced.
+  human. Full FSM (candidate→…→promoted) declared in the schema; Phase-1 (2026-06-13) made the
+  later transitions code-enforced — see the Phase-1 bullet below (`_promotion.py:TRANSITIONS`).
 - **Durable ledger OUTSIDE the target repo** — `~/.claude/projects/<slug>/improvements/<fp>.json`.
   Brownfield driver must never pollute the driven repo's VCS; `--commit-to` is the explicit opt-in.
   Evidence is self-contained (snippet + run_id, never a dangling `path:line` into gitignored scratch).

@@ -110,7 +110,7 @@ Target repo TBD by user. Step 3 relevance digest stays deferred-measured until G
 - Freshness → diff-relevance / `--update`, not sha-equality.
 - Schema → `project_context` optional + fail-closed verify + schema_version 2.
 
-**Still open:**
+**Recently resolved (2026-06-13):**
 - ~~Q4 verify integration~~ **DECIDED 2026-06-13** — see decision record below.
 - ~~Review delegation~~ **DECIDED 2026-06-13** — see decision record below.
 
