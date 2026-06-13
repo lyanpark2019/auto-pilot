@@ -73,6 +73,30 @@ class TestLoadTickets:
         with pytest.raises(PromotionError):
             load_tickets(tmp_path)
 
+    def test_partial_mode_skips_corrupt_returns_valid(self, tmp_path, capsys):
+        """partial=True skips malformed tickets; default still raises; mutate still raises."""
+        _seed_ticket(tmp_path, FP_A)
+        corrupt_fp = "c" * 64
+        (tmp_path / f"{corrupt_fp}.json").write_text("{not json")
+
+        # RED: partial=True must return only the valid ticket and warn on stderr
+        result = load_tickets(tmp_path, partial=True)
+        assert len(result) == 1
+        assert result[0]["fingerprint"] == FP_A
+        captured = capsys.readouterr()
+        assert "warning" in captured.err.lower()
+        assert corrupt_fp[:8] in captured.err or "malformed" in captured.err.lower()
+        # warning must NOT leak to stdout — improvements-list --json writes JSON there
+        assert captured.out == ""
+
+        # GREEN characterization: default=False still raises on malformed ledger
+        with pytest.raises(PromotionError):
+            load_tickets(tmp_path)
+
+        # GREEN characterization: mutate/resolve on corrupt fingerprint still raises
+        with pytest.raises(PromotionError):
+            set_gate_field(tmp_path, corrupt_fp, "tests_pass", True)
+
 
 class TestResolveFingerprint:
     def test_unique_prefix_resolves(self, tmp_path):
