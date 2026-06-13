@@ -170,9 +170,12 @@ auto-pilot/
 └── docs/
     ├── architecture.md (this file) + master-plan.md + perf-budget.md + 7-phase-template.md
     ├── asset-charter.md               # pillar→asset mapping SoT
+    ├── onboarding/README.md           # AI/developer start path: architecture map, task routing, graphify commands (shipped 2026-06-07); What/Why discipline: graphify is the What (current code), architecture/ADR docs are the Why (rationale)
     ├── history/                       # distilled changelogs
     └── specs/
 ```
+
+`skills/auto-pilot/tests/skill-snippets.bats` pins load-bearing Step 7 (reviewer registry check) and Step 8 (codex sandbox probe) fenced snippets in `SKILL.md` (PR#33, 2026-06-12); wired into CI alongside the ARL and setup-harness bats suites.
 
 
 ## State
@@ -280,6 +283,7 @@ Regression pins: `tests/test_pm_protocol_contract_dispatch.py` asserts `dispatch
 1. `review-input/frozen.diff` exists; recomputed SHA-256 == `review-input/frozen.diff.sha256` content.
 2. Both `tickets/{codex-reviewer,claude-reviewer}.json` exist with `diff_sha256` equal to that value.
 3. Both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist, schema-valid, `contract_id` matches the round. Verdict requirement (per `scripts/_evidence.py` docstring lines 17–20, CLAUDE.md module table): claude-reviewer must be APPROVE; codex-reviewer may be APPROVE or honest ABSTAIN (verdict `ABSTAIN` + non-empty `reviewer_meta.abstain_reason`) — codex unavailability never blocks, a codex REJECT still does. Any APPROVE from either reviewer additionally requires `scope_check=PASS`.
+4. `PM-SIGNATURE` exists and `_contract.verify_pm_signature(contract_dir)` passes — missing, unreadable, or tampered signature converts to `EvidenceError` (shipped PR#34, 2026-06-12). `scripts/_contract_check.py` is the single producer for `contract-check.json`; it records `pm_signature.verified`, `pm_signature.signature_sha256`, `pm_signature.contract_sha256`, and `pm_signature.manifest_sha256` so a stale or legacy artifact is detectable before dispatch. `hooks/dispatch-contract-gate.sh` also verifies the signature-status fields before its independent `PM-SIGNATURE` recomputation (PR#35).
 
 `scripts/orchestrator.py cmd_phase_end` calls `_evidence.gate_phase_end(contracts_root)`, which internally locates the latest-round dirs and runs `assert_round_evidence` on each. Failure → exit 2, `BLOCKED` stderr, state untouched. `AUTO_PILOT_SKIP_EVIDENCE=1` escape hatch exists for unit tests that fabricate state without contract dirs (test-only, never for live runs).
 
