@@ -46,8 +46,12 @@ if [[ -z "$prompt" ]] && ! printf '%s' "$payload" | python3 -c 'import sys,json;
   exit 0
 fi
 
-# Extract contract_dir from prompt (marker: contract_dir=<path>)
-contract_dir=$(printf '%s' "$prompt" | grep -oE 'contract_dir=[^[:space:]]+' | head -1 | sed 's/contract_dir=//' || echo "")
+# Extract contract_dir from prompt (marker: contract_dir=<path>).
+# Anchored to line-start (optional leading whitespace only) so a mid-line prose
+# mention (e.g. a spec or the hook's own source explaining the protocol) does NOT
+# trip the gate.  Real pm-orchestrator dispatches always emit "contract_dir=…" as
+# a standalone line — see agents/pm-orchestrator.md lines 278-279.
+contract_dir=$(printf '%s' "$prompt" | grep -oE '^[[:space:]]*contract_dir=[^[:space:]]+' | head -1 | sed 's/^[[:space:]]*contract_dir=//' || echo "")
 # Shape-gate: a real pm-orchestrator dispatch always has contract.json present.
 # If the extracted path has none, the mention is prose (e.g. a spec explaining the
 # protocol) — clear it and fall through so no false DENY is emitted.
@@ -70,7 +74,9 @@ fi
 # above (lines 51-56) clears the value when no contract.json is present at the path,
 # so prose mentions of contract_dir= without a real contract tree fall through here.
 if [[ -z "$contract_dir" ]]; then
-  ticket_path=$(printf '%s' "$prompt" | grep -oE 'TICKET=[^[:space:]]+' | head -1 | sed 's/TICKET=//' || echo "")
+  # Anchored to line-start — a mid-line prose mention of TICKET=… (e.g. in a
+  # planning doc or the hook's own source) must not trigger the dispatch gate.
+  ticket_path=$(printf '%s' "$prompt" | grep -oE '^[[:space:]]*TICKET=[^[:space:]]+' | head -1 | sed 's/^[[:space:]]*TICKET=//' || echo "")
   # Require the pm-orchestrator canonical shape: */tickets/*.json.
   # Any non-matching value (prose mention, JIRA key, doc path, …) → clear and
   # fall through; do NOT treat as a dispatch.

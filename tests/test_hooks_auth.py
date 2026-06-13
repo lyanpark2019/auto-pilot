@@ -216,7 +216,8 @@ class TestDispatchContractGate:
         r = _run_hook(
             self._hook(hooks_dir),
             {"tool_name": "Task", "tool_input": {
-                "prompt": f"Worker task. contract_dir={contract_dir} Build the alpha module."
+                # Marker at line-start — pm-orchestrator.md template (lines 278-279)
+                "prompt": f"contract_dir={contract_dir}\nBuild the alpha module."
             }},
             cwd=tmp_path,
         )
@@ -237,7 +238,8 @@ class TestDispatchContractGate:
         r = _run_hook(
             self._hook(hooks_dir),
             {"tool_name": "Task", "tool_input": {
-                "prompt": f"Worker task. contract_dir={contract_dir}"
+                # Marker at line-start — pm-orchestrator.md template (lines 278-279)
+                "prompt": f"contract_dir={contract_dir}"
             }},
             cwd=tmp_path,
         )
@@ -276,7 +278,8 @@ class TestDispatchContractGate:
         r = _run_hook(
             self._hook(hooks_dir),
             {"tool_name": "Task", "tool_input": {
-                "prompt": f"Worker task. contract_dir={contract_dir}"
+                # Marker at line-start — pm-orchestrator.md template (lines 278-279)
+                "prompt": f"contract_dir={contract_dir}"
             }},
             cwd=tmp_path,
         )
@@ -361,7 +364,8 @@ class TestDispatchContractGate:
         r = _run_hook(
             self._hook(hooks_dir),
             {"tool_name": "Task", "tool_input": {
-                "prompt": f"Worker task. contract_dir={contract_dir}"
+                # Marker at line-start — pm-orchestrator.md template (lines 278-279)
+                "prompt": f"contract_dir={contract_dir}"
             }},
             cwd=tmp_path,
         )
