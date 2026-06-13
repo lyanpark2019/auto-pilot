@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import subprocess
 import sys
 import time as _time
@@ -46,12 +45,6 @@ SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 TICKET_SCHEMA_PATH = SCHEMAS_DIR / "ticket.schema.json"
 _VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer",
                 "review-gatekeeper", "tech-critic-lead"}
-
-# Env var mirrors AutoPilotConfig.preflight_ttl_sec (scripts/_config.py).
-# Module-level read chosen deliberately: _dispatch does not instantiate
-# AutoPilotConfig (heavyweight import chain not needed here), so we read the
-# same env var directly to stay DRY without introducing a circular dependency.
-PREFLIGHT_TTL_SEC = int(os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC", "900"))
 
 _TICKET_VALIDATOR: jsonschema.Draft202012Validator | None = None
 JsonObject = dict[str, object]
@@ -129,13 +122,15 @@ def _locate_repo_root(contract_dir: Path) -> Path:
 
 def _check_preflight_ttl(preflight: JsonObject) -> None:
     """Raise PreflightError if preflight artifact is expired or has invalid timestamp."""
+    import _config  # lazy: avoid eager _config import in the dispatch hot path
+    ttl_sec = _config.preflight_ttl_sec()
     generated_ts_str = _as_str(preflight.get("generated_ts", ""))
     try:
         generated_dt = datetime.fromisoformat(generated_ts_str)
         age_sec = (datetime.now(timezone.utc) - generated_dt).total_seconds()
-        if age_sec > PREFLIGHT_TTL_SEC:
+        if age_sec > ttl_sec:
             raise PreflightError(
-                f"Preflight artifact too old: {age_sec:.0f}s > TTL {PREFLIGHT_TTL_SEC}s; "
+                f"Preflight artifact too old: {age_sec:.0f}s > TTL {ttl_sec}s; "
                 f"re-run `bash scripts/pm_preflight.sh`"
             )
     except (ValueError, TypeError) as exc:

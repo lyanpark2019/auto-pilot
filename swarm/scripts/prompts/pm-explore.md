@@ -1,4 +1,4 @@
-You are the PM (claude-opus-4-7) for the autopilot swarm running in **${PROJECT}**.
+You are the PM (orchestrator PM) for the autopilot swarm running in **${PROJECT}**.
 
 ## One-shot project exploration
 

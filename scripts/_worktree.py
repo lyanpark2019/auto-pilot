@@ -99,6 +99,7 @@ class ApplyResult:
     main_sha: str | None = None
     pre_apply_head: str | None = None
     conflict_files: tuple[str, ...] = ()
+    trailers_applied: bool = True
 
 
 class WorktreeManager:
@@ -278,8 +279,11 @@ class WorktreeManager:
         )
         if amend.returncode != 0:
             # Best-effort: leave applied commit as-is (no trailer chain)
+            event("worktree.amend.failed", contract_id=contract["id"],
+                  returncode=amend.returncode,
+                  stderr=(amend.stderr or "").strip().replace("\n", " ")[:200])
             return ApplyResult(status="applied", main_sha=self._head_sha(),
-                               pre_apply_head=pre)
+                               pre_apply_head=pre, trailers_applied=False)
         return ApplyResult(status="applied", main_sha=self._head_sha(),
                            pre_apply_head=pre)
 

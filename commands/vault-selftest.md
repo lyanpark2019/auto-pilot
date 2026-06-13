@@ -42,5 +42,5 @@ Exit 0 on pass, 1 on any failure.
 Add to GitHub Actions:
 ```yaml
 - name: Plugin selftest
-  run: python3 scripts/selftest.py
+  run: python3 vault/scripts/selftest.py
 ```

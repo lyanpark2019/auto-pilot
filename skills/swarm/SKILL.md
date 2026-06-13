@@ -41,10 +41,10 @@ interactive Q&A. Output drives `start.sh`.
 {
   "session_name": "autopilot-<basename>",
   "pm": {
-    "model": "claude-opus-4-7"
+    "model": "claude-opus-4-8"
   },
   "workers": [
-    {"id": 1, "engine": "claude", "model": "claude-opus-4-7",  "role": "architecture-review"},
+    {"id": 1, "engine": "claude", "model": "claude-opus-4-8",  "role": "architecture-review"},
     {"id": 2, "engine": "claude", "model": "claude-sonnet-4-6","role": "general"},
     {"id": 3, "engine": "claude", "model": "claude-sonnet-4-6","role": "general"},
     {"id": 4, "engine": "claude", "model": "claude-haiku-4-5", "role": "general"},
@@ -76,7 +76,7 @@ interactive Q&A. Output drives `start.sh`.
 
 ### Constraints
 
-- **PM model is forced to `claude-opus-4-7`** — never let the user override it.
+- **PM model is forced to `claude-opus-4-8`** — never let the user override it.
 - Worker count must be in `[4, 10]`.
 - Per worker, `engine ∈ {claude, codex}`, `model` must match engine
   (claude-* for claude, gpt-5.5 for codex). `role` must match `^[a-z0-9][a-z0-9-]*$`.
@@ -93,7 +93,7 @@ Apply BEFORE schema check. Always normalize aliases:
 
 | User says | Canonical |
 |---|---|
-| `opus`, `claude-opus`, `o4` | `claude-opus-4-7` |
+| `opus`, `claude-opus`, `o4` | `claude-opus-4-8` |
 | `sonnet`, `claude-sonnet` | `claude-sonnet-4-6` |
 | `haiku`, `claude-haiku` | `claude-haiku-4-5` |
 | `codex`, `gpt`, `gpt-5.5` | engine `codex` + model `gpt-5.5` (top tier, default) |
@@ -366,13 +366,13 @@ when no swarm is up.
      Copies the score json + `results/` artifacts into `arm-a/`.
    - **Arm B (claude opus solo)**: in a throwaway worktree on branch
      `bench/b/<ts>/rN`, runs
-     `timeout 600 claude --model claude-opus-4-7 -p --dangerously-skip-permissions "<task>"`.
+     `timeout 600 claude --model claude-opus-4-8 -p --dangerously-skip-permissions "<task>"`.
    - **Arm C (codex solo)**: in a throwaway worktree on branch `bench/c/<ts>/rN`,
      runs `timeout 600 codex exec --model gpt-5.5 -c model_reasoning_effort="xhigh" --sandbox workspace-write --skip-git-repo-check "<task>"`.
    - For each solo arm: commits the result (`--allow-empty`), captures
      `diff-rN.patch` (vs `HEAD~1`, or empty-tree on first commit), records
      `wall_seconds_all`.
-   - **Scores arms B/C** by spawning `claude --model claude-opus-4-7 -p` to run
+   - **Scores arms B/C** by spawning `claude --model claude-opus-4-8 -p` to run
      `Skill(quality-eval)` on the last-rep worktree, capturing
      `arm-{b,c}/quality-eval.md` (same rubric as the PM, so arms compare directly).
    - **Aggregates** per-arm median wall time (`median()` helper — numeric sort,

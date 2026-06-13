@@ -100,9 +100,10 @@ print(cmd_val)
     # token after git) stays allowed.  Trailing boundary stops prefix FPs
     # (`git commitlint`).
     re_git='(/[^ ]*/)?\\?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+(commit|push|reset|checkout|stash|am|rebase|merge|worktree|restore|clean)([[:space:]]|$)'
-    re_bin='(rm|mv|chmod|chown|tee|curl|wget|ssh|scp|rsync)[[:space:]]'
-    re_inplace='(sed|awk)[[:space:]]+-i'
-    if echo "$cmd" | grep -qE "(^|[[:space:]]|/)($re_git|$re_bin|$re_inplace)"; then
+    re_bin='(rm|mv|chmod|chown|tee|curl|wget|ssh|scp|rsync|cp|ln|dd|install|truncate)[[:space:]]'
+    re_inplace='(sed|awk)[[:space:]]+-i|(perl|ruby|php)[[:space:]]+(-[^[:space:]]*[ie])|(python[0-9.]*)[[:space:]]+(-[^[:space:]]*c)'
+    re_redir='((^|[^&])[0-9]*>>?[[:space:]]*[^&[:space:]]|&>>?[[:space:]]*[^&[:space:]])'
+    if echo "$cmd" | grep -qE "(^|[[:space:]]|/)($re_git|$re_bin|$re_inplace)" || echo "$cmd" | grep -qE "$re_redir"; then
       echo "auto-pilot: BLOCKED reviewer ($role) Bash mutation: $cmd" >&2
       exit 2
     fi

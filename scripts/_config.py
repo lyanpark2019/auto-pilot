@@ -60,6 +60,25 @@ def _check_float_bounds(
         raise ValueError(f"{name}={value!r} is out of range: must be <= {le}")
 
 
+PREFLIGHT_TTL_DEFAULT = 900
+PREFLIGHT_TTL_MIN = 60
+PREFLIGHT_TTL_MAX = 86_400
+
+
+def preflight_ttl_sec() -> int:
+    """Resolve AUTO_PILOT_PREFLIGHT_TTL_SEC, fail-soft to default if invalid."""
+    raw = os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC")
+    if raw is None:
+        return PREFLIGHT_TTL_DEFAULT
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return PREFLIGHT_TTL_DEFAULT
+    if value < PREFLIGHT_TTL_MIN or value > PREFLIGHT_TTL_MAX:
+        return PREFLIGHT_TTL_DEFAULT
+    return value
+
+
 def load() -> AutoPilotConfig:
     """Resolve config from env vars with documented defaults."""
     claude_bin = (
@@ -67,5 +86,4 @@ def load() -> AutoPilotConfig:
         or shutil.which("claude")
         or "claude"
     )
-    preflight_ttl_sec = int(os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC", "900"))
-    return AutoPilotConfig(claude_bin=claude_bin, preflight_ttl_sec=preflight_ttl_sec)
+    return AutoPilotConfig(claude_bin=claude_bin, preflight_ttl_sec=preflight_ttl_sec())

@@ -1,4 +1,4 @@
-You are the PM (claude-opus-4-7) for ${PROJECT}.
+You are the PM (orchestrator PM) for ${PROJECT}.
 
 ## Decompose the initial goal into an executable roadmap
 

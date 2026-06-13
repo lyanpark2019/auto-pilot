@@ -1,5 +1,5 @@
 ---
-name: auto-pilot-worker
+name: worker
 description: Sonnet 4.6 (1M context) implementation worker. Dispatched by the PM with an exclusive contract scope, project rules, and a verify checklist. Edits code, runs verify, reports diff + summary. Never reviews itself.
 model: sonnet
 ---

@@ -103,15 +103,33 @@ def test_preflight_ttl_default_when_env_unset(monkeypatch):
     assert cfg.preflight_ttl_sec == 900
 
 
-def test_preflight_ttl_dispatch_module_reads_same_env(monkeypatch):
-    """_dispatch.PREFLIGHT_TTL_SEC is a module-level constant; verify
-    that a fresh import with the env var set reflects the override."""
-    import importlib
+def test_preflight_ttl_accessor_env_override(monkeypatch):
     monkeypatch.setenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", "1200")
+    assert _config.preflight_ttl_sec() == 1200
+
+
+def test_preflight_ttl_accessor_default_when_unset(monkeypatch):
+    monkeypatch.delenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", raising=False)
+    assert _config.preflight_ttl_sec() == 900
+
+
+@pytest.mark.parametrize("raw", ["", "abc", "12.5", "  ", "0x10", "nan"])
+def test_preflight_ttl_accessor_garbage_falls_back(monkeypatch, raw):
+    monkeypatch.setenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", raw)
+    assert _config.preflight_ttl_sec() == 900
+
+
+@pytest.mark.parametrize("raw,expected", [("59", 900), ("86401", 900), ("60", 60), ("86400", 86400)])
+def test_preflight_ttl_accessor_clamps_out_of_range(monkeypatch, raw, expected):
+    monkeypatch.setenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", raw)
+    assert _config.preflight_ttl_sec() == expected
+
+
+def test_dispatch_import_survives_garbage_ttl(monkeypatch):
+    import importlib
+    monkeypatch.setenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", "not-an-int")
     import _dispatch
-    importlib.reload(_dispatch)
-    assert _dispatch.PREFLIGHT_TTL_SEC == 1200
-    # Restore: reload without env var so other tests are not poisoned
+    importlib.reload(_dispatch)  # must not raise
     monkeypatch.delenv("AUTO_PILOT_PREFLIGHT_TTL_SEC", raising=False)
     importlib.reload(_dispatch)
 

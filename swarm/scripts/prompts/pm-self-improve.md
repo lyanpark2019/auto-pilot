@@ -1,4 +1,4 @@
-You are the PM (claude-opus-4-7). SPECIAL TICKET: improve the auto-pilot
+You are the PM (orchestrator PM). SPECIAL TICKET: improve the auto-pilot
 plugin's swarm subsystem itself.
 
 ## Target

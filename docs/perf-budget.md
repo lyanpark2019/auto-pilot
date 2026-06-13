@@ -55,22 +55,32 @@ If the assertion fails, either:
 ## Baseline regression
 
 In addition to the 50 ms ceiling, each `test_*_within_budget` test asserts the
-measured mean is `<=` a committed baseline (`tests/perf_baseline.json`). The
-absolute mean/p95 budget (`<50 ms`) is the primary gate; this baseline assertion is the
-secondary smoke catching catastrophic regressions.
+measured mean is `<= baseline * BASELINE_TOLERANCE` (where `BASELINE_TOLERANCE = 1.25`
+in `tests/test_perf.py`). The absolute mean/p95 budget (`<50 ms`) is the primary gate;
+this baseline assertion is the secondary smoke catching catastrophic regressions.
 
-Baseline values are sized to tolerate shared-runner variance:
-- Local M-series Mac, Python 3.13: ~500 µs measured mean per command.
-- GitHub Actions `ubuntu-latest`, Python 3.13: 0.5–11 ms observed range
-  across runs (CI hardware is a noisy neighbour environment; 10× spread is
-  not unusual).
+Baselines are per-test measured ceilings (not a uniform placeholder):
 
-Each baseline is set at **25 ms**, well below the 50 ms absolute budget but
-loose enough to never flake on a slow CI runner. The gate triggers on a
-genuine ≥25× slowdown vs local — caught regressions are catastrophic, not
-incremental. For finer-grained regression tracking, switch to
-`pytest-benchmark --benchmark-compare-fail` with a maintained `.benchmarks/`
-history (deliberately out of scope for this plugin).
+| Test | Local mean (M-series, Py 3.13) | Committed baseline | Headroom |
+|---|---|---|---|
+| `test_status_within_budget` | ~1.2 ms | 0.012 s (12 ms) | ~10× local |
+| `test_phase_start_within_budget` | ~1.4 ms | 0.012 s (12 ms) | ~8.6× local |
+| `test_phase_end_within_budget` | ~9.8 ms | 0.025 s (25 ms) | ~2.6× local |
+| `test_pivot_check_within_budget` | ~0.037 ms | 0.0015 s (1.5 ms) | ~40× local |
+
+With `BASELINE_TOLERANCE = 1.25`, the effective regression ceiling is
+`baseline × 1.25` per test (e.g. phase-end limit = 31.25 ms, still well under
+50 ms absolute budget). GitHub Actions `ubuntu-latest`, Python 3.13 shows a
+0.5–11 ms observed range across runs (CI hardware is a noisy-neighbour
+environment; 10× spread is not unusual). The per-test baselines are sized to
+absorb that variance without flaking.
+
+CI flake risk: status/phase-start baselines (12 ms ceiling × 1.25 = 15 ms
+effective) have ~10× headroom over local mean; should never flake even on a
+slow runner. phase-end (25 ms × 1.25 = 31.25 ms) has ~2.6× headroom — CI has
+shown up to 11 ms observed; if a slow runner or extra I/O adds latency, raise
+the phase-end baseline to 0.030 before any CI flake occurs. pivot-check is
+pure CPU and CI-stable at any reasonable load.
 
 Refresh procedure after an intentional perf-affecting change:
 
@@ -80,9 +90,11 @@ python3 -c "
 import json
 data = json.load(open('/tmp/perf-new.json'))
 for b in data['benchmarks']:
-    print(b['fullname'], '->', b['stats']['mean'] * 25)
+    print(b['fullname'].split('::')[-1], '->', round(b['stats']['mean'] * 1000, 3), 'ms')
 "
-# update tests/perf_baseline.json with the new 25x values (round up)
+# Set each tests/perf_baseline.json stats.mean to a clean ceiling at or above the
+# measured mean (round up; add CI headroom for light CLI commands; keep phase-end's
+# larger ceiling to account for real evidence-gate I/O). BASELINE_TOLERANCE stays 1.25.
 git add tests/perf_baseline.json && git commit -m "perf(baseline): refresh after intentional change"
 ```
 

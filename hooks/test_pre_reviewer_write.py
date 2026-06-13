@@ -213,6 +213,112 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": "   "},
         }),
     ),
+    # SEC2: redirection bypass cases — previously ALLOWed, must now DENY.
+    (
+        "Bash echo redirect to file → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo x > /etc/evil"},
+        }),
+    ),
+    (
+        "Bash printf redirect → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "printf y > /tmp/out"},
+        }),
+    ),
+    (
+        "Bash cat redirect → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat a > b"},
+        }),
+    ),
+    (
+        "Bash perl -i in-place → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "perl -i -pe 's/a/b/' f"},
+        }),
+    ),
+    (
+        "Bash python3 -c open(w) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": 'python3 -c \'open("f","w").write(1)\''},
+        }),
+    ),
+    (
+        "Bash ruby -e → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": 'ruby -e "x=1"'},
+        }),
+    ),
+    (
+        "Bash cp copy → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "cp /etc/passwd /tmp/leak"},
+        }),
+    ),
+    (
+        "Bash ln symlink → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "ln -s a b"},
+        }),
+    ),
+    (
+        "Bash dd → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "dd if=x of=y"},
+        }),
+    ),
+    (
+        "Bash append redirect → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo x >> /tmp/f"},
+        }),
+    ),
+    # SEC2: regression-ALLOW — must not over-block read-only usage.
+    (
+        "Bash pytest fd-dup pipe → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "pytest 2>&1 | tail"},
+        }),
+    ),
+    (
+        "Bash python3 -m pytest → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "python3 -m pytest -q"},
+        }),
+    ),
+    (
+        "Bash git diff redirect-free → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "git diff --name-only base..HEAD"},
+        }),
+    ),
 ]
 
 

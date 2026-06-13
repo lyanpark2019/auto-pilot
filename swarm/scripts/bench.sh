@@ -13,6 +13,8 @@ TASK="${1:?task required}"; shift
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=swarm/scripts/lib/bench-acceptance.sh
 . "$SCRIPT_DIR/lib/bench-acceptance.sh"
+# shellcheck source=swarm/scripts/lib/swarm-models.sh
+. "$SCRIPT_DIR/lib/swarm-models.sh"
 
 REPEATS=1
 SWARM_TIMEOUT=1200
@@ -165,20 +167,20 @@ fi
 
 # Arm B: claude opus solo
 for rep in $(seq 1 "$REPEATS"); do
-  echo "[bench] arm-b: claude opus 4.7 solo (rep $rep/$REPEATS)"
-  run_arm_solo b claude claude-opus-4-7 "$rep"
+  echo "[bench] arm-b: claude opus solo (rep $rep/$REPEATS)"
+  run_arm_solo b claude "$SWARM_PM_CLAUDE_MODEL" "$rep"
 done
 
-# Arm C: codex gpt-5.5 solo
+# Arm C: codex solo
 for rep in $(seq 1 "$REPEATS"); do
-  echo "[bench] arm-c: codex gpt-5.5 solo (rep $rep/$REPEATS)"
-  run_arm_solo c codex gpt-5.5 "$rep"
+  echo "[bench] arm-c: codex solo (rep $rep/$REPEATS)"
+  run_arm_solo c codex "$SWARM_CODEX_DEFAULT_MODEL" "$rep"
 done
 
 # Score arms b/c with quality-eval (last rep's worktree — representative)
 for arm in b c; do
   WT="$PROJECT/../$BASE-bench-$arm-$TS-r$REPEATS"
-  claude --model claude-opus-4-7 -p --dangerously-skip-permissions \
+  claude --model "$SWARM_PM_CLAUDE_MODEL" -p --dangerously-skip-permissions \
     "Run Skill(quality-eval) on $WT. Output the resulting score-state.json verbatim." \
     > "$DIR/arm-$arm/quality-eval.md" 2>&1 || true
 done
