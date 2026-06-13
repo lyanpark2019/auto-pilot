@@ -184,6 +184,35 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": "git log --oneline | grep commit"},
         }),
     ),
+    # Whitespace-only file_path for Edit: case "$file_path" in "$allowed_output_dir"/*)
+    # "   " does not start with "/tmp/ok/" so it is out-of-scope → DENY.
+    (
+        "Edit whitespace-only file_path → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "   "},
+        }),
+    ),
+    # Tab-only file_path: same shape, still not inside allowed_output_dir → DENY.
+    (
+        "Edit tab-only file_path → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "\t"},
+        }),
+    ),
+    # Whitespace-only Bash command: the mutation grep patterns all require real tokens;
+    # "   " contains no mutation keyword → ALLOW.
+    (
+        "Bash whitespace-only command → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "   "},
+        }),
+    ),
 ]
 
 

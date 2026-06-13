@@ -126,6 +126,25 @@ CASES: list[Case] = [
      "auto-pilot-codex-reviewer",
      "contract_dir=/tmp/nope_no_contract_xyz review",
      False, False, "ALLOW", True, True),
+    # Whitespace-only prompt — reviewer-fail-closed still fires when active run present.
+    # The regex `^[[:space:]]*contract_dir=[^[:space:]]+` requires non-space chars after
+    # "contract_dir=", so whitespace-only extracts nothing.  Same for TICKET=.
+    # With no marker the reviewer-fail-closed branch checks subagent_type + active run.
+    ("whitespace-only prompt, reviewer, active run → DENY",
+     "auto-pilot-codex-reviewer",
+     "   ",
+     True, False, "DENY", True, True),
+    # Without an active run the reviewer-fail-closed branch does not fire → ALLOW.
+    ("whitespace-only prompt, reviewer, no active run → ALLOW",
+     "auto-pilot-codex-reviewer",
+     "   ",
+     False, False, "ALLOW", True, True),
+    # Whitespace-only subagent_type — grep -qE 'auto-pilot-(codex|claude)-reviewer' does
+    # not match "   ", so reviewer-fail-closed never fires regardless of active run.
+    ("whitespace-only subagent_type, active run → ALLOW",
+     "   ",
+     "some task",
+     True, False, "ALLOW", True, True),
 ]
 
 

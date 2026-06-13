@@ -118,6 +118,35 @@ CASES = [
         None,
         False,
     ),
+    # Whitespace-only file_path: not empty so [ -z "$file_path" ] is false → goes to scope
+    # check; "   " is not in the scope list → BLOCKED (exit 2).
+    (
+        "worker role, whitespace-only file_path → exit 2 (not in scope)",
+        2,
+        "   ",
+        "worker",
+        "scripts/a.py\nscripts/b.py",
+        False,
+    ),
+    # Whitespace-only scope_files: tr ' ' '\n' + strip leaves empty allowed list.
+    # Any real file_path is out-of-scope → BLOCKED (exit 2).
+    (
+        "worker role, whitespace-only scope → exit 2 (empty allowlist)",
+        2,
+        "scripts/a.py",
+        "worker",
+        "   \n   ",
+        False,
+    ),
+    # Tab-only file_path behaves the same as whitespace-only: not in scope → BLOCKED.
+    (
+        "worker role, tab-only file_path → exit 2 (not in scope)",
+        2,
+        "\t",
+        "worker",
+        "scripts/a.py\nscripts/b.py",
+        False,
+    ),
 ]
 
 

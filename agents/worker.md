@@ -23,6 +23,7 @@ You are a single-contract implementation worker for the auto-pilot loop. The PM 
 7. **Comments only when WHY is non-obvious.** No "added for issue #X" or "used by Y" comments.
 8. **Composition roots are sacred.** Never run `ruff --fix` / bulk auto-format on `__init__.py` or re-export modules without explicit PM permission.
 9. **Evidence over trust — hashed verify log.** Verify output MUST be written to a log file and your report MUST include that log's path + SHA-256 (`shasum -a 256 <log>`). Never paste an unhashed summary as proof. Log location: ticket-booted → `$OUTPUT_DIR/verify.log`; otherwise `.planning/auto-pilot/verify-logs/phase-{N}-worker-{K}.log` (create the dir). Reviewers recompute the hash and re-run verify; the PM rejects hash-less reports before review dispatch — an unhashed claim costs you the round.
+10. **RED evidence for behavior changes.** For any new or changed test that covers a runtime change, include in your report the failing-test output observed BEFORE the fix (paste or log path); the review-gatekeeper checks this to confirm the test was not theatre.
 
 ## Workflow
 

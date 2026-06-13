@@ -159,6 +159,39 @@ def case_malformed_frontmatter_silent() -> bool:
     return True
 
 
+def case_whitespace_only_status_skipped() -> bool:
+    """Whitespace-only status field is not 'pending' → silent skip, no injection.
+
+    The hook checks ``status == "consumed"`` then ``status != "pending"``.
+    A whitespace-only value (e.g. "   ") is not "pending", so the hook exits
+    silently without injecting the handoff.  This is a characterization pin —
+    the hook correctly ignores unknown/malformed status values.
+
+    Note: _handoff_status() strips YAML values with v.strip(), so the stored
+    "   " is read back as "" — we assert on the stripped form.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        path = _make_handoff(d, status="   ")
+        rc, stdout, _ = _run_hook(d)
+        assert rc == 0, f"hook exited {rc}"
+        assert not stdout.strip(), f"expected no output for whitespace status, got: {stdout!r}"
+        # File must be unchanged (no flip attempted on non-pending status).
+        # _handoff_status strips values, so "   " reads back as "".
+        fm = _handoff_status(path)
+        assert fm.get("status") in ("", "   "), f"status was modified unexpectedly: {fm}"
+    return True
+
+
+def case_tab_only_status_skipped() -> bool:
+    """Tab-only status field → same as whitespace-only: silent skip."""
+    with tempfile.TemporaryDirectory() as d:
+        _make_handoff(d, status="\t")
+        rc, stdout, _ = _run_hook(d)
+        assert rc == 0
+        assert not stdout.strip(), f"expected no output for tab status, got: {stdout!r}"
+    return True
+
+
 def main() -> None:
     cases = [
         ("pending handoff is injected + flipped with session ID", case_pending_consumed_and_flipped),
@@ -166,6 +199,8 @@ def main() -> None:
         ("stale handoff (>7d) is skipped silently", case_stale_handoff_skipped),
         ("no handoff file: silent exit 0", case_no_handoff_file_silent),
         ("malformed frontmatter: silent skip", case_malformed_frontmatter_silent),
+        ("whitespace-only status: silent skip", case_whitespace_only_status_skipped),
+        ("tab-only status: silent skip", case_tab_only_status_skipped),
     ]
     results = [run_case(label, fn) for label, fn in cases]
     passed = sum(results)
