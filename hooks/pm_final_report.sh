@@ -145,7 +145,7 @@ except Exception as e:
     print(f"pm_final_report: session-artifacts skipped: {e}", file=sys.stderr)
 PY
 
-python3 - "$report_dir" <<'PY' || exit 0
+python3 - "$report_dir" <<'PY' || true
 import pathlib, sys
 
 KEEP = 20

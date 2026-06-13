@@ -6,7 +6,8 @@ description: >-
   them. Mode is selected per worker diff: (a) `security` mode when the diff
   touches a trust boundary — auth / API endpoints / user input / secrets /
   file uploads / payments / webhooks / DB queries or migrations; (b) `tdd-gate`
-  mode when the worker diff touches application (runtime) code. A diff can
+  mode when the worker diff touches application (runtime) code, or when the
+  diff is tests-only (test-theatre check — see tdd-gate sub-path b). A diff can
   trigger BOTH modes; run each that matches. Read-only — never edit, never run
   git mutations. Absorbed security-reviewer + tdd-enforcer 2026-06-07 (zero
   capability loss). security mode concept from
