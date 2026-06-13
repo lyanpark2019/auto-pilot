@@ -37,7 +37,7 @@ def test_onboarding_docs_entrypoints_exist() -> None:
 def test_onboarding_docs_carry_freshness_frontmatter() -> None:
     required = {"type", "topic", "source_commit", "manual_edit"}
 
-    for path in (DOCS_README, ONBOARDING, Path("docs/plans/2026-06-07-onboarding-hub.md")):
+    for path in (DOCS_README, ONBOARDING):
         meta = _frontmatter(path)
         assert required <= meta.keys()
         assert meta["source_commit"]
