@@ -102,11 +102,12 @@ def test_snapshot_context_copies_files_and_returns_shas(tmp_path):
 
     bundle = dest_dir / "context-bundle"
     assert (bundle / "spec.md").exists()
-    assert (bundle / "CLAUDE.md").exists()
+    root_copy = bundle / "CLAUDE-chain-00-root.md"
+    assert root_copy.exists()
     assert (bundle / "MANIFEST.txt").exists()
     assert len(shas.spec) == 64
     assert len(shas.claude_md_chain) == 1
-    assert shas.claude_md_chain[0] == _sha256_of((bundle / "CLAUDE.md").read_bytes())
+    assert shas.claude_md_chain[0] == _sha256_of(root_copy.read_bytes())
 
 
 def _sha256_of(b: bytes) -> str:
@@ -172,3 +173,91 @@ def test_is_killed_returns_true_after_canceled_touch(tmp_path):
     assert _contract.is_killed(tmp_path) is False
     (tmp_path / "CANCELED").touch()
     assert _contract.is_killed(tmp_path) is True
+
+
+def _bind_snapshot_to_contract(dest_dir, shas) -> None:
+    import _contract
+    contract = json.loads(FIXTURE.read_text())
+    contract["snapshot_shas"]["spec"] = shas.spec
+    contract["snapshot_shas"]["claude_md_chain"] = shas.claude_md_chain
+    contract["context_bundle_path"] = str(dest_dir / "context-bundle")
+    _contract.write_contract(contract, dest_dir / "contract.json")
+
+
+def test_verify_snapshots_roundtrips_non_alphabetical_chain(tmp_path):
+    """A1 ORDER: chain order must survive re-derivation even when parent dir
+    names are not in alphabetical order ([root, zebra, alpha])."""
+    import _contract
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\n")
+    root = tmp_path / "CLAUDE.md"
+    root.write_text("ROOT\n")
+    zdir = tmp_path / "zebra"
+    zdir.mkdir()
+    zc = zdir / "CLAUDE.md"
+    zc.write_text("ZEBRA\n")
+    adir = tmp_path / "alpha"
+    adir.mkdir()
+    ac = adir / "CLAUDE.md"
+    ac.write_text("ALPHA\n")
+    dest_dir = tmp_path / "contract" / "round-1"
+    dest_dir.mkdir(parents=True)
+
+    shas = _contract.snapshot_context(dest_dir, spec, [root, zc, ac])
+    _bind_snapshot_to_contract(dest_dir, shas)
+
+    # Clean bundle must round-trip — no false SnapshotMismatchError.
+    _contract.verify_snapshots(dest_dir)
+    assert len(shas.claude_md_chain) == 3
+
+
+def test_snapshot_context_no_collision_on_same_leaf_dirs(tmp_path):
+    """A1 COLLISION: two CLAUDE.md under same-named leaf dirs (src/api, lib/api)
+    must produce distinct bundle copies — no silent overwrite/data loss."""
+    import _contract
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\n")
+    root = tmp_path / "CLAUDE.md"
+    root.write_text("ROOT\n")
+    sa = tmp_path / "src" / "api"
+    sa.mkdir(parents=True)
+    sac = sa / "CLAUDE.md"
+    sac.write_text("SRC-API\n")
+    la = tmp_path / "lib" / "api"
+    la.mkdir(parents=True)
+    lac = la / "CLAUDE.md"
+    lac.write_text("LIB-API\n")
+    dest_dir = tmp_path / "contract" / "round-1"
+    dest_dir.mkdir(parents=True)
+
+    shas = _contract.snapshot_context(dest_dir, spec, [root, sac, lac])
+    _bind_snapshot_to_contract(dest_dir, shas)
+
+    bundle = dest_dir / "context-bundle"
+    chain_files = _contract._bundle_claude_files(bundle)
+    # All three entries survive distinct on disk.
+    assert len(chain_files) == 3
+    assert len(shas.claude_md_chain) == 3
+    contents = sorted(p.read_text() for p in chain_files)
+    assert contents == ["LIB-API\n", "ROOT\n", "SRC-API\n"]
+    # Clean round-trip in chain order.
+    _contract.verify_snapshots(dest_dir)
+
+
+def test_atomic_write_text_cleans_temp_on_keyboard_interrupt(tmp_path, monkeypatch):
+    """A12: a BaseException (KeyboardInterrupt) mid-write must not leak the
+    hidden temp file, and any pre-existing target must stay intact."""
+    import _contract
+    target = tmp_path / "contract.json"
+    target.write_text("ORIGINAL\n")
+
+    def boom(_fd: int) -> None:
+        raise KeyboardInterrupt("mid-write")
+
+    monkeypatch.setattr(_contract, "_fsync_file", boom)
+    with pytest.raises(KeyboardInterrupt):
+        _contract.atomic_write_text(target, "NEW")
+
+    orphans = [p.name for p in tmp_path.iterdir() if p.name.startswith(".contract.json.")]
+    assert orphans == [], f"leaked temp file(s): {orphans}"
+    assert target.read_text() == "ORIGINAL\n"

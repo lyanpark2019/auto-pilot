@@ -19,6 +19,7 @@ class AutoPilotConfig:
     default_max_cost_usd: float = 50.0
     default_max_tokens: int = 50_000_000
     default_per_iter_cost_estimate_usd: float = 0.50
+    default_per_iter_token_estimate: int = 100_000
     default_max_concurrent_claude: int = 4
     # Wall-clock watchdog: abort after this many seconds; 0 = disabled (opt-in).
     default_max_wall_clock_sec: float = 0.0
@@ -40,6 +41,8 @@ class AutoPilotConfig:
         _check_int_bounds("default_max_tokens", self.default_max_tokens, ge=1, le=1_000_000_000)
         # fallback per-iter cost substituted when log has no total — must be positive
         _check_float_bounds("default_per_iter_cost_estimate_usd", self.default_per_iter_cost_estimate_usd, gt=0, le=1_000)
+        # fallback per-iter token count substituted when log has no total — must be at least 1
+        _check_int_bounds("default_per_iter_token_estimate", self.default_per_iter_token_estimate, ge=1, le=1_000_000_000)
         # _budget.check_caps: pid growth over startup baseline >= cap — at least 1 allowed
         _check_int_bounds("default_max_concurrent_claude", self.default_max_concurrent_claude, ge=1, le=64)
         # wall-clock watchdog: 0 = disabled; gt=-1 admits 0.0; ≤7-day ceiling

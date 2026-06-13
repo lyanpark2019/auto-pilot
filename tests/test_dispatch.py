@@ -333,3 +333,44 @@ def test_abstain_empty_reason_is_schema_invalid(tmp_path):
     p.write_text(json.dumps(review))
     with pytest.raises(_dispatch.MalformedReviewError):
         _dispatch.read_review(p)
+
+
+def _git_repo_with_commit(repo: Path) -> None:
+    subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "a").write_text("a")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "x"], check=True)
+
+
+def test_preflight_head_sha_transient_git_failure_is_blocked(monkeypatch, tmp_path):
+    """F13: a non-zero git exit inside a real git repo is a gate failure, not a silent skip."""
+    import _dispatch
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_repo_with_commit(repo)
+
+    def _boom(cmd, **kwargs):
+        raise subprocess.CalledProcessError(128, cmd)
+
+    monkeypatch.setattr(_dispatch.subprocess, "check_output", _boom)
+    with pytest.raises(_dispatch.PreflightError):
+        _dispatch._check_preflight_head_sha({"head_sha": "deadbeef"}, repo)
+
+
+def test_preflight_head_sha_non_git_skips_quietly(tmp_path):
+    """F13: a genuinely non-git dir still skips the HEAD check quietly (no raise)."""
+    import _dispatch
+    nongit = tmp_path / "nongit"
+    nongit.mkdir()
+    _dispatch._check_preflight_head_sha({"head_sha": "should-not-block"}, nongit)
+
+
+def test_preflight_head_sha_unborn_head_skips_quietly(tmp_path):
+    """F13: an unborn-HEAD repo is genuinely-non-git for this gate → quiet skip."""
+    import _dispatch
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True)
+    _dispatch._check_preflight_head_sha({"head_sha": "should-not-block"}, repo)

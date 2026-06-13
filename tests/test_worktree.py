@@ -220,6 +220,7 @@ def test_apply_to_main_aborts_on_conflict(tmp_path):
     assert isinstance(series, _worktree.PatchSeries)
     result = mgr.apply_to_main(series.mbox, contract)
     assert result.status == "conflict"
+    assert result.conflict_files == ("a.txt",)
 
     status = subprocess.check_output(
         ["git", "-C", str(repo), "status", "--porcelain"], text=True
@@ -269,6 +270,49 @@ def test_apply_to_main_refuses_dirty_main(tmp_path):
     _commit_one(handle.path, "b.txt", "x\n")
     series = mgr.collect_patches(handle, contract_dir=contract_dir)
     assert isinstance(series, _worktree.PatchSeries)
+    with pytest.raises(_worktree.MainTreeDirtyError):
+        mgr.apply_to_main(series.mbox, contract)
+
+
+def _ready_to_apply(tmp_path, repo, token):
+    """Build a one-commit worker series ready for apply_to_main."""
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    contract.update(idempotency_token=token, iter=1, phase=1)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "x\n")
+    series = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(series, _worktree.PatchSeries)
+    return mgr, series, contract
+
+
+def _brownfield_repo(tmp_path):
+    """Target repo that has NOT gitignored .planning/."""
+    repo = _init_repo(tmp_path)
+    subprocess.run(["git", "-C", str(repo), "rm", "-q", ".gitignore"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "drop ignore"], check=True)
+    return repo
+
+
+def test_apply_to_main_ignores_own_state_when_planning_not_gitignored(tmp_path):
+    repo = _brownfield_repo(tmp_path)
+    mgr, series, contract = _ready_to_apply(tmp_path, repo, "abad1deaabad1dea")
+    # Loop writes its own untracked state under .planning/auto-pilot/; main-apply.lock
+    # is created by apply_to_main itself — both auto-pilot-owned, must not false-trip.
+    state_dir = repo / ".planning" / "auto-pilot"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "state.json").write_text("{}")
+    assert mgr.apply_to_main(series.mbox, contract).status == "applied"
+
+
+def test_apply_to_main_still_refuses_real_dirty_source_without_planning_ignore(tmp_path):
+    repo = _brownfield_repo(tmp_path)
+    (repo / "dirty.txt").write_text("untracked source")  # genuine dirty source
+    mgr, series, contract = _ready_to_apply(tmp_path, repo, "0ddba110ddba110d")
     with pytest.raises(_worktree.MainTreeDirtyError):
         mgr.apply_to_main(series.mbox, contract)
 
@@ -369,6 +413,35 @@ def test_reap_orphans_preserves_in_flight(tmp_path):
     # No status.json, no done.marker → in-flight
     reaped = mgr.reap_orphans(state_dir=state_dir, max_age_hours=0)
     assert handle.path not in reaped
+
+
+def _seed_rebase_apply_patch(repo, patch_text):
+    rebase_apply = repo / ".git" / "rebase-apply"
+    rebase_apply.mkdir(parents=True)
+    (rebase_apply / "patch").write_text(patch_text)
+
+
+def test_extract_conflict_files_multi_file_and_empty(tmp_path):
+    repo = _init_repo(tmp_path)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=tmp_path / "wt")
+    assert mgr._extract_conflict_files() == ()  # no rebase-apply yet
+    _seed_rebase_apply_patch(repo, (
+        "diff --git a/src/foo.py b/src/foo.py\n--- a/src/foo.py\n+++ b/src/foo.py\n"
+        "diff --git a/src/bar.py b/src/bar.py\n--- a/src/bar.py\n+++ b/src/bar.py\n"
+    ))
+    assert mgr._extract_conflict_files() == ("src/bar.py", "src/foo.py")
+
+
+def test_extract_conflict_files_rename_uses_old_path(tmp_path):
+    repo = _init_repo(tmp_path)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=tmp_path / "wt")
+    # `diff --git a/old b/new` — the ` b/` split must not corrupt the path; the
+    # detector keys on the old path, deterministic for the pivot hash.
+    _seed_rebase_apply_patch(repo, (
+        "diff --git a/src/old_name.py b/src/new_name.py\n"
+        "rename from src/old_name.py\nrename to src/new_name.py\n"
+    ))
+    assert mgr._extract_conflict_files() == ("src/old_name.py",)
 
 
 def test_compute_merge_conflict_finding_hash():

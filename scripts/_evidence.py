@@ -62,7 +62,10 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
 
     APPROVE is acceptable only with scope_check=PASS. scope_check=FAIL means
     the reviewer flagged an out-of-scope diff and approving it is contradictory
-    evidence — blocked. scope_check=SKIPPED is only valid on ABSTAIN.
+    evidence — blocked. scope_check=SKIPPED is only valid on ABSTAIN. APPROVE
+    also requires verify_rerun.exit_code==0 — the reviewer's own re-run failing
+    while it approves is contradictory evidence (codex honest ABSTAIN, which
+    carries the timeout/exec exit code, is exempt because it is not APPROVE).
     """
     verdict = data.get("verdict")
     if verdict == "APPROVE":
@@ -72,6 +75,11 @@ def _verdict_failure(role: str, data: dict[str, Any]) -> str | None:
         if sc == "FAIL":
             return (f"{role}: scope_check=FAIL — an out-of-scope diff cannot be "
                     f"approved evidence (contradictory)")
+        rerun = data.get("verify_rerun")
+        exit_code = rerun.get("exit_code") if isinstance(rerun, dict) else None
+        if not isinstance(exit_code, int) or exit_code != 0:
+            return (f"{role}: APPROVE with verify_rerun.exit_code={exit_code!r} "
+                    f"(need 0 — contradictory evidence)")
         return None
     if role == "codex-reviewer" and verdict == "ABSTAIN":
         meta = data.get("reviewer_meta")
@@ -184,6 +192,13 @@ def _iter_num(iter_dir: Path) -> int:
         return -1
 
 
+def _round_num(round_dir: Path) -> int:
+    try:
+        return int(round_dir.name.split("-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
+
+
 def latest_round_dirs_for_active_phase(contracts_root: Path) -> list[Path]:
     """Latest round-* dir of each contract under the CURRENT iteration's max phase.
 
@@ -212,7 +227,7 @@ def latest_round_dirs_for_active_phase(contracts_root: Path) -> list[Path]:
         if _phase_num(phase_dir) != max_phase:
             continue
         for contract_dir in sorted(phase_dir.glob("contract-*")):
-            rounds = sorted(contract_dir.glob("round-*"), key=lambda d: d.name)
+            rounds = sorted(contract_dir.glob("round-*"), key=_round_num)
             if rounds:
                 out.append(rounds[-1])
     return out

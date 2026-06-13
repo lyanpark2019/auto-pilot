@@ -93,6 +93,35 @@ def run_case(
     return ok
 
 
+def run_paths_case(
+    label: str,
+    repo_root: str,
+    file_path: str,
+    expect: str,
+) -> bool:
+    """Run with cwd=repo_root so tier (a) reads that repo's human-only.paths."""
+    env = os.environ.copy()
+    env.pop("AUTO_PILOT_ALLOW_CORE_EDIT", None)
+    payload = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": file_path}})
+    result = subprocess.run(
+        ["bash", HOOK],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=repo_root,
+    )
+    stdout = result.stdout.strip()
+    actual = "DENY" if '"permissionDecision":"deny"' in stdout else "ALLOW"
+    ok = actual == expect and result.returncode == 0
+    icon = "OK  " if ok else "FAIL"
+    print(f"[{icon}] {label:55s}  expect={expect:5s}  got={actual:5s}")
+    if not ok:
+        print(f"       stdout: {stdout!r}")
+        print(f"       stderr: {result.stderr.strip()!r}")
+    return ok
+
+
 def main() -> None:
     results: list[bool] = []
 
@@ -151,6 +180,52 @@ def main() -> None:
             raw_stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}}),
             expect_allow=True,
             expect_advisory=False,
+        ))
+
+    # ── Tier (a) prefix-match regression (D3): substring-anywhere over-block ──
+    with tempfile.TemporaryDirectory() as repo:
+        Path(repo, ".claude").mkdir()
+        Path(repo, ".claude", "human-only.paths").write_text("agents\n")
+        for sub in ("src/agents", "agents", "agents-extra"):
+            Path(repo, sub).mkdir(parents=True)
+        Path(repo, "src/agents/helper.py").write_text("x = 1\n")
+        Path(repo, "agents/foo.py").write_text("y = 1\n")
+        Path(repo, "agents-extra/foo.py").write_text("z = 1\n")
+
+        # The bug: entry `agents` denied any */agents/* via the substring clause.
+        results.append(run_paths_case(
+            "D3 entry 'agents': src/agents/helper.py → ALLOW (not a prefix)",
+            repo_root=repo,
+            file_path="src/agents/helper.py",
+            expect="ALLOW",
+        ))
+        # A true path prefix still blocks the subtree.
+        results.append(run_paths_case(
+            "D3 entry 'agents': agents/foo.py → DENY (real subtree)",
+            repo_root=repo,
+            file_path="agents/foo.py",
+            expect="DENY",
+        ))
+        # The entry path itself is denied.
+        results.append(run_paths_case(
+            "D3 entry 'agents': agents → DENY (exact)",
+            repo_root=repo,
+            file_path="agents",
+            expect="DENY",
+        ))
+        # `..` no longer bypasses tier (a) (raw-path match was traversable).
+        results.append(run_paths_case(
+            "D3 entry 'agents': agents/../agents/foo.py → DENY (canonicalized)",
+            repo_root=repo,
+            file_path="agents/../agents/foo.py",
+            expect="DENY",
+        ))
+        # A sibling that merely string-prefixes the entry is NOT a path prefix.
+        results.append(run_paths_case(
+            "D3 entry 'agents': agents-extra/foo.py → ALLOW (sibling)",
+            repo_root=repo,
+            file_path="agents-extra/foo.py",
+            expect="ALLOW",
         ))
 
     passed = sum(results)

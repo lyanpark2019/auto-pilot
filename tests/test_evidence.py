@@ -17,7 +17,8 @@ REVIEWERS = ("codex-reviewer", "claude-reviewer")
 def _review(contract_id: str, verdict: str = "APPROVE",
             abstain_reason: str | None = None,
             scope_check: str | None = None,
-            reviewer: str = "codex-reviewer") -> dict:
+            reviewer: str = "codex-reviewer",
+            rerun_exit_code: int = 0) -> dict:
     meta: dict[str, str] = {
         "model": "test",
         "started_at": "2026-06-10T00:00:00+00:00",
@@ -35,7 +36,7 @@ def _review(contract_id: str, verdict: str = "APPROVE",
         "verdict": verdict,
         "scope_check": resolved_scope_check,
         "findings": [],
-        "verify_rerun": {"cmd": "pytest", "exit_code": 0},
+        "verify_rerun": {"cmd": "pytest", "exit_code": rerun_exit_code},
         "reviewer_meta": meta,
     }
 
@@ -46,7 +47,8 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
                  per_role_verdict: dict | None = None,
                  abstain_reason: str | None = None,
                  scope_check_override: dict | None = None,
-                 reviewer_override: dict | None = None) -> Path:
+                 reviewer_override: dict | None = None,
+                 rerun_exit_code_override: dict | None = None) -> Path:
     """Materialize a contract round dir with a full (or partially broken) evidence chain.
 
     drop selects a defect: "" (none), "codex-ticket", "codex-review",
@@ -58,6 +60,7 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
     abstain_reason is included in reviewer_meta when a role's verdict is ABSTAIN.
     scope_check_override overrides scope_check for specific roles: {"claude-reviewer": "SKIPPED"}.
     reviewer_override writes a wrong reviewer field: {"claude-reviewer": "codex-reviewer"}.
+    rerun_exit_code_override sets verify_rerun.exit_code per role: {"claude-reviewer": 1}.
     """
     cdir = tmp_path / "round-1"
     (cdir / "review-input").mkdir(parents=True)
@@ -96,9 +99,10 @@ def _build_round(tmp_path: Path, *, contract_id: str = "iter-1/phase-1/contract-
             v = per_role_verdict[role]
         sc = (scope_check_override or {}).get(role)
         rv = (reviewer_override or {}).get(role, role)
+        rerun_rc = (rerun_exit_code_override or {}).get(role, 0)
         (out / "review.json").write_text(
             json.dumps(_review(rid, v, abstain_reason if v == "ABSTAIN" else None,
-                               scope_check=sc, reviewer=rv)))
+                               scope_check=sc, reviewer=rv, rerun_exit_code=rerun_rc)))
         if drop == "empty-review" and role == "claude-reviewer":
             (out / "review.json").write_text("")
     return cdir
@@ -318,3 +322,49 @@ def test_approve_with_scope_check_pass_passes(tmp_path):
     """APPROVE + scope_check=PASS (correct reviewer fields) must pass end-to-end."""
     cdir = _build_round(tmp_path)
     _evidence.assert_round_evidence(cdir)  # no raise
+
+
+# --- E6: APPROVE must carry verify_rerun.exit_code == 0 ---
+
+def test_approve_with_failing_verify_rerun_blocks(tmp_path):
+    """APPROVE + verify_rerun.exit_code != 0 is contradictory evidence — blocked."""
+    cdir = _build_round(tmp_path,
+                        rerun_exit_code_override={"claude-reviewer": 1})
+    with pytest.raises(_evidence.EvidenceError,
+                       match="APPROVE with verify_rerun.exit_code"):
+        _evidence.assert_round_evidence(cdir)
+
+
+def test_approve_with_passing_verify_rerun_passes(tmp_path):
+    """APPROVE + verify_rerun.exit_code == 0 (the default) must pass."""
+    cdir = _build_round(tmp_path,
+                        rerun_exit_code_override={"codex-reviewer": 0,
+                                                  "claude-reviewer": 0})
+    _evidence.assert_round_evidence(cdir)  # no raise
+
+
+def test_codex_abstain_keeps_nonzero_rerun_exit_code(tmp_path):
+    """A codex honest ABSTAIN carries verify_rerun.exit_code=124 (timeout) and is
+    still valid — the exit_code==0 rule applies to APPROVE only."""
+    cdir = _build_round(tmp_path,
+                        per_role_verdict={"codex-reviewer": "ABSTAIN"},
+                        abstain_reason="codex-timeout",
+                        rerun_exit_code_override={"codex-reviewer": 124})
+    _evidence.assert_round_evidence(cdir)  # no raise
+
+
+# --- E11/E19: latest round picked numerically, not lexically ---
+
+def test_latest_round_dirs_uses_numeric_round_sort(tmp_path):
+    """round-10 must beat round-9 — lexical sort would wrongly pick round-9."""
+    root = tmp_path / "contracts"
+    for rel in [
+        "iter-1/phase-1/contract-1/round-1",
+        "iter-1/phase-1/contract-1/round-2",
+        "iter-1/phase-1/contract-1/round-9",
+        "iter-1/phase-1/contract-1/round-10",
+    ]:
+        (root / rel).mkdir(parents=True)
+    dirs = _evidence.latest_round_dirs_for_active_phase(root)
+    names = sorted(str(d.relative_to(root)) for d in dirs)
+    assert names == ["iter-1/phase-1/contract-1/round-10"], names

@@ -1,12 +1,40 @@
 """Tests for scripts/_subagent_helpers.py."""
 from __future__ import annotations
 import json
+import subprocess
 import sys
 from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+
+HELPER = ROOT / "scripts" / "_subagent_helpers.py"
+
+
+def _prepare_valid_ticket(tmp_path: Path) -> Path:
+    import _contract
+    import _dispatch
+
+    contract = json.loads((ROOT / "tests/fixtures/contracts/sample_contract.json").read_text())
+    contract_dir = tmp_path / "c"
+    contract_dir.mkdir()
+    bundle = contract_dir / "context-bundle"
+    bundle.mkdir()
+    (bundle / "spec.md").write_text("# spec\n")
+    (bundle / "MANIFEST.txt").write_text("x\n")
+    contract["context_bundle_path"] = str(bundle)
+    contract["snapshot_shas"]["spec"] = _contract._sha256(b"# spec\n")
+    contract["snapshot_shas"]["claude_md_chain"] = []
+    _contract.write_contract(contract, contract_dir / "contract.json")
+    _contract.write_pm_signature(contract_dir, run_id="run-test")
+    return _dispatch.prepare_subagent_ticket(
+        contract_dir=contract_dir,
+        worktree=tmp_path / "wt",
+        subagent_role="worker",
+        skip_preflight=True,
+        skip_contract_check=True,
+    )
 
 
 def test_read_ticket_validates_sha(tmp_path):
@@ -93,3 +121,42 @@ def test_write_exit_code_atomic(tmp_path):
     out.mkdir(parents=True)
     h.write_exit_code(out, 99)
     assert (out / "exit-code.txt").read_text().strip() == "99"
+
+
+def test_cli_read_ticket_valid_exits_zero(tmp_path):
+    # The reviewer agents shell out as `python _subagent_helpers.py --read-ticket`.
+    ticket_path = _prepare_valid_ticket(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, str(HELPER), "--read-ticket", str(ticket_path)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_cli_read_ticket_tampered_exits_nonzero(tmp_path):
+    ticket_path = _prepare_valid_ticket(tmp_path)
+    bad = json.loads(ticket_path.read_text())
+    bad["subagent_role"] = "claude-reviewer"
+    ticket_path.write_text(json.dumps(bad))
+    proc = subprocess.run(
+        [sys.executable, str(HELPER), "--read-ticket", str(ticket_path)],
+        capture_output=True, text=True,
+    )
+    # ticket_sha mismatch → exit 2 (NOT a silent no-op exit 0)
+    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
+
+
+def test_cli_read_ticket_missing_file_exits_nonzero(tmp_path):
+    proc = subprocess.run(
+        [sys.executable, str(HELPER), "--read-ticket", str(tmp_path / "nope.json")],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 4, (proc.returncode, proc.stderr)
+
+
+def test_cli_no_action_exits_nonzero():
+    proc = subprocess.run(
+        [sys.executable, str(HELPER)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode != 0

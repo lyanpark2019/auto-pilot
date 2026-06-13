@@ -246,3 +246,45 @@ def test_timeout_does_not_write_stderr_sidecar(env):
     # Neither attempt should have a .stderr sidecar
     assert not (env["out"] / "codex-raw-attempt-1.json.stderr").exists()
     assert not (env["out"] / "codex-raw-attempt-2.json.stderr").exists()
+
+
+# ---------------------------------------------------------------------------
+# E17: floored tier abstains after ONE attempt (no identical-effort retry)
+# ---------------------------------------------------------------------------
+
+def _count_attempts(monkeypatch, env, tier: str) -> tuple[int, int]:
+    """Run with a counting _attempt that always times out; return (#calls, rc)."""
+    calls: list[tuple[str, int]] = []
+
+    def counting(argv, prompt, raw_path, timeout_s):
+        calls.append((str(raw_path), timeout_s))
+        return crb._TIMEOUT_RC, "codex-timeout"
+
+    monkeypatch.setattr(crb, "_attempt", counting)
+    rc = crb.main([
+        "--ticket", str(env["ticket"]), "--tier", tier,
+        "--prompt-file", str(env["prompt"]), "--config", str(env["config"]),
+        "--codex-cmd", "irrelevant",
+    ])
+    return len(calls), rc
+
+
+def test_low_tier_single_attempt_no_identical_retry(env, monkeypatch):
+    """tier=low floors to effort=low; lower_effort(low)==low → one attempt only."""
+    n, rc = _count_attempts(monkeypatch, env, "low")
+    assert n == 1, f"expected single attempt for floored tier, got {n}"
+    assert rc == 3
+    review = json.loads((env["out"] / "review.json").read_text())
+    assert review["reviewer_meta"]["effort"] == "low"
+
+
+def test_none_tier_single_attempt_no_identical_retry(env, monkeypatch):
+    """tier=none also floors to effort=low → one attempt only."""
+    n, _ = _count_attempts(monkeypatch, env, "none")
+    assert n == 1, f"expected single attempt for floored tier, got {n}"
+
+
+def test_medium_tier_still_retries_at_lower_effort(env, monkeypatch):
+    """tier=medium (effort=medium) downgrades to low → two distinct attempts."""
+    n, _ = _count_attempts(monkeypatch, env, "medium")
+    assert n == 2, f"expected two attempts for non-floored tier, got {n}"

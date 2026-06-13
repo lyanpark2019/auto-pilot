@@ -162,6 +162,8 @@ def _timed_stream(proc: subprocess.Popen[str], lf: IO[str], timeout_sec: float) 
     hit_timeout: dict[str, bool] = {"v": False}
 
     def _on_timeout() -> None:
+        if proc.poll() is not None:
+            return
         hit_timeout["v"] = True
         event("session.timeout", timeout_s=int(timeout_sec))
         lf.write(f"\n[TIMEOUT] killed after {timeout_sec:.0f}s\n")
@@ -205,7 +207,15 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
         fired (mirroring coreutils ``timeout``).
     """
     full_prompt = _prompts.sanitize_for_llm(HEADLESS_PROMPT_PREAMBLE + prompt)
-    cmd = [CLAUDE_BIN, "-p", "--dangerously-skip-permissions", full_prompt]
+    cmd = [
+        CLAUDE_BIN,
+        "-p",
+        "--dangerously-skip-permissions",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        full_prompt,
+    ]
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(log_path, "w") as lf:
@@ -238,6 +248,7 @@ def _accumulate_usage(
     source = "estimate" if log_cost <= 0.0 else "parsed"
     if log_cost <= 0.0:
         log_cost = args.per_iter_cost_estimate
+        log_tokens = int(getattr(args, "per_iter_token_estimate", 0))
     state["cost_usd"] = float(state.get("cost_usd", 0.0)) + log_cost
     state["tokens"] = int(state.get("tokens", 0)) + log_tokens
     save_state(state)
@@ -288,6 +299,24 @@ def _timeout_preserved_status(state_after: State) -> str | None:
     return None
 
 
+def _session_timeout(args: argparse.Namespace, now_monotonic: float) -> float:
+    """Clamp the per-iter session timeout to the remaining wall-clock budget.
+
+    A session that blocks for the full ``timeout_build`` (default 4 h) could
+    overshoot the wall-clock deadline by an entire iteration. Clamping the
+    in-flight timeout to ``deadline - now`` kills the session at the boundary.
+    Floors at 1 s so a near-zero remainder still spawns rather than insta-kills.
+    """
+    base = float(args.timeout_build)
+    deadline = getattr(args, "wall_clock_deadline", None)
+    if deadline is None:
+        return base
+    remaining = float(deadline) - now_monotonic
+    if remaining <= 0.0:
+        return 1.0
+    return max(1.0, min(base, remaining))
+
+
 def _early_exit_status(state: State, args: argparse.Namespace) -> str | None:
     """Return a terminal status string if iteration should be skipped, else None."""
     current: str | None = state.get("status")
@@ -335,7 +364,8 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
 
     log = LOG_DIR / f"iter-{iter_n:04d}-phase-{phase}.log"
     prompt = _prompts.render_for_llm("iteration", iter_n=iter_n, phase=phase)
-    rc = run_claude_session(prompt, log, args.timeout_build)
+    session_timeout = _session_timeout(args, time.monotonic())
+    rc = run_claude_session(prompt, log, session_timeout)
 
     state_after = load_state() or state
     _accumulate_usage(log, args, state_after, iter_n, phase)
@@ -380,6 +410,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=CONFIG.default_per_iter_cost_estimate_usd,
         help="fallback per-iter cost (USD) used when claude log lacks a total",
+    )
+    p.add_argument(
+        "--per-iter-token-estimate",
+        type=int,
+        default=CONFIG.default_per_iter_token_estimate,
+        help="fallback per-iter token count used when claude log lacks a total",
     )
     p.add_argument(
         "--max-concurrent-claude",
