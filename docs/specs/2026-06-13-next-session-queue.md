@@ -134,7 +134,15 @@ at a registry query rather than a hardcoded number.
 
 Both confirmed live on 2026-06-13.
 
-### (a) dispatch-contract-gate.sh — prose-trip on contract_dir= marker
+**STATUS: DONE 2026-06-13** (PR `fix/p3-hook-false-positives`). (a) real fix shipped; (b) NO-OP-CONFIRMED
+(tests + doc only — the spec's root-cause below was wrong; corrected inline). Dual cold review APPROVE,
+0 P0/P1, 1106 tests + 56 hook self-tests green, shellcheck clean.
+
+### (a) ~~dispatch-contract-gate.sh — prose-trip on contract_dir= marker~~ DONE
+
+Fixed: shape-gate at `hooks/dispatch-contract-gate.sh:51-56` clears the extracted marker when no
+`contract.json` exists at the path (prose mentions fall through to ALLOW); RED-first test +
+2 positive-control reviewer-fail-closed tests added.
 
 **Root cause:** `hooks/dispatch-contract-gate.sh:50` extracts `contract_dir=<word>` via bare
 `grep -oE 'contract_dir=[^[:space:]]+'` from the entire prompt text. Any Agent dispatch whose
@@ -151,23 +159,27 @@ as a dispatch marker (mirrors the `TICKET=` fallback's `cand_dir/contract.json` 
 prompt prose contains `contract_dir=/some/path` but no contract file exists at that path →
 expect ALLOW, not BLOCK.
 
-### (b) branch-lock.sh — main-repo HEAD false positive inside worktrees
+### (b) ~~branch-lock.sh — main-repo HEAD false positive inside worktrees~~ NO-OP-CONFIRMED
 
-**Root cause:** `hooks/branch-lock.sh:59` falls back to `work_dir=$(pwd)` when `tool_input.cwd`
-is absent. When a Claude Code session's working-directory (the parent process CWD) is the
-main repo root (which is on branch `main`), every bare `git push` or `git commit` invocation
-from a worktree session resolves `git -C <main-repo-root> branch --show-current` → `main` and
-denies. Branch resolved at `hooks/branch-lock.sh:263`/`:269`; deny condition + call at `hooks/branch-lock.sh:274`.
-Live workaround: `AUTO_PILOT_MAIN_OK=1` prefix.
+**Corrected analysis (2026-06-13, dual-reviewer verified):** the original root-cause below was
+**factually wrong**. A linked git worktree carries its own `.git` **FILE** in the worktree dir, so
+`git -C $(pwd) branch --show-current` resolves the worktree's branch **natively** from the worktree
+dir or any subdir — no walk-up needed. Empirically (real `git worktree add` probe): cwd inside a real
+worktree → ALLOW (bare push + commit); cwd = main-repo root with no `tool_input.cwd` → DENY, which is
+**correct by design** (the session root is literally on `main`; the invocation is genuinely ambiguous).
+`scripts/_worktree.py:4` codifies the invariant "all ops use `git -C <path>` — never relies on cwd", so
+the worktree-session false-positive the original text described does not occur in the dispatch path.
+The spec's proposed walk-up-to-`.git`-FILE fix is therefore a **no-op** (git already resolves the
+worktree's `.git` file). Shipped: 8 worktree regression tests (`hooks/test_branch_lock.py`, 54/54) +
+an inline analysis comment at the `work_dir` fallback (`hooks/branch-lock.sh:50-58`). **No logic change.**
 
-**Proposed fix:** before using `$(pwd)` as `work_dir`, check whether CWD is inside a
-`.claude/worktrees/*` path. If so, walk up to the first parent containing a `.git` file
-(not directory) and use that as `work_dir` — the worktree's own HEAD rather than the parent
-repo's `main`.
+**Residual (unchanged, by design):** `AUTO_PILOT_MAIN_OK=1` is still required when a bare `git push`/
+`git commit` runs with the hook subprocess CWD = main-repo root and no `tool_input.cwd` (e.g. the PM
+session driving git from the repo root). This is indistinguishable from a genuine main mutation and is
+correctly denied; pass `-C <wt-dir>` / `tool_input.cwd`, or the bypass, for legitimate non-main ops.
 
-**TDD:** extend `hooks/test_branch_lock.py` with a test that simulates a
-worktree CWD (a git worktree checked out on a non-main branch inside a parent repo on `main`)
-and verifies that a bare `git push` is ALLOWED from that worktree.
+~~**Original (incorrect) root cause:** `hooks/branch-lock.sh:59` … resolves `git -C <main-repo-root>` →
+`main` from a worktree session.~~ Superseded by the corrected analysis above.
 
 ---
 

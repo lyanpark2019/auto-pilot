@@ -45,7 +45,17 @@ if printf '%s' "$cmd" | grep -q 'AUTO_PILOT_MAIN_OK=1'; then
   exit 0
 fi
 
-# Determine working directory: use tool_input.cwd if present, else CWD
+# Determine working directory: use tool_input.cwd if present, else CWD.
+#
+# Worktree note (p3b 2026-06-13, NO-OP-CONFIRMED):
+# A linked worktree has a .git FILE in its root; git -C <wt-dir> already
+# resolves to the worktree branch natively.  When the hook subprocess CWD is
+# the worktree directory (no payload.cwd), $(pwd) IS the worktree dir and git
+# resolves correctly — no walk-up logic is needed.  When payload.cwd is set
+# to the worktree dir (normal Claude Code Bash tool shape), S1 handles it.
+# The "bare push from main-repo CWD with no payload.cwd" case is DENIED by
+# design: that invocation is genuinely ambiguous (session root is on main).
+# Override: AUTO_PILOT_MAIN_OK=1 or pass -C <wt-dir> in the git command.
 work_dir=$(printf '%s' "$payload" | python3 -c '
 import sys, json
 try:

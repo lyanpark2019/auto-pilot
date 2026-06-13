@@ -109,6 +109,23 @@ CASES: list[Case] = [
     # e.g. "TICKET=docs/foo.md" appears in a non-dispatch planning prompt.
     ("prose TICKET=docs/foo.md slashed, not tickets-shape", "general-purpose",
      "see TICKET=docs/foo.md for context", True, False, "ALLOW", True, True),
+    # Prose contract_dir= mention with no contract.json at the path → must ALLOW (P3-a false-positive fix).
+    # A planning/spec/doc prompt that explains the protocol may contain "contract_dir=/some/path"
+    # in its text; no real dispatch is occurring, so the hook must treat it as prose.
+    ("prose contract_dir= mention, no contract.json at path", "general-purpose",
+     "set contract_dir=/tmp/auto_pilot_p3a_no_contract_here for context", False, False, "ALLOW", True, True),
+    # Shape-gate → reviewer-fail-closed boundary: when contract_dir= points at a path with no
+    # contract.json the shape-gate clears the marker (fall-through).  For a reviewer subagent
+    # during an active run the reviewer-fail-closed branch MUST still fire and DENY.
+    # Case 1 proves DENY; Case 2 documents the scope boundary (no active run → ALLOW).
+    ("shape-gate fall-through: reviewer, active run → DENY",
+     "auto-pilot-codex-reviewer",
+     "contract_dir=/tmp/nope_no_contract_xyz review",
+     True, False, "DENY", True, True),
+    ("shape-gate fall-through: reviewer, no active run → ALLOW",
+     "auto-pilot-codex-reviewer",
+     "contract_dir=/tmp/nope_no_contract_xyz review",
+     False, False, "ALLOW", True, True),
 ]
 
 
