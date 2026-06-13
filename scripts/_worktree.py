@@ -11,6 +11,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import shutil
 import subprocess
 import time
 from contextlib import contextmanager
@@ -239,15 +240,31 @@ class WorktreeManager:
         ).strip()
 
     def _clear_stale_am_state(self) -> None:
-        """Abort any leftover `git am` state; raise StaleAmStateError if it persists."""
+        """Clear any leftover `git am` state; raise StaleAmStateError if it persists.
+
+        Escalates: `git am --abort` (restores pre-am HEAD + worktree) → `git am
+        --quit` (forgets the session metadata) → direct removal of the
+        `.git/rebase-apply` directory. Some git builds (observed on ubuntu CI
+        git 2.43) leave the directory behind after both --abort and --quit for
+        an apply-failure session, which would otherwise wedge recovery; the
+        rmtree fallback is the documented manual fix (`rm -rf .git/rebase-apply`)
+        and is bounded to that one path. A clean apply-failure never modified
+        the worktree; if a session DID leave the tree dirty, apply_to_main's
+        dirty-check surfaces it next rather than this swallowing it silently.
+        """
         rebase_apply = self.repo_root / ".git" / "rebase-apply"
-        if rebase_apply.exists():
+        if not rebase_apply.exists():
+            return
+        for verb in ("--abort", "--quit"):
             subprocess.run(
-                ["git", "-C", str(self.repo_root), "am", "--abort"],
+                ["git", "-C", str(self.repo_root), "am", verb],
                 capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
             )
-            if rebase_apply.exists():
-                raise StaleAmStateError(f"could not clear {rebase_apply}")
+            if not rebase_apply.exists():
+                return
+        shutil.rmtree(rebase_apply, ignore_errors=True)
+        if rebase_apply.exists():
+            raise StaleAmStateError(f"could not clear {rebase_apply}")
 
     def _extract_conflict_files(self) -> tuple[str, ...]:
         """Parse the rebase-apply/patch file to extract conflicting file paths."""
