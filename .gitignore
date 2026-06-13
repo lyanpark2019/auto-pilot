@@ -20,6 +20,9 @@ scheduled_tasks.lock
 .claude/scheduled_tasks.lock
 graphify-out/
 
+# vault export pipeline run artifacts
+.vault-builder/
+
 # secrets — never commit (GH OAuth creds etc.)
 .env
 .env.*
