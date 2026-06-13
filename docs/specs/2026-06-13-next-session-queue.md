@@ -58,6 +58,37 @@ Deferred decisions revisit with G1 evidence: Q4 verify integration and ARL codeb
 
 ## P2 — 6 Hermes tickets → assets via promotion FSM
 
+**STATUS 2026-06-13 (session 2):** 5 of 7 ledger tickets PROMOTED — 10c5a82d (shellcheck),
+f0714c2a (fail-open, PR #48), 5dc13c9a (anchor-markers, PR #49), dbc42839 (asset-count detector,
+PR #50), 0bfc7486 (ledger-pollution test, PR #51). All merged to main, CI green, batch-blessed.
+
+**2 REMAINING (blocked mid-run by subagent session limit — resume next session):**
+
+- **138cdacd** (fixture-shape, test) — NOT STARTED. Scope: enumerate empty-string / key-absent /
+  whitespace-only boundary variants of the primary stdin field in the hook tests that lack them
+  (survey `hooks/test_*.py`; add only the MISSING variant per guard, asserting actual current
+  behavior; if a variant reveals a real fail-open/closed bug, report it, don't encode it). Disjoint
+  from everything → own branch off main.
+- **ec583cd0** (labelled reentry/test — BOTH wrong; real evidence = RED-first discipline). The
+  `agents/review-gatekeeper.md` tdd-gate strengthening is ALREADY WRITTEN (a worker completed it
+  before the session limit; re-apply verbatim) — insert after the theatre-check, renumbering the
+  suite-run step to 5:
+  ```
+  4. **Confirm RED (behavior diffs only).** For each new or changed test covering a runtime change:
+     - Check the worker's report for recorded RED evidence (failing-test output observed BEFORE the fix).
+     - If RED evidence is absent: attempt to reproduce — `git stash` the implementation hunk, run the
+       test, confirm it FAILs, then `git stash pop`. If it passes pre-change code (or you cannot
+       reproduce failure), the test is theatre → REJECT. Do not APPROVE a test that was never observed to fail.
+  5. Run the test suite — paste output. If tests fail → REJECT.
+  ```
+  STILL TODO for ec583cd0: add ONE line to `agents/auto-pilot-worker.md` verify/report contract —
+  worker must record RED evidence for any behavior change; then dual-review + merge. Note in the
+  ledger/PR: candidate_asset="test" is a MISLABEL — durable asset is a gate-contract clause (doc).
+
+**Cleanup debt (manual):** stray `.clone/` dir at repo root (a subagent's errant nested clone holding
+a dup of check_asset_counts.py — `rm -rf .clone`, needs the destructive-guard bypass); lingering merged
+local branches `fix/p2-*` (guard-destructive false-fires on `git branch -d` — use the approval marker).
+
 FSM + CLI shipped 2026-06-13: `scripts/_promotion.py:1`, orchestrator subcommands
 `improvements-list/gate/set-state` (`scripts/_promotion.py:127`).
 Ledger: `~/.claude/projects/-Users-lyan-Documents-Project-auto-pilot/improvements/`.
