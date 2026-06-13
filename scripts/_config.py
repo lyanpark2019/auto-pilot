@@ -23,7 +23,6 @@ class AutoPilotConfig:
     default_max_concurrent_claude: int = 4
     # Wall-clock watchdog: abort after this many seconds; 0 = disabled (opt-in).
     default_max_wall_clock_sec: float = 0.0
-    monitored_ports: tuple[int, ...] = (8000, 3000, 5000, 8080)
     # Preflight artifact max age; mirrors PREFLIGHT_TTL_SEC in _dispatch.py.
     # Env var: AUTO_PILOT_PREFLIGHT_TTL_SEC (same name as the dispatch module reads).
     preflight_ttl_sec: int = 900

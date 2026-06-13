@@ -16,7 +16,7 @@ Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-c
 ## Boot
 
 ```bash
-python ${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py} \
+python3 ${AUTO_PILOT_HELPER_ABSPATH:-/abs/path/to/scripts/_subagent_helpers.py} \
     --read-ticket "$TICKET"
 ```
 

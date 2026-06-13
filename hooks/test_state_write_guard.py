@@ -378,6 +378,120 @@ EXTRA_CASES: list[tuple[str, str, str, dict[str, str] | None, str]] = [
         None,
         "pm-orchestrator",
     ),
+    # ── FIX 1: in-place / destructive writer bypass cases ──────────────────────
+    # sed -i edits state.json in-place → DENY
+    (
+        "FIX1 sed -i .planning/auto-pilot/state.json → DENY",
+        "DENY",
+        _state("sed -i s/a/b/ .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # perl -i in-place → DENY
+    (
+        "FIX1 perl -i state.json → DENY",
+        "DENY",
+        _state("perl -i -e 's/a/b/g' .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # perl -pi in-place → DENY
+    (
+        "FIX1 perl -pi state.json → DENY",
+        "DENY",
+        _state("perl -pi -e 's/a/b/g' .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # install overwrites destination → DENY
+    (
+        "FIX1 install x state.json → DENY",
+        "DENY",
+        _state("install x .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # ln -sf symlink replaces state.json → DENY
+    (
+        "FIX1 ln -sf /tmp/x state.json → DENY",
+        "DENY",
+        _state("ln -sf /tmp/x .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # rm deletes state.json (defeats lock invariant) → DENY
+    (
+        "FIX1 rm .planning/auto-pilot/state.json → DENY",
+        "DENY",
+        _state("rm .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # ed editor targeting state.json → DENY
+    (
+        "FIX1 ed .planning/auto-pilot/state.json → DENY",
+        "DENY",
+        _state("ed .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # ex editor targeting state.json → DENY
+    (
+        "FIX1 ex .planning/auto-pilot/state.json → DENY",
+        "DENY",
+        _state("ex .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # awk with embedded redirect inside program string → DENY
+    (
+        "FIX1 awk embedded redirect to state.json → DENY",
+        "DENY",
+        _state('awk \'BEGIN{print > ".planning/auto-pilot/state.json"}\' input.txt'),
+        None,
+        _WORKER_ROLE,
+    ),
+    # positive: sed -i on a NON-state file must still be allowed
+    (
+        "FIX1 sed -i scripts/foo.py (not state) → ALLOW",
+        "ALLOW",
+        _state("sed -i s/a/b/ scripts/foo.py"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # positive: cat state.json (read) must still be allowed
+    (
+        "FIX1 cat state.json (read-only) → ALLOW",
+        "ALLOW",
+        _state("cat .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # positive: jq . state.json (read) must still be allowed
+    (
+        "FIX1 jq . state.json (read-only) → ALLOW",
+        "ALLOW",
+        _state("jq . .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # ── FIX 2: fd-numbered redirect operators ──────────────────────────────────
+    # echo 1> state.json (fd-prefixed overwrite) → DENY
+    (
+        "FIX2 echo 1> state.json → DENY",
+        "DENY",
+        _state("echo bad 1> .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # echo 1>> state.json (fd-prefixed append) → DENY
+    (
+        "FIX2 echo 1>> state.json → DENY",
+        "DENY",
+        _state("echo bad 1>> .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
 ]
 
 

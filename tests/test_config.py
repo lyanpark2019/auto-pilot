@@ -18,7 +18,6 @@ def test_load_returns_config():
     assert cfg.default_max_iter == 100
     assert cfg.default_sleep_sec == 10
     assert cfg.default_timeout_build_sec == 4 * 3600
-    assert 8000 in cfg.monitored_ports
 
 
 def test_claude_bin_env_override(monkeypatch):
