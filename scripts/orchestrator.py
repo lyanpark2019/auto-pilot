@@ -192,19 +192,13 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
     if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
         # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
         # (tests fabricate state without a real contracts tree). Never set in prod.
-        blocked = _evidence.gate_phase_end(STATE_DIR / "contracts")
-        if blocked is not None:
-            suffix, message = blocked
+        result = _evidence.gate_phase_end(STATE_DIR / "contracts")
+        if isinstance(result, tuple):
+            suffix, message = result
             _warn(message)
             event(f"phase_end.{suffix}", phase=args.phase)
             return 2
-        round_dirs = _evidence.latest_round_dirs_for_active_phase(STATE_DIR / "contracts")
-        for rdir in round_dirs:
-            try:
-                _evidence.assert_round_evidence(rdir)
-                approved_count += 1
-            except _evidence.EvidenceError:
-                pass
+        approved_count = result
 
     # Auto-append ledger records — telemetry; never blocks phase-end.
     try:

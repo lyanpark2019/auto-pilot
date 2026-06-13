@@ -120,3 +120,21 @@ def test_phase_end_approved_stays_zero_on_failed(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     state = json.loads((tmp_path / ".planning/auto-pilot/state.json").read_text())
     assert state["phases"][0].get("approved", 0) == 0
+
+
+def test_phase_end_approved_two_contracts(tmp_path):
+    """phase-end --status success with two passing contracts → approved == 2."""
+    _init_running_state(tmp_path)
+    contracts_root = tmp_path / ".planning" / "auto-pilot" / "contracts"
+    for name in ("contract-1", "contract-2"):
+        contract_dir = contracts_root / "iter-1" / "phase-1" / name
+        contract_dir.mkdir(parents=True)
+        _build_passing_round(contract_dir)
+
+    proc = _run(tmp_path, "phase-end", "--phase", "1", "--status", "success")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    state = json.loads((tmp_path / ".planning/auto-pilot/state.json").read_text())
+    assert state["phases"][0]["approved"] == 2, (
+        f"expected approved=2, got {state['phases'][0].get('approved')}"
+    )

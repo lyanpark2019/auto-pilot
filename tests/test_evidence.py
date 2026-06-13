@@ -190,13 +190,14 @@ def test_gate_phase_end_no_contracts_tree(tmp_path):
 
 
 def test_gate_phase_end_complete_chain(tmp_path):
-    """Latest round with a valid complete chain → returns None (gate passes)."""
+    """Latest round with a valid complete chain → returns approved count (int ≥ 1)."""
     root = tmp_path / "contracts"
     contract_dir = root / "iter-1" / "phase-1" / "contract-1"
     contract_dir.mkdir(parents=True)
     _build_round(contract_dir)  # creates contract_dir/round-1 with full chain
     result = _evidence.gate_phase_end(root)
-    assert result is None
+    assert isinstance(result, int), f"expected int, got {result!r}"
+    assert result == 1
 
 
 def test_gate_phase_end_broken_chain(tmp_path):

@@ -132,7 +132,8 @@ structured verdict.
 ### When you fire (`tdd-gate`)
 
 The PM invokes this mode in parallel with `auto-pilot-codex-reviewer` and
-`auto-pilot-claude-reviewer` for any worker diff that touches application code.
+`auto-pilot-claude-reviewer` for any worker diff that touches application code
+OR for tests-only diffs (see sub-path below).
 This mode is skipped for docs-only or config-only diffs (PM decides via path
 heuristic).
 
@@ -177,16 +178,32 @@ Does NOT count as runtime change (no test required):
 ```
 1. Read diff (git diff against base ref)
 2. Classify each changed file: runtime | test | docs/config
-3. If no runtime change → APPROVE (nothing to enforce)
-4. For each runtime file changed:
-   - Find matching test file (same module path, swap dir or add .test/_test)
-   - Check if matching test file is also in the diff (added or modified)
-   - If absent → flag as untested runtime change
-5. If any untested runtime change → REJECT
-6. Verify the new/modified tests actually exercise the new behavior
-   (not just import statements or trivial smoke tests)
-7. Run the test suite — paste output. If tests fail → REJECT.
+3. Dispatch sub-path:
+   a. Runtime-only or mixed diff:
+      - If no runtime file changed → APPROVE (nothing to enforce)
+      - For each runtime file changed:
+        * Find matching test file (same module path, swap dir or add .test/_test)
+        * Check if matching test file is also in the diff (added or modified)
+        * If absent → flag as untested runtime change
+      - If any untested runtime change → REJECT
+      - Verify the new/modified tests actually exercise the new behavior
+        (not just import statements or trivial smoke tests)
+   b. Tests-only diff (ONLY test files changed, zero runtime files):
+      - Do NOT auto-APPROVE. The diff may add theatre tests that never fail.
+      - Evaluate test quality directly:
+        * Assertions that can actually fail on a real code bug (not `assert True`)
+        * At least one failure path exercised (not only the happy path)
+        * No mock-everything patterns that make tests structurally untestable
+        * No trivial smoke tests (empty body, single `pass`, `assert x is not None`)
+      - REJECT when tests are theatre; APPROVE when quality checks pass.
+4. Run the test suite — paste output. If tests fail → REJECT.
 ```
+
+> **Why tests-only diffs are not auto-APPROVE:** `specialist-pool.md` routes
+> tests-only diffs here precisely because they may introduce theatre. A diff that
+> touches only test files but adds assertions that can never fail is worse than no
+> test — it gives false coverage confidence while the real behavior is untested.
+> See `agents/specialist-pool.md` → tests-only row for the dispatch rule.
 
 ### Output format (`tdd-gate`)
 

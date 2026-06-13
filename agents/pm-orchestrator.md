@@ -241,6 +241,7 @@ VERDICT: APPROVE or REJECT + findings table.
     {"phase": 0, "status": "success", "commits": ["sha1"], "started": "...", "ended": "..."},
     {"phase": 1, "status": "running", "round": 2, "contracts": 6, "approved": 4}
   ],
+  "pivot_detector": {
     "phase-1": {"finding-hash-abc": 1, "finding-hash-def": 3}
   }
 }

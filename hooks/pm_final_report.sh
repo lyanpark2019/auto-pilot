@@ -145,13 +145,13 @@ except Exception as e:
     print(f"pm_final_report: session-artifacts skipped: {e}", file=sys.stderr)
 PY
 
-python3 - "$report_dir" <<'PY'
+python3 - "$report_dir" <<'PY' || exit 0
 import pathlib, sys
 
 KEEP = 20
 reports = sorted(pathlib.Path(sys.argv[1]).glob("pm-final-report-*.md"))
 for old in reports[:-KEEP]:
-    old.unlink()
+    old.unlink(missing_ok=True)
 PY
 
 [[ -s "$report" ]] && printf '{"continue":true,"systemMessage":"PM final report: %s"}\n' "$report"
