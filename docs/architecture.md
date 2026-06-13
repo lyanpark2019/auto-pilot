@@ -274,9 +274,9 @@ Regression pins: `tests/test_pm_protocol_contract_dispatch.py` asserts `dispatch
 
 1. `review-input/frozen.diff` exists; recomputed SHA-256 == `review-input/frozen.diff.sha256` content.
 2. Both `tickets/{codex-reviewer,claude-reviewer}.json` exist with `diff_sha256` equal to that value.
-3. Both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist, schema-valid, `contract_id` matches the round, `verdict == "APPROVE"`.
+3. Both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist, schema-valid, `contract_id` matches the round. Verdict requirement (per `scripts/_evidence.py` docstring lines 17–20, CLAUDE.md module table): claude-reviewer must be APPROVE (with `scope_check=PASS`); codex-reviewer may be APPROVE or honest ABSTAIN (verdict `ABSTAIN` + non-empty `reviewer_meta.abstain_reason`) — codex unavailability never blocks, a codex REJECT still does.
 
-`scripts/orchestrator.py cmd_phase_end` calls `_evidence.latest_round_dirs_for_active_phase(contracts_root)` to locate round dirs, then `assert_round_evidence` on each. Failure → exit 2, `BLOCKED` stderr, state untouched. `AUTO_PILOT_SKIP_EVIDENCE=1` escape hatch exists for unit tests that fabricate state without contract dirs (test-only, never for live runs).
+`scripts/orchestrator.py cmd_phase_end` calls `_evidence.gate_phase_end(contracts_root)`, which internally locates the latest-round dirs and runs `assert_round_evidence` on each. Failure → exit 2, `BLOCKED` stderr, state untouched. `AUTO_PILOT_SKIP_EVIDENCE=1` escape hatch exists for unit tests that fabricate state without contract dirs (test-only, never for live runs).
 
 Proven live in run-4 (2026-06-10/12): dual APPROVE with sha-bound evidence required before phase advanced; deliberate missing-trailer REJECT in phase 1 proved the round-2 recovery path.
 
@@ -303,7 +303,7 @@ Helpers: `_timeout_preserved_status(state_after)` checks `status == "success"` o
 
 Invariant: phase-end evidence gates remain the authority for success. Timeout preservation only applies when state already proves success before the wrapper timed out — it cannot turn stranded reviewer outputs into success.
 
-Regression tests: `tests/test_headless_loop.py::test_timeout_preserves_terminal_success_state` and `test_timeout_preserves_completed_phase_when_run_continues`.
+Regression tests: `tests/test_headless_loop_recovery.py::test_timeout_preserves_terminal_success_state` and `::test_timeout_preserves_completed_phase_when_run_continues`.
 
 ## Routing ledger & model-tier assignment (Slice C, 2026-06-12)
 
@@ -311,16 +311,18 @@ Regression tests: `tests/test_headless_loop.py::test_timeout_preserves_terminal_
 
 **`scripts/_ledger.py`** — IO layer + schema validation. Public API: `load_ledger`, `validate_ledger`, `save_ledger`, `build_record_from_round_dirs`, `append_phase_records`. Re-exports `evaluate_rebalance` from `_rebalance.py` for backward-compat callers. Schema: `schemas/routing-ledger.schema.json` (JSON Schema 2020-12; `p0_escaped` OPTIONAL boolean added).
 
-**`scripts/_rebalance.py`** — pure rule engine. Zero IO; operates on plain dicts only. `evaluate_rebalance(ledger, ladder, config)` returns proposed `rebalance_log` entries (never written unless `--apply`).
+**`scripts/_rebalance.py`** — pure rule engine. No ledger IO; config read via `_routing` (`_routing.model_rank` reads `model-routing.yaml` to resolve tier ranks). Operates on plain dicts only. `evaluate_rebalance(ledger, ladder, config)` returns proposed `rebalance_log` entries (never written unless `--apply`).
 
 ### Four rebalance rules
 
+SoT for trigger wording: `skills/auto-pilot/references/model-routing.md`. Code enforcement: `scripts/_rebalance.py`.
+
 | Rule | Trigger | Effect |
 |------|---------|--------|
-| `promote-2x-gate-fail` | ≥2× rejects in group | propose model upgrade |
-| `promote-real-p0` | any record has `p0_escaped=True` | propose model upgrade |
-| `trial-demotion-3x-clean` | ≥3 consecutive clean rounds after a trial | propose demotion confirmation |
-| `revert-trial` | clean-run ratio drops after trial-demotion | propose revert to prior tier |
+| `promote-2x-gate-fail` | last two consecutive fresh records both fail `gates_first_try` | propose model upgrade |
+| `promote-real-p0` | any fresh record has `p0_escaped=True` | propose model upgrade |
+| `trial-demotion-3x-clean` | last three consecutive fresh records all clean (`review_rounds==1`, first-try gate pass, `rejects_real==0`); a pending trial blocks a new demotion | propose one-tier trial demotion |
+| `revert-trial` | any single failing record newer than the trial-demotion entry | propose revert to prior tier |
 
 `revert-trial` takes precedence: when it fires for a group, promote rules are suppressed for that group in the same pass. At most one promote rule fires per group per call (double-promote prevention).
 
