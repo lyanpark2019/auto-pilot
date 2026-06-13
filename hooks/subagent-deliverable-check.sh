@@ -14,6 +14,7 @@ set -euo pipefail
 
 payload=$(cat)
 
+# shellcheck disable=SC2016 # python heredoc — not a shell expansion context
 printf '%s' "$payload" | python3 -c '
 import json
 import os
@@ -30,7 +31,7 @@ except Exception:
 if d.get("stop_hook_active"):
     sys.exit(0)
 
-# Extract the subagent'"'"'s last output text.  The SubagentStop payload shape
+# Extract the last output text from the subagent.  The SubagentStop payload shape
 # (Claude Code >=0.2): {"stop_reason": "...", "result": {"output": "...", ...}}
 output_text = ""
 result = d.get("result") or {}
