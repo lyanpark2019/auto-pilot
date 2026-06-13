@@ -1,7 +1,7 @@
 ---
 type: runbook
 topic: auto-pilot-7-phase-fallback
-source_commit: f726a9fa218eb29e2a01d54db4b94c0a1aaecb14
+source_commit: 36dc75b9f02dc2f34f7e26e9cd65887ab4c35aed
 manual_edit: false
 ---
 

@@ -301,11 +301,12 @@ class TestScanScope:
 
 
 class TestSymbolWarn:
-    """Pin the symbol-proximity WARN heuristic behaviour.
+    """Pin the symbol-proximity behaviour for canonical docs and docs/specs/.
 
-    The WARN fires when a backtick-wrapped symbol appears near a citation in the
-    doc but is absent from the 10-line window around the cited line in the code
-    file.  It is advisory only (exit 0); the test captures it via stderr.
+    For canonical docs (outside docs/specs/), a nearby symbol absent from the
+    cited line window is a hard VIOLATION (exit 1).
+    For docs/specs/**, it stays a WARN on stderr (exit 0) — specs are historical
+    planning docs, distilled+deleted per CLAUDE.md, so stale proximity is expected.
     """
 
     def _make_code_file(self, repo: Path, fn_line: int) -> None:
@@ -315,18 +316,16 @@ class TestSymbolWarn:
             "".join(padding) + "def foo():\n    pass\n"
         )
 
-    def test_warn_emitted_for_symbol_at_wrong_line(self, repo: Path) -> None:
-        """Citation pointing to line 5 when `foo` is at line 50 → WARN on stderr."""
+    def test_symbol_at_wrong_line_is_violation_in_canonical_doc(self, repo: Path) -> None:
+        """Citation pointing to line 5 when `foo` is at line 50 → VIOLATION in canonical doc."""
         self._make_code_file(repo, fn_line=50)
-        # cite line 5; symbol `foo` appears near doc line but NOT in code window
         (repo / "docs" / "guide.md").write_text(
             "`foo` lives in `scripts/code.py:5`\n"
         )
         r = _run(repo)
-        assert r.returncode == 0, "WARN must not cause a violation (exit stays 0)"
-        assert "WARN" in r.stderr
-        assert "foo" in r.stderr
-        assert "scripts/code.py:5" in r.stderr
+        assert r.returncode == 1, "missing symbol in canonical doc must be a violation"
+        assert "foo" in r.stdout
+        assert "not found near" in r.stdout
 
     def test_no_warn_for_symbol_at_correct_line(self, repo: Path) -> None:
         """`foo` cited at the line it actually lives on → no WARN."""
@@ -338,3 +337,36 @@ class TestSymbolWarn:
         r = _run(repo)
         assert r.returncode == 0
         assert "WARN" not in r.stderr
+
+
+class TestSpecsCarveOut:
+    """docs/specs/** paths get WARN-only treatment for symbol proximity."""
+
+    def _make_code_file(self, repo: Path, fn_line: int) -> None:
+        padding = ["# padding\n"] * (fn_line - 1)
+        (repo / "scripts" / "code.py").write_text(
+            "".join(padding) + "def foo():\n    pass\n"
+        )
+
+    def test_missing_symbol_in_specs_is_warn_only(self, repo: Path) -> None:
+        """Missing symbol in docs/specs/** stays WARN (exit 0), not a violation."""
+        self._make_code_file(repo, fn_line=50)
+        specs = repo / "docs" / "specs"
+        specs.mkdir(parents=True, exist_ok=True)
+        (specs / "plan.md").write_text(
+            "`foo` lives in `scripts/code.py:5`\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, "specs doc symbol mismatch must stay WARN-only (exit 0)"
+        assert "WARN" in r.stderr
+        assert "foo" in r.stderr
+
+    def test_missing_symbol_in_canonical_doc_fails(self, repo: Path) -> None:
+        """Missing symbol in canonical doc (not docs/specs/) is a hard VIOLATION."""
+        self._make_code_file(repo, fn_line=50)
+        (repo / "docs" / "guide.md").write_text(
+            "`foo` lives in `scripts/code.py:5`\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1, "canonical doc symbol mismatch must be exit 1"
+        assert "not found near" in r.stdout

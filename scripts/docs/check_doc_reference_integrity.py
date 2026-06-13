@@ -7,8 +7,10 @@ Scans docs/*.md, CLAUDE.md, and .claude/**/*.md for file:line citations
 For each citation:
   (a) the cited file must exist in the repo root;
   (b) the cited line number must be ≤ the file's line count.
-  (c) best-effort: if a symbol name appears nearby, warn if it is absent
-      from that line's surrounding context (10-line window).
+  (c) symbol proximity: for canonical docs (outside docs/specs/) a missing
+      nearby symbol is a hard VIOLATION (exit 1); for docs/specs/** it is
+      WARN-only — specs are historical planning docs, distilled+deleted per
+      CLAUDE.md convention, so stale symbol proximity there is expected.
 Also enforces inventory counts: live asset-count claims and free-text
 hook-count claims ("(N scripts)" / "N hooks") on the wiring-SoT pages must
 match the real inventory (hooks/hooks.json for hook counts).
@@ -315,23 +317,23 @@ class _FileCache:
         return self._counts[p]
 
 
-def _warn_symbols(
+def _check_symbols(
     cache: _FileCache, doc_lines: list[str], doc_rel: str, doc_lineno_0: int,
-    target_path: Path, raw_path: str, cited_lineno: int,
-) -> None:
-    """Emit a WARN to stderr when nearby symbols are absent from the cited line window."""
+    target_path: Path, raw_path: str, cited_lineno: int, strict: bool,
+) -> list[Violation]:
     nearby = _nearby_symbols(doc_lines, doc_lineno_0)
-    if not nearby:
-        return
     code_lines = cache.get_lines(target_path)
-    if code_lines is None:
-        return
+    if not nearby or code_lines is None:
+        return []
     missing = _find_symbol_in_window(code_lines, cited_lineno - 1, nearby)
-    if missing:
-        sys.stderr.write(
-            f"WARN {doc_rel}:{doc_lineno_0 + 1}: symbol(s) "
-            f"{missing} not found near {raw_path}:{cited_lineno}\n"
-        )
+    if not missing:
+        return []
+    reason = f"symbol(s) {missing} not found near {raw_path}:{cited_lineno}"
+    if not strict:
+        sys.stderr.write(f"WARN {doc_rel}:{doc_lineno_0 + 1}: {reason}\n")
+        return []
+    return [_violation(doc_rel, doc_lineno_0, raw_path, reason,
+                       "fix the cited line or remove the stale symbol reference")]
 
 
 def _check_path_resolvable(
@@ -394,26 +396,25 @@ def _check_line_bounds(
 def _check_citation(
     cache: _FileCache, repo_root: Path, doc_rel: str, doc_lines: list[str],
     doc_lineno_0: int, raw_path: str, line_str: str, end_line_str: str | None,
-    citation: str,
-) -> Violation | None:
-    """Validate one citation match; return a Violation or None (clean / WARN-only)."""
+    citation: str, strict: bool,
+) -> list[Violation]:
+    """Validate one citation; return Violations (empty = clean or WARN-only)."""
     target_path, path_violation = _check_path_resolvable(
         doc_rel, doc_lineno_0, citation, raw_path, repo_root
     )
     if path_violation is not None:
-        return path_violation
+        return [path_violation]
     assert target_path is not None
     bounds_violation = _check_line_bounds(
         cache, doc_rel, doc_lineno_0, citation, raw_path,
         target_path, line_str, end_line_str,
     )
     if bounds_violation is not None:
-        return bounds_violation
-    _warn_symbols(
+        return [bounds_violation]
+    return _check_symbols(
         cache, doc_lines, doc_rel, doc_lineno_0,
-        target_path, raw_path, int(line_str),
+        target_path, raw_path, int(line_str), strict,
     )
-    return None
 
 
 def _check_doc_lines(
@@ -425,6 +426,9 @@ def _check_doc_lines(
     if doc_lines is None:
         return violations
     doc_rel = str(doc_path.relative_to(repo_root))
+    # docs/specs/ are historical planning docs (distilled+deleted per CLAUDE.md);
+    # symbol proximity mismatches there are expected — keep as WARN, non-blocking.
+    strict = not doc_rel.startswith("docs/specs/")
     for lineno_0, raw_line in enumerate(doc_lines):
         if IGNORE_MARKER in raw_line:
             continue
@@ -434,12 +438,10 @@ def _check_doc_lines(
             raw_path = m.group(1)
             if _is_skipped_path(raw_path) or not _is_checkable(raw_path):
                 continue
-            v = _check_citation(
+            violations.extend(_check_citation(
                 cache, repo_root, doc_rel, doc_lines, lineno_0,
-                raw_path, m.group(2), m.group(3), m.group(0).strip("`"),
-            )
-            if v is not None:
-                violations.append(v)
+                raw_path, m.group(2), m.group(3), m.group(0).strip("`"), strict,
+            ))
     return violations
 
 

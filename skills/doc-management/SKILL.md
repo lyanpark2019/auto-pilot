@@ -41,8 +41,8 @@ This SKILL.md is the executable entry.
 | Export docs/graph to an Obsidian / NotebookLM vault | NOT here → `vault-build` |
 
 AUDIT finds, MAINTAIN fixes, REBUILD replaces. Steady-state lifecycle: REBUILD once →
-post-commit hook keeps the graph fresh → `check_design_doc_freshness.py` WARNs on stale
-docs → MAINTAIN batches the refreshes → periodic AUDIT catches what machines can't.
+post-commit hook keeps the graph fresh → `check_design_doc_freshness.py` flags stale docs (blocking)
+→ MAINTAIN batches the refreshes → periodic AUDIT catches what machines can't.
 "The user thinks it's rotten" is a hypothesis, not a finding — REBUILD's Phase 0
 diagnosis decides between full rebuild and targeted cleanup; when in doubt start there.
 
@@ -117,9 +117,8 @@ single source, do not re-derive). Then, from the target repo root:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py [DOC_ROOT ...]
-# default DOC_ROOT: .claude/design — or run the repo's own installed copy
-# For this plugin repo, also pass docs/ explicitly: architecture.md and asset-charter.md live there and are freshness-tracked.
-# Example: check_design_doc_freshness.py .claude/design docs/
+# default DOC_ROOT: docs — or run the repo's own installed copy
+# For this plugin repo, also pass .claude/design/ if needed: check_design_doc_freshness.py docs .claude/design
 ```
 
 Zero-LLM: per doc, diffs the body's cited source paths against frontmatter
@@ -127,8 +126,7 @@ Zero-LLM: per doc, diffs the body's cited source paths against frontmatter
 **STALE** (prints doc + changed files). Missing/empty required frontmatter keys
 (`type`/`topic`/`source_commit`/`manual_edit` — the section-5 contract) =
 frontmatter-contract **WARN**. `manual_edit: true` docs are skipped for freshness —
-automation never touches them. **Always exits 0** — a blocking gate would hold every
-code PR hostage to doc updates. Known limits: renames/moves untracked (path-based
+automation never touches them. STALE exits 1 (blocking); frontmatter-contract WARN exits 0 (advisory). Known limits: renames/moves untracked (path-based
 diff); cites are collected only under the script's path-prefix allowlist (CONFIG
 block / `DOC_FRESHNESS_PATH_PREFIXES` env) — out-of-allowlist cites silently report
 fresh, so extend the list when a repo grows a new source tree.
@@ -204,7 +202,7 @@ residual semantic risk. Never "docs now perfect".
 | L1 generate (`--check` freshness on OpenAPI-style exports) | fact drift in generated artifacts | gate | yes |
 | L2 guard (`check-doc-reference-integrity.mjs`) | dead paths, `file:NNN` > EOF, retired symbols as current | gate (CI) | yes |
 | graph hook (`graphify hook install` + `${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-update.sh`) | structure lag | every commit / edit | auto |
-| L3 freshness (`check_design_doc_freshness.py`) | design docs whose cited sources changed | gate WARN + post-commit line | **WARN only** |
+| L3 freshness (`check_design_doc_freshness.py`) | design docs whose cited sources changed | gate STALE-blocking (exit 1) + post-commit line | **STALE blocks** (exit 1); frontmatter-contract WARN advisory (exit 0) |
 | MAINTAIN | resolving STALE | on-demand batch | reviewed |
 | AUDIT | semantic drift (prose ↔ logic) | periodic / post-big-refactor | report |
 
@@ -219,8 +217,8 @@ itself needs maintenance.
 
 ## Bundled assets
 
-- `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py` — L3 freshness checker (zero-LLM, WARN-only,
-  exit 0 always). Copy into the target repo's scripts dir or run from the skill.
+- `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py` — L3 freshness checker (zero-LLM, STALE blocks
+  exit 1; frontmatter-contract WARN advisory exit 0). Copy into the target repo's scripts dir or run from the skill.
 - `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check-doc-reference-integrity.mjs` — L2 deterministic guard
   (project-agnostic, Node built-ins only). Copy in, edit the CONFIG block, wire into
   CI. Parses all real-world anchor styles incl. `file.py:33,36,37` comma lists.

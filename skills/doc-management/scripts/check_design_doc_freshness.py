@@ -4,17 +4,17 @@
 Zero-LLM: per doc, parse frontmatter `source_commit` + `manual_edit`, collect cited
 source paths from the body (backtick path tokens, same style as the L2 guard), run
 `git diff --name-only <source_commit>..HEAD -- <paths>`; non-empty -> STALE (prints
-doc + changed files). Frontmatter contract (doc-management-system.md section 5): every
-generated-mirror doc must carry `type` + `topic` + `source_commit` + `manual_edit`;
-any missing/empty key = WARN (one line listing the gaps). `manual_edit: true` docs
-are skipped for freshness (contract check still applies). WARN-only gate: ALWAYS exits 0 (blocking would
-hold every code PR hostage to doc updates). Known limits (doc-management-system.md
+doc + changed files). STALE is blocking: exits 1 when any doc is stale. Frontmatter
+contract (doc-management-system.md section 5): every generated-mirror doc must carry
+`type` + `topic` + `source_commit` + `manual_edit`; any missing/empty key = WARN
+(advisory only — does not change the exit code). `manual_edit: true` docs are skipped
+for freshness (contract check still applies). Known limits (doc-management-system.md
 section 9): renames/moves untracked; fenced-code cites ignored (matches L2 guard);
 cites are collected ONLY under the top-level path-prefix allowlist below (CONFIG /
 `DOC_FRESHNESS_PATH_PREFIXES` env) — paths under any other tree are invisible to
 this check and silently report fresh.
 
-Usage: check_design_doc_freshness.py [DOC_ROOT ...]     default: .claude/design
+Usage: check_design_doc_freshness.py [DOC_ROOT ...]     default: docs
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def main(argv: list[str]) -> int:
-    roots = [Path(a) for a in argv[1:]] or [Path(".claude/design")]
+    roots = [Path(a) for a in argv[1:]] or [Path("docs")]
     if git("rev-parse", "--git-dir").returncode != 0:
         print("WARN: not a git repository -- freshness needs git history (exit 0)")
         return 0
@@ -119,8 +119,8 @@ def main(argv: list[str]) -> int:
                 print(f"STALE {doc} (source_commit {commit[:10]}): {len(changed)} cited source file(s) changed:")
                 for path in changed:
                     print(f"  - {path}")
-    print(f"freshness: {scanned} doc(s) scanned, {stale} STALE, {warned} WARN -- WARN-only gate, exit 0")
-    return 0
+    print(f"freshness: {scanned} doc(s) scanned, {stale} STALE, {warned} WARN -- STALE blocks (exit {1 if stale else 0}), WARN advisory")
+    return 1 if stale else 0
 
 
 if __name__ == "__main__":

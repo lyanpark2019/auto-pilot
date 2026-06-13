@@ -81,7 +81,7 @@ When changing agent contracts or hooks:
 python3 -m pytest tests/ -q
 python3 -m mypy scripts/ hooks/
 python3 -m ruff check scripts/ tests/ hooks/
-python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py && python3 hooks/test_notebooklm_delete_gate.py && python3 hooks/test_dispatch_contract_gate.py && python3 hooks/test_headless_sync_dispatch_guard.py && python3 hooks/test_verifier_tier_gate.py && python3 hooks/test_pre_edit_human_only.py  # bundled hook self-tests (script-style, not pytest)
+python3 hooks/test_guard_destructive.py && python3 hooks/test_codex_conductor_guard.py && python3 hooks/test_notebooklm_delete_gate.py && python3 hooks/test_dispatch_contract_gate.py && python3 hooks/test_headless_sync_dispatch_guard.py && python3 hooks/test_verifier_tier_gate.py && python3 hooks/test_pre_edit_human_only.py && python3 hooks/test_preflight_handoff.py  # bundled hook self-tests (script-style, not pytest)
 
 # vault export-layer suite
 ( cd vault && python3 -m pytest tests/ -q )

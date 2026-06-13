@@ -34,3 +34,9 @@ tests/test_hooks_guards.py|640
 # (_recover.register_cli_subparsers wiring; all logic in _recover.py).
 # Cap 595 = 591 current + 4 headroom.
 scripts/orchestrator.py|595
+#
+# test_headless_loop.py is the integration test suite for headless-loop.py; all
+# tests share loop_module/state_dir fixtures and the _args helper, so splitting
+# would duplicate fixture overhead or require a conftest. OBS3 adds TestWallClock
+# (3 tests) + TestUsageLedger (2 tests) = +85 lines. Cap 520 = 516 + 4 headroom.
+tests/test_headless_loop.py|520

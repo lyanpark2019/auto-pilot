@@ -20,6 +20,7 @@ values fail fast before the headless loop or dispatch gate starts.
 | Max tokens | `default_max_tokens` dataclass field | `50000000` | `1..1000000000` | `_budget.check_caps` |
 | Fallback per-iteration cost | `default_per_iter_cost_estimate_usd` dataclass field | `0.50` | `>0..1000` USD | `_budget.parse_session_usage` fallback |
 | Max concurrent Claude processes | `default_max_concurrent_claude` dataclass field | `4` | `1..64` | `_budget.count_claude_pids` cap |
+| Max wall-clock | `default_max_wall_clock_sec` dataclass field | `0.0` (disabled) | `-1<..604800` seconds | `scripts/headless-loop.py --max-wall-clock-sec` |
 
 Env values outside `60..86400` or non-integer fail soft to the `900` default via `preflight_ttl_sec()`, whereas direct `AutoPilotConfig` field construction with a bad value raises.
 

@@ -20,6 +20,8 @@ class AutoPilotConfig:
     default_max_tokens: int = 50_000_000
     default_per_iter_cost_estimate_usd: float = 0.50
     default_max_concurrent_claude: int = 4
+    # Wall-clock watchdog: abort after this many seconds; 0 = disabled (opt-in).
+    default_max_wall_clock_sec: float = 0.0
     monitored_ports: tuple[int, ...] = (8000, 3000, 5000, 8080)
     # Preflight artifact max age; mirrors PREFLIGHT_TTL_SEC in _dispatch.py.
     # Env var: AUTO_PILOT_PREFLIGHT_TTL_SEC (same name as the dispatch module reads).
@@ -40,6 +42,8 @@ class AutoPilotConfig:
         _check_float_bounds("default_per_iter_cost_estimate_usd", self.default_per_iter_cost_estimate_usd, gt=0, le=1_000)
         # _budget.check_caps: pid growth over startup baseline >= cap — at least 1 allowed
         _check_int_bounds("default_max_concurrent_claude", self.default_max_concurrent_claude, ge=1, le=64)
+        # wall-clock watchdog: 0 = disabled; gt=-1 admits 0.0; ≤7-day ceiling
+        _check_float_bounds("default_max_wall_clock_sec", self.default_max_wall_clock_sec, gt=-1, le=604_800)
         # _dispatch.py: age_sec > PREFLIGHT_TTL_SEC — 60 s minimum to avoid instant expiry
         _check_int_bounds("preflight_ttl_sec", self.preflight_ttl_sec, ge=60, le=86_400)
 

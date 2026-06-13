@@ -39,6 +39,9 @@ jobs:
       - name: doc reference integrity (file:line citations in docs)
         run: python3 scripts/docs/check_doc_reference_integrity.py
 
+      - name: doc SHA freshness (STALE cited-source detection, blocking)
+        run: python3 skills/doc-management/scripts/check_design_doc_freshness.py docs
+
       - name: asset count drift (hardcoded counts in CLAUDE.md vs live filesystem)
         run: python3 scripts/docs/check_asset_counts.py
 
@@ -104,6 +107,8 @@ jobs:
           python3 hooks/test_pre_edit_human_only.py
           python3 hooks/test_dispatch_contract_gate.py
           python3 hooks/test_state_write_guard.py
+          python3 hooks/test_headless_sync_dispatch_guard.py
+          python3 hooks/test_preflight_handoff.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh

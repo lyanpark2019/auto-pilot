@@ -2,7 +2,8 @@
 
 Covers the L3 freshness contract: STALE detection, frontmatter contract WARN
 (type/topic/source_commit/manual_edit — doc-management-system.md section 5),
-manual_edit skip, and the always-exit-0 WARN-gate invariant.
+manual_edit skip. STALE blocks (exit 1); frontmatter-contract WARN is advisory
+(exit 0). Infrastructure absence (not-a-git-repo, cat-file miss) never blocks.
 """
 from __future__ import annotations
 
@@ -74,8 +75,24 @@ class TestFreshness:
         _git(repo, "add", "-A")
         _git(repo, "commit", "-q", "-m", "change source")
         r = _run(repo, "docs")
-        assert r.returncode == 0
+        assert r.returncode == 1
         assert "STALE" in r.stdout and "scripts/foo.py" in r.stdout
+
+    def test_default_root_is_docs(self, repo: Path) -> None:
+        commit = _git(repo, "rev-parse", "HEAD")
+        _doc(repo, "a.md", _full_meta(commit), "Covers `scripts/foo.py`.")
+        r = _run(repo)  # no root arg — default should be docs/
+        assert r.returncode == 0
+        assert "1 doc(s) scanned" in r.stdout
+
+    def test_warn_only_still_exits_zero(self, repo: Path) -> None:
+        commit = _git(repo, "rev-parse", "HEAD")
+        # Missing type + topic but source_commit points at HEAD, no stale source
+        _doc(repo, "a.md", {"source_commit": commit, "manual_edit": "false"},
+             "Covers `scripts/foo.py`.")
+        r = _run(repo, "docs")
+        assert r.returncode == 0  # frontmatter WARN must not block
+        assert any(ln.startswith("WARN") for ln in r.stdout.splitlines())
 
     def test_manual_edit_skipped(self, repo: Path):
         commit = _git(repo, "rev-parse", "HEAD")
