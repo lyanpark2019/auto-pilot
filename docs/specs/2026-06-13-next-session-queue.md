@@ -27,7 +27,8 @@ P1–P3 items are done (retro step per `agents/retro.md`).
 1. Clone / open the target repo in a Claude Code session.
 2. Bootstrap graphify: run `/graphify` in the target repo, then
    `python3 scripts/orchestrator.py discover --record --graphify-version <v>` to write
-   `graphify-provenance.json` (Step 2 seam — `docs/master-plan.md:81`).
+   `graphify-provenance.json` (Step 1 record seam — `docs/master-plan.md:81`; the Step 2 bundle-copy
+   seam that carries it into the contract is `docs/master-plan.md:85`).
 3. PM resolves context at dispatch step 0 (`agents/pm-orchestrator.md:268`):
    `_discovery.resolve_report(repo_root, state_dir, graphify_version, scope_files)`.
    If stale/absent → regen + `--record` again; still absent → proceed context-blind (never blocks).
@@ -41,8 +42,9 @@ Risk_assess + dual reviewers + review-gatekeeper modes + evidence gate fire auto
 ### (c) Success criteria
 
 - Worker diff merged to the TARGET repo's `main` branch.
-- Dual-APPROVE evidence chain in the contract bundle (both `auto-pilot-codex-reviewer` and
-  `auto-pilot-claude-reviewer` issued APPROVE, `scope_check=PASS`).
+- Evidence chain passes the exit gate (`scripts/_evidence.py:17`): `auto-pilot-claude-reviewer`
+  APPROVE with `scope_check=PASS`; `auto-pilot-codex-reviewer` APPROVE or honest ABSTAIN
+  (non-empty `reviewer_meta.abstain_reason`) — codex unavailability does not fail the run, a codex REJECT does.
 - `retro` agent appended to `.claude/insights.md` on the target repo.
 - `orchestrator.py status` shows `completed` (not `pivot-needed` or `failed`).
 
@@ -70,6 +72,7 @@ and validates, never auto-decides (`docs/architecture.md:97`). Promotion stays h
 ```
 python3 scripts/orchestrator.py improvements-set-state <prefix> accepted
 # implement the asset
+python3 scripts/orchestrator.py improvements-set-state <prefix> implemented
 python3 scripts/orchestrator.py improvements-gate <prefix> --field tests_pass --value true
 python3 scripts/orchestrator.py improvements-set-state <prefix> verified
 # user explicitly approves:
@@ -154,7 +157,7 @@ expect ALLOW, not BLOCK.
 is absent. When a Claude Code session's working-directory (the parent process CWD) is the
 main repo root (which is on branch `main`), every bare `git push` or `git commit` invocation
 from a worktree session resolves `git -C <main-repo-root> branch --show-current` → `main` and
-denies (`hooks/branch-lock.sh:263`, `hooks/branch-lock.sh:269`, `hooks/branch-lock.sh:275`).
+denies. Branch resolved at `hooks/branch-lock.sh:263`/`:269`; deny condition + call at `hooks/branch-lock.sh:274`.
 Live workaround: `AUTO_PILOT_MAIN_OK=1` prefix.
 
 **Proposed fix:** before using `$(pwd)` as `work_dir`, check whether CWD is inside a
