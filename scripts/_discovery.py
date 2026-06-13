@@ -41,10 +41,21 @@ class Freshness:
 
 
 def _git_head(repo_root: Path) -> str:
-    return subprocess.check_output(
-        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-        text=True, timeout=_GIT_TIMEOUT,
-    ).strip()
+    """Current HEAD sha, or "" when HEAD is unresolvable (unborn / non-git).
+
+    Fail-soft like ``_changed_since`` — never raise, so the freshness check
+    cannot block dispatch on a missing or unborn git context.
+    """
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=_GIT_TIMEOUT,
+        )
+    except OSError:
+        return ""
+    if res.returncode != 0:
+        return ""
+    return res.stdout.strip()
 
 
 def record_provenance(
@@ -117,7 +128,8 @@ def check_freshness(
     """Pure-git freshness verdict for the recorded graphify context.
 
     Stale reasons: ``never-recorded``, ``provenance-corrupt``,
-    ``version-changed``, ``build-commit-unknown``, ``scope-intersects``,
+    ``version-changed``, ``head-unresolvable`` (unborn / non-git — fail soft,
+    never block), ``build-commit-unknown``, ``scope-intersects``,
     ``changed-no-scope`` (conservative — caller gave no scope, commits differ).
     Fresh reasons: ``same-commit``, ``no-scope-overlap``.
 
@@ -133,7 +145,10 @@ def check_freshness(
         return Freshness(fresh=False, reason="version-changed")
 
     build_commit: str = prov["build_commit"]
-    if build_commit == _git_head(repo_root):
+    head = _git_head(repo_root)
+    if not head:
+        return Freshness(fresh=False, reason="head-unresolvable")
+    if build_commit == head:
         return Freshness(fresh=True, reason="same-commit")
 
     changed = _changed_since(repo_root, build_commit)

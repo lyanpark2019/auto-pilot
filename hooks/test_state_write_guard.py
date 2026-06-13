@@ -4,7 +4,7 @@
 Script-style: invokes the hook via subprocess with JSON on stdin.
 Mirrors hooks/test_pre_reviewer_write.py scaffold pattern.
 
-12 cases covering:
+Covers:
   - state.json Edit deny (rel + abs-prefix)
   - normal-path allow
   - AUTO_PILOT_ALLOW_STATE_WRITE=1 bypass allow
@@ -15,6 +15,9 @@ Mirrors hooks/test_pre_reviewer_write.py scaffold pattern.
   - git commit allow (branch-lock's domain, not this guard)
   - malformed JSON fail-closed deny
   - non-dict tool_input fail-closed deny
+  - separator/subshell/cmd-sub bypass deny, path-traversal deny
+  - D4: shell-write to state.json (redirect/tee/cp/mv/dd) deny + benign allow
+  - D5: tech-critic-lead reviewer role covered; unguarded role no-op
 """
 import json
 import os
@@ -31,9 +34,10 @@ def run_case(
     expect: str,
     payload_str: str,
     env_extra: dict[str, str] | None = None,
+    role: str = _WORKER_ROLE,
 ) -> bool:
     env = os.environ.copy()
-    env["AUTO_PILOT_SUBAGENT_ROLE"] = _WORKER_ROLE
+    env["AUTO_PILOT_SUBAGENT_ROLE"] = role
     # Clear bypass envs so they don't leak from the outer shell
     env.pop("AUTO_PILOT_ALLOW_STATE_WRITE", None)
     env.pop("AUTO_PILOT_ALLOW_MAIN_MUTATE", None)
@@ -231,12 +235,161 @@ _CASE_ENV_OVERRIDES: dict[int, dict[str, str]] = {
 }
 
 
+def _state(path: str) -> str:
+    return json.dumps({"tool_name": "Bash", "tool_input": {"command": path}})
+
+
+# D4 + D5 regression cases (label, expect, payload, env_extra, role).
+# D4: a worker must not be able to clobber state.json via a shell write
+#     (redirect / tee / cp / mv / dd). D5: tech-critic-lead is a reviewer role
+#     and must be covered by the same guard.
+EXTRA_CASES: list[tuple[str, str, str, dict[str, str] | None, str]] = [
+    # D4: redirect overwrite → DENY
+    (
+        "D4 echo > state.json (redirect) → DENY",
+        "DENY",
+        _state("echo bad > .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: redirect append → DENY
+    (
+        "D4 echo >> state.json (append) → DENY",
+        "DENY",
+        _state("echo bad >> .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: attached redirect (no space) → DENY
+    (
+        "D4 echo >state.json (attached) → DENY",
+        "DENY",
+        _state("echo bad >.planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: absolute target → DENY
+    (
+        "D4 echo > /repo/.planning/auto-pilot/state.json → DENY",
+        "DENY",
+        _state("echo bad > /repo/.planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: ../ traversal in redirect target normalizes to state.json → DENY
+    (
+        "D4 redirect ../ traversal to state.json → DENY",
+        "DENY",
+        _state("echo bad > .planning/auto-pilot/../auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: tee → DENY
+    (
+        "D4 tee state.json → DENY",
+        "DENY",
+        _state("echo bad | tee .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: cp final-arg destination → DENY
+    (
+        "D4 cp x state.json → DENY",
+        "DENY",
+        _state("cp x .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: mv final-arg destination → DENY
+    (
+        "D4 mv x state.json → DENY",
+        "DENY",
+        _state("mv x .planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: dd of= target → DENY
+    (
+        "D4 dd of=state.json → DENY",
+        "DENY",
+        _state("dd if=x of=.planning/auto-pilot/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: benign redirect to another path → ALLOW (no false-deny)
+    (
+        "D4 echo > /tmp/other.txt → ALLOW",
+        "ALLOW",
+        _state("echo ok > /tmp/other.txt"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: a different state.json that is NOT the loop file → ALLOW
+    (
+        "D4 echo > config/state.json (not loop path) → ALLOW",
+        "ALLOW",
+        _state("echo ok > config/state.json"),
+        None,
+        _WORKER_ROLE,
+    ),
+    # D4: shell-write bypass honors ALLOW_STATE_WRITE=1 → ALLOW
+    (
+        "D4 redirect to state.json + ALLOW_STATE_WRITE=1 → ALLOW",
+        "ALLOW",
+        _state("echo ok > .planning/auto-pilot/state.json"),
+        {"AUTO_PILOT_ALLOW_STATE_WRITE": "1"},
+        _WORKER_ROLE,
+    ),
+    # D4: shell-write to state.json NOT bypassed by ALLOW_MAIN_MUTATE (wrong invariant) → DENY
+    (
+        "D4 redirect to state.json + ALLOW_MAIN_MUTATE=1 (wrong bypass) → DENY",
+        "DENY",
+        _state("echo bad > .planning/auto-pilot/state.json"),
+        {"AUTO_PILOT_ALLOW_MAIN_MUTATE": "1"},
+        _WORKER_ROLE,
+    ),
+    # D5: tech-critic-lead Edit to state.json → DENY (role now covered)
+    (
+        "D5 tech-critic-lead Edit state.json → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": ".planning/auto-pilot/state.json"},
+        }),
+        None,
+        "tech-critic-lead",
+    ),
+    # D5: tech-critic-lead Bash shell-write to state.json → DENY
+    (
+        "D5 tech-critic-lead redirect to state.json → DENY",
+        "DENY",
+        _state("echo bad > .planning/auto-pilot/state.json"),
+        None,
+        "tech-critic-lead",
+    ),
+    # D5: an unguarded role stays a no-op → ALLOW
+    (
+        "D5 pm-orchestrator (unguarded role) Edit state.json → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": ".planning/auto-pilot/state.json"},
+        }),
+        None,
+        "pm-orchestrator",
+    ),
+]
+
+
 def main() -> None:
     results: list[bool] = []
     for idx, case in enumerate(CASES):
         label, expect, payload = case
         env_extra = _CASE_ENV_OVERRIDES.get(idx)
         results.append(run_case(label, expect, payload, env_extra))
+
+    for label, expect, payload, env_extra, role in EXTRA_CASES:
+        results.append(run_case(label, expect, payload, env_extra, role))
 
     passed = sum(results)
     total = len(results)

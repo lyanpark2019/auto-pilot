@@ -115,19 +115,21 @@ def atomic_write_text(path: Path, text: str) -> Path:
     """
     # Same-fs tempfile in target dir
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    renamed = False
     try:
         with os.fdopen(fd, "w") as f:
             f.write(text)
             f.flush()
             _fsync_file(f.fileno())
         os.replace(tmp_name, path)  # atomic on same fs
+        renamed = True
         _fsync_dir(path.parent)
-    except OSError:
-        try:
-            os.unlink(tmp_name)
-        except FileNotFoundError:
-            pass
-        raise
+    finally:
+        if not renamed:
+            try:
+                os.unlink(tmp_name)
+            except FileNotFoundError:
+                pass
     return path
 
 
@@ -203,6 +205,19 @@ class SnapshotShas:
     project_context: str | None = None
 
 
+_CHAIN_PREFIX = "CLAUDE-chain-"
+
+
+def _chain_bundle_name(idx: int, src: Path) -> str:
+    """Order-preserving, collision-proof bundle filename for a CLAUDE chain entry.
+
+    Zero-padded index keeps ``sorted()`` in chain order; index disambiguates
+    same-leaf-name dirs (e.g. src/api vs lib/api) so copies never overwrite.
+    """
+    label = "root" if idx == 0 else src.parent.name
+    return f"{_CHAIN_PREFIX}{idx:02d}-{label}.md"
+
+
 def snapshot_context(dest_dir: Path, spec_path: Path,
                      claude_md_chain: list[Path],
                      project_context_path: Path | None = None) -> SnapshotShas:
@@ -222,11 +237,8 @@ def snapshot_context(dest_dir: Path, spec_path: Path,
 
     chain_shas: list[str] = []
     manifest_lines = [f"{spec_sha}  spec.md"]
-    for src in claude_md_chain:
-        # Preserve folder-level naming: root CLAUDE.md vs CLAUDE-<sub>.md
-        name = "CLAUDE.md" if src.name == "CLAUDE.md" and not chain_shas else f"CLAUDE-{src.parent.name}.md"
-        if not chain_shas and src.name == "CLAUDE.md":
-            name = "CLAUDE.md"
+    for idx, src in enumerate(claude_md_chain):
+        name = _chain_bundle_name(idx, src)
         dest = bundle / name
         shutil.copy2(src, dest)
         sha = _sha256(dest.read_bytes())
@@ -252,11 +264,7 @@ def _verify_spec_sha(bundle: Path, expected_spec: str) -> None:
 
 
 def _bundle_claude_files(bundle: Path) -> list[Path]:
-    chain_files: list[Path] = []
-    if (bundle / "CLAUDE.md").exists():
-        chain_files.append(bundle / "CLAUDE.md")
-    chain_files.extend(sorted(bundle.glob("CLAUDE-*.md")))
-    return chain_files
+    return sorted(bundle.glob(f"{_CHAIN_PREFIX}*.md"))
 
 
 def _verify_claude_chain(bundle: Path, expected_chain: list[str]) -> None:

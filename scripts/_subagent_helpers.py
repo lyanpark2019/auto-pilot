@@ -4,11 +4,14 @@ These run *inside* the subagent's Claude Code session; PM does NOT call them.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Sequence, cast
+
+import jsonschema
 
 import _contract
 import _dispatch
@@ -72,3 +75,37 @@ def mark_done(role_output_dir: Path) -> Path:
     marker = role_output_dir / "done.marker"
     marker.touch()
     return marker
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Reviewer/worker boot entry point: validate a ticket from the shell.
+
+    `--read-ticket <path>` runs read_ticket (schema + ticket_sha). Exit 2 on a
+    ticket_sha mismatch, 3 on schema-invalid, 4 on missing/unreadable JSON, 0 on
+    a valid ticket. The reviewer agents shell out here instead of running an
+    inert `import` that always exited 0.
+    """
+    parser = argparse.ArgumentParser(prog="_subagent_helpers")
+    parser.add_argument("--read-ticket", metavar="PATH",
+                        help="validate ticket schema + ticket_sha, non-zero on failure")
+    args = parser.parse_args(argv)
+
+    if args.read_ticket is not None:
+        try:
+            read_ticket(Path(args.read_ticket))
+        except TicketShaMismatchError as exc:
+            sys.stderr.write(f"_subagent_helpers: {exc}\n")
+            return 2
+        except jsonschema.ValidationError as exc:
+            sys.stderr.write(f"_subagent_helpers: ticket schema invalid: {exc.message}\n")
+            return 3
+        except (OSError, json.JSONDecodeError) as exc:
+            sys.stderr.write(f"_subagent_helpers: cannot read ticket: {exc}\n")
+            return 4
+        return 0
+
+    parser.error("no action requested (expected --read-ticket)")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -15,7 +15,7 @@ set -uo pipefail
 
 role="${AUTO_PILOT_SUBAGENT_ROLE:-}"
 case "$role" in
-  worker|codex-reviewer|claude-reviewer|review-gatekeeper) ;;
+  worker|codex-reviewer|claude-reviewer|review-gatekeeper|tech-critic-lead) ;;
   *) exit 0 ;;
 esac
 
@@ -83,12 +83,12 @@ print(os.path.normpath(raw) if raw else "")
     ;;
 
   Bash)
-    # Bypass honored ONLY from the real process/session env, NOT a command-string
+    # Bypasses honored ONLY from the real process/session env, NOT a command-string
     # prefix: a tool-call prefix never reaches this hook's env and accepting the
     # literal token would make the guard self-grantable by any subagent (SEC5 class).
-    if [ "${AUTO_PILOT_ALLOW_MAIN_MUTATE:-}" = "1" ]; then
-      exit 0
-    fi
+    # Two invariants, two bypasses: AUTO_PILOT_ALLOW_MAIN_MUTATE for git apply-to-main,
+    # AUTO_PILOT_ALLOW_STATE_WRITE for the state.json shell-write guard. The verdict
+    # below is computed first, then each block-type honors its own bypass.
 
     # Extract command string — fail-closed on parse failures.
     # shellcheck disable=SC2016 # python heredoc — $ and backtick are regex literals
@@ -136,7 +136,54 @@ except ValueError:
     print("BLOCK:shlex-unbalanced-quotes")
     sys.exit(0)
 
-# --- 3. Guard git am/apply/format-patch ---
+
+# --- 3. Guard shell writes to state.json (redirect / tee / dd / cp / mv) ---
+# The Edit/Write branch denies direct edits to state.json; a worker could
+# otherwise clobber it via a Bash shell write. Resolve each candidate target
+# and block when it normalizes to .planning/auto-pilot/state.json.
+STATE_SUFFIX = os.path.join(".planning", "auto-pilot", "state.json")
+
+
+def _is_state(path):
+    if not path:
+        return False
+    norm = os.path.normpath(path)
+    return norm == STATE_SUFFIX or norm.endswith(os.sep + STATE_SUFFIX)
+
+
+redirect_targets = []
+for k, tok in enumerate(tokens):
+    if tok in (">", ">>") and k + 1 < len(tokens):
+        redirect_targets.append(tokens[k + 1])
+    else:
+        m = re.match(r"^>>?(?P<f>[^>&].*)$", tok)
+        if m:
+            redirect_targets.append(m.group("f"))
+
+# tee / dd of=... / cp / mv write their target argument. dd uses of=PATH;
+# tee/cp/mv take positional path args (cp/mv final arg is the destination).
+final_arg_cmds = {"cp", "mv"}
+for k, tok in enumerate(tokens):
+    basename = os.path.basename(tok)
+    if basename == "tee":
+        for arg in tokens[k + 1:]:
+            if not arg.startswith("-"):
+                redirect_targets.append(arg)
+    elif basename == "dd":
+        for arg in tokens[k + 1:]:
+            if arg.startswith("of="):
+                redirect_targets.append(arg[len("of="):])
+    elif basename in final_arg_cmds:
+        positionals = [a for a in tokens[k + 1:] if not a.startswith("-")]
+        if positionals:
+            redirect_targets.append(positionals[-1])
+
+for target in redirect_targets:
+    if _is_state(target):
+        print("BLOCK:shell-write-to-state:" + target)
+        sys.exit(0)
+
+# --- 4. Guard git am/apply/format-patch ---
 # These verbs apply patches directly to the working tree, bypassing
 # WorktreeManager.apply_to_main.  git allows intermediate value-taking flags
 # (-C <path>, -c <name=value>) before the subcommand; we skip those pairs
@@ -166,7 +213,17 @@ print("ALLOW")
 
     case "$verdict" in
       ALLOW) ;;
+      BLOCK:shell-write-to-state:*)
+        if [ "${AUTO_PILOT_ALLOW_STATE_WRITE:-}" = "1" ]; then
+          exit 0
+        fi
+        echo "auto-pilot: BLOCKED Bash shell-write to state.json — writes must go through _state.save_state (set AUTO_PILOT_ALLOW_STATE_WRITE=1 to override): ${verdict#BLOCK:shell-write-to-state:}" >&2
+        exit 2
+        ;;
       BLOCK:*)
+        if [ "${AUTO_PILOT_ALLOW_MAIN_MUTATE:-}" = "1" ]; then
+          exit 0
+        fi
         echo "auto-pilot: BLOCKED Bash \$ROOT-mutating git verb — must go through WorktreeManager.apply_to_main (set AUTO_PILOT_ALLOW_MAIN_MUTATE=1 to override): ${verdict#BLOCK:}" >&2
         exit 2
         ;;

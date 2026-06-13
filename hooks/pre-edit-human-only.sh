@@ -86,14 +86,25 @@ for prefix in "${TIER2_PREFIXES[@]}"; do
 done
 
 # ── Tier (a): .claude/human-only.paths prefixes ──
+# Match only TRUE path prefixes (canonicalized, same realpath step as tier c).
+# A bare substring-anywhere clause (r1) false-denied any nested dir whose name
+# equals the entry (entry `agents` blocked <any>/src/agents/x.py) and matched
+# the RAW path so `entry/../entry/x` slipped past tier (a) while tier (c) caught
+# it. Entries are resolved against repo_root so a relative entry compares like
+# the canonicalized target.
 human_only_file="$repo_root/.claude/human-only.paths"
 if [[ -f "$human_only_file" ]]; then
   while IFS= read -r line; do
     # Skip blank lines and comments
     [[ -z "$line" || "$line" == \#* ]] && continue
-    if [[ "$file_path" == "$line"* ]] || [[ "$file_path" == *"/$line"* ]]; then
-      deny "Path is listed in .claude/human-only.paths ($line): $file_path"
-    fi
+    entry_abs="$line"
+    [[ "$entry_abs" != /* ]] && entry_abs="$repo_root/$entry_abs"
+    entry_abs="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$entry_abs" 2>/dev/null || printf '%s' "$entry_abs")"
+    case "$abs_path" in
+      "$entry_abs"|"$entry_abs"/*)
+        deny "Path is listed in .claude/human-only.paths ($line): $file_path"
+        ;;
+    esac
   done < "$human_only_file"
 fi
 

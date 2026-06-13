@@ -139,10 +139,35 @@ def _check_preflight_ttl(preflight: JsonObject) -> None:
         ) from exc
 
 
+def _is_genuine_non_git(repo_root: Path) -> bool:
+    """True only for a genuinely-not-a-git context (no work tree, or unborn HEAD).
+
+    Used to keep the legitimate non-git skip in :func:`_check_preflight_head_sha`
+    while a transient git failure (lock/corruption/wrong cwd) is treated as a
+    gate failure rather than failing open.
+    """
+    try:
+        inside = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return True
+    head = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--verify", "-q", "HEAD"],
+        capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
+    )
+    return head.returncode != 0
+
+
 def _check_preflight_head_sha(preflight: JsonObject, repo_root: Path) -> None:
     """Raise PreflightError if preflight head_sha does not match current HEAD.
 
-    Silently skips on git timeout or non-git environment.
+    Silently skips ONLY on git timeout or a genuinely-non-git context (no work
+    tree, or unborn HEAD). Any other non-zero git exit (transient lock,
+    corruption, wrong cwd) is treated as a gate failure — fail closed, not open.
     """
     start = _time.monotonic()
     try:
@@ -155,8 +180,17 @@ def _check_preflight_head_sha(preflight: JsonObject, repo_root: Path) -> None:
     except subprocess.TimeoutExpired:
         sys.stderr.write(f"_dispatch: git rev-parse timed out (>{_GIT_QUICK_TIMEOUT}s), skipping HEAD check\n")
         return
-    except subprocess.CalledProcessError:
-        return
+    except subprocess.CalledProcessError as exc:
+        if _is_genuine_non_git(repo_root):
+            return
+        sys.stderr.write(
+            f"_dispatch: git rev-parse HEAD failed in a git repo (exit {exc.returncode}); "
+            "treating preflight HEAD check as a gate failure\n"
+        )
+        raise PreflightError(
+            f"Preflight HEAD check failed: git rev-parse HEAD errored (exit {exc.returncode}) "
+            f"in repo_root={repo_root}; resolve the git state and re-run `bash scripts/pm_preflight.sh`"
+        ) from exc
     artifact_head = preflight.get("head_sha", "")
     if current_head != artifact_head:
         raise PreflightError(

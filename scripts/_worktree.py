@@ -22,6 +22,7 @@ from typing import Any, Iterator, cast
 
 import _status
 from _log import event
+from _state import STATE_DIR
 
 # Subprocess timeout budget (seconds). Quick git plumbing vs. tree-touching ops.
 _GIT_QUICK_TIMEOUT = 30  # rev-parse, status, branch, merge-base, rev-list, ref-format, prune
@@ -226,9 +227,16 @@ class WorktreeManager:
                 fd.close()
 
     def _is_dirty(self) -> str:
-        """Raises subprocess.TimeoutExpired if `git status` stalls past 30 s."""
+        """Raises subprocess.TimeoutExpired if `git status` stalls past 30 s.
+
+        Excludes auto-pilot's own state tree (``.planning/auto-pilot/`` —
+        main-apply.lock, state.json); those are scratch this method itself
+        creates, never part of a worker diff, and false-trip the dirty-check in
+        a brownfield target that has not gitignored ``.planning/``.
+        """
         return subprocess.check_output(
-            ["git", "-C", str(self.repo_root), "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-C", str(self.repo_root), "status", "--porcelain", "--untracked-files=all",
+             "--", ".", f":(exclude){STATE_DIR}/"],
             text=True, timeout=_GIT_QUICK_TIMEOUT,
         )
 

@@ -42,7 +42,7 @@ Follow `${CLAUDE_PLUGIN_ROOT}/skills/adversarial-review-loop/references/review-c
 | Scope check (HARD) | `git -C $WORKTREE diff --name-only $BASE_SHA..HEAD` ⊆ contract.scope_files |
 | Scope reduction (HARD) | worker shrunk tests instead of fixing impl — inspect test diffs in `$WORKTREE` |
 | Spec compliance | read `$CONTRACT_DIR/context-bundle/spec.md` |
-| Verify re-run | run `$CONTRACT_DIR/context-bundle/verify.sh`, paste full output |
+| Verify re-run | run the commands from `contract.verify_cmds` (in `$CONTRACT_DIR/contract.json`), paste full output + record the exit code as `verify_rerun.exit_code`: `while read -r cmd; do bash -c "$cmd"; done < <(jq -r '.verify_cmds[]' "$CONTRACT_DIR/contract.json")` |
 | Project-rules compliance | read `$CONTRACT_DIR/context-bundle/CLAUDE*.md`; check ≤500 lines, types, dead-code 6-gate |
 
 ## Output (write to `$AUTO_PILOT_OUTPUT_DIR/review.json`)

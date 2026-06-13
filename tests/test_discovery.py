@@ -164,6 +164,51 @@ def test_check_corrupt_provenance_stale(repo):
     assert f.reason == "provenance-corrupt"
 
 
+def _write_provenance(state: Path, build_commit: str, version: str = "1.2.0") -> None:
+    (state / _discovery.PROVENANCE_FILE).write_text(json.dumps({
+        "build_commit": build_commit,
+        "graphify_version": version,
+        "recorded_at": "2026-06-13T00:00:00+00:00",
+    }))
+
+
+def test_check_unborn_head_is_stale_not_exception(tmp_path):
+    """F8: unborn-HEAD repo → stale verdict, never an exception (never block dispatch)."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    subprocess.run(["git", "-C", str(repo_root), "init", "-q", "-b", "main"], check=True)
+    state = tmp_path / "state"
+    state.mkdir()
+    _write_provenance(state, build_commit="a" * 40)
+    f = _discovery.check_freshness(
+        repo_root=repo_root, state_dir=state, graphify_version="1.2.0"
+    )
+    assert f.fresh is False
+    assert f.reason == "head-unresolvable"
+
+
+def test_check_non_git_dir_is_stale_not_exception(tmp_path):
+    """F8: non-git directory → stale verdict, never an exception."""
+    repo_root = tmp_path / "nongit"
+    repo_root.mkdir()
+    state = tmp_path / "state"
+    state.mkdir()
+    _write_provenance(state, build_commit="b" * 40)
+    f = _discovery.check_freshness(
+        repo_root=repo_root, state_dir=state, graphify_version="1.2.0"
+    )
+    assert f.fresh is False
+    assert f.reason == "head-unresolvable"
+
+
+def test_git_head_returns_empty_on_unborn(tmp_path):
+    """F8: _git_head fail-softs to "" on unborn HEAD instead of raising."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    subprocess.run(["git", "-C", str(repo_root), "init", "-q", "-b", "main"], check=True)
+    assert _discovery._git_head(repo_root) == ""
+
+
 class TestResolveReport:
     @staticmethod
     def _with_report(repo_root: Path) -> Path:

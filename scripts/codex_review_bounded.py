@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Bounded codex reviewer invocation: risk-tiered effort, portable timeout,
-one retry at lower effort, honest ABSTAIN on exhaustion.
+one retry at lower effort (skipped when the tier is already floored — a
+floored tier abstains after one timeout instead of repeating an identical
+attempt), honest ABSTAIN on exhaustion.
 
 Invoked by agents/auto-pilot-codex-reviewer.md instead of a bare `codex exec`.
 Codex is a second opinion — its unavailability never blocks the round
@@ -138,12 +140,14 @@ def run(
 
     started_at = _now_iso()
     try:
-        efforts = [_routing.effort_for_tier(tier, config=config)]
-        efforts.append(_routing.lower_effort(efforts[0]))
-        timeouts = list(_routing.codex_timeouts(config=config))
+        e0 = _routing.effort_for_tier(tier, config=config)
+        e1 = _routing.lower_effort(e0)
+        all_timeouts = list(_routing.codex_timeouts(config=config))
     except _routing.RoutingConfigError as exc:
         sys.stderr.write(f"codex_review_bounded: bad routing config: {exc}\n")
         return 2
+    efforts = [e0] + ([e1] if e1 != e0 else [])
+    timeouts = all_timeouts[: len(efforts)]
 
     try:
         reason = ""

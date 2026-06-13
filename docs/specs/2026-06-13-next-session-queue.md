@@ -124,9 +124,13 @@ File: `hooks/dispatch-contract-gate.sh:46`, similar pattern in `hooks/guard-dest
 ### Ticket: 5dc13c9a — reentry (hook)
 
 Pattern: a guard may read its own source prose as a dispatch prompt, triggering self-lock.
-**Target asset:** add a reentry guard (check `AUTO_PILOT_HOOK_ACTIVE` env or source-file path
-is the hook itself) at the top of each guard hook, mirroring the Stop-hook reentry pattern
-(`hooks/pm_final_report.sh:14`). Non-blocking — exit 0 on detected reentry.
+**Target asset:** add a reentry guard at the top of each PreToolUse guard hook that detects
+when the inspected `tool_input.file_path` IS the hook's own source path, and exits 0 on match.
+Note the Stop-hook reentry exemplar (`hooks/pm_final_report.sh:8` — the `stop_hook_active`
+payload check) does NOT transfer here: `stop_hook_active` is a Stop-event-only field, absent
+from PreToolUse payloads, and there is no `AUTO_PILOT_HOOK_ACTIVE` env signal in the codebase.
+The viable signal for a PreToolUse guard is the source-file-path-equals-the-hook check.
+Non-blocking — exit 0 on detected reentry.
 
 ### Ticket: ec583cd0 — reentry (test)
 
@@ -202,7 +206,7 @@ worktree → ALLOW (bare push + commit); cwd = main-repo root with no `tool_inpu
 the worktree-session false-positive the original text described does not occur in the dispatch path.
 The spec's proposed walk-up-to-`.git`-FILE fix is therefore a **no-op** (git already resolves the
 worktree's `.git` file). Shipped: 8 worktree regression tests (`hooks/test_branch_lock.py`, 54/54) +
-an inline analysis comment at the `work_dir` fallback (`hooks/branch-lock.sh:50-58`). **No logic change.**
+an inline analysis comment at the `work_dir` fallback (`hooks/branch-lock.sh:62`; NO-OP-CONFIRMED note at :51-61). **No logic change.**
 
 **Residual (unchanged, by design):** `AUTO_PILOT_MAIN_OK=1` is still required when a bare `git push`/
 `git commit` runs with the hook subprocess CWD = main-repo root and no `tool_input.cwd` (e.g. the PM
@@ -223,8 +227,8 @@ correctly denied; pass `-C <wt-dir>` / `tool_input.cwd`, or the bypass, for legi
 - `scripts/_promotion.py:36` — `load_tickets` fail-fast on first corrupt ticket; partial-load mode needed for `improvements-list`.
 - `scripts/_promotion.py:59` — `_locked_update` lock sidecar may persist on failed mid-mutation write; verify `_improvement.ledger_lock` teardown cleans up on exception.
 - `scripts/_promotion.py` — no pre-mutate schema validation; a pre-existing invalid ticket silently passes the read, then fails post-mutate with an opaque error.
-- `scripts/orchestrator.py` sits 1 line under its budget cap
-  (`scripts/quality/module_size_budget.txt:35`). The next substantive addition (any new
+- `scripts/orchestrator.py` sits 4 lines under its budget cap
+  (`scripts/quality/module_size_budget.txt:36`). The next substantive addition (any new
   subcommand) forces extraction; plan for it now rather than at crunch time.
 - `docs/architecture.md:344` — routing-ledger v2 deferred: `schemas/contract.schema.json` carries
   no `role` or `task_class` fields, so auto-records all collapse into one
