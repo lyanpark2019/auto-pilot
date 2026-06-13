@@ -12,11 +12,13 @@ tmp_path fixtures, parametrize for near-miss coverage.
 from __future__ import annotations
 
 import json
+import multiprocessing
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
@@ -484,3 +486,149 @@ class TestPhaseEndLedgerNonBlocking:
         monkeypatch.setenv("AUTO_PILOT_SKIP_EVIDENCE", "1")
         rc = _run(["phase-end", "--phase", "1", "--status", "success"])
         assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# ledger_transaction — new context manager (concurrency fix)
+# ---------------------------------------------------------------------------
+
+def _txn_append_worker(args: tuple[Path, str]) -> None:
+    """Top-level worker for multiprocessing (must be picklable).
+
+    Each invocation opens a ledger_transaction and appends one record keyed by
+    ``task_id``. The exclusive flock prevents lost-updates across processes.
+    """
+    ledger_path, task_id = args
+    # Re-insert scripts/ into sys.path inside the child process.
+    scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import _ledger as _led  # noqa: PLC0415
+
+    record: dict[str, Any] = {
+        "ts": "2026-06-14T00:00:00+00:00",
+        "task_id": task_id,
+        "role": "worker-primary",
+        "task_class": "feature-multi-file",
+        "model": "sonnet",
+        "outcome": {
+            "gates_first_try": True,
+            "review_rounds": 1,
+            "rejects_real": 0,
+        },
+    }
+    with _led.ledger_transaction(ledger_path) as txn:
+        txn.ledger.setdefault("records", []).append(record)
+        txn.commit()
+
+
+class TestLedgerTransaction:
+    def test_commit_persists_mutation(self, tmp_path: Path) -> None:
+        """Scenario 1: commit → on-disk YAML reflects the mutation; lock file created."""
+        ledger_path = tmp_path / "routing" / "ledger.yaml"
+        with _ledger.ledger_transaction(ledger_path) as txn:
+            txn.ledger["assignments"]["worker-primary"] = {"model": "opus"}
+            txn.commit()
+
+        assert ledger_path.exists()
+        # Lock file sibling must have been created.
+        assert ledger_path.with_suffix(ledger_path.suffix + ".lock").exists()
+        on_disk = yaml.safe_load(ledger_path.read_text())
+        assert on_disk["assignments"]["worker-primary"]["model"] == "opus"
+
+    def test_no_commit_leaves_disk_unchanged(self, tmp_path: Path) -> None:
+        """Scenario 2: no commit → on-disk ledger UNCHANGED."""
+        ledger_path = tmp_path / "routing" / "ledger.yaml"
+        # Pre-seed a valid ledger.
+        original = _seed_ledger()
+        _ledger.save_ledger(ledger_path, original)
+        original_text = ledger_path.read_text()
+
+        with _ledger.ledger_transaction(ledger_path) as txn:
+            txn.ledger["assignments"]["some-role"] = {"model": "haiku"}
+            # Deliberately no txn.commit()
+
+        assert ledger_path.read_text() == original_text, (
+            "ledger on disk should be unchanged when commit() is not called"
+        )
+
+    def test_exception_in_body_no_write_propagates(self, tmp_path: Path) -> None:
+        """Scenario 3: exception inside body → no write, exception propagates."""
+        ledger_path = tmp_path / "routing" / "ledger.yaml"
+        _ledger.save_ledger(ledger_path, _seed_ledger())
+        original_text = ledger_path.read_text()
+
+        with pytest.raises(ValueError, match="simulated failure"):
+            with _ledger.ledger_transaction(ledger_path) as txn:
+                txn.ledger["assignments"]["bad"] = {"model": "opus"}
+                txn.commit()
+                raise ValueError("simulated failure")
+
+        assert ledger_path.read_text() == original_text, (
+            "ledger on disk should be unchanged after exception in body"
+        )
+
+    def test_absent_ledger_yields_fresh_skeleton(self, tmp_path: Path) -> None:
+        """Scenario 4: absent ledger → txn.ledger is the fresh skeleton; after commit valid."""
+        ledger_path = tmp_path / "nonexistent" / "ledger.yaml"
+        assert not ledger_path.exists()
+
+        with _ledger.ledger_transaction(ledger_path) as txn:
+            assert txn.ledger["schema_version"] == 1
+            assert txn.ledger["records"] == []
+            assert txn.ledger["assignments"] == {}
+            assert txn.ledger["rebalance_log"] == []
+            txn.commit()
+
+        assert ledger_path.exists()
+        _ledger.validate_ledger(yaml.safe_load(ledger_path.read_text()))
+
+    def test_concurrent_processes_no_lost_update(self, tmp_path: Path) -> None:
+        """Scenario 5 (REGRESSION PIN): N=15 processes each append one distinct record.
+
+        The exclusive flock spanning load→mutate→save must prevent lost updates.
+        Final on-disk ledger must have exactly 15 records with all unique task_ids.
+        """
+        ledger_path = tmp_path / "routing" / "ledger.yaml"
+        # Pre-seed an empty but valid ledger.
+        _ledger.save_ledger(ledger_path, _seed_ledger())
+
+        n = 15
+        task_ids = [f"task-{i:02d}" for i in range(n)]
+        args = [(ledger_path, tid) for tid in task_ids]
+
+        ctx = multiprocessing.get_context("spawn")
+        with ctx.Pool(processes=n) as pool:
+            pool.map(_txn_append_worker, args)
+
+        on_disk = yaml.safe_load(ledger_path.read_text())
+        _ledger.validate_ledger(on_disk)
+        records = on_disk.get("records", [])
+        assert len(records) == n, (
+            f"Expected {n} records (no lost updates), got {len(records)}"
+        )
+        found_ids = {r["task_id"] for r in records}
+        assert found_ids == set(task_ids), (
+            f"Missing task_ids: {set(task_ids) - found_ids}"
+        )
+
+    def test_append_phase_records_still_works(self, tmp_path: Path) -> None:
+        """Scenario 6: append_phase_records happy-path after conversion to ledger_transaction."""
+        contracts_root = tmp_path / "contracts"
+        _make_round_dir(contracts_root, contract_id="iter-1/phase-1/contract-1/round-1")
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+
+        # First run: 1 record appended.
+        count = _ledger.append_phase_records(project_root, contracts_root)
+        assert count == 1
+
+        ledger_path = project_root / ".claude" / "routing" / "ledger.yaml"
+        on_disk = yaml.safe_load(ledger_path.read_text())
+        assert len(on_disk["records"]) == 1
+
+        # Idempotent re-run: 0 appended.
+        count2 = _ledger.append_phase_records(project_root, contracts_root)
+        assert count2 == 0
+        on_disk2 = yaml.safe_load(ledger_path.read_text())
+        assert len(on_disk2["records"]) == 1

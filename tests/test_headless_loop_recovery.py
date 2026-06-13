@@ -279,3 +279,83 @@ class TestTokenEstimateFallback:
         )
         rec = json.loads((loop_module.LOG_DIR / "usage.jsonl").read_text().splitlines()[0])
         assert rec["tokens"] == 5000
+
+
+class TestStateTransactionConversions:
+    """Pin the 3 RMW → state_transaction conversions for lost-update safety."""
+
+    def test_accumulate_usage_reads_fresh_disk_state_not_stale_passed_dict(
+        self, loop_module, state_dir
+    ):
+        """LOST-UPDATE pin: _accumulate_usage must accumulate onto the fresh
+        on-disk cumulative, not the stale in-memory dict the caller passes.
+
+        Setup: on-disk cost_usd=5.0, tokens=100 (written before the call).
+        Passed state has cost_usd=0.0 (simulates parent holding an old snapshot).
+        After the call the on-disk cost_usd must be 5.0 + delta (= 5.5),
+        NOT 0.0 + delta (= 0.5), proving it read disk not the stale dict.
+        The passed state dict must also be synced to the cumulative.
+        """
+        import _budget
+
+        # Pre-write an on-disk state with existing cumulative
+        _write_state(state_dir, {"status": "running", "cost_usd": 5.0, "tokens": 100})
+
+        # Stale in-memory dict (simulates parent holding an old snapshot)
+        stale_state = {"status": "running", "cost_usd": 0.0, "tokens": 0}
+
+        log = loop_module.LOG_DIR / "iter-0001-phase-1.log"
+        loop_module.LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log.touch()
+
+        args = _args(per_iter_cost_estimate=0.0, per_iter_token_estimate=0)
+
+        # parse_session_usage returns a known delta: $0.50, 50 tokens
+        with patch.object(_budget, "parse_session_usage", return_value=(0.5, 50)):
+            loop_module._accumulate_usage(log, args, stale_state, 1, 1)
+
+        # On-disk must show 5.0 + 0.5 = 5.5, NOT 0.0 + 0.5 = 0.5
+        on_disk = json.loads((state_dir / "state.json").read_text())
+        assert on_disk["cost_usd"] == pytest.approx(5.5), (
+            f"expected 5.5 (fresh disk + delta), got {on_disk['cost_usd']} "
+            "(stale passed dict was used instead of fresh on-disk value)"
+        )
+        assert on_disk["tokens"] == 150
+
+        # The passed state dict must be synced to the cumulative
+        assert stale_state["cost_usd"] == pytest.approx(5.5)
+        assert stale_state["tokens"] == 150
+
+    def test_handle_timeout_flips_on_disk_status_to_failed(self, loop_module, state_dir):
+        """_handle_timeout must atomically flip on-disk status to 'failed'."""
+        _write_state(state_dir, {"status": "running", "current_phase": 1})
+        state_after = {"status": "running", "current_phase": 1}
+
+        with patch.object(loop_module, "stash_if_dirty", return_value=None):
+            result = loop_module._handle_timeout(1, "abc12345", state_after)
+
+        assert result == "failed"
+        on_disk = json.loads((state_dir / "state.json").read_text())
+        assert on_disk["status"] == "failed"
+        # in-memory dict also synced
+        assert state_after["status"] == "failed"
+
+    def test_early_exit_status_cap_flips_on_disk_status(self, loop_module, state_dir):
+        """_early_exit_status cap path must atomically write the cap status to disk
+        and return the cap string."""
+        import _budget
+
+        _write_state(state_dir, {"status": "running", "cost_usd": 0.0, "tokens": 0})
+        state = {"status": "running", "cost_usd": 0.0, "tokens": 0}
+        args = _args(max_cost_usd=0.01, max_tokens=10**12, max_concurrent_claude=10**6)
+        args.pid_baseline = 0
+
+        # Make check_caps return "cost-cap" (cost exceeded)
+        with patch.object(_budget, "check_caps", return_value="cost-cap"):
+            result = loop_module._early_exit_status(state, args)
+
+        assert result == "cost-cap"
+        on_disk = json.loads((state_dir / "state.json").read_text())
+        assert on_disk["status"] == "cost-cap"
+        # in-memory dict also synced
+        assert state["status"] == "cost-cap"

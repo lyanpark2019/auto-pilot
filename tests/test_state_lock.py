@@ -159,3 +159,123 @@ def test_atomic_write_no_partial_on_crash(cwd, monkeypatch):
     assert _state.STATE_FILE.read_text() == before
 
     monkeypatch.setattr(_contract, "atomic_write_text", orig)
+
+
+# ---------------------------------------------------------------------------
+# state_transaction() tests
+# ---------------------------------------------------------------------------
+
+
+class TestStateTxn:
+    """Tests for :func:`_state.state_transaction` and :class:`_state.StateTxn`."""
+
+    def test_commit_persists(self, cwd):
+        """commit() inside the body writes the mutated state to disk."""
+        with _state.state_transaction() as txn:
+            txn.state["status"] = "running"
+            txn.state["current_phase"] = 7
+            txn.commit()
+
+        assert _state.STATE_FILE.exists()
+        on_disk = json.loads(_state.STATE_FILE.read_text())
+        assert on_disk["status"] == "running"
+        assert on_disk["current_phase"] == 7
+
+    def test_no_commit_no_write(self, cwd):
+        """Not calling commit() leaves the on-disk file unchanged."""
+        _state.save_state({"status": "idle", "current_phase": 1})
+        original = _state.STATE_FILE.read_text()
+
+        with _state.state_transaction() as txn:
+            txn.state["status"] = "mutated"  # mutate but do NOT commit
+
+        # File must be byte-for-byte identical to original
+        assert _state.STATE_FILE.read_text() == original
+
+    def test_exception_no_write(self, cwd):
+        """An exception inside the body writes nothing and propagates."""
+        _state.save_state({"status": "stable", "current_phase": 2})
+        original = _state.STATE_FILE.read_text()
+
+        with pytest.raises(ValueError, match="boom"):
+            with _state.state_transaction() as txn:
+                txn.state["status"] = "corrupted"
+                txn.commit()  # marks dirty
+                raise ValueError("boom")  # exception before context exit
+
+        # Even though commit() was called, the exception must prevent the write
+        # (because __exit__ sees the exception and the generator's except branch
+        # re-raises before the post-yield write code runs)
+        assert _state.STATE_FILE.read_text() == original
+
+    def test_empty_file_yields_empty_dict_then_writes(self, cwd):
+        """When no state file exists, txn.state starts as {} and commit creates it."""
+        assert not _state.STATE_FILE.exists()
+
+        with _state.state_transaction() as txn:
+            assert txn.state == {}
+            txn.state["tokens"] = 42
+            txn.commit()
+
+        assert _state.STATE_FILE.exists()
+        on_disk = json.loads(_state.STATE_FILE.read_text())
+        assert on_disk["tokens"] == 42
+
+    def test_early_return_no_commit_writes_nothing(self, cwd):
+        """An early `return` from the with-body WITHOUT commit() writes nothing."""
+        _state.save_state({"status": "before", "current_phase": 3})
+        original = _state.STATE_FILE.read_text()
+
+        def _helper() -> None:
+            with _state.state_transaction() as txn:
+                txn.state["status"] = "mutated"
+                return  # early return WITHOUT commit
+
+        _helper()
+        assert _state.STATE_FILE.read_text() == original
+
+    def test_regression_lost_update_multiprocess(self, cwd):
+        """Regression: N concurrent incrementers must each see the latest value.
+
+        flock() is per-fd/per-process, so we spawn N subprocesses with
+        subprocess.Popen to get genuine kernel-level lock contention.  Each
+        subprocess reads, increments, and writes ``tokens`` via
+        state_transaction().  The final count must equal N exactly — proving
+        no lost updates.  This would fail with the old load/mutate/save split.
+        """
+        import sys
+
+        N = 20
+        # Seed
+        _state.save_state({"tokens": 0})
+
+        scripts_dir = str(REPO / "scripts")
+        work_dir = str(cwd)
+
+        worker_script = textwrap.dedent("""
+            import sys, os
+            sys.path.insert(0, {scripts!r})
+            os.chdir({cwd!r})
+            import _state
+            with _state.state_transaction() as txn:
+                txn.state["tokens"] = int(txn.state.get("tokens", 0)) + 1
+                txn.commit()
+        """).format(scripts=scripts_dir, cwd=work_dir)
+
+        # Launch all N processes simultaneously to maximise lock contention.
+        procs = [
+            subprocess.Popen(
+                [sys.executable, "-c", worker_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            for _ in range(N)
+        ]
+        for p in procs:
+            out, err = p.communicate(timeout=30)
+            assert p.returncode == 0, err.decode()
+
+        final = json.loads(_state.STATE_FILE.read_text())
+        assert final["tokens"] == N, (
+            f"lost-update regression: expected {N}, got {final['tokens']}"
+        )

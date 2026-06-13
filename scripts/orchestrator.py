@@ -36,7 +36,7 @@ from _state import (
     PhaseEntry,
     State,
     load_state,
-    save_state,
+    state_transaction,
     utc_now,
 )
 
@@ -54,28 +54,16 @@ def _emit_json(payload: Any, *, indent: int | None = None) -> None:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    """Initialize a new auto-pilot run by writing a fresh state file.
-
-    Args:
-        args: parsed CLI namespace; expects ``spec``, ``max_workers``,
-            ``time_box_until`` and ``force``.
-
-    Returns:
-        0 on success, 2 if the spec is missing or a run is already active.
-    """
+    """Initialize a new auto-pilot run; 0 on success, 2 on missing spec or active run."""
     spec_path = Path(args.spec)
     if not spec_path.exists():
         event("init.spec_missing", path=spec_path)
         return 2
 
-    existing = load_state()
-    if existing.get("status") == "running" and not args.force:
-        event("init.already_running", hint="pass --force to wipe or run stop first")
-        return 2
-
+    # _count_phases does not need the lock — read-only spec scan.
     total_phases = _count_phases(spec_path)
 
-    state: State = {
+    fresh: State = {
         "started_at": utc_now(),
         "spec_path": str(spec_path),
         "current_phase": 0,
@@ -86,8 +74,15 @@ def cmd_init(args: argparse.Namespace) -> int:
         "phases": [],
         "pivot_detector": {},
     }
-    save_state(state)
-    _emit_json({"ok": True, "state": state}, indent=2)
+    with state_transaction() as txn:
+        if txn.state.get("status") == "running" and not args.force:
+            event("init.already_running", hint="pass --force to wipe or run stop first")
+            return 2
+        s: dict[str, Any] = txn.state  # type: ignore[assignment]
+        s.clear()
+        s.update(fresh)
+        txn.commit()
+    _emit_json({"ok": True, "state": fresh}, indent=2)
     return 0
 
 
@@ -124,33 +119,34 @@ def _new_phase_entry(phase: int, contracts: int) -> PhaseEntry:
 
 def cmd_phase_start(args: argparse.Namespace) -> int:
     """Begin (or retry) a phase, validating bounds and bumping ``round`` on retry."""
-    state = load_state()
-    if not state:
-        event("phase_start.no_state")
-        return 2
-
-    _ensure_run_id(state)
-    total = state.get("total_phases", 0)
-    if args.phase < 1 or args.phase > total:
-        event("phase_start.out_of_range", phase=args.phase, total_phases=total)
-        return 2
-
-    phases: list[PhaseEntry] = state.setdefault("phases", [])
-    existing = _phase_entry(phases, args.phase)
-    if existing is not None:
-        if existing["status"] == "running":
-            event("phase_start.already_running", phase=args.phase)
+    with state_transaction() as txn:
+        state = txn.state
+        if not state:
+            event("phase_start.no_state")
             return 2
-        _restart_phase(state, existing, args.phase, args.contracts)
-        save_state(state)
-        _emit_json({"ok": True, "phase": args.phase, "round": existing["round"]}, indent=2)
-        return 0
 
-    state["current_phase"] = args.phase
-    phases.append(_new_phase_entry(args.phase, args.contracts))
-    save_state(state)
-    _emit_json({"ok": True, "phase": args.phase}, indent=2)
-    return 0
+        _ensure_run_id(state)
+        total = state.get("total_phases", 0)
+        if args.phase < 1 or args.phase > total:
+            event("phase_start.out_of_range", phase=args.phase, total_phases=total)
+            return 2
+
+        phases: list[PhaseEntry] = state.setdefault("phases", [])
+        existing = _phase_entry(phases, args.phase)
+        if existing is not None:
+            if existing["status"] == "running":
+                event("phase_start.already_running", phase=args.phase)
+                return 2
+            _restart_phase(state, existing, args.phase, args.contracts)
+            txn.commit()
+            _emit_json({"ok": True, "phase": args.phase, "round": existing["round"]}, indent=2)
+            return 0
+
+        state["current_phase"] = args.phase
+        phases.append(_new_phase_entry(args.phase, args.contracts))
+        txn.commit()
+        _emit_json({"ok": True, "phase": args.phase}, indent=2)
+        return 0
 
 
 def _active_phase(state: State) -> PhaseEntry | None:
@@ -178,99 +174,80 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
     phase's evidence chain is complete (see _evidence.gate_phase_end).
     AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the gate — unit tests only, never prod.
     """
-    state = load_state()
-    if not state or not state.get("phases"):
-        event("phase_end.no_active_phase")
-        return 2
-
-    current = _active_phase(state)
-    if current is None or current["phase"] != args.phase:
-        event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
-        return 2
-
-    approved_count = 0
-    if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
-        # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
-        # (tests fabricate state without a real contracts tree). Never set in prod.
-        result = _evidence.gate_phase_end(STATE_DIR / "contracts")
-        if isinstance(result, tuple):
-            suffix, message = result
-            _warn(message)
-            event(f"phase_end.{suffix}", phase=args.phase)
+    with state_transaction() as txn:
+        state = txn.state
+        if not state or not state.get("phases"):
+            event("phase_end.no_active_phase")
             return 2
-        approved_count = result
 
-    # Auto-append ledger records — telemetry; never blocks phase-end.
-    try:
-        import _ledger  # noqa: PLC0415
-        _ledger.append_phase_records(Path.cwd(), STATE_DIR / "contracts")
-    except Exception as exc:  # noqa: BLE001
-        _warn(f"ledger auto-append failed (telemetry, non-blocking): {exc}")
-    current["approved"] = approved_count
-    _close_phase(current, args.status, args.commits)
-    _update_run_status(state, args.status)
-    save_state(state)
-    _emit_json({"ok": True, "phase": args.phase, "status": args.status}, indent=2)
-    return 0
+        current = _active_phase(state)
+        if current is None or current["phase"] != args.phase:
+            event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
+            return 2
+
+        approved_count = 0
+        if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
+            # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
+            # (tests fabricate state without a real contracts tree). Never set in prod.
+            result = _evidence.gate_phase_end(STATE_DIR / "contracts")
+            if isinstance(result, tuple):
+                suffix, message = result
+                _warn(message)
+                event(f"phase_end.{suffix}", phase=args.phase)
+                return 2  # critical: failed gate must not persist state
+            approved_count = result
+
+        # Auto-append ledger records — telemetry; runs inside state lock so the
+        # ledger append_phase_records acquires the separate LEDGER lock.
+        # State→ledger order is consistent across callers; no deadlock possible.
+        try:
+            import _ledger  # noqa: PLC0415
+            _ledger.append_phase_records(Path.cwd(), STATE_DIR / "contracts")
+        except Exception as exc:  # noqa: BLE001
+            _warn(f"ledger auto-append failed (telemetry, non-blocking): {exc}")
+        current["approved"] = approved_count
+        _close_phase(current, args.status, args.commits)
+        _update_run_status(state, args.status)
+        txn.commit()
+        _emit_json({"ok": True, "phase": args.phase, "status": args.status}, indent=2)
+        return 0
 
 
 def cmd_resume(_: argparse.Namespace) -> int:
-    """Clear a ``cost-cap`` terminal status so the operator can re-run with raised caps.
-
-    Clears ONLY ``cost-cap`` → ``running``; preserves ``phases``, ``cost_usd``,
-    and ``tokens`` so the new cap applies to lifetime spend. Any other status
-    (running / failed / stopped / success) is not affected — those states have
-    their own recovery paths.
-
-    Returns:
-        0 when status was ``cost-cap`` and is now ``running``.
-        1 when status is anything else (state is not modified).
-    """
-    state = load_state()
-    if state.get("status") != "cost-cap":
-        _warn(f"resume clears cost-cap only; status={state.get('status')!r}")
-        return 1
-    state["status"] = "running"
-    save_state(state)
-    event("orchestrator.resume_after_cap",
-          cost_usd=state.get("cost_usd"), tokens=state.get("tokens"))
-    return 0
+    """Clear ``cost-cap`` → ``running``; other statuses are untouched (return 1)."""
+    with state_transaction() as txn:
+        state = txn.state
+        if state.get("status") != "cost-cap":
+            _warn(f"resume clears cost-cap only; status={state.get('status')!r}")
+            return 1
+        state["status"] = "running"
+        txn.commit()
+        event("orchestrator.resume_after_cap",
+              cost_usd=state.get("cost_usd"), tokens=state.get("tokens"))
+        return 0
 
 
 def cmd_pivot_check(args: argparse.Namespace) -> int:
-    """Bump the repeat counter for ``finding_hash`` within a phase bucket.
-
-    Args:
-        args: parsed CLI namespace; expects ``phase`` (int) and ``finding_hash``.
-
-    Returns:
-        0 normally, 1 once a finding has been observed three or more times
-        (PM should pivot). Also flips state status to ``pivot-needed`` then.
-    """
-    state = load_state()
-    if not state:
-        return 0
-
-    bucket = state.setdefault("pivot_detector", {}).setdefault(f"phase-{args.phase}", {})
-    bucket[args.finding_hash] = bucket.get(args.finding_hash, 0) + 1
-    save_state(state)
-
-    count = bucket[args.finding_hash]
+    """Bump repeat counter for ``finding_hash``; return 1 (+ pivot-needed) at 3rd hit."""
+    with state_transaction() as txn:
+        state = txn.state
+        if not state:
+            return 0
+        bucket = state.setdefault("pivot_detector", {}).setdefault(f"phase-{args.phase}", {})
+        bucket[args.finding_hash] = bucket.get(args.finding_hash, 0) + 1
+        count = bucket[args.finding_hash]
+        if count >= 3:
+            state["status"] = "pivot-needed"
+        txn.commit()
     _emit_json({"finding_hash": args.finding_hash, "count": count})
     if count >= 3:
         event("pivot.needed", reason="finding_repeated_3_rounds")
-        state["status"] = "pivot-needed"
-        save_state(state)
         return 1
     return 0
 
 
 def cmd_status(_: argparse.Namespace) -> int:
-    """Print the current state as JSON, or a hint if no run is initialized.
-
-    Returns:
-        Always 0 — status queries do not fail.
-    """
+    """Print current state as JSON, or a hint when uninitialised. Always 0."""
     state = load_state()
     if not state:
         _emit("auto-pilot: not initialized")
@@ -280,18 +257,15 @@ def cmd_status(_: argparse.Namespace) -> int:
 
 
 def cmd_stop(_: argparse.Namespace) -> int:
-    """Mark the run as stopped (terminal), recording ``stopped_at``.
-
-    Returns:
-        Always 0; a missing state file is treated as a no-op success.
-    """
-    state = load_state()
-    if not state:
-        _emit("auto-pilot: nothing to stop")
-        return 0
-    state["status"] = "stopped"
-    state["stopped_at"] = utc_now()
-    save_state(state)
+    """Mark the run as stopped (terminal), recording ``stopped_at``. Always returns 0."""
+    with state_transaction() as txn:
+        state = txn.state
+        if not state:
+            _emit("auto-pilot: nothing to stop")
+            return 0
+        state["status"] = "stopped"
+        state["stopped_at"] = utc_now()
+        txn.commit()
     _emit_json({"ok": True, "status": "stopped"}, indent=2)
     return 0
 
@@ -438,24 +412,7 @@ def cmd_ledger_append(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_ledger_rebalance(args: argparse.Namespace) -> int:
-    """Evaluate (and optionally apply) model rebalance proposals."""
-    import _ledger  # noqa: PLC0415
-    import _routing  # noqa: PLC0415
-    project_root = Path(args.project_root) if args.project_root else Path.cwd()
-    ledger_path = project_root / ".claude" / "routing" / "ledger.yaml"
-    try:
-        ledger = _ledger.load_ledger(ledger_path)
-        # F11: validate before evaluating — catches schema drift early.
-        _ledger.validate_ledger(ledger)
-        ladder = _routing.tier_ladder()
-    except (_ledger.LedgerError, _routing.RoutingConfigError) as exc:
-        _warn(f"ledger-rebalance: {exc}")
-        return 2
-    proposals = _ledger.evaluate_rebalance(ledger, ladder)
-    if not proposals:
-        _emit("ledger-rebalance: no proposals")
-        return 0
+def _print_rebalance_proposals(proposals: list[dict[str, Any]]) -> None:
     _emit(f"{'role':<24} {'task_class':<20} {'rule':<28} {'from':<12} {'to':<12} evidence")
     for p in proposals:
         ev = ",".join(p.get("evidence") or [])
@@ -464,25 +421,72 @@ def cmd_ledger_rebalance(args: argparse.Namespace) -> int:
             f"{p.get('rule',''):<28} {p.get('from_model',''):<12} "
             f"{p.get('to_model',''):<12} {ev}"
         )
+
+
+def _apply_rebalance(ledger: dict[str, Any], proposals: list[dict[str, Any]]) -> None:
+    rebalance_log = ledger.setdefault("rebalance_log", [])
+    assignments = ledger.setdefault("assignments", {})
+    for p in proposals:
+        rebalance_log.append(p)
+        role = p.get("role", "")
+        task_class = p.get("task_class", "")
+        to_model = p.get("to_model", "")
+        if role and to_model:
+            # F9: key by composite "<role>/<task_class>" so different task
+            # classes within the same role get independent assignments.
+            comp_key = f"{role}/{task_class}" if task_class else role
+            assignments.setdefault(comp_key, {})["model"] = to_model
+
+
+def cmd_ledger_rebalance(args: argparse.Namespace) -> int:
+    """Evaluate (and optionally apply) model rebalance proposals."""
+    import _ledger  # noqa: PLC0415
+    import _routing  # noqa: PLC0415
+    project_root = Path(args.project_root) if args.project_root else Path.cwd()
+    ledger_path = project_root / ".claude" / "routing" / "ledger.yaml"
+    try:
+        ladder = _routing.tier_ladder()
+    except _routing.RoutingConfigError as exc:
+        _warn(f"ledger-rebalance: {exc}")
+        return 2
+
     if args.apply:
-        rebalance_log = ledger.setdefault("rebalance_log", [])
-        assignments = ledger.setdefault("assignments", {})
-        for p in proposals:
-            rebalance_log.append(p)
-            role = p.get("role", "")
-            task_class = p.get("task_class", "")
-            to_model = p.get("to_model", "")
-            if role and to_model:
-                # F9: key by composite "<role>/<task_class>" so different task
-                # classes within the same role get independent assignments.
-                comp_key = f"{role}/{task_class}" if task_class else role
-                assignments.setdefault(comp_key, {})["model"] = to_model
+        # commit() saves in ledger_transaction.__exit__ → save errors surface on
+        # `with` exit; outer except keeps the pre-refactor "save fail → rc 2".
         try:
-            _ledger.save_ledger(ledger_path, ledger)
+            with _ledger.ledger_transaction(ledger_path) as txn:
+                ledger = txn.ledger
+                try:
+                    _ledger.validate_ledger(ledger)
+                except _ledger.LedgerError as exc:
+                    _warn(f"ledger-rebalance: {exc}")
+                    return 2
+                proposals = _ledger.evaluate_rebalance(ledger, ladder)
+                if not proposals:
+                    _emit("ledger-rebalance: no proposals")
+                    return 0
+                _print_rebalance_proposals(proposals)
+                _apply_rebalance(ledger, proposals)
+                txn.commit()
         except (_ledger.LedgerError, OSError) as exc:
             _warn(f"ledger-rebalance --apply save failed: {exc}")
             return 2
         _emit(f"ledger-rebalance: applied {len(proposals)} proposal(s)")
+        return 0
+
+    # Dry-run: read-only, no lock needed.
+    try:
+        ledger = _ledger.load_ledger(ledger_path)
+        # F11: validate before evaluating — catches schema drift early.
+        _ledger.validate_ledger(ledger)
+    except _ledger.LedgerError as exc:
+        _warn(f"ledger-rebalance: {exc}")
+        return 2
+    proposals = _ledger.evaluate_rebalance(ledger, ladder)
+    if not proposals:
+        _emit("ledger-rebalance: no proposals")
+        return 0
+    _print_rebalance_proposals(proposals)
     return 0
 
 

@@ -11,10 +11,12 @@ here so existing callers (orchestrator.py, tests) import from one place.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import sys
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import yaml
 
@@ -29,6 +31,7 @@ __all__ = [
     "save_ledger",
     "build_record_from_round_dirs",
     "append_phase_records",
+    "ledger_transaction",
     "evaluate_rebalance",
 ]
 
@@ -119,6 +122,56 @@ def save_ledger(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
     _contract.atomic_write_text(path, text)
+
+
+class LedgerTxn:
+    """Handle yielded by ledger_transaction().
+
+    `.ledger` is the dict loaded via load_ledger() under the held exclusive lock.
+    Call `.commit()` to persist it (via save_ledger, which validates) on context
+    exit; without commit nothing is written.
+    """
+
+    def __init__(self) -> None:
+        self.ledger: dict[str, Any] = {}
+        self._committed: bool = False
+
+    def commit(self) -> None:
+        """Mark the transaction for write on context exit."""
+        self._committed = True
+
+
+@contextmanager
+def ledger_transaction(ledger_path: Path) -> Iterator[LedgerTxn]:
+    """Exclusive-lock context manager spanning load → mutate → save.
+
+    Lock file: ``<ledger_path>.lock`` (sibling of the YAML file).
+    The lock is acquired before load_ledger and released after save_ledger
+    (or after the body raises), preventing concurrent lost-update between
+    cmd_phase_end auto-append and manual ledger-append/rebalance callers.
+
+    Usage::
+
+        with ledger_transaction(ledger_path) as txn:
+            txn.ledger["assignments"]["worker-primary"] = {"model": "opus"}
+            txn.commit()   # without this, nothing is written
+    """
+    lock_path = ledger_path.with_suffix(ledger_path.suffix + ".lock")
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.touch(exist_ok=True)
+    fd = lock_path.open("r+")
+    txn = LedgerTxn()
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+        txn.ledger = load_ledger(ledger_path)
+        yield txn
+        if txn._committed:
+            save_ledger(ledger_path, txn.ledger)
+    finally:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        finally:
+            fd.close()
 
 
 def _read_review_json(path: Path) -> dict[str, Any]:
@@ -345,35 +398,40 @@ def append_phase_records(
         Count of new records appended (0 on idempotent re-run or empty contracts).
     """
     ledger_path = project_root / ".claude" / "routing" / "ledger.yaml"
-    ledger = load_ledger(ledger_path)
 
-    existing_ids = {r.get("task_id") for r in ledger.get("records") or []}
     # latest_round_dirs returns one round-* per contract; we use it to discover
     # which contracts are active, then fetch ALL their rounds ourselves.
+    # Discovery happens outside the lock to minimise lock-hold time, but the
+    # actual load→mutate→save is protected by ledger_transaction so two
+    # concurrent callers cannot produce a lost-update.
     latest_round_dirs = _evidence.latest_round_dirs_for_active_phase(contracts_root)
 
     appended = 0
-    for latest_round in latest_round_dirs:
-        # contract_dir is the parent of the round-* dir.
-        contract_dir = latest_round.parent
-        # F-A: contract.json lives in the round dir, not the contract-K parent.
-        contract = _read_contract_json(latest_round)
-        task_id = str(contract.get("id") or contract_dir.name)
-        if task_id in existing_ids:
-            print(
-                f"append_phase_records: skipping duplicate task_id {task_id!r} "
-                "(already in ledger; contract.json may lack a stable 'id' — "
-                "set one to avoid cross-phase collisions)",
-                file=sys.stderr,
-            )
-            continue
-        # F1/F3: collect ALL rounds for this contract, not just the latest.
-        all_rounds = _all_round_dirs_for_contract(contract_dir)
-        record = build_record_from_round_dirs(contract_dir, all_rounds)
-        ledger.setdefault("records", []).append(record)
-        existing_ids.add(task_id)
-        appended += 1
+    with ledger_transaction(ledger_path) as txn:
+        ledger = txn.ledger
+        existing_ids = {r.get("task_id") for r in ledger.get("records") or []}
 
-    if appended:
-        save_ledger(ledger_path, ledger)
+        for latest_round in latest_round_dirs:
+            # contract_dir is the parent of the round-* dir.
+            contract_dir = latest_round.parent
+            # F-A: contract.json lives in the round dir, not the contract-K parent.
+            contract = _read_contract_json(latest_round)
+            task_id = str(contract.get("id") or contract_dir.name)
+            if task_id in existing_ids:
+                print(
+                    f"append_phase_records: skipping duplicate task_id {task_id!r} "
+                    "(already in ledger; contract.json may lack a stable 'id' — "
+                    "set one to avoid cross-phase collisions)",
+                    file=sys.stderr,
+                )
+                continue
+            # F1/F3: collect ALL rounds for this contract, not just the latest.
+            all_rounds = _all_round_dirs_for_contract(contract_dir)
+            record = build_record_from_round_dirs(contract_dir, all_rounds)
+            ledger.setdefault("records", []).append(record)
+            existing_ids.add(task_id)
+            appended += 1
+
+        if appended:
+            txn.commit()
     return appended
