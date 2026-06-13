@@ -12,6 +12,25 @@ current-branch lookups (`git branch --show-current`) resolve.
 
 Decision is read from the hook's JSON output: a `"permissionDecision":"deny"`
 token means DENY; absence (silent exit 0) means ALLOW.
+
+Worktree regression block (p3b 2026-06-13)
+-------------------------------------------
+The spec (docs/specs/2026-06-13-next-session-queue.md §P3b) proposed a walk-up
+fix for a worktree false-positive.  Independent investigation confirmed:
+
+  - git worktree add produces a .git FILE in the worktree dir; git -C <wt>
+    already resolves to the worktree branch natively (no hook change needed).
+  - When payload.cwd = worktree: the hook already ALLOWs correctly (S1).
+  - When hook subprocess CWD = worktree (no payload.cwd): git -C $(pwd) walks
+    the native git mechanism and returns the worktree branch — ALLOW (S3/S6).
+  - The spec's walk-up-to-.git-FILE algorithm is a NO-OP: the .git file is
+    already present in the worktree dir itself; git resolves it without help.
+  - Bare-push from main-repo CWD with no payload.cwd (S4) is DENIED by design:
+    that invocation is genuinely ambiguous — the session root is on main.
+    Override: set AUTO_PILOT_MAIN_OK=1 or include -C <worktree> in the command.
+
+Verdict: NO BEHAVIORAL CODE CHANGE to branch-lock.sh (NO-OP-CONFIRMED).
+The tests below lock the current correct behavior as a regression guard.
 """
 import json
 import os
@@ -52,6 +71,23 @@ def make_repo(tmp: str, branch: str) -> str:
     return tmp
 
 
+def make_linked_worktree(main_repo: str, wt_path: str, branch: str) -> str:
+    """Create a real linked worktree at wt_path checked out on branch."""
+    env = os.environ.copy()
+    env["GIT_AUTHOR_NAME"] = "t"
+    env["GIT_AUTHOR_EMAIL"] = "t@t"
+    env["GIT_COMMITTER_NAME"] = "t"
+    env["GIT_COMMITTER_EMAIL"] = "t@t"
+    subprocess.run(
+        ["git", "-C", main_repo, "worktree", "add", "-b", branch, wt_path],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    return wt_path
+
+
 def run_case(
     label: str,
     expect: str,
@@ -83,6 +119,48 @@ def run_case(
     print(f"[{status_icon}] {label:55s}  expect={expect:5s}  got={actual:5s}")
     if pass_fail == "FAIL":
         print(f"       cmd:    {cmd!r}")
+        print(f"       stdout: {stdout!r}")
+        print(f"       stderr: {result.stderr.strip()!r}")
+    return pass_fail == "PASS"
+
+
+def run_case_no_payload_cwd(
+    label: str,
+    expect: str,
+    cmd: str,
+    subprocess_cwd: str,
+    env_extra: dict[str, str] | None = None,
+) -> bool:
+    """Variant: payload omits tool_input.cwd so the hook falls back to $(pwd).
+
+    The hook's subprocess cwd is subprocess_cwd, mimicking the case where the
+    harness did not populate cwd (older callers, scripted invocations, etc.).
+    """
+    env = os.environ.copy()
+    env.pop("AUTO_PILOT_MAIN_OK", None)
+    if env_extra:
+        env.update(env_extra)
+
+    # Deliberately omit cwd from tool_input to exercise the pwd fallback path.
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}})
+
+    result = subprocess.run(
+        ["bash", HOOK],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=subprocess_cwd,
+    )
+
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and '"permissionDecision":"deny"' in stdout) else "ALLOW"
+    pass_fail = "PASS" if actual == expect else "FAIL"
+    status_icon = "OK  " if pass_fail == "PASS" else "FAIL"
+    print(f"[{status_icon}] {label:55s}  expect={expect:5s}  got={actual:5s}")
+    if pass_fail == "FAIL":
+        print(f"       cmd:    {cmd!r}")
+        print(f"       cwd:    {subprocess_cwd!r}")
         print(f"       stdout: {stdout!r}")
         print(f"       stderr: {result.stderr.strip()!r}")
     return pass_fail == "PASS"
@@ -200,6 +278,72 @@ def main() -> None:
         results.append(run_case(
             "unbalanced quote on feature (residual)", "ALLOW",
             'git push origin "main', feat_repo))
+
+    # --- Worktree regression block (p3b 2026-06-13) ---
+    # Uses a REAL linked worktree created with `git worktree add`.
+    # All cases document/lock current correct behavior (NO-OP-CONFIRMED).
+    # See module docstring for the full analysis.
+    with tempfile.TemporaryDirectory() as wt_base:
+        make_repo(wt_base, "main")
+        wt_dir = os.path.join(wt_base, "wt-feature")
+        make_linked_worktree(wt_base, wt_dir, "feature/wt-x")
+
+        # Linked-worktree dir has a .git FILE (not directory); git native
+        # resolution already returns the correct branch without any hook change.
+        assert Path(os.path.join(wt_dir, ".git")).is_file(), ".git must be a file in a linked worktree"
+
+        # S1: payload.cwd = worktree → ALLOW (existing path, locked here too)
+        results.append(run_case(
+            "wt: payload cwd=worktree, bare push → ALLOW",
+            "ALLOW", "git push", wt_dir))
+
+        # S3: no payload.cwd, subprocess CWD = worktree dir → ALLOW
+        # git -C $(pwd) resolves to feature/wt-x via native git walk.
+        # This is the primary worktree-session scenario: no false-positive.
+        results.append(run_case_no_payload_cwd(
+            "wt: no payload cwd, subprocess CWD=worktree → ALLOW",
+            "ALLOW", "git push", wt_dir))
+
+        # Commit from worktree also resolves correctly.
+        results.append(run_case_no_payload_cwd(
+            "wt: no payload cwd, commit from worktree CWD → ALLOW",
+            "ALLOW", "git commit -m x", wt_dir))
+
+        # S4: no payload.cwd, subprocess CWD = MAIN repo root → DENY by design.
+        # The invocation is genuinely ambiguous: CWD is on main, no cwd context.
+        # This is NOT a false-positive — it is a correct deny.
+        # Override requires AUTO_PILOT_MAIN_OK=1 or passing -C <wt-dir>.
+        results.append(run_case_no_payload_cwd(
+            "wt: no payload cwd, CWD=main root → DENY (by design)",
+            "DENY", "git push", wt_base))
+
+        # Safety: genuine main push from main repo must still be denied.
+        results.append(run_case_no_payload_cwd(
+            "wt: genuine push origin main from main CWD → DENY (safety)",
+            "DENY", "git push origin main", wt_base))
+
+        # Worktree inside .claude/worktrees/ (auto-pilot convention):
+        # create it there and verify native git resolution still works.
+        claude_wt_dir = os.path.join(wt_base, ".claude", "worktrees", "wt2")
+        os.makedirs(os.path.dirname(claude_wt_dir), exist_ok=True)
+        make_linked_worktree(wt_base, claude_wt_dir, "feature/wt2")
+        assert Path(os.path.join(claude_wt_dir, ".git")).is_file(), ".git must be a file"
+
+        results.append(run_case_no_payload_cwd(
+            "wt: .claude/worktrees/wt2 no payload cwd → ALLOW",
+            "ALLOW", "git push", claude_wt_dir))
+
+        # Base dir .claude/worktrees/ is NOT a worktree; git walks up to main.
+        claude_wt_base = os.path.join(wt_base, ".claude", "worktrees")
+        results.append(run_case_no_payload_cwd(
+            "wt: .claude/worktrees/ base (not a wt) → DENY (by design)",
+            "DENY", "git push", claude_wt_base))
+
+        # AUTO_PILOT_MAIN_OK=1 bypass still works from main CWD.
+        results.append(run_case_no_payload_cwd(
+            "wt: AUTO_PILOT_MAIN_OK=1 bypass from main CWD → ALLOW",
+            "ALLOW", "git push origin main", wt_base,
+            env_extra={"AUTO_PILOT_MAIN_OK": "1"}))
 
     passed = sum(results)
     total = len(results)

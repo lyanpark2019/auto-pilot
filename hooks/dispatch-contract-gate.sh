@@ -48,6 +48,12 @@ fi
 
 # Extract contract_dir from prompt (marker: contract_dir=<path>)
 contract_dir=$(printf '%s' "$prompt" | grep -oE 'contract_dir=[^[:space:]]+' | head -1 | sed 's/contract_dir=//' || echo "")
+# Shape-gate: a real pm-orchestrator dispatch always has contract.json present.
+# If the extracted path has none, the mention is prose (e.g. a spec explaining the
+# protocol) — clear it and fall through so no false DENY is emitted.
+if [[ -n "$contract_dir" && ! -f "$contract_dir/contract.json" ]]; then
+  contract_dir=""
+fi
 
 # Fallback (review r1): live dispatch prompts carry TICKET=<contract_dir>/tickets/<role>.json
 # (pm-orchestrator.md template) — keying only on contract_dir= left the gate inert
@@ -60,9 +66,9 @@ contract_dir=$(printf '%s' "$prompt" | grep -oE 'contract_dir=[^[:space:]]+' | h
 # mention) is NOT a dispatch marker and must be ignored — falling through to the
 # reviewer-subagent check below (or plain ALLOW for non-reviewer types).
 #
-# Residual: the primary contract_dir= marker can still prose-trip if prose happens
-# to contain "contract_dir=<word>" — its value has no canonical shape to narrow to
-# beyond what already exists, so we document the residual and accept it.
+# Note: the primary contract_dir= marker prose-trip residual is closed: the shape-gate
+# above (lines 51-56) clears the value when no contract.json is present at the path,
+# so prose mentions of contract_dir= without a real contract tree fall through here.
 if [[ -z "$contract_dir" ]]; then
   ticket_path=$(printf '%s' "$prompt" | grep -oE 'TICKET=[^[:space:]]+' | head -1 | sed 's/TICKET=//' || echo "")
   # Require the pm-orchestrator canonical shape: */tickets/*.json.

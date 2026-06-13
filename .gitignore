@@ -15,6 +15,7 @@ __pycache__/
 .DS_Store
 .coverage
 .claude/worktrees/
+.claude/routing/
 scheduled_tasks.lock
 .claude/scheduled_tasks.lock
 graphify-out/
