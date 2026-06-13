@@ -188,15 +188,17 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
         event("phase_end.phase_mismatch", requested=args.phase, active=current["phase"] if current else None)
         return 2
 
+    approved_count = 0
     if args.status == "success" and os.environ.get("AUTO_PILOT_SKIP_EVIDENCE") != "1":
         # AUTO_PILOT_SKIP_EVIDENCE=1 bypasses the evidence gate — UNIT TESTS ONLY
         # (tests fabricate state without a real contracts tree). Never set in prod.
-        blocked = _evidence.gate_phase_end(STATE_DIR / "contracts")
-        if blocked is not None:
-            suffix, message = blocked
+        result = _evidence.gate_phase_end(STATE_DIR / "contracts")
+        if isinstance(result, tuple):
+            suffix, message = result
             _warn(message)
             event(f"phase_end.{suffix}", phase=args.phase)
             return 2
+        approved_count = result
 
     # Auto-append ledger records — telemetry; never blocks phase-end.
     try:
@@ -204,10 +206,34 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
         _ledger.append_phase_records(Path.cwd(), STATE_DIR / "contracts")
     except Exception as exc:  # noqa: BLE001
         _warn(f"ledger auto-append failed (telemetry, non-blocking): {exc}")
+    current["approved"] = approved_count
     _close_phase(current, args.status, args.commits)
     _update_run_status(state, args.status)
     save_state(state)
     _emit_json({"ok": True, "phase": args.phase, "status": args.status}, indent=2)
+    return 0
+
+
+def cmd_resume(_: argparse.Namespace) -> int:
+    """Clear a ``cost-cap`` terminal status so the operator can re-run with raised caps.
+
+    Clears ONLY ``cost-cap`` → ``running``; preserves ``phases``, ``cost_usd``,
+    and ``tokens`` so the new cap applies to lifetime spend. Any other status
+    (running / failed / stopped / success) is not affected — those states have
+    their own recovery paths.
+
+    Returns:
+        0 when status was ``cost-cap`` and is now ``running``.
+        1 when status is anything else (state is not modified).
+    """
+    state = load_state()
+    if state.get("status") != "cost-cap":
+        _warn(f"resume clears cost-cap only; status={state.get('status')!r}")
+        return 1
+    state["status"] = "running"
+    save_state(state)
+    event("orchestrator.resume_after_cap",
+          cost_usd=state.get("cost_usd"), tokens=state.get("tokens"))
     return 0
 
 
@@ -516,6 +542,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("stop").set_defaults(func=cmd_stop)
+    sub.add_parser("resume").set_defaults(func=cmd_resume)
     sub.add_parser("review-status").set_defaults(func=cmd_review_status)
 
     p_dcc = sub.add_parser("dispatch-contract-check")

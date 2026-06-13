@@ -148,23 +148,26 @@ def assert_round_evidence(contract_dir: Path) -> None:
         raise EvidenceError(f"{contract_dir}: " + "; ".join(failures))
 
 
-def gate_phase_end(contracts_root: Path) -> tuple[str, str] | None:
+def gate_phase_end(contracts_root: Path) -> tuple[str, str] | int:
     """Evidence gate for a successful phase-end.
 
-    Returns None when every active-phase round dir holds a complete evidence
-    chain. Otherwise returns (event_suffix, blocked_message): event_suffix is
-    "no_evidence_dirs" or "evidence_failed" for the caller's structured log.
+    Returns the approved-contract count (int ≥ 0) when every active-phase round
+    dir holds a complete evidence chain. Otherwise returns
+    (event_suffix, blocked_message): event_suffix is "no_evidence_dirs" or
+    "evidence_failed" for the caller's structured log.
     """
     round_dirs = latest_round_dirs_for_active_phase(contracts_root)
     if not round_dirs:
         return ("no_evidence_dirs",
                 f"BLOCKED phase-end --status success: no contract round dirs under {contracts_root}")
+    approved = 0
     for round_dir in round_dirs:
         try:
             assert_round_evidence(round_dir)
+            approved += 1
         except EvidenceError as exc:
             return ("evidence_failed", f"BLOCKED phase-end --status success: {exc}")
-    return None
+    return approved
 
 
 def _phase_num(phase_dir: Path) -> int:

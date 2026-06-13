@@ -342,3 +342,57 @@ class TestReviewStatus:
         rc = orchestrator.main(["review-status"])
         assert rc == 0
         assert "no reviewer status" in capsys.readouterr().out
+
+
+class TestResume:
+    def _seed_state(self, in_tmp_cwd: Path, status: str, sample_spec: Path) -> None:
+        _run(["init", "--spec", str(sample_spec)])
+        state = _state()
+        state["status"] = status
+        state["cost_usd"] = 1.23
+        state["tokens"] = 5000
+        import _state as _s
+        import os
+        os.chdir(str(in_tmp_cwd))
+        _s.save_state(state)
+
+    def test_resume_clears_cost_cap(self, in_tmp_cwd, sample_spec):
+        self._seed_state(in_tmp_cwd, "cost-cap", sample_spec)
+        rc = _run(["resume"])
+        assert rc == 0
+        state = _state()
+        assert state["status"] == "running"
+        # preserved fields untouched
+        assert state["cost_usd"] == 1.23
+        assert state["tokens"] == 5000
+
+    def test_resume_running_exits_1(self, in_tmp_cwd, sample_spec, capsys):
+        _run(["init", "--spec", str(sample_spec)])
+        rc = _run(["resume"])
+        assert rc == 1
+        state = _state()
+        assert state["status"] == "running"
+
+    def test_resume_failed_exits_1(self, in_tmp_cwd, sample_spec, capsys):
+        self._seed_state(in_tmp_cwd, "failed", sample_spec)
+        rc = _run(["resume"])
+        assert rc == 1
+        state = _state()
+        assert state["status"] == "failed"
+
+    def test_resume_absent_state_exits_1(self, in_tmp_cwd):
+        """resume with no state.json → exit 1, no state file created."""
+        rc = _run(["resume"])
+        assert rc == 1
+        assert not (in_tmp_cwd / ".planning" / "auto-pilot" / "state.json").exists()
+
+    def test_resume_preserves_cost_and_tokens_on_non_cap_status(
+        self, in_tmp_cwd: Path, sample_spec: Path
+    ) -> None:
+        """resume on failed does not modify cost_usd or tokens."""
+        self._seed_state(in_tmp_cwd, "failed", sample_spec)
+        rc = _run(["resume"])
+        assert rc == 1
+        s = _state()
+        assert s["cost_usd"] == 1.23
+        assert s["tokens"] == 5000

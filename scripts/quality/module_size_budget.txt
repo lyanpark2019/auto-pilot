@@ -28,6 +28,8 @@ tests/test_hooks_guards.py|640
 # cannot be split without introducing circular-import risk (all cmd_* functions
 # share STATE_DIR, _emit, _warn helpers from the same module). Slice C adds
 # cmd_ledger_append + cmd_ledger_rebalance (thin glue; all logic in _ledger.py)
-# + phase-end try/except wiring (~60 lines). Cap 570 = current 561 + 9-line
-# headroom for parser-docstring tweaks; no new subcommands without another ADR.
-scripts/orchestrator.py|570
+# + phase-end try/except wiring (~60 lines). fix/loop-residuals adds
+# cmd_resume (~22 lines, cap-recovery); duplicate approved-count loop removed
+# (gate_phase_end now returns the count directly). Cap 590 = current 585 + 5-line
+# headroom; no new subcommands without another ADR.
+scripts/orchestrator.py|590

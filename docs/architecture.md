@@ -174,7 +174,7 @@ auto-pilot/
 
 `.planning/auto-pilot/state.json` — SoT for loop state. Owned by `scripts/_state.py`. Writers hold `flock(LOCK_EX)` on `state.lock`; reads hold `LOCK_SH`. Writes use `_contract.atomic_write_text` (tempfile + fsync + rename, `F_FULLFSYNC` on Darwin) — never a partial file. Resume-safe: PM reads `current_phase` + `phases[last]`, continues from next contract.
 
-Accumulates `cost_usd` + `tokens` across iters. Exceeds `--max-cost-usd` or `--max-tokens` → terminal `cost-cap`. `pgrep -x claude` GROWTH over the driver-start baseline (`args.pid_baseline`, captured in `headless-loop.main`) above `--max-concurrent-claude` → same exit (fork-bomb guard; ambient sessions on a busy host don't count).
+Accumulates `cost_usd` + `tokens` across iters. Exceeds `--max-cost-usd` or `--max-tokens` → terminal `cost-cap`. `pgrep -x claude` GROWTH over the driver-start baseline (`args.pid_baseline`, captured in `headless-loop.main`) above `--max-concurrent-claude` → same exit (fork-bomb guard; ambient sessions on a busy host don't count). `cost-cap` is recoverable: `python3 scripts/orchestrator.py resume` clears the status to `running` (preserving accumulated `cost_usd`/`tokens`), then re-run `headless-loop.py` with raised `--max-cost-usd`/`--max-tokens`.
 
 Failure recovery is intentionally non-destructive: `headless-loop.py` snapshots pre-phase HEAD, but `status=failed` / timeout stashes dirty `$ROOT` state with a recoverable `auto-pilot-iter-N-{failed,timeout}` label instead of a destructive hard reset; per-worker worktree cleanup is the recovery unit.
 
