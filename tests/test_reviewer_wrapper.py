@@ -329,6 +329,145 @@ def test_hard_kill_fallback_on_routing_error(restore_rw_module, monkeypatch):
     )
 
 
+# ── FIX 2: clean-exit-no-marker records ReviewerFailure ──────────────────────
+
+def test_wait_all_clean_exit_no_marker_records_failure(tmp_path):
+    """A reviewer that exits 0 without writing done.marker must produce a
+    ReviewerFailure, not a silent success (FIX 2 regression pin, P2 2026-06-14)."""
+    import _reviewer_wrapper as rw
+
+    out = tmp_path / "out"
+    out.mkdir()
+
+    class ExitNoMarkerHandle:
+        role = "codex-reviewer"
+        output_dir = out
+
+        def poll(self) -> int:
+            return 0  # exited 0, marker never written
+
+        @property
+        def proc(self):  # type: ignore[override]
+            raise NotImplementedError("should not be called in this path")
+
+    failures = rw.wait_all([ExitNoMarkerHandle()], timeout_sec=2,
+                           hard_kill_sec=60)
+    assert len(failures) == 1
+    assert failures[0].role == "codex-reviewer"
+    assert "no-marker" in failures[0].reason
+
+
+# ── FIX 3: retry path records success; hard-kill path invokes terminate ───────
+
+def test_wait_all_retry_path_succeeds_when_marker_appears_after_kill(tmp_path):
+    """After a hard-kill + respawn, if the retry reviewer writes done.marker
+    wait_all must return failures==[] (retry success path, FIX 3 coverage)."""
+    import _reviewer_wrapper as rw
+
+    # Simulate: original handle never writes marker and is hard-killed; a fake
+    # respawn writes the marker immediately.  We control _respawn by monkeypatching
+    # wait_all's internal deadline so the hard-kill fires, then the retry succeeds.
+    out = tmp_path / "out"
+    out.mkdir()
+    marker = out / "done.marker"
+
+    calls: list[str] = []
+
+    class OrigHandle:
+        role = "codex-reviewer"
+        output_dir = out
+
+        def poll(self) -> None:
+            return None  # never exits — hard-kill will fire
+
+    class RetryHandle:
+        role = "codex-reviewer"
+        output_dir = out
+
+        def poll(self) -> int:
+            return None  # type: ignore[return-value]  # not polled; marker exists
+
+    original = OrigHandle()
+    original_proc = type("P", (), {
+        "pid": 99999,
+        "terminate": lambda self: calls.append("terminate"),
+        "wait": lambda self, timeout=None: None,
+        "kill": lambda self: calls.append("kill"),
+    })()
+    original.proc = original_proc  # type: ignore[attr-defined]
+
+    def fake_respawn(handle: rw.SpawnHandle) -> rw.SpawnHandleProtocol:  # noqa: ARG001
+        calls.append("respawn")
+        marker.touch()
+        return RetryHandle()
+
+    import unittest.mock as mock
+    with mock.patch.object(rw, "_respawn", side_effect=fake_respawn), \
+         mock.patch.object(rw, "_hard_kill", side_effect=lambda proc, role: calls.append("hard_kill")):
+        failures = rw.wait_all(
+            [original],
+            timeout_sec=5,
+            soft_warn_sec=999,
+            hard_kill_sec=0,   # fire immediately
+        )
+
+    assert "respawn" in calls, "respawn must be called after hard-kill"
+    assert failures == [], f"retry success should yield no failures, got {failures}"
+
+
+def test_wait_all_hard_kill_invoked_on_persistent_timeout(tmp_path):
+    """A handle that never exits past hard_kill_sec must have hard-kill invoked
+    (terminate called on its proc) and produce a ReviewerFailure (FIX 3)."""
+    import _reviewer_wrapper as rw
+    import unittest.mock as mock
+
+    out = tmp_path / "out"
+    out.mkdir()
+
+    terminated: list[str] = []
+
+    class HungHandle:
+        role = "claude-reviewer"
+        output_dir = out
+
+        def poll(self) -> None:
+            return None
+
+    # Attach a fake proc so _hard_kill can call terminate on it.
+    hung = HungHandle()
+    fake_proc = type("P", (), {
+        "pid": 99998,
+        "terminate": lambda self: terminated.append("terminate"),
+        "wait": lambda self, timeout=None: None,
+        "kill": lambda self: terminated.append("kill"),
+    })()
+    hung.proc = fake_proc  # type: ignore[attr-defined]
+
+    def fake_respawn(handle: rw.SpawnHandle) -> rw.SpawnHandleProtocol:  # noqa: ARG001
+        # Retry also hangs and exceeds hard_kill_sec immediately.
+        retry = HungHandle()
+        retry.proc = fake_proc  # type: ignore[attr-defined]
+        return retry
+
+    with mock.patch.object(rw, "_respawn", side_effect=fake_respawn), \
+         mock.patch.object(rw, "_hard_kill",
+                           side_effect=lambda proc, role: terminated.append(f"hard_kill:{role}")):
+        failures = rw.wait_all(
+            [hung],
+            timeout_sec=5,
+            soft_warn_sec=999,
+            hard_kill_sec=0,   # fire immediately
+        )
+
+    assert any("hard_kill" in t for t in terminated), (
+        f"_hard_kill must be called; calls={terminated}"
+    )
+    # After original hard-kill + retry-hard-kill, a ReviewerFailure is recorded.
+    assert len(failures) == 1
+    assert failures[0].role == "claude-reviewer"
+    assert "retry-hard-kill" in failures[0].reason
+
+
 def test_reviewer_cmd_uses_equals_form_so_prompt_not_swallowed(tmp_path):
     """--allowedTools and --disallowedTools must use equals-form single tokens.
 

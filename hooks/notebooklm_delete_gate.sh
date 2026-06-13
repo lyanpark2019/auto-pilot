@@ -19,8 +19,14 @@ if ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)'
   exit 0
 fi
 
-tool_name=$(printf '%s' "$payload" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_name") or "")' 2>/dev/null || echo "")
-cmd=$(printf '%s' "$payload" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("tool_input") or {}).get("command") or "")' 2>/dev/null || echo "")
+tool_name=$(printf '%s' "$payload" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("tool_name") or "").lower())' 2>/dev/null || echo "")
+# Collapse runs of whitespace so double-space variants don't bypass substring checks.
+cmd=$(printf '%s' "$payload" | python3 -c '
+import sys, json, re
+d = json.load(sys.stdin)
+raw = (d.get("tool_input") or {}).get("command") or ""
+print(re.sub(r"[ \t]+", " ", raw))
+' 2>/dev/null || echo "")
 
 deny() {
   cat <<'JSON'

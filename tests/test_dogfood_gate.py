@@ -206,24 +206,40 @@ class TestTier2:
         assert not report.passed
         assert any("done.marker" in f for f in report.failures)
 
-    def test_specialist_role_checked(self, good_repo):
-        """Regression: outputs/specialists/<name>/ must be traversed and checked."""
+    def test_inline_role_dirs_are_ignored_by_artifact_gate(self, good_repo):
+        """Regression: review-gatekeeper and tech-critic-lead are inline-only agents
+        (Read/Grep/Glob/Bash; no Write).  Even if a specialists/ dir exists for them,
+        assert_reviewer_outputs_present must NOT demand done.marker / exit-code.txt /
+        review.json from those dirs — inline agents physically cannot produce them.
+
+        Previously the gate traversed outputs/specialists/<name>/ and required the
+        full artifact set, causing the test to fabricate files that a real run would
+        never create, masking the incoherence.
+        """
         for phase in (1, 2):
             round_dir = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / f"phase-{phase}" / "contract-1" / "round-1"
-            _populate_outputs(
-                round_dir,
-                ["worker", "codex-reviewer", "claude-reviewer"],
-                specialists=["review-gatekeeper"],
-            )
-        # Sanity: passes when specialist artifacts are present
+            # Populate only the ticket-booted roles — no artifacts for inline agents
+            _populate_outputs(round_dir, ["worker", "codex-reviewer", "claude-reviewer"])
+            # Drop an empty specialists/review-gatekeeper dir (as a real run might leave)
+            (round_dir / "outputs" / "specialists" / "review-gatekeeper").mkdir(parents=True, exist_ok=True)
+
+        # Gate must pass even though specialists/review-gatekeeper has no artifacts
         report = gate.run_tier2(good_repo, expected_phases=2)
         assert report.passed, report.failures
-        # Now break the specialist: missing exit-code.txt → failure
-        bad = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / "phase-1" / "contract-1" / "round-1" / "outputs" / "specialists" / "review-gatekeeper" / "exit-code.txt"
+
+    def test_ticket_booted_roles_still_require_artifacts(self, good_repo):
+        """ticket-booted roles (worker, codex-reviewer, claude-reviewer) still require
+        the full artifact set — this confirms the gate wasn't over-relaxed."""
+        for phase in (1, 2):
+            round_dir = good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1" / f"phase-{phase}" / "contract-1" / "round-1"
+            _populate_outputs(round_dir, ["worker", "codex-reviewer", "claude-reviewer"])
+        # Remove one artifact from a ticket-booted role → gate must fail
+        bad = (good_repo / ".planning" / "auto-pilot" / "contracts" / "iter-1"
+               / "phase-1" / "contract-1" / "round-1" / "outputs" / "codex-reviewer" / "exit-code.txt")
         bad.unlink()
-        report2 = gate.run_tier2(good_repo, expected_phases=2)
-        assert not report2.passed
-        assert any("exit-code.txt" in f and "review-gatekeeper" in f for f in report2.failures)
+        report = gate.run_tier2(good_repo, expected_phases=2)
+        assert not report.passed
+        assert any("exit-code.txt" in f and "codex-reviewer" in f for f in report.failures)
 
 
 class TestCli:

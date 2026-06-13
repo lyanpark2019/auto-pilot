@@ -42,6 +42,26 @@ CASES: list[tuple[str, str, object, bool]] = [
     ("Bash unrelated notebooklm command", "ALLOW",
      {"tool_name": "Bash", "tool_input": {"command": "notebooklm list --json"}}, False),
     ("garbage stdin (non-blocking default)", "ALLOW", "not json", False),
+    # Case-sensitivity hardening (FIX 3): uppercase MCP tool names must DENY.
+    ("MCP uppercase DELETE_notebook, unconfirmed", "DENY",
+     {"tool_name": "mcp__notebooklm__DELETE_notebook",
+      "tool_input": {"notebook_id": "abc123"}}, False),
+    ("MCP mixed-case Delete_Source, unconfirmed", "DENY",
+     {"tool_name": "mcp__notebooklm__Delete_Source",
+      "tool_input": {"source_id": "s1"}}, False),
+    ("MCP uppercase DELETE_notebook, confirmed", "ALLOW",
+     {"tool_name": "mcp__notebooklm__DELETE_notebook",
+      "tool_input": {"notebook_id": "abc123"}}, True),
+    # Whitespace hardening (FIX 3): double-space CLI variants must DENY.
+    ("Bash CLI double-space notebook  delete, unconfirmed", "DENY",
+     {"tool_name": "Bash",
+      "tool_input": {"command": "notebooklm  notebook  delete --id x"}}, False),
+    ("Bash CLI double-space nb  delete, unconfirmed", "DENY",
+     {"tool_name": "Bash",
+      "tool_input": {"command": "notebooklm  nb  delete x"}}, False),
+    ("Bash CLI double-space notebook  delete, confirmed", "ALLOW",
+     {"tool_name": "Bash",
+      "tool_input": {"command": "notebooklm  notebook  delete --id x"}}, True),
 ]
 
 

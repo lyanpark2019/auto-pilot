@@ -492,3 +492,153 @@ def test_apply_to_main_marks_trailers_applied_false_when_amend_fails(tmp_path, m
         ["git", "-C", str(repo), "log", "-1", "--format=%B"], text=True
     )
     assert "auto-pilot-iter" not in log
+
+
+# ---------------------------------------------------------------------------
+# FIX 1 — apply_to_main idempotency probe
+# ---------------------------------------------------------------------------
+
+def test_apply_to_main_returns_already_applied_on_second_call(tmp_path):
+    """Re-calling apply_to_main with the same token must return already_applied.
+
+    Simulates a PM crash after apply_to_main landed the commit but before
+    phase-end was recorded: on restart the same contract is re-dispatched and
+    apply_to_main is called again with the identical mbox + contract.
+    Expected: already_applied result, NO duplicate commit, log count unchanged.
+    """
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    contract.update(idempotency_token="feed1234feed5678", iter=1, phase=1)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "idempotency-test\n")
+    series = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(series, _worktree.PatchSeries)
+
+    # First application — must succeed
+    result1 = mgr.apply_to_main(series.mbox, contract)
+    assert result1.status == "applied"
+
+    commit_count_after_first = int(subprocess.check_output(
+        ["git", "-C", str(repo), "rev-list", "--count", "HEAD"], text=True
+    ).strip())
+
+    # Second application — must be short-circuited as already_applied
+    result2 = mgr.apply_to_main(series.mbox, contract)
+    assert result2.status == "already_applied"
+    assert result2.main_sha is not None
+
+    # No duplicate commit
+    commit_count_after_second = int(subprocess.check_output(
+        ["git", "-C", str(repo), "rev-list", "--count", "HEAD"], text=True
+    ).strip())
+    assert commit_count_after_second == commit_count_after_first
+
+    # No stale .git/rebase-apply left behind
+    assert not (repo / ".git" / "rebase-apply").exists()
+
+
+def test_apply_to_main_does_not_skip_with_empty_token(tmp_path):
+    """A missing/empty idempotency_token must NOT trigger the already_applied path."""
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    contract.update(idempotency_token="", iter=1, phase=1)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "no-token-test\n")
+    series = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(series, _worktree.PatchSeries)
+
+    result = mgr.apply_to_main(series.mbox, contract)
+    # Must proceed normally, not short-circuit
+    assert result.status == "applied"
+
+
+# ---------------------------------------------------------------------------
+# FIX 2 — create() is atomic on post-add failure
+# ---------------------------------------------------------------------------
+
+def test_create_cleans_up_worktree_and_branch_if_write_handle_fails(tmp_path, monkeypatch):
+    """If _write_handle raises after git worktree add, both the worktree dir
+    and the auto-pilot/* branch must be removed before the exception propagates.
+    """
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    expected_branch = f"auto-pilot/{contract['id']}"
+    expected_wt = wt_base / contract["id"]
+
+    # Force _write_handle to fail after git worktree add has already succeeded
+    monkeypatch.setattr(mgr, "_write_handle", lambda *a, **kw: (_ for _ in ()).throw(
+        RuntimeError("simulated write_handle failure")
+    ))
+
+    with pytest.raises(RuntimeError, match="simulated write_handle failure"):
+        mgr.create(contract, contract_dir=contract_dir)
+
+    # Worktree directory must be gone
+    assert not expected_wt.exists(), "orphaned worktree dir found after create() failure"
+
+    # Branch must be gone
+    branches_out = subprocess.check_output(
+        ["git", "-C", str(repo), "branch", "--list", expected_branch], text=True
+    ).strip()
+    assert branches_out == "", f"orphaned branch '{expected_branch}' found after create() failure"
+
+
+# ---------------------------------------------------------------------------
+# FIX 3 — create() tolerates leftover branch from crashed prior attempt
+# ---------------------------------------------------------------------------
+
+def test_create_succeeds_when_branch_already_exists_from_crash(tmp_path):
+    """create() must not raise CalledProcessError when branch auto-pilot/<id>
+    already exists from a prior crashed attempt of the same contract.
+
+    Simulates: first create() call → crash before done.marker → PM restart →
+    second create() call for the same contract id.
+    """
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+
+    # First create — succeeds (simulates pre-crash state)
+    handle1 = mgr.create(contract, contract_dir=contract_dir)
+    assert handle1.path.exists()
+
+    # Cleanup the worktree dir manually (simulating partial crash cleanup) but
+    # do NOT delete the branch — leaving the "branch already exists" condition.
+    # Actually, just call create() again directly: it must force-recreate.
+    contract_dir2 = tmp_path / "contract2"
+    contract_dir2.mkdir()
+    handle2 = mgr.create(contract, contract_dir=contract_dir2)
+
+    # Must succeed and return a valid handle
+    assert handle2.path.exists()
+    assert handle2.branch == handle1.branch
+
+    # Only one worktree for this branch should exist
+    wt_list = subprocess.check_output(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"], text=True
+    )
+    branch_entries = [line for line in wt_list.splitlines() if handle1.branch in line]
+    assert len(branch_entries) == 1, (
+        f"Expected exactly 1 worktree for branch, found: {branch_entries}"
+    )

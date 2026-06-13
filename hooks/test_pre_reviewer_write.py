@@ -55,6 +55,32 @@ def run_case(
 
 
 CASES: list[tuple[str, str, str]] = [
+    # SEC1 traversal fix: ../ path must be blocked even though it string-prefixes
+    # the allowed_output_dir component (the old glob `"$dir"/*` matched /tmp/ok/../../etc).
+    (
+        "Write ../ traversal (one hop) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Write",
+            "tool_input": {"file_path": f"{OUTPUT_DIR}/../../etc/cron.d/evil"},
+        }),
+    ),
+    (
+        "Edit ../ traversal (deep nested) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": f"{OUTPUT_DIR}/../../../etc/ssh/sshd_config"},
+        }),
+    ),
+    (
+        "Write legit in-dir path → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Write",
+            "tool_input": {"file_path": f"{OUTPUT_DIR}/legit.json"},
+        }),
+    ),
     (
         "Malformed JSON with reviewer role → DENY",
         "DENY",

@@ -86,12 +86,17 @@ CASES: list[tuple[str, str, str]] = [
     # codex re-review: command-substitution / backtick wrappers → fail toward firing.
     ("backtick `gh` pr list",           "DENY", "`gh` pr list"),
     ("cmd-subst $(echo gh) pr list",    "DENY", "$(echo gh) pr list"),
+    # $VAR indirection hardening (FIX 2): VAR=gh; "$VAR" forms must DENY.
+    ("$VAR: g=gh; \"$g\" pr merge 5",  "DENY", 'g=gh; "$g" pr merge 5'),
+    ("$VAR: G=gh; \"$G\" pr merge",    "DENY", 'G=gh; "$G" pr merge'),
     # Controls — must ALLOW.
     ("gh auth switch (skip)",           "ALLOW", "gh auth switch -u lyanpark2019"),
     ("gh auth status (skip)",           "ALLOW", "gh auth status"),
     ("non-gh command (git status)",     "ALLOW", "git status"),
     ("substring 'weigh' not gh",        "ALLOW", "echo weigh more"),
     ("cmd-subst no gh token",           "ALLOW", "echo $(date) more"),
+    # $VAR with non-gh value must ALLOW (no false positive).
+    ("$VAR: foo=bar; echo $foo (ALLOW)", "ALLOW", "foo=bar; echo $foo"),
 ]
 
 

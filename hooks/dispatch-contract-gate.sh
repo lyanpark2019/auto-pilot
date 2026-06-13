@@ -267,10 +267,19 @@ if [[ "$age_str" -gt 900 ]]; then
   deny "Preflight phase-${phase} is stale (${age_str}s > 900s TTL). Run scripts/pm_preflight.sh."
 fi
 
-# Check head_sha matches current HEAD
-current_head=$(git rev-parse HEAD 2>/dev/null || echo "")
-if [[ -n "$current_head" && -n "$stored_head" && "$current_head" != "$stored_head" ]]; then
-  deny "Preflight phase-${phase} head_sha mismatch (preflight=$stored_head, current=$current_head). Run scripts/pm_preflight.sh."
+# Check head_sha matches current HEAD.
+# Only perform the binding check when stored_head is non-empty — an empty
+# stored_head signals that the preflight deliberately skipped SHA binding
+# (e.g. no git repo in the test env); skip git altogether in that case.
+# When stored_head IS set, fail CLOSED on any git error (bad CWD, corrupt repo)
+# rather than silently treating an empty result as "no mismatch" (FIX 1).
+if [[ -n "$stored_head" ]]; then
+  if ! current_head=$(git rev-parse HEAD 2>/tmp/dcg_git_err); then
+    deny "dispatch-contract-gate: git rev-parse HEAD failed ($(cat /tmp/dcg_git_err 2>/dev/null | head -1)). Cannot verify head_sha binding; denying as a safety measure."
+  fi
+  if [[ -n "$current_head" && "$current_head" != "$stored_head" ]]; then
+    deny "Preflight phase-${phase} head_sha mismatch (preflight=$stored_head, current=$current_head). Run scripts/pm_preflight.sh."
+  fi
 fi
 
 exit 0

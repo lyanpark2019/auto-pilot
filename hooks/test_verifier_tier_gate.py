@@ -43,6 +43,21 @@ CASES: list[tuple[str, str | None, str | None, str]] = [
     ("verifier, no model override", "auto-pilot-claude-reviewer", None, "ALLOW"),
     ("verifier + unknown model token", "swarm-verifier", "gpt-5.5", "ALLOW"),
     ("whitespace strip: ' swarm-verifier ' + ' haiku '", " swarm-verifier ", " haiku ", "DENY"),
+    # Case-sensitivity hardening (FIX 1): uppercase model token must DENY.
+    ("uppercase model HAIKU -> DENY", "swarm-verifier", "HAIKU", "DENY"),
+    ("mixed-case model Haiku -> DENY", "swarm-verifier", "Haiku", "DENY"),
+    ("uppercase model SONNET -> DENY", "auto-pilot-claude-reviewer", "SONNET", "DENY"),
+    # Case-sensitivity hardening (FIX 1): uppercase agent name must DENY.
+    ("uppercase agent SWARM-VERIFIER + haiku -> DENY",
+     "auto-pilot:SWARM-VERIFIER", "haiku", "DENY"),
+    ("mixed-case agent Swarm-Verifier + haiku -> DENY",
+     "auto-pilot:Swarm-Verifier", "haiku", "DENY"),
+    # Uppercase model on non-verifier still ALLOW (no regression).
+    ("non-verifier + uppercase HAIKU -> ALLOW", "auto-pilot-worker", "HAIKU", "ALLOW"),
+    # Uppercase model at-tier (OPUS) must still ALLOW.
+    ("uppercase model OPUS at tier -> ALLOW", "swarm-verifier", "OPUS", "ALLOW"),
+    # Uppercase model above-tier (FABLE) must still ALLOW.
+    ("uppercase model FABLE above tier -> ALLOW", "review-gatekeeper", "FABLE", "ALLOW"),
 ]
 
 

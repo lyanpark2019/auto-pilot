@@ -109,24 +109,32 @@ def scan_doom_loops(repo_root: Path, run_id: str) -> list[Observation]:
     pivot_detector = data.get("pivot_detector")
     if not isinstance(pivot_detector, dict):
         return observations
-    for phase_key, count in pivot_detector.items():
-        try:
-            count_int = int(count)
-        except (TypeError, ValueError):
+    # pivot_detector is NESTED: {"phase-N": {"finding_hash": count}} per _state.py TypedDict.
+    # The old code iterated the outer dict and called int() on the inner dict value,
+    # raising TypeError (caught silently) → every doom-loop entry was dropped.
+    for phase_key, findings in pivot_detector.items():
+        if not isinstance(findings, dict):
             continue
-        if count_int < 1:
-            continue
-        snippet = json.dumps({"phase": phase_key, "count": count_int})[:500]
-        observations.append(
-            Observation(
-                source="doom-loop",
-                file_basename="",
-                issue="doom-loop",
-                candidate_asset=None,
-                run_id=run_id,
-                snippet=snippet,
+        for finding_hash, count in findings.items():
+            try:
+                count_int = int(count)
+            except (TypeError, ValueError):
+                continue
+            if count_int < 1:
+                continue
+            snippet = json.dumps(
+                {"phase": phase_key, "finding_hash": finding_hash, "count": count_int}
+            )[:500]
+            observations.append(
+                Observation(
+                    source="doom-loop",
+                    file_basename="",
+                    issue="doom-loop",
+                    candidate_asset=None,
+                    run_id=run_id,
+                    snippet=snippet,
+                )
             )
-        )
     return observations
 
 

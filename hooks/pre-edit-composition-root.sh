@@ -11,15 +11,23 @@ set -uo pipefail
 input=$(cat)
 
 # Extract file_path from tool input (Edit and Write both use it)
-file_path=$(echo "$input" | python3 -c '
+file_path=$(printf '%s' "$input" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
-except json.JSONDecodeError:
-    sys.stderr.write("auto-pilot: WARNING malformed tool_input json — hook skipped\n")
-    sys.exit(0)
-print(d.get("tool_input", {}).get("file_path", ""))
+except (json.JSONDecodeError, ValueError):
+    # Blocking guard: unparseable stdin must deny, not skip.
+    sys.stderr.write("auto-pilot: BLOCKED malformed tool_input json (fail-closed)\n")
+    sys.exit(2)
+# Valid JSON but no file_path key → allow (not a parse failure).
+val = d.get("tool_input") or {}
+print(val.get("file_path", "") if isinstance(val, dict) else "")
 ')
+# Propagate exit 2 from the python parse-fail sentinel.
+_fp_rc=$?
+if [ "$_fp_rc" -eq 2 ]; then
+  exit 2
+fi
 
 [[ -z "$file_path" ]] && exit 0
 

@@ -97,7 +97,7 @@ class StaleAmStateError(Exception):
 @dataclass(frozen=True)
 class ApplyResult:
     """Represent ApplyResult data for this module."""
-    status: str  # "applied" | "conflict"
+    status: str  # "applied" | "already_applied" | "conflict"
     main_sha: str | None = None
     pre_apply_head: str | None = None
     conflict_files: tuple[str, ...] = ()
@@ -155,14 +155,48 @@ class WorktreeManager:
         handle.write(contract_dir / "worktree-handle.json")
         return handle
 
+    def _force_remove_worktree_and_branch(self, wt_path: Path, branch: str) -> None:
+        """Best-effort cleanup of a worktree + its branch; errors are suppressed."""
+        subprocess.run(
+            ["git", "-C", str(self.repo_root), "worktree", "remove", "--force",
+             str(wt_path)],
+            capture_output=True, check=False, timeout=_GIT_TREE_TIMEOUT,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.repo_root), "worktree", "prune"],
+            capture_output=True, check=False, timeout=_GIT_QUICK_TIMEOUT,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.repo_root), "branch", "-D", branch],
+            capture_output=True, check=False, timeout=_GIT_QUICK_TIMEOUT,
+        )
+
     def create(self, contract: dict[str, Any], *, contract_dir: Path) -> WorktreeHandle:
-        """Create a worktree on the canonical branch derived from contract.id."""
+        """Create a worktree on the canonical branch derived from contract.id.
+
+        Atomic: if any step after ``git worktree add`` raises, the just-created
+        worktree and branch are force-removed before re-raising so callers never
+        observe a half-constructed state (FIX 2).
+
+        If the branch/worktree already exist from a prior crashed attempt of the
+        same contract id, they are force-removed before re-creating, making create()
+        safe to call on crash-restart without a separate recovery step (FIX 3).
+        """
         contract_id = contract["id"]
         branch = f"auto-pilot/{contract_id}"
         base_sha = contract["snapshot_shas"]["base_sha"]
+        wt_path = self.worktree_base / contract_id
         self._validate_branch(branch)
-        self._add_worktree(self.worktree_base / contract_id, branch, base_sha)
-        return self._write_handle(contract_dir, contract_id, branch, base_sha)
+        # FIX 3: force-remove any leftover worktree+branch from a prior crashed
+        # attempt so that git worktree add does not fail with "branch already exists".
+        self._force_remove_worktree_and_branch(wt_path, branch)
+        self._add_worktree(wt_path, branch, base_sha)
+        # FIX 2: make the post-add steps atomic — roll back on any exception.
+        try:
+            return self._write_handle(contract_dir, contract_id, branch, base_sha)
+        except Exception:
+            self._force_remove_worktree_and_branch(wt_path, branch)
+            raise
 
     def _current_merge_base(self, handle: WorktreeHandle) -> str:
         try:
@@ -312,17 +346,44 @@ class WorktreeManager:
         return ApplyResult(status="applied", main_sha=self._head_sha(),
                            pre_apply_head=pre)
 
+    def _token_already_in_log(self, token: str) -> bool:
+        """Return True when main's git log already contains an idempotency trailer for token.
+
+        Probes git log with --grep so no Python-side log parsing is needed.
+        A missing or empty token is treated as not-present (cannot safely skip).
+        """
+        if not token:
+            return False
+        result = subprocess.run(
+            ["git", "-C", str(self.repo_root), "log",
+             f"--grep=auto-pilot-idempotency: {token}", "--oneline", "-1"],
+            capture_output=True, text=True, timeout=_GIT_QUICK_TIMEOUT,
+        )
+        return bool(result.returncode == 0 and result.stdout.strip())
+
     def apply_to_main(self, mbox: Path, contract: dict[str, Any]) -> ApplyResult:
         """Apply worker's patch series to $ROOT under flock, injecting auto-pilot trailers.
 
-        Sequence: lock → clear stale am-state → dirty-check → git am --3way → amend
-        trailers on success; abort + return conflict result on failure.  git am has no
-        --trailer flag, so the trailer inject is a separate amend after apply.
+        Sequence: lock → idempotency probe → clear stale am-state → dirty-check →
+        git am --3way → amend trailers on success; abort + return conflict result on
+        failure.  git am has no --trailer flag, so the trailer inject is a separate
+        amend after apply.
+
+        On a PM crash-restart the same contract is re-dispatched; the idempotency probe
+        detects the already-applied commit (via its trailer) and returns
+        ``already_applied`` without re-running git am — preventing a duplicate commit or
+        a spurious conflict from git am --empty=stop (git ≥ 2.45 default).
 
         Raises MainTreeDirtyError, StaleAmStateError, or subprocess.TimeoutExpired.
         TimeoutExpired propagates safely — flock is released in _main_apply_lock finally.
         """
         with self._main_apply_lock():
+            token: str = contract.get("idempotency_token", "")
+            if self._token_already_in_log(token):
+                current_sha = self._head_sha()
+                event("worktree.apply.already_applied",
+                      contract_id=contract.get("id", ""), token=token)
+                return ApplyResult(status="already_applied", main_sha=current_sha)
             self._clear_stale_am_state()
             dirty = self._is_dirty()
             if dirty.strip():

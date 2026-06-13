@@ -61,23 +61,24 @@ def test_prepare_ticket_writes_signed_json(tmp_path):
     assert ticket["ticket_sha"] == recomputed
 
 
-def test_prepare_ticket_accepts_review_gatekeeper_role(tmp_path):
+@pytest.mark.parametrize("inline_role", ["review-gatekeeper", "tech-critic-lead"])
+def test_prepare_ticket_rejects_inline_only_roles(tmp_path, inline_role):
+    """Regression: inline-only agents (no Write tool) must never be ticket-booted.
+
+    review-gatekeeper and tech-critic-lead dispatch via subagent_type and return
+    inline YAML — they cannot produce done.marker / exit-code.txt / review.json.
+    Attempting to mint a ticket for them must raise ValueError immediately.
+    """
     import _dispatch
     contract_dir = _make_contract_dir(tmp_path)
-    worktree = tmp_path / "worktree"
-    worktree.mkdir()
-
-    ticket_path = _dispatch.prepare_subagent_ticket(
-        contract_dir=contract_dir,
-        worktree=worktree,
-        subagent_role="review-gatekeeper",
-        skip_contract_check=True,
-        skip_preflight=True,
-    )
-
-    ticket = _json.loads(ticket_path.read_text())
-    assert ticket["subagent_role"] == "review-gatekeeper"
-    assert ticket["output_dir"].endswith("/outputs/review-gatekeeper")
+    with pytest.raises(ValueError, match="unknown subagent_role"):
+        _dispatch.prepare_subagent_ticket(
+            contract_dir=contract_dir,
+            worktree=tmp_path / "wt",
+            subagent_role=inline_role,
+            skip_contract_check=True,
+            skip_preflight=True,
+        )
 
 
 def test_prepare_ticket_rejects_invalid_role(tmp_path):

@@ -197,8 +197,10 @@ def _read_contract_json(round_dir: Path) -> dict[str, Any]:
 def _gates_first_try(
     round_dirs: list[Path],
 ) -> tuple[bool, bool]:
-    # Reads outputs/worker/status.json from the FIRST round dir for direct bool;
-    # falls back to review_rounds==1 inference (was_inferred=True) when absent.
+    # Reads outputs/worker/status.json from the FIRST round dir for a direct bool.
+    # When status.json is absent OR unreadable, returns (False, True): absence of
+    # evidence must not credit a first-try pass (conservative by design).
+    # was_inferred=True signals the caller to add a "gates_first_try inferred" note.
     if round_dirs:
         worker_status = round_dirs[0] / "outputs" / "worker" / "status.json"
         if worker_status.exists():
@@ -209,9 +211,8 @@ def _gates_first_try(
                     return val, False
             except (json.JSONDecodeError, OSError):
                 pass
-    # Fallback: infer from review_rounds
-    inferred = len(round_dirs) == 1
-    return inferred, True
+    # Fallback: no readable status.json → False (conservative; do not credit without evidence).
+    return False, True
 
 
 def build_record_from_round_dirs(
@@ -304,9 +305,18 @@ def build_record_from_round_dirs(
     return record
 
 
+def _round_num(round_dir: Path) -> int:
+    # Mirrors _evidence._round_num: numeric key prevents lexical misordering
+    # when round count reaches 10+ (round-9 sorts after round-10 lexically).
+    try:
+        return int(round_dir.name.split("-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
+
+
 def _all_round_dirs_for_contract(contract_dir: Path) -> list[Path]:
-    # Sorted by name (round-1, round-2, …) for stable multi-round aggregation.
-    return sorted(contract_dir.glob("round-*"), key=lambda d: d.name)
+    # Sorted numerically so round-10, round-11 follow round-9 (not precede it).
+    return sorted(contract_dir.glob("round-*"), key=_round_num)
 
 
 def append_phase_records(

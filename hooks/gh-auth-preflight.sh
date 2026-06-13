@@ -81,15 +81,24 @@ for seg in segments:
         gh_seg = " ".join(["gh", *(shlex.quote(t) for t in rest)]).strip()
         break
 
-# Fail TOWARD firing on shell-eval constructs that could expand to `gh` (command
-# substitution $(...) / backtick) which the static first-token check cannot
-# resolve.  If no clean gh segment was found but a construct sits next to a `gh`
-# token, run the auth check anyway (advisory hook — an extra cached check is
-# harmless; a missed wrong-account gh is not).  Closes the `\`gh\`` / `$(... gh)`
-# evasion (codex re-review 2026-06-10).
-if not gh_seg and re.search(r"\$\(|`", cmd):
-    stripped = re.sub(r"[\\`\"\x27(){}]|\$\(", " ", cmd)
-    if any(os.path.basename(t) == "gh" for t in stripped.split()):
+# Fail TOWARD firing on shell-eval constructs that could expand to `gh`:
+#   • command substitution $(...) / backtick
+#   • bare $VAR indirection (e.g. g=gh; "$g" pr merge)
+# The static first-token check cannot statically resolve these. If no clean gh
+# segment was found but a construct is present, check two things:
+#   1. After stripping meta-chars, does "gh" appear as a standalone token?
+#      (catches $(gh ...) / backtick forms)
+#   2. Does any shell variable in the command hold the literal value "gh"?
+#      (catches g=gh; "$g" pr merge — $VAR indirection)
+# An extra cached auth check is harmless; a missed wrong-account gh is not.
+# Closes `\`gh\`` / `$(... gh)` / `$VAR=gh "$VAR"` evasions.
+# (codex re-review 2026-06-10; $VAR indirection hardening 2026-06-14)
+if not gh_seg and re.search(r"\$\(|`|\$[A-Za-z_]", cmd):
+    stripped = re.sub(r"[\\`\"\x27(){}]|\$\(|\$[A-Za-z_][A-Za-z0-9_]*", " ", cmd)
+    gh_in_tokens = any(os.path.basename(t) == "gh" for t in stripped.split())
+    # Also catch VAR=gh assignment patterns (covers $VAR indirection)
+    gh_in_assign = bool(re.search(r"(?:^|[\s;|&])([A-Za-z_][A-Za-z0-9_]*)=gh(?:\s|;|$)", cmd))
+    if gh_in_tokens or gh_in_assign:
         gh_seg = "gh"
 print(gh_seg)
 ' 2>/dev/null || echo "")

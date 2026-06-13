@@ -364,6 +364,30 @@ def main() -> None:
             "ALLOW", "git push origin main", wt_base,
             env_extra={"AUTO_PILOT_MAIN_OK": "1"}))
 
+    # --- FIX 1: git-failure → DENY (fail-closed) ---
+    # When git cannot resolve the branch (bad CWD / non-repo dir), the hook must
+    # DENY rather than fall through with an empty branch name.  We supply a CWD
+    # that is NOT a git repo so `git branch --show-current` exits non-zero.
+    with tempfile.TemporaryDirectory() as non_repo:
+        # Sanity: confirm it is not a git repo.
+        r = subprocess.run(["git", "-C", non_repo, "rev-parse", "--git-dir"],
+                           capture_output=True)
+        if r.returncode != 0:
+            results.append(run_case(
+                "git error (non-repo CWD) → DENY (fail-closed)",
+                "DENY",
+                "git commit -m x",
+                non_repo,
+            ))
+            results.append(run_case(
+                "git error (non-repo CWD, push) → DENY (fail-closed)",
+                "DENY",
+                "git push",
+                non_repo,
+            ))
+        else:
+            print("[SKIP] non_repo somehow is a git repo — skipping git-failure tests")
+
     passed = sum(results)
     total = len(results)
     print(f"\n{passed}/{total} passed")

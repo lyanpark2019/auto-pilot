@@ -244,6 +244,41 @@ def test_snapshot_context_no_collision_on_same_leaf_dirs(tmp_path):
     _contract.verify_snapshots(dest_dir)
 
 
+def test_verify_claude_chain_detects_tamper(tmp_path):
+    """FIX 4 (A1 bug-history area): _verify_claude_chain must raise
+    SnapshotMismatchError when a bundle CLAUDE-chain-NN-*.md file is mutated
+    after the snapshot was taken (tamper path previously unasserted)."""
+    import _contract
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\n")
+    root = tmp_path / "CLAUDE.md"
+    root.write_text("ROOT\n")
+    zdir = tmp_path / "z"
+    zdir.mkdir()
+    zc = zdir / "CLAUDE.md"
+    zc.write_text("CHILD\n")
+    dest_dir = tmp_path / "contract" / "round-1"
+    dest_dir.mkdir(parents=True)
+
+    # Build snapshot with a 2-entry chain.
+    shas = _contract.snapshot_context(dest_dir, spec, [root, zc])
+    _bind_snapshot_to_contract(dest_dir, shas)
+    assert len(shas.claude_md_chain) == 2
+
+    # Clean state must round-trip.
+    _contract.verify_snapshots(dest_dir)
+
+    # Tamper one of the CLAUDE-chain bundle files — any one in the chain.
+    bundle = dest_dir / "context-bundle"
+    chain_files = list(bundle.glob("CLAUDE-chain-*.md"))
+    assert chain_files, "bundle must contain at least one chain file"
+    chain_files[0].write_text("TAMPERED BY TEST\n")
+
+    # _verify_claude_chain must detect the tampering and raise.
+    with pytest.raises(_contract.SnapshotMismatchError):
+        _contract.verify_snapshots(dest_dir)
+
+
 def test_atomic_write_text_cleans_temp_on_keyboard_interrupt(tmp_path, monkeypatch):
     """A12: a BaseException (KeyboardInterrupt) mid-write must not leak the
     hidden temp file, and any pre-existing target must stay intact."""
