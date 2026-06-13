@@ -129,8 +129,93 @@ CASES: list[Case] = [
 ]
 
 
+def _stale_contract(cwd: Path) -> tuple[str, str]:
+    """Build a contract tree whose contract-check.json has a STALE sha.
+
+    This simulates a real directory (contract.json EXISTS — shape-gate won't clear
+    it) but with an intentionally wrong sha in contract-check.json so that if the
+    hook ever reaches the sha-verification step it will DENY.
+
+    Returns (contract_dir_path, ticket_path).
+    """
+    base = cwd / ".planning" / "auto-pilot"
+    contract_dir = base / "contracts" / "phase-1"
+    tickets_dir = contract_dir / "tickets"
+    tickets_dir.mkdir(parents=True, exist_ok=True)
+    contract_json = contract_dir / "contract.json"
+    contract_json.write_text(json.dumps({"id": "phase-1", "phase": "1", "scope": []}))
+    # Intentionally wrong sha — if verification runs, it will DENY.
+    stale_sha = "0" * 64
+    (contract_dir / "contract-check.json").write_text(
+        json.dumps({"contract_sha256": stale_sha, "result": "pass"})
+    )
+    ticket_path = tickets_dir / "claude-reviewer.json"
+    ticket_path.write_text("{}")
+    preflight_dir = base / "preflight"
+    preflight_dir.mkdir(parents=True, exist_ok=True)
+    (preflight_dir / "phase-1.json").write_text(json.dumps({
+        "generated_ts": datetime.now(timezone.utc).isoformat(),
+        "head_sha": "",
+    }))
+    return str(contract_dir), str(ticket_path)
+
+
+def run_midline_marker_case(label: str, marker_style: str, expect: str) -> bool:
+    """Test that a marker appearing MID-LINE in prose does NOT trigger the gate.
+
+    Uses a contract tree whose sha is intentionally STALE so that if the hook
+    reaches the verification step it will DENY — isolating the anchoring fix from
+    the shape-gate: the shape-gate only checks for contract.json existence (which
+    IS present here), while the anchoring fix prevents the marker from matching
+    mid-line prose in the first place.
+
+    Pre-fix (unanchored grep) → hook reaches sha check → DENY  (bug / RED).
+    Post-fix (anchored grep)  → marker is ignored      → ALLOW (correct / GREEN).
+    """
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        contract_dir_path, ticket_path = _stale_contract(cwd)
+        if marker_style == "contract_dir":
+            # Mid-line prose: NOT a real dispatch — marker mid-sentence
+            prompt = f"see contract_dir={contract_dir_path} for details on the protocol"
+        else:
+            # Mid-line prose: NOT a real dispatch — TICKET= embedded mid-sentence
+            prompt = f"the TICKET={ticket_path} above was already processed"
+        payload = {
+            "tool_name": "Task",
+            "tool_input": {"subagent_type": "general-purpose", "prompt": prompt},
+        }
+        result = subprocess.run(
+            ["bash", HOOK],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env={**os.environ, "PATH": os.environ["PATH"]},
+        )
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and "deny" in stdout) else "ALLOW"
+    ok = actual == expect
+    print(f"[{'OK  ' if ok else 'FAIL'}] {label:52s} expect={expect:5s} got={actual:5s}")
+    if not ok:
+        print(f"       stdout={stdout!r} stderr={result.stderr.strip()!r}")
+    return ok
+
+
 def main() -> None:
     results = [run_case(*c) for c in CASES]
+    # Anchoring fix cases — RED before fix, GREEN after.
+    # Both use a real contract tree so the shape-gate cannot mask the anchoring gap.
+    results.append(run_midline_marker_case(
+        "mid-line contract_dir= prose with real contract → ALLOW",
+        "contract_dir",
+        "ALLOW",
+    ))
+    results.append(run_midline_marker_case(
+        "mid-line TICKET= prose with real contract → ALLOW",
+        "TICKET",
+        "ALLOW",
+    ))
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)

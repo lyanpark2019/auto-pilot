@@ -95,6 +95,7 @@ jobs:
           python3 hooks/test_gh_auth_preflight.py
           python3 hooks/test_verifier_tier_gate.py
           python3 hooks/test_pre_edit_human_only.py
+          python3 hooks/test_dispatch_contract_gate.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh

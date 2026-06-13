@@ -273,7 +273,8 @@ class TestDispatchContractGateFailOpen:
         r = _run_hook(
             self._hook(),
             {"tool_name": "Task", "tool_input": {
-                "prompt": f"Worker task. contract_dir={contract_dir}"
+                # Marker at line-start — pm-orchestrator.md template (lines 278-279)
+                "prompt": f"contract_dir={contract_dir}"
             }},
             cwd=tmp_path,
         )
