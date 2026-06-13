@@ -22,7 +22,7 @@ In addition, PM scans the diff's file paths and dispatches matching specialists 
 | `**/*migration*.sql`, `**/migrations/**`, `prisma/schema.prisma`, `**/*.sql` | `database-reviewer` — NOT YET PORTED, do not dispatch | — | Schema correctness, RLS, index plan |
 | `**/*.tf`, `**/*Dockerfile*`, `**/k8s/**`, `**/.github/workflows/**`, `vercel.json`, `vercel.ts`, `**/fly.toml` | `infra-reviewer` — NOT YET PORTED, do not dispatch | — | Infra change blast radius |
 | `prompts/**`, `**/*.prompt.md`, anywhere with LLM call + prompt template | `prompt-reviewer` — NOT YET PORTED, do not dispatch | — | Prompt drift, cost regression |
-| Tests-only diffs (only `tests/**`, `**/*.test.*`) | `test-quality-reviewer` — NOT YET PORTED, do not dispatch | — | Are tests real or theatre? |
+| Tests-only diffs (only `tests/**`, `**/*.test.*`) | `review-gatekeeper` | `tdd-gate` | Are tests real or theatre? `tdd-gate` mode widens its scope here: it applies even when no runtime code changed, because a tests-only diff may introduce theatre tests (assertions that never fail, dead code in tests, mock-all patterns that test nothing). |
 
 `review-gatekeeper` carries both gates (modes `security` + `tdd-gate`) in one agent. A diff may match both rows → PM dispatches the agent once per mode (or instructs it to run both modes), and each mode emits its own verdict.
 
@@ -59,7 +59,7 @@ If 2 specialists disagree (e.g., `review-gatekeeper` (`security`) says REJECT bu
 ## Tier system
 
 - **Tier 1 (ship now)**: `auto-pilot-codex-reviewer`, `auto-pilot-claude-reviewer`, `review-gatekeeper` (modes `security` + `tdd-gate`). These exist in `auto-pilot/agents/`.
-- **Tier 2 (port on demand — NOT YET PORTED, do not dispatch)**: `database-reviewer`, `infra-reviewer`, `prompt-reviewer`, `test-quality-reviewer`. PM will request port from `~/Documents/Project/everything-claude-code/agents/` when first triggered.
+- **Tier 2 (port on demand — NOT YET PORTED, do not dispatch)**: `database-reviewer`, `infra-reviewer`, `prompt-reviewer`. PM will request port from `~/Documents/Project/everything-claude-code/agents/` when first triggered. (`test-quality-reviewer` was retired — tests-only diffs now route to `review-gatekeeper` tdd-gate mode, which already ships in Tier 1.)
 
 ## Don't over-dispatch
 
