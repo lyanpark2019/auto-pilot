@@ -148,7 +148,7 @@ class Observation:
 
 
 @contextmanager
-def _ledger_lock(lock_path: Path) -> Iterator[None]:
+def ledger_lock(lock_path: Path) -> Iterator[None]:
     """Exclusive flock on ``<fp>.json.lock``, held across the read-modify-write."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.touch(exist_ok=True)
@@ -161,6 +161,9 @@ def _ledger_lock(lock_path: Path) -> Iterator[None]:
             fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
         finally:
             fd.close()
+
+
+_ledger_lock = ledger_lock  # backward-compat alias
 
 
 def _seed_ticket(fp: str, obs: Observation, repo_fp: str, ts: str) -> Ticket:

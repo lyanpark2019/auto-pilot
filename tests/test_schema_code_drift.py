@@ -1,5 +1,10 @@
 """Drift guards for code mirrors that are NOT enforced by a schema at runtime.
 
+Also guards _promotion.py constants against improvement-ticket.schema.json:
+  (c) TRANSITIONS keys == schema ``state`` enum
+  (d) GATE_FIELDS == ``promotion_gate.required``
+
+
 Each test pins a Python (or shell) constant to its mirror so manual edits to one
 side without the other fail in CI. Same pattern already protects
 ``learning_miner.VALID_ASSET_TYPES`` (tests/test_learning_miner.py) and the
@@ -21,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import _dispatch  # noqa: E402  (sys.path set above)
+import _promotion  # noqa: E402
 
 
 # ── (a) _VALID_ROLES ⇄ ticket.schema.json subagent_role enum ──────────────────
@@ -132,3 +138,50 @@ def test_gh_auth_known_owners_self_mapped() -> None:
             f"{_PREFLIGHT_PATH.relative_to(REPO_ROOT)}: owner {owner!r} should map "
             f"to itself, got {preflight_map.get(owner)!r}"
         )
+
+
+# ── (c) _promotion.TRANSITIONS keys == improvement-ticket.schema.json state enum ─
+
+
+_IMPROVEMENT_SCHEMA_PATH = REPO_ROOT / "schemas" / "improvement-ticket.schema.json"
+
+
+def test_transitions_keys_match_schema_state_enum() -> None:
+    """_promotion.TRANSITIONS keys must equal the schema state enum exactly.
+
+    A state present in the code but absent from the schema (or vice versa) means
+    a ticket in that state would fail validation or FSM lookup.
+    """
+    schema = json.loads(_IMPROVEMENT_SCHEMA_PATH.read_text())
+    schema_states = set(schema["properties"]["state"]["enum"])
+    code_states = set(_promotion.TRANSITIONS.keys())
+
+    only_code = code_states - schema_states
+    only_schema = schema_states - code_states
+    assert code_states == schema_states, (
+        f"TRANSITIONS/state enum drift: "
+        f"in code-not-schema={sorted(only_code)}, "
+        f"in schema-not-code={sorted(only_schema)}"
+    )
+
+
+# ── (d) _promotion.GATE_FIELDS == improvement-ticket.schema.json promotion_gate.required ─
+
+
+def test_gate_fields_match_schema_promotion_gate_required() -> None:
+    """_promotion.GATE_FIELDS must equal promotion_gate.required in the schema.
+
+    A field accepted by set_gate_field but absent from promotion_gate.required
+    (or vice versa) creates a silent schema-code split.
+    """
+    schema = json.loads(_IMPROVEMENT_SCHEMA_PATH.read_text())
+    schema_gate_required = set(schema["properties"]["promotion_gate"]["required"])
+    code_gate_fields = set(_promotion.GATE_FIELDS)
+
+    only_code = code_gate_fields - schema_gate_required
+    only_schema = schema_gate_required - code_gate_fields
+    assert code_gate_fields == schema_gate_required, (
+        f"GATE_FIELDS/promotion_gate.required drift: "
+        f"in code-not-schema={sorted(only_code)}, "
+        f"in schema-not-code={sorted(only_schema)}"
+    )

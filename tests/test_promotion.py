@@ -105,6 +105,23 @@ class TestSetGateField:
         with pytest.raises(PromotionError, match="gate field"):
             set_gate_field(tmp_path, FP_A, "vibes", True)
 
+    def test_corrupt_ticket_raises_promotion_error(self, tmp_path):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f"{FP_A}.json").write_text("{not json")
+        with pytest.raises(PromotionError, match="corrupt"):
+            set_gate_field(tmp_path, FP_A, "tests_pass", True)
+
+    def test_terminal_state_promoted_blocks_gate(self, tmp_path):
+        _seed_ticket(tmp_path, FP_A, state="promoted",
+                     gates={"tests_pass": True, "ci_pass": True, "user_approved": True})
+        with pytest.raises(PromotionError, match="terminal"):
+            set_gate_field(tmp_path, FP_A, "tests_pass", False)
+
+    def test_terminal_state_rejected_blocks_gate(self, tmp_path):
+        _seed_ticket(tmp_path, FP_A, state="rejected")
+        with pytest.raises(PromotionError, match="terminal"):
+            set_gate_field(tmp_path, FP_A, "tests_pass", True)
+
 
 class TestTransition:
     def test_full_happy_path(self, tmp_path):
@@ -144,6 +161,12 @@ class TestTransition:
         from _improvement import validate_ticket
         validate_ticket(out)
 
+    def test_corrupt_ticket_raises_promotion_error(self, tmp_path):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f"{FP_A}.json").write_text("{not json")
+        with pytest.raises(PromotionError, match="corrupt"):
+            transition(tmp_path, FP_A, "accepted")
+
 
 # ---------------------------------------------------------------------------
 # Orchestrator CLI shims
@@ -167,6 +190,51 @@ def _make_ledger(tmp_path: Path, fp: str, state: str = "candidate") -> tuple[Pat
     repo_root = tmp_path / "repo"
     repo_root.mkdir(parents=True, exist_ok=True)
     return ledger, repo_root
+
+
+class TestImprovementsListPromotableCLI:
+    """--promotable flag filters to tickets meeting promotion thresholds."""
+
+    def test_promotable_flag_filters_correctly(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        slug = str(tmp_path / "repo").replace("/", "-")
+        ledger = tmp_path / "home" / ".claude" / "projects" / slug / "improvements"
+        ledger.mkdir(parents=True, exist_ok=True)
+
+        # Above threshold: reviewer-finding requires distinct_runs >= 2
+        above = {
+            "schema_version": 1,
+            "fingerprint": FP_A,
+            "state": "candidate",
+            "pattern": "above",
+            "source": "reviewer-finding",
+            "candidate_asset": None,
+            "occurrences": 2,
+            "distinct_runs": 2,
+            "first_seen": "2026-06-10T08:00:39Z",
+            "last_seen": "2026-06-12T23:06:46Z",
+            "plugin_version": "0",
+            "repo_fingerprint": "abc123",
+            "evidence": [{"run_id": "r1", "snippet": "s"}, {"run_id": "r2", "snippet": "s2"}],
+            "promotion_gate": {"tests_pass": None, "ci_pass": None, "user_approved": None},
+        }
+        # Below threshold: distinct_runs = 1
+        below = {**above, "fingerprint": FP_B, "pattern": "below", "distinct_runs": 1,
+                 "occurrences": 1, "evidence": [{"run_id": "r1", "snippet": "s"}]}
+
+        (ledger / f"{FP_A}.json").write_text(json.dumps(above))
+        (ledger / f"{FP_B}.json").write_text(json.dumps(below))
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        rc = _run(["improvements-list", "--repo-root", str(repo_root),
+                   "--promotable", "--json"])
+        assert rc == 0
+        lines = [ln for ln in capsys.readouterr().out.strip().splitlines() if ln]
+        assert len(lines) == 1
+        ticket = json.loads(lines[0])
+        assert ticket["fingerprint"] == FP_A
 
 
 class TestImprovementsListCLI:

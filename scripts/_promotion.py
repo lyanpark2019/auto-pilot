@@ -7,13 +7,14 @@ promotion_gate field to be True.
 """
 from __future__ import annotations
 
-import fcntl
 import json
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 from _contract import atomic_write_text
-from _improvement import validate_ticket
+from _improvement import ledger_lock, validate_ticket
 
 TRANSITIONS: dict[str, frozenset[str]] = {
     "candidate": frozenset({"accepted", "rejected"}),
@@ -56,36 +57,45 @@ def resolve_fingerprint(ledger: Path, prefix: str) -> str:
 
 
 def _locked_update(ledger: Path, fp: str, mutate: Any) -> Ticket:
-    path = ledger / f"{fp}.json"
-    if not path.exists():
-        raise PromotionError(f"no ticket {fp}")
-    lock = ledger / f"{fp}.json.lock"
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.touch(exist_ok=True)
-    fd = lock.open("r+")
     result: Ticket
-    try:
-        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
-        raw: Ticket = json.loads(path.read_text())
-        result = mutate(raw)
-        validate_ticket(result)
-        atomic_write_text(path, json.dumps(result, indent=2, sort_keys=True) + "\n")
-    finally:
+    lock = ledger / f"{fp}.json.lock"
+    with ledger_lock(lock):
+        path = ledger / f"{fp}.json"
+        if not path.exists():
+            raise PromotionError(f"no ticket {fp}")
         try:
-            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
-        finally:
-            fd.close()
+            raw: Ticket = json.loads(path.read_text())
+        except json.JSONDecodeError as exc:
+            raise PromotionError(f"corrupt ticket {fp}: {exc}") from exc
+        try:
+            result = mutate(raw)
+        except PromotionError:
+            raise
+        except KeyError as exc:
+            raise PromotionError(f"missing key in ticket {fp}: {exc}") from exc
+        try:
+            validate_ticket(result)
+        except jsonschema.ValidationError as exc:
+            raise PromotionError(f"ticket {fp} invalid after mutation: {exc.message}") from exc
+        atomic_write_text(path, json.dumps(result, indent=2, sort_keys=True) + "\n")
     return result
 
 
+_TERMINAL_STATES: frozenset[str] = frozenset({"promoted", "rejected"})
+
+
 def set_gate_field(ledger: Path, fp: str, field: str, value: bool) -> Ticket:
-    """Set one promotion_gate field; raise PromotionError for unknown fields."""
+    """Set one promotion_gate field; raise PromotionError for unknown fields or terminal state."""
     if field not in GATE_FIELDS:
         raise PromotionError(
             f"unknown gate field {field!r}; expected one of {GATE_FIELDS}"
         )
 
     def mutate(ticket: Ticket) -> Ticket:
+        if ticket.get("state") in _TERMINAL_STATES:
+            raise PromotionError(
+                f"ticket {fp} is in terminal state {ticket['state']!r}; gate mutation denied"
+            )
         ticket["promotion_gate"][field] = value
         return ticket
 
@@ -163,8 +173,8 @@ def cmd_improvements_list(args: Any) -> int:
         tickets = [t for t in tickets if t.get("state") == state_filter]
 
     if promotable_only:
-        from learning_miner import _is_promotable
-        tickets = [t for t in tickets if _is_promotable(t)]
+        from learning_miner import is_promotable
+        tickets = [t for t in tickets if is_promotable(t)]
 
     if getattr(args, "json", False):
         for t in tickets:
