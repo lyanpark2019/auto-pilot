@@ -278,6 +278,15 @@ def main() -> None:
         results.append(run_case(
             "unbalanced quote on feature (residual)", "ALLOW",
             'git push origin "main', feat_repo))
+        # Whitespace-only command: the Python shlex tokenizer receives only
+        # spaces/tabs → produces no tokens → no git invocations found →
+        # invocations string is empty → exit 0 ALLOW (characterization pin).
+        results.append(run_case(
+            "whitespace-only command → ALLOW (no git tokens)", "ALLOW",
+            "   ", main_repo))
+        results.append(run_case(
+            "tab-only command → ALLOW (no git tokens)", "ALLOW",
+            "\t\t", main_repo))
 
     # --- Worktree regression block (p3b 2026-06-13) ---
     # Uses a REAL linked worktree created with `git worktree add`.
