@@ -65,3 +65,18 @@ tests/test_worktree.py|660
 # scope); table-driven matrix tests for ReviewerWrapper dispatch; cannot split without
 # duplicating the mock-factory helpers. Cap 520 = 510 current + 10 headroom.
 tests/test_reviewer_wrapper.py|520
+#
+# headless-loop.py is the single-process headless driver; all loop_iteration /
+# _accumulate_usage / _early_exit_status / _handle_timeout helpers share the
+# module-level ROOT/STATE_FILE/LOG_DIR snapshot + the _budget seam, so splitting
+# would fork the cwd-snapshot wiring. The state_transaction concurrency conversion
+# (state.json RMW lock spanning load->mutate->write) added ~18 net lines across the
+# 3 RMW spots. Cap 515 = 505 current + 10 headroom.
+scripts/headless-loop.py|515
+#
+# test_ledger.py is the integration suite for _ledger.py; all tests share the
+# tmp ledger / contracts-tree fixtures + the schema-valid record builders, so
+# splitting would duplicate fixture overhead or require a conftest. The
+# ledger_transaction concurrency conversion added a TestLedgerTransaction class
+# (6 tests incl. a multiprocessing lost-update pin). Cap 645 = 634 current + 11 headroom.
+tests/test_ledger.py|645

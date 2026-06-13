@@ -42,7 +42,7 @@ import _config
 import _prompts
 import _recover
 from _log import event
-from _state import STATE_DIR, STATE_FILE, State, load_state, save_state, utc_now as _state_utc_now
+from _state import STATE_DIR, STATE_FILE, State, load_state, state_transaction, utc_now as _state_utc_now
 
 # ROOT captured at import time; used only for subprocess cwd (git ops + claude
 # session). State + log paths come from _state and resolve lazily relative to
@@ -243,15 +243,27 @@ def _accumulate_usage(
     iter_n: int,
     phase: int,
 ) -> None:
-    """Parse session usage from *log*, add to *state* in-place, persist, and ledger."""
+    """Parse session usage from *log*, accumulate onto fresh on-disk state, and ledger.
+
+    The delta is added to the FRESHEST on-disk cumulative under an exclusive lock
+    (the real lost-update fix vs. the old load→mutate→save pattern). The passed
+    *state* dict is synced with the new cumulative so downstream timeout handling
+    sees consistent values.
+    """
     log_cost, log_tokens = _budget.parse_session_usage(log)
     source = "estimate" if log_cost <= 0.0 else "parsed"
     if log_cost <= 0.0:
         log_cost = args.per_iter_cost_estimate
         log_tokens = log_tokens or int(getattr(args, "per_iter_token_estimate", 0))
-    state["cost_usd"] = float(state.get("cost_usd", 0.0)) + log_cost
-    state["tokens"] = int(state.get("tokens", 0)) + log_tokens
-    save_state(state)
+    with state_transaction() as txn:
+        txn.state["cost_usd"] = float(txn.state.get("cost_usd", 0.0)) + log_cost
+        txn.state["tokens"] = int(txn.state.get("tokens", 0)) + log_tokens
+        cum_cost = float(txn.state["cost_usd"])
+        cum_tokens = int(txn.state["tokens"])
+        txn.commit()
+    # keep caller's in-memory dict consistent with the persisted cumulative
+    state["cost_usd"] = cum_cost
+    state["tokens"] = cum_tokens
     _budget.append_usage_ledger(
         LOG_DIR / "usage.jsonl",
         {
@@ -259,8 +271,8 @@ def _accumulate_usage(
             "phase": phase,
             "cost_usd": log_cost,
             "tokens": log_tokens,
-            "cumulative_cost_usd": float(state.get("cost_usd", 0.0)),
-            "cumulative_tokens": int(state.get("tokens", 0)),
+            "cumulative_cost_usd": cum_cost,
+            "cumulative_tokens": cum_tokens,
             "source": source,
             "ts": _state_utc_now(),
         },
@@ -273,8 +285,10 @@ def _handle_timeout(iter_n: int, pre_head: str, state_after: State) -> str:
           pre_head=pre_head[:8],
           note="state.status set to failed; $ROOT untouched")
     stash_if_dirty(reason=f"iter-{iter_n}-timeout")
+    with state_transaction() as txn:
+        txn.state["status"] = "failed"
+        txn.commit()
     state_after["status"] = "failed"
-    save_state(state_after)
     return "failed"
 
 
@@ -325,15 +339,19 @@ def _early_exit_status(state: State, args: argparse.Namespace) -> str | None:
         return current
     cap_hit = _budget.check_caps(args, state)
     if cap_hit is not None:
+        with state_transaction() as txn:
+            txn.state["status"] = cap_hit
+            txn.commit()
         state["status"] = cap_hit
-        save_state(state)
         return cap_hit
     wall_hit = _budget.check_wall_clock(
         getattr(args, "wall_clock_deadline", None), time.monotonic()
     )
     if wall_hit is not None:
+        with state_transaction() as txn:
+            txn.state["status"] = wall_hit
+            txn.commit()
         state["status"] = wall_hit
-        save_state(state)
         return wall_hit
     return None
 

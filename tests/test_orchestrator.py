@@ -396,3 +396,59 @@ class TestResume:
         s = _state()
         assert s["cost_usd"] == 1.23
         assert s["tokens"] == 5000
+
+
+class TestPivotCheckSingleTransaction:
+    """Regression pin: cmd_pivot_check must use a single state transaction.
+
+    A two-save implementation (increment save + status-flip save) can lose the
+    increment if a concurrent writer races between them.  The single-txn form
+    captures both in one atomic commit, so the 3rd call must yield rc==1 AND
+    have pivot_detector count==3 AND status=="pivot-needed" on disk.
+    """
+
+    def test_third_call_returns_1_and_persists_both_increment_and_status(
+        self, in_tmp_cwd: Path, sample_spec: Path
+    ) -> None:
+        _run(["init", "--spec", str(sample_spec)])
+        assert _run(["pivot-check", "--phase", "1", "--finding-hash", "abc"]) == 0
+        assert _run(["pivot-check", "--phase", "1", "--finding-hash", "abc"]) == 0
+        rc = _run(["pivot-check", "--phase", "1", "--finding-hash", "abc"])
+        assert rc == 1
+        s = _state()
+        assert s["status"] == "pivot-needed"
+        assert s["pivot_detector"]["phase-1"]["abc"] == 3
+
+
+class TestPhaseEndEvidenceGate:
+    """phase-end with a failing evidence gate must return 2 and not persist state."""
+
+    def test_failed_gate_returns_2_and_no_status_change(
+        self, in_tmp_cwd: Path, tmp_path: Path, monkeypatch
+    ) -> None:
+        # Build a 1-phase spec.
+        spec = tmp_path / "one.md"
+        spec.write_text("## Phase 1\n")
+        _run(["init", "--spec", str(spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "1"])
+        # Do NOT set AUTO_PILOT_SKIP_EVIDENCE; the contracts dir is empty so
+        # _evidence.gate_phase_end should return a (suffix, message) tuple.
+        monkeypatch.delenv("AUTO_PILOT_SKIP_EVIDENCE", raising=False)
+        rc = _run(["phase-end", "--phase", "1", "--status", "success"])
+        assert rc == 2
+        # Status must remain "running" — gate failure must not write state.
+        s = _state()
+        assert s["status"] == "running"
+        assert s["phases"][-1]["status"] == "running"
+
+
+class TestStopNoState:
+    """cmd_stop on missing state must return 0 and write nothing."""
+
+    def test_stop_no_state_returns_0_no_file(self, in_tmp_cwd: Path, capsys) -> None:
+        state_file = in_tmp_cwd / ".planning" / "auto-pilot" / "state.json"
+        assert not state_file.exists()
+        rc = _run(["stop"])
+        assert rc == 0
+        assert not state_file.exists()
+        assert "nothing to stop" in capsys.readouterr().out

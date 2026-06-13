@@ -107,6 +107,65 @@ def _state_read_lock() -> Iterator[None]:
             fd.close()
 
 
+class StateTxn:
+    """Handle yielded by :func:`state_transaction`.
+
+    ``.state`` is the mutable :class:`State` dict loaded under the held
+    exclusive lock (``{}`` when no state file exists).  Call :meth:`commit`
+    to persist ``.state`` on context exit; without a commit nothing is written.
+    """
+
+    def __init__(self, state: State) -> None:
+        self.state: State = state
+        self._committed: bool = False
+
+    def commit(self) -> None:
+        """Mark the transaction dirty so :func:`state_transaction` writes on exit."""
+        self._committed = True
+
+
+@contextmanager
+def state_transaction() -> Iterator[StateTxn]:
+    """Exclusive-lock context manager that spans the full load → mutate → write cycle.
+
+    Acquires ``fcntl.LOCK_EX`` on :data:`STATE_LOCK` before reading and holds
+    it until the ``with`` body exits.  If the caller invokes
+    :meth:`StateTxn.commit` inside the body, the (possibly mutated)
+    ``txn.state`` is written atomically **while the lock is still held**.
+    Otherwise nothing is written.
+
+    On any exception inside the body nothing is written; the exception
+    propagates normally.  The lock is always released in a ``finally`` block.
+
+    Usage::
+
+        with state_transaction() as txn:
+            txn.state["tokens"] = txn.state.get("tokens", 0) + delta
+            txn.commit()
+    """
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_LOCK.touch(exist_ok=True)
+    fd = STATE_LOCK.open("r+")
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+        state = (
+            cast(State, json.loads(STATE_FILE.read_text()))
+            if STATE_FILE.exists()
+            else cast(State, {})
+        )
+        txn = StateTxn(state)
+        yield txn
+        if txn._committed:
+            _contract.atomic_write_text(
+                STATE_FILE, json.dumps(txn.state, indent=2) + "\n"
+            )
+    finally:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        finally:
+            fd.close()
+
+
 def load_state() -> State:
     """Read :data:`STATE_FILE` into a :class:`State` under a shared lock.
 
