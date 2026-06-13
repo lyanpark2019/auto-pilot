@@ -197,7 +197,15 @@ Does NOT count as runtime change (no test required):
         * No mock-everything patterns that make tests structurally untestable
         * No trivial smoke tests (empty body, single `pass`, `assert x is not None`)
       - REJECT when tests are theatre; APPROVE when quality checks pass.
-4. Run the test suite — paste output. If tests fail → REJECT.
+4. **Confirm RED (behavior diffs only).** For each new or changed test covering a runtime change:
+   - Check the worker's report for recorded RED evidence (failing-test output observed BEFORE the fix).
+   - If RED evidence is absent: REJECT and return to the worker to supply it. The worker (the writer
+     role) re-runs the test against pre-change code — e.g. `git stash` the implementation hunk, run the
+     test, confirm it FAILs, `git stash pop` — and records the failing output. Do not APPROVE a test
+     that was never observed to fail. (The gatekeeper is a read-only sandboxed role: `pre-reviewer-write.sh`
+     blocks `git stash` and other mutations, so the gatekeeper must NOT self-reproduce — absent
+     worker-recorded RED, the conservative outcome is REJECT, never an implicit pass.)
+5. Run the test suite — paste output. If tests fail → REJECT.
 ```
 
 > **Why tests-only diffs are not auto-APPROVE:** `specialist-pool.md` routes
