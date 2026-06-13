@@ -279,7 +279,7 @@ Regression pins: `tests/test_pm_protocol_contract_dispatch.py` asserts `dispatch
 
 1. `review-input/frozen.diff` exists; recomputed SHA-256 == `review-input/frozen.diff.sha256` content.
 2. Both `tickets/{codex-reviewer,claude-reviewer}.json` exist with `diff_sha256` equal to that value.
-3. Both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist, schema-valid, `contract_id` matches the round. Verdict requirement (per `scripts/_evidence.py` docstring lines 17–20, CLAUDE.md module table): claude-reviewer must be APPROVE (with `scope_check=PASS`); codex-reviewer may be APPROVE or honest ABSTAIN (verdict `ABSTAIN` + non-empty `reviewer_meta.abstain_reason`) — codex unavailability never blocks, a codex REJECT still does.
+3. Both `outputs/{codex-reviewer,claude-reviewer}/review.json` exist, schema-valid, `contract_id` matches the round. Verdict requirement (per `scripts/_evidence.py` docstring lines 17–20, CLAUDE.md module table): claude-reviewer must be APPROVE; codex-reviewer may be APPROVE or honest ABSTAIN (verdict `ABSTAIN` + non-empty `reviewer_meta.abstain_reason`) — codex unavailability never blocks, a codex REJECT still does. Any APPROVE from either reviewer additionally requires `scope_check=PASS`.
 
 `scripts/orchestrator.py cmd_phase_end` calls `_evidence.gate_phase_end(contracts_root)`, which internally locates the latest-round dirs and runs `assert_round_evidence` on each. Failure → exit 2, `BLOCKED` stderr, state untouched. `AUTO_PILOT_SKIP_EVIDENCE=1` escape hatch exists for unit tests that fabricate state without contract dirs (test-only, never for live runs).
 
