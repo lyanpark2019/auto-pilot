@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EXPECTED_VERSION = "0.8.8"
-EXPECTED_COMMIT = "e2ec0e14549f44ac3d5fef621bc1a06d7a823203"
-EXPECTED_CI_RUN = 27273499973
-EXPECTED_RELEASE_URL = "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.8"
+EXPECTED_VERSION = "0.8.9"
+EXPECTED_COMMIT = "8c4a3916ac0bc182204d7f8b1a6a492477bdcba2"
+EXPECTED_CI_RUN = 27466105529
+EXPECTED_RELEASE_URL = "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.9"
 
 
 def _load_json(path: str) -> dict[str, object]:
