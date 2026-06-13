@@ -4,6 +4,15 @@ This is the auto-pilot plugin source. It is **a Claude Code plugin**, not applic
 
 > **Read first for full context:** [`docs/onboarding/README.md`](docs/onboarding/README.md) — AI/developer start path, graphify commands, task routing. Then [`docs/master-plan.md`](docs/master-plan.md) for roadmap and [`docs/architecture.md`](docs/architecture.md) for loop design detail.
 
+## Code questions = vault-first
+
+Read the curated vault page first — answers usually live there (human-verified, fact-checked). Order:
+- **① Obsidian vault**: `~/Documents/Knowledge/wiki/projects/auto-pilot/` (curated pages: `architecture.md`, `master-plan.md`, `index.md`, `graphify/`, …)
+- **② repo docs**: this repo's `docs/` + folder-level `CLAUDE.md`
+- **③ graphify supplement**: `graphify query/explain/path/affected` over `graphify-out/graph.json` — only for symbols/edges/freshness the vault doesn't cover (use the code-only filtered graph; SQL not indexed). No grep-guessing before ①–②.
+
+Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pins this repo's vault path.
+
 ## Principles (Nisi 2026-06)
 
 - **Prompts/specs are the durable re-runnable asset; code is the output** ("code is sawdust") — invest in the spec, not in patching generated artifacts.
