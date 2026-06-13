@@ -10,6 +10,15 @@
 set -euo pipefail
 
 payload=$(cat)
+
+# Detect unparseable stdin early: if python3 cannot parse it as JSON, the gate
+# is fail-open (non-blocking convention) but must emit an advisory so it is
+# never SILENTLY inert.
+if ! printf '%s' "$payload" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+  printf '[hook:notebooklm_delete_gate] fail-open: unparseable stdin\n' >&2
+  exit 0
+fi
+
 tool_name=$(printf '%s' "$payload" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_name") or "")' 2>/dev/null || echo "")
 cmd=$(printf '%s' "$payload" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("tool_input") or {}).get("command") or "")' 2>/dev/null || echo "")
 
