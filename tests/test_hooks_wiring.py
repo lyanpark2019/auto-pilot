@@ -95,6 +95,20 @@ class TestHooksJsonWiring:
         assert entry is not None, "ruff-import-integrity.sh not in PostToolUse"
         assert "Bash" in entry["matcher"]
 
+    def test_shellcheck_on_write_wired_post_tool_use_triple_matcher(self):
+        data = self._load()
+        post = data["hooks"]["PostToolUse"]
+        entry = next(
+            (e for e in post if any(
+                "shellcheck-on-write.sh" in h["command"] for h in e["hooks"])),
+            None,
+        )
+        assert entry is not None, "shellcheck-on-write.sh not in PostToolUse"
+        for tool in ("Write", "Edit", "MultiEdit"):
+            assert tool in entry["matcher"], (
+                f"{tool} missing from shellcheck-on-write matcher; got {entry['matcher']!r}"
+            )
+
     def test_headless_sync_dispatch_guard_wired(self):
         data = self._load()
         pre = data["hooks"]["PreToolUse"]

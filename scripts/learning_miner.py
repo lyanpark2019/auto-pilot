@@ -195,11 +195,15 @@ def _ticket_distinct_runs(ticket: dict[str, object]) -> int:
     return dr if isinstance(dr, int) else 0
 
 
-def _is_promotable(ticket: dict[str, object]) -> bool:
+def is_promotable(ticket: dict[str, object]) -> bool:
+    """Return True when ticket's distinct_runs meets its source's promotion threshold."""
     threshold = PROMOTION_THRESHOLDS.get(_ticket_source(ticket))
     if threshold is None:
         return False
     return _ticket_distinct_runs(ticket) >= threshold
+
+
+_is_promotable = is_promotable  # backward-compat alias
 
 
 def verdict_for(tickets: list[dict[str, object]]) -> str:

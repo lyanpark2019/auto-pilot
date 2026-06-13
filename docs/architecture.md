@@ -88,8 +88,13 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
   `insights.jsonl` — retro's structured sidecar where a `class` tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
-  it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class) —
-  promotion machinery stays deferred until live runs accumulate real `distinct_runs`.
+  it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
+- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:1`, three orchestrator
+  subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
+  state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
+  requires all three `promotion_gate` fields (`tests_pass`, `ci_pass`, `user_approved`) to be
+  `True` before the transition is accepted. Asset authoring and approval stay human — `user_approved`
+  is only set on an explicit user directive; the CLI records and validates, never auto-decides.
 - **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded).
   Once-per-session is sufficient: evidence dedups on (run_id, snippet), so re-fires cannot inflate.
   SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected (enforce with code).
@@ -124,7 +129,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 24 hooks · 12 codex-skills = 70 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 25 hooks · 12 codex-skills = 71 assets total.
 
 ```
 auto-pilot/
@@ -153,7 +158,7 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (24 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (25 scripts, P④; hooks/hooks.json is wiring SoT)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)

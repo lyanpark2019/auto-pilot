@@ -571,6 +571,10 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     p_lr.add_argument("--apply", action="store_true")
     p_lr.add_argument("--project-root", default=None)
     p_lr.set_defaults(func=cmd_ledger_rebalance)
+
+    import _promotion  # noqa: PLC0415
+    _promotion.register_cli_subparsers(sub)
+
     return parser
 
 
