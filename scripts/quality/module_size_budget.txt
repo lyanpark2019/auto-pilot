@@ -46,3 +46,22 @@ tests/test_headless_loop.py|520
 # duplicating the run_case helper or adding a conftest. FIX1 + FIX2 additions
 # (14 new bypass cases) grew it past 500. Cap 520 = 515 current + 5 headroom.
 hooks/test_state_write_guard.py|520
+#
+# _worktree.py gained atomicity helpers (FIX 2: _force_remove_worktree_and_branch +
+# try/except rollback in create) and idempotency probe (FIX 1: _token_already_in_log +
+# already_applied branch in apply_to_main). The module cannot be split because all
+# methods share WorktreeManager state and the PatchResult / ApplyResult ADTs.
+# Cap 520 = 506 current + 14 headroom.
+scripts/_worktree.py|520
+#
+# test_worktree.py is a table-driven integration test suite for WorktreeManager;
+# all tests share _init_repo / _fake_contract / _commit_one helpers + the
+# _ready_to_apply / _brownfield_repo fixtures. Splitting would duplicate fixture
+# overhead or require a conftest import chain. FIX 1/2/3 tests added 150 lines
+# (4 new test functions). Cap 660 = 644 current + 16 headroom.
+tests/test_worktree.py|660
+#
+# test_reviewer_wrapper.py grew past 500 from prior worktree changes (not audit-r2-fix
+# scope); table-driven matrix tests for ReviewerWrapper dispatch; cannot split without
+# duplicating the mock-factory helpers. Cap 520 = 510 current + 10 headroom.
+tests/test_reviewer_wrapper.py|520

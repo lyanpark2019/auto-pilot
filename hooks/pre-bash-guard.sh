@@ -9,15 +9,23 @@
 set -uo pipefail
 
 input=$(cat)
-cmd=$(echo "$input" | python3 -c '
+cmd=$(printf '%s' "$input" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
-except json.JSONDecodeError:
-    sys.stderr.write("auto-pilot: WARNING malformed tool_input json — hook skipped\n")
-    sys.exit(0)
-print(d.get("tool_input", {}).get("command", ""))
+except (json.JSONDecodeError, ValueError):
+    # Blocking guard: unparseable stdin must deny, not skip.
+    sys.stderr.write("auto-pilot: BLOCKED malformed tool_input json (fail-closed)\n")
+    sys.exit(2)
+# Valid JSON but no command key → allow (not a parse failure).
+val = d.get("tool_input") or {}
+print(val.get("command", "") if isinstance(val, dict) else "")
 ')
+# Propagate exit 2 from the python parse-fail sentinel.
+_cmd_rc=$?
+if [ "$_cmd_rc" -eq 2 ]; then
+  exit 2
+fi
 
 [[ -z "$cmd" ]] && exit 0
 

@@ -57,12 +57,25 @@ print(ti.get("file_path", ""))
       echo "auto-pilot: BLOCKED reviewer ($role) $tool_name — unparseable or non-dict tool_input (fail-closed)" >&2
       exit 2
     fi
-    case "$file_path" in
-      "$allowed_output_dir"/*) exit 0 ;;
-      *)
-        echo "auto-pilot: BLOCKED reviewer ($role) $tool_name to $file_path (allowed: $allowed_output_dir/)" >&2
-        exit 2 ;;
-    esac
+    # Normalise both paths before prefix-compare to block ../.. traversal.
+    # python3 os.path.normpath collapses foo/../../etc → /etc without requiring
+    # the path to exist (unlike realpath).  Fail-closed if normalisation fails.
+    safe=$(printf '%s\n%s' "$allowed_output_dir" "$file_path" | python3 -c '
+import os, sys
+lines = sys.stdin.read().splitlines()
+allowed_norm = os.path.normpath(lines[0])
+target_norm  = os.path.normpath(lines[1])
+# Require target to start with allowed_norm + "/" (strict prefix, not just allowed_norm itself)
+if target_norm.startswith(allowed_norm + os.sep):
+    print("yes")
+else:
+    print("no")
+' 2>/dev/null || echo "no")
+    if [ "$safe" = "yes" ]; then
+      exit 0
+    fi
+    echo "auto-pilot: BLOCKED reviewer ($role) $tool_name to $file_path (allowed: $allowed_output_dir/)" >&2
+    exit 2
     ;;
   Bash)
     # Extract command string — fail-closed on parse failures (non-dict or

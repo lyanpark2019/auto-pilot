@@ -43,8 +43,10 @@ _GIT_TREE_TIMEOUT = 60   # diff across potentially large trees
 
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 TICKET_SCHEMA_PATH = SCHEMAS_DIR / "ticket.schema.json"
-_VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer",
-                "review-gatekeeper", "tech-critic-lead"}
+_VALID_ROLES = {"worker", "codex-reviewer", "claude-reviewer"}
+# review-gatekeeper and tech-critic-lead are inline-only agents (tools: Read, Grep, Glob, Bash;
+# no Write) — they return inline YAML and cannot produce ticket-boot artifacts
+# (done.marker / exit-code.txt / review.json).  They must never appear here.
 
 _TICKET_VALIDATOR: jsonschema.Draft202012Validator | None = None
 JsonObject = dict[str, object]

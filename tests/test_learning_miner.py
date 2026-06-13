@@ -134,6 +134,7 @@ def test_run_miner_skips_crashing_observation(
 
 
 def test_doom_loop_cross_run_promotes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # pivot_detector is NESTED: {"phase-N": {"finding_hash": count}} per _state.py TypedDict.
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     root = tmp_path / "repo"
     d = root / ".planning" / "auto-pilot"
@@ -141,10 +142,42 @@ def test_doom_loop_cross_run_promotes(tmp_path: Path, monkeypatch: pytest.Monkey
     res = {"verdict": "thin"}
     for i, phase in enumerate(["phase-1", "phase-2", "phase-3"], start=1):
         (d / "state.json").write_text(
-            json.dumps({"run_id": f"r{i}", "pivot_detector": {phase: 3}})
+            json.dumps({"run_id": f"r{i}", "pivot_detector": {phase: {"hash-abc": 3}}})
         )
         res = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
     assert res["verdict"] == "promotable"
+
+
+def test_nested_pivot_detector_produces_doom_loop_observation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fix 3: scan_doom_loops must handle the NESTED pivot_detector shape.
+
+    The real writer (orchestrator.cmd_pivot_check) stores:
+        pivot_detector = {"phase-N": {"finding_hash": count}}
+    The old code iterated the outer dict and called int() on the inner dict
+    (a TypeError), caught silently, so every doom-loop signal was dropped.
+
+    This test proves:
+      - A nested pivot_detector {"phase-1": {"abc": 3}} produces >=1 Observation
+        (fails on old code → 0 observations; passes after fix).
+      - The observation source is "doom-loop".
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    # Nested shape: single phase, single finding hash with count=3.
+    nested = {"phase-1": {"abc123def": 3}}
+    (d / "state.json").write_text(
+        json.dumps({"run_id": "r1", "pivot_detector": nested})
+    )
+    observations = lm.scan_doom_loops(root, "r1")
+    assert len(observations) >= 1, (
+        f"Expected >=1 doom-loop Observation from nested pivot_detector, got {len(observations)}. "
+        "Old code: int({{hash: count}}) raised TypeError → caught → DEAD signal."
+    )
+    assert all(o.source == "doom-loop" for o in observations)
 
 
 def test_dry_run_creates_no_improvements_dir(

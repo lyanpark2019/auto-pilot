@@ -22,7 +22,9 @@ description: >
 [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]
 
 # TypeScript/JavaScript
-[ -f "package.json" ] && ([ -f "tsconfig.json" ] && LANG=typescript || LANG=javascript)
+if [ -f "package.json" ]; then
+  if [ -f "tsconfig.json" ]; then LANG=typescript; else LANG=javascript; fi
+fi
 
 # Go
 [ -f "go.mod" ]

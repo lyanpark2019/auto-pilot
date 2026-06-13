@@ -273,13 +273,21 @@ while IFS= read -r inv; do
       done <<< "$all_branches"
       continue
     elif [[ "$dst" == "__CURRENT__" || "$dst" == "HEAD" ]]; then
-      branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
+      # Distinguish real git failure from legitimate empty (detached HEAD).
+      # Detached HEAD → branch is empty string → lc_branch is "" → no deny.
+      # git error (bad CWD, corrupt repo) → fail CLOSED with a clear message.
+      branch=$(git -C "$target" branch --show-current 2>/tmp/bl_git_err) || {
+        deny "branch-lock: git branch --show-current failed in $target ($(cat /tmp/bl_git_err 2>/dev/null | head -1)). Cannot verify branch; denying as a safety measure."
+      }
     else
       branch="$dst"
     fi
   else
     # commit: gate on current HEAD
-    branch=$(git -C "$target" branch --show-current 2>/dev/null || echo "")
+    # Fail CLOSED on genuine git error (bad CWD, corrupt repo, etc.).
+    branch=$(git -C "$target" branch --show-current 2>/tmp/bl_git_err) || {
+      deny "branch-lock: git branch --show-current failed in $target ($(cat /tmp/bl_git_err 2>/dev/null | head -1)). Cannot verify branch; denying as a safety measure."
+    }
   fi
 
   # Case-insensitive comparison: Main/MAIN/MaIn all match.

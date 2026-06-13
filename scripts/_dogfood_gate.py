@@ -131,14 +131,25 @@ def assert_no_sandbox_violations(state_dir: Path) -> list[str]:
     return []
 
 
+_TICKET_BOOTED_ROLES = frozenset({"worker", "codex-reviewer", "claude-reviewer"})
+# review-gatekeeper and tech-critic-lead are inline-only: they receive only
+# Read/Grep/Glob/Bash and return inline YAML.  They never write ticket-boot
+# artifacts (done.marker / exit-code.txt / review.json), so asserting those
+# files would always fail against an empty or absent specialists/ dir.
+
+
 def _role_output_dirs(outputs: Path) -> list[Path]:
-    """Enumerate one-level role dirs plus per-specialist subdirs.
+    """Enumerate ticket-booted role dirs only.
+
+    Inline-only agents (review-gatekeeper, tech-critic-lead) dispatch via
+    subagent_type — no ticket, no filesystem artifacts — and are excluded.
 
     Layout (per PR1 spec):
       outputs/worker/
       outputs/codex-reviewer/
       outputs/claude-reviewer/
-      outputs/specialists/<name>/        # nested one extra level
+    The former outputs/specialists/<name>/ traversal is removed: inline agents
+    cannot produce the required artifacts, so asserting them is always wrong.
     """
     out: list[Path] = []
     if not outputs.exists():
@@ -146,18 +157,18 @@ def _role_output_dirs(outputs: Path) -> list[Path]:
     for role_dir in outputs.iterdir():
         if not role_dir.is_dir():
             continue
-        if role_dir.name == "specialists":
-            for spec_dir in role_dir.iterdir():
-                if spec_dir.is_dir():
-                    out.append(spec_dir)
-            continue
-        out.append(role_dir)
+        if role_dir.name in _TICKET_BOOTED_ROLES:
+            out.append(role_dir)
     return out
 
 
 def assert_reviewer_outputs_present(contracts_root: Path) -> list[str]:
-    """For each round, every role dir (including each specialist) must have
-    done.marker + exit-code.txt + (review.json | status.json)."""
+    """For each round, every ticket-booted role dir must have
+    done.marker + exit-code.txt + (review.json | status.json).
+
+    Inline-only roles (review-gatekeeper, tech-critic-lead) are excluded —
+    they dispatch via subagent_type with no filesystem artifacts.
+    """
     failures: list[str] = []
     for round_dir in _find_contract_dirs(contracts_root):
         outputs = round_dir / "outputs"

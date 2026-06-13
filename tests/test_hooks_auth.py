@@ -256,16 +256,38 @@ class TestDispatchContractGate:
 
         _write_signed_contract_check(contract_dir, contract_json)
 
-        # Get current HEAD (may fail in a non-git cwd)
-        try:
-            head = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(REPO_ROOT), text=True, stderr=subprocess.DEVNULL,
-            ).strip()
-        except Exception:
-            head = "abc123"
+        # Make tmp_path a real git repo so git rev-parse HEAD resolves.
+        # The old test fell through on git-error-fail-open (SPURIOUS allow) — now
+        # the hook fails CLOSED on git error, so we need a real repo with a real HEAD.
+        subprocess.run(
+            ["git", "init", "-b", "main", str(tmp_path)],
+            check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "user.email", "test@example.com"],
+            check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "config", "user.name", "Test"],
+            check=True, capture_output=True,
+        )
+        # Create an initial commit so HEAD resolves
+        (tmp_path / "README.md").write_text("init\n")
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "add", "README.md"],
+            check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "commit", "-m", "init"],
+            check=True, capture_output=True,
+        )
+        # Capture REAL head sha — used for genuine binding check
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(tmp_path), capture_output=True, text=True, check=True,
+        ).stdout.strip()
 
-        # Write fresh preflight
+        # Write fresh preflight with the REAL head_sha so binding check passes
         preflight_dir = tmp_path / ".planning" / "auto-pilot" / "preflight"
         preflight_dir.mkdir(parents=True)
         # ISO-8601, matching what pm_preflight.sh actually writes (schema
@@ -284,8 +306,42 @@ class TestDispatchContractGate:
             cwd=tmp_path,
         )
         assert r.returncode == 0
-        # With correct sha + signature status + fresh preflight: allow.
+        # With correct sha + signature status + fresh preflight + real HEAD binding: allow.
         assert "deny" not in r.stdout
+
+    def test_git_rev_parse_failure_denies(self, hooks_dir, tmp_path):
+        """W7 fix: when stored_head is set and git rev-parse HEAD fails (non-git dir),
+        the hook must fail CLOSED — deny with the safety-measure message."""
+        contract_dir = tmp_path / "contracts"
+        contract_dir.mkdir()
+        contract_json = contract_dir / "contract.json"
+        contract_json.write_text('{"id": "phase-1", "phase": "1"}')
+
+        _write_signed_contract_check(contract_dir, contract_json)
+
+        # Write a fresh preflight with a non-empty head_sha — this triggers the
+        # git-rev-parse binding check in the hook.  tmp_path is NOT a git repo,
+        # so rev-parse will fail → hook must deny (fail-closed).
+        preflight_dir = tmp_path / ".planning" / "auto-pilot" / "preflight"
+        preflight_dir.mkdir(parents=True)
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        (preflight_dir / "phase-1.json").write_text(
+            json.dumps({"generated_ts": now_iso, "head_sha": "abc123nonexistent"})
+        )
+
+        r = _run_hook(
+            self._hook(hooks_dir),
+            {"tool_name": "Task", "tool_input": {
+                "prompt": f"contract_dir={contract_dir}"
+            }},
+            cwd=tmp_path,
+        )
+        assert r.returncode == 0  # hook exits 0 but emits JSON deny
+        out = r.stdout
+        data = json.loads(out)
+        reason = data["hookSpecificOutput"]["permissionDecisionReason"]
+        assert "git rev-parse HEAD failed" in reason
+        assert "denying as a safety measure" in reason
 
     # ── TICKET= marker (the REAL dispatch prompt shape) fires the gate ──
 

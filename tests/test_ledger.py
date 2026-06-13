@@ -221,9 +221,12 @@ class TestBuildRecord:
             rd.parent, [rd])["outcome"]["gates_first_try"] is False
 
     def test_gates_first_try_inferred_from_review_rounds(self, tmp_path: Path) -> None:
+        # Fix 2: absence of status.json must NOT credit gates_first_try=True.
+        # Conservative rule: without explicit evidence, default to False.
+        # The "gates_first_try inferred" note still appears (was_inferred=True).
         rd = _make_round_dir(tmp_path, contract_id="iter-1/phase-1/contract-5/round-1")
         rec = _ledger.build_record_from_round_dirs(rd.parent, [rd])
-        assert rec["outcome"]["gates_first_try"] is True
+        assert rec["outcome"]["gates_first_try"] is False
         assert "gates_first_try inferred" in rec.get("notes", "")
 
     def test_p0_escaped_auto_derived_from_p0_finding(self, tmp_path: Path) -> None:
@@ -400,6 +403,67 @@ class TestRebalanceApplySaveFailure:
 # ---------------------------------------------------------------------------
 # orchestrator: ledger failure does not block phase-end
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Fix 1: numeric round sort (≥10 rounds)
+# ---------------------------------------------------------------------------
+
+class TestNumericRoundSort:
+    def test_final_round_is_numeric_max_not_lexical(self, tmp_path: Path) -> None:
+        # Lexical sort gives round-9 as final for 11 rounds; numeric gives round-11.
+        # Seed round-11 with a codex ABSTAIN so abstained_final=True iff it is
+        # correctly identified as the final round.
+        base = "iter-1/phase-1/contract-11"
+        for i in range(1, 11):
+            _make_round_dir(tmp_path, contract_id=f"{base}/round-{i}",
+                            codex_verdict="APPROVE")
+        # round-11: mark codex ABSTAIN — only correct if it is the real final round.
+        _make_round_dir(tmp_path, contract_id=f"{base}/round-11",
+                        codex_verdict="ABSTAIN")
+        contract_dir = tmp_path / "iter-1" / "phase-1" / "contract-11"
+        round_dirs = _ledger._all_round_dirs_for_contract(contract_dir)
+        assert round_dirs[-1].name == "round-11", (
+            f"Expected round-11 as final, got {round_dirs[-1].name} "
+            "(lexical sort bug: round-9 sorts after round-11)"
+        )
+        rec = _ledger.build_record_from_round_dirs(contract_dir, round_dirs)
+        assert rec["outcome"].get("abstained") is True, (
+            "abstained_final should be True (round-11 is codex ABSTAIN) — "
+            "fails when lexical sort mis-identifies round-9 as final"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: missing/unreadable status.json must NOT credit gates_first_try=True
+# ---------------------------------------------------------------------------
+
+class TestGatesFirstTryConservative:
+    def test_missing_status_json_not_credited_as_first_try(self, tmp_path: Path) -> None:
+        # No status.json written — old code infers from len(round_dirs)==1 → True.
+        # Correct behavior: absence of evidence must not credit a first-try pass.
+        # Fix makes missing/unreadable → False (conservative).
+        rd = _make_round_dir(tmp_path, contract_id="iter-1/phase-1/contract-20/round-1")
+        # Confirm no status.json exists.
+        assert not (rd / "outputs" / "worker" / "status.json").exists()
+        rec = _ledger.build_record_from_round_dirs(rd.parent, [rd])
+        gft = rec["outcome"]["gates_first_try"]
+        assert gft is False, (
+            f"gates_first_try should be False when status.json is absent "
+            f"(absence of evidence must not credit a first-try pass), got {gft!r}"
+        )
+
+    def test_corrupt_status_json_not_credited_as_first_try(self, tmp_path: Path) -> None:
+        # Corrupt status.json — old code falls through to len==1 → True.
+        rd = _make_round_dir(tmp_path, contract_id="iter-1/phase-1/contract-21/round-1")
+        worker_dir = rd / "outputs" / "worker"
+        worker_dir.mkdir(parents=True, exist_ok=True)
+        (worker_dir / "status.json").write_text("{not valid json!!!")
+        rec = _ledger.build_record_from_round_dirs(rd.parent, [rd])
+        gft = rec["outcome"]["gates_first_try"]
+        assert gft is False, (
+            f"gates_first_try should be False when status.json is corrupt, got {gft!r}"
+        )
+
 
 class TestPhaseEndLedgerNonBlocking:
     def test_ledger_failure_does_not_block_phase_end(

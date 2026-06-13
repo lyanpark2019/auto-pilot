@@ -221,6 +221,89 @@ def run_midline_marker_case(label: str, marker_style: str, expect: str) -> bool:
     return ok
 
 
+def _real_contract_with_head_sha(cwd: Path, head_sha: str) -> str:
+    """Like _real_contract but writes a specific head_sha in the preflight.
+
+    Used to exercise the head_sha mismatch / git-failure path without a real
+    git repo: a non-empty stored_head causes the hook to run git rev-parse HEAD,
+    which fails in a non-repo tempdir → hook must DENY (FIX 1 fail-closed).
+    """
+    base = cwd / ".planning" / "auto-pilot"
+    contract_dir = base / "contracts" / "phase-1"
+    tickets_dir = contract_dir / "tickets"
+    tickets_dir.mkdir(parents=True, exist_ok=True)
+    contract_json = contract_dir / "contract.json"
+    contract_json.write_text(json.dumps({"id": "phase-1", "phase": "1", "scope": []}))
+    sha = hashlib.sha256(contract_json.read_bytes()).hexdigest()
+    bundle = contract_dir / "context-bundle"
+    bundle.mkdir()
+    manifest = bundle / "MANIFEST.txt"
+    manifest.write_text("fixture manifest\n")
+    sig = {
+        "contract_sha": sha,
+        "manifest_sha": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "run_id": "test-run",
+        "signed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    sig_path = contract_dir / "PM-SIGNATURE"
+    sig_path.write_text(json.dumps(sig) + "\n")
+    check: dict[str, object] = {
+        "contract_sha256": sha,
+        "result": "pass",
+        "pm_signature": {
+            "verified": True,
+            "signature_sha256": hashlib.sha256(sig_path.read_bytes()).hexdigest(),
+            "contract_sha256": sha,
+            "manifest_sha256": sig["manifest_sha"],
+        },
+    }
+    (contract_dir / "contract-check.json").write_text(json.dumps(check))
+    ticket_path = tickets_dir / "claude-reviewer.json"
+    ticket_path.write_text("{}")
+    preflight_dir = base / "preflight"
+    preflight_dir.mkdir(parents=True, exist_ok=True)
+    # Non-empty head_sha forces the hook to call git rev-parse HEAD.
+    (preflight_dir / "phase-1.json").write_text(json.dumps({
+        "generated_ts": datetime.now(timezone.utc).isoformat(),
+        "head_sha": head_sha,
+    }))
+    return str(ticket_path)
+
+
+def run_git_failure_case(label: str, expect: str) -> bool:
+    """FIX 1: when git rev-parse HEAD fails (non-repo CWD), the hook must DENY.
+
+    We build a valid contract tree but set head_sha to a non-empty sentinel so
+    the hook cannot skip the git check.  The CWD is a plain tempdir (not a git
+    repo), so git rev-parse HEAD exits non-zero.  Pre-fix: empty-output guard
+    silently skipped the check → ALLOW (wrong).  Post-fix: non-zero rc → DENY.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sentinel_sha = "a" * 40  # non-empty, triggers git check
+        ticket_path = _real_contract_with_head_sha(cwd, sentinel_sha)
+        prompt = "TICKET=" + ticket_path + " review"
+        payload = {
+            "tool_name": "Task",
+            "tool_input": {"subagent_type": "auto-pilot-claude-reviewer", "prompt": prompt},
+        }
+        result = subprocess.run(
+            ["bash", HOOK],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env={**os.environ, "PATH": os.environ["PATH"]},
+        )
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and "deny" in stdout) else "ALLOW"
+    ok = actual == expect
+    print(f"[{'OK  ' if ok else 'FAIL'}] {label:52s} expect={expect:5s} got={actual:5s}")
+    if not ok:
+        print(f"       stdout={stdout!r} stderr={result.stderr.strip()!r}")
+    return ok
+
+
 def main() -> None:
     results = [run_case(*c) for c in CASES]
     # Anchoring fix cases — RED before fix, GREEN after.
@@ -234,6 +317,11 @@ def main() -> None:
         "mid-line TICKET= prose with real contract → ALLOW",
         "TICKET",
         "ALLOW",
+    ))
+    # FIX 1: git-failure → DENY (fail-closed, non-repo CWD, non-empty stored head_sha).
+    results.append(run_git_failure_case(
+        "git rev-parse failure (non-repo) → DENY (FIX 1)",
+        "DENY",
     ))
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")

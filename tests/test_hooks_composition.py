@@ -141,7 +141,7 @@ class TestPreEditCompositionRoot:
         assert r.returncode == 0
         assert "WARNING" in r.stderr
 
-    def test_malformed_json_warns_not_blocks(self, hooks_dir, in_tmp_cwd):
+    def test_malformed_json_blocks_fail_closed(self, hooks_dir, in_tmp_cwd):
         r = subprocess.run(
             [str(hooks_dir / "pre-edit-composition-root.sh")],
             input="this is not json {{{",
@@ -150,8 +150,8 @@ class TestPreEditCompositionRoot:
             cwd=str(in_tmp_cwd),
             timeout=15,
         )
-        assert r.returncode == 0
-        assert "malformed tool_input json" in r.stderr
+        assert r.returncode == 2
+        assert "BLOCKED malformed tool_input json (fail-closed)" in r.stderr
 
     def test_handles_multiedit_input_shape(self, hooks_dir, in_tmp_cwd, clean_env):
         """When invoked via the matcher, script must extract file_path from MultiEdit input."""
@@ -241,7 +241,7 @@ class TestPreBashGuard:
         )
         assert r.returncode == 0
 
-    def test_malformed_json_warns_not_blocks(self, hooks_dir, in_tmp_cwd):
+    def test_malformed_json_blocks_fail_closed(self, hooks_dir, in_tmp_cwd):
         r = subprocess.run(
             [str(hooks_dir / "pre-bash-guard.sh")],
             input="this is not json {{{",
@@ -250,5 +250,5 @@ class TestPreBashGuard:
             cwd=str(in_tmp_cwd),
             timeout=15,
         )
-        assert r.returncode == 0
-        assert "malformed tool_input json" in r.stderr
+        assert r.returncode == 2
+        assert "BLOCKED malformed tool_input json (fail-closed)" in r.stderr

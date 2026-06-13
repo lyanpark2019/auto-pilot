@@ -316,6 +316,7 @@ def _poll_original_handle(
     retrying: dict[str, SpawnHandleProtocol],
     retry_started: dict[str, float],
     remaining: set[str],
+    failures: list[ReviewerFailure],
     hard_kill_deadline: float,
     soft_warn_deadline: float,
     start: float,
@@ -342,6 +343,11 @@ def _poll_original_handle(
               elapsed_s=int(now - start), soft_warn_threshold_s=soft_warn_sec)
         warned.add(role)
     if exited and not marker.exists():
+        # The reviewer exited cleanly but produced no done.marker.
+        # Record a structured failure so the PM can dispatch an alternate
+        # reviewer — silently discarding the role would make wait_all return
+        # failures=[] as if success (FIX 2 P2 2026-06-14).
+        failures.append(ReviewerFailure(role=role, reason=f"exit-{h.poll()}-no-marker"))
         remaining.discard(role)
 
 
@@ -385,7 +391,7 @@ def _tick_all_roles(
                                failures, hard_kill_sec, now)
             continue
         _poll_original_handle(role, by_role[role], by_role, killed, warned,
-                               retrying, retry_started, remaining,
+                               retrying, retry_started, remaining, failures,
                                hard_kill_deadline, soft_warn_deadline,
                                start, soft_warn_sec, now)
 

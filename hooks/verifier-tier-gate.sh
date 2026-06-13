@@ -33,8 +33,8 @@ except Exception:
     print("allow")
     raise SystemExit(0)
 
-name = subagent.split(":")[-1].strip()
-model = model.strip()
+name = subagent.split(":")[-1].strip().lower()
+model = model.strip().lower()
 # Cheap path: no model override -> allow without reading yaml.
 if not model:
     print("allow")
