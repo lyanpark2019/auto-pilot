@@ -122,6 +122,43 @@ def run_paths_case(
     return ok
 
 
+def run_paths_case_subdir(
+    label: str,
+    repo_root: str,
+    cwd: str,
+    file_path: str,
+    expect: str,
+) -> bool:
+    """Run with cwd != repo_root to exercise the FIX-3 subdir-CWD regression.
+
+    The hook walks up from cwd to find .claude/human-only.paths; the target
+    file_path (relative) is now resolved against repo_root (not cwd) so that
+    entries in human-only.paths correctly deny it even when the worker's cwd is
+    a subdirectory of the repo.
+    """
+    env = os.environ.copy()
+    env.pop("AUTO_PILOT_ALLOW_CORE_EDIT", None)
+    payload = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": file_path}})
+    result = subprocess.run(
+        ["bash", HOOK],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=cwd,
+    )
+    stdout = result.stdout.strip()
+    actual = "DENY" if '"permissionDecision":"deny"' in stdout else "ALLOW"
+    ok = actual == expect and result.returncode == 0
+    icon = "OK  " if ok else "FAIL"
+    print(f"[{icon}] {label:55s}  expect={expect:5s}  got={actual:5s}")
+    if not ok:
+        print(f"       stdout: {stdout!r}")
+        print(f"       stderr: {result.stderr.strip()!r}")
+        print(f"       cwd:    {cwd!r}")
+    return ok
+
+
 def main() -> None:
     results: list[bool] = []
 
@@ -225,6 +262,44 @@ def main() -> None:
             "D3 entry 'agents': agents-extra/foo.py → ALLOW (sibling)",
             repo_root=repo,
             file_path="agents-extra/foo.py",
+            expect="ALLOW",
+        ))
+
+    # ── FIX 3: subdir-CWD regression ──────────────────────────────────────────
+    # Old code resolved relative file_path against CWD; entries in human-only.paths
+    # are anchored to repo_root.  When CWD is repo/a/b and file_path="secret/key.txt",
+    # the old code compared <repo>/a/b/secret/key.txt against the entry <repo>/secret —
+    # no match → ALLOW.  The fix resolves relative paths against repo_root → DENY.
+    with tempfile.TemporaryDirectory() as repo3:
+        Path(repo3, ".claude").mkdir()
+        Path(repo3, ".claude", "human-only.paths").write_text("secret\n")
+        Path(repo3, "a", "b").mkdir(parents=True)
+        Path(repo3, "secret").mkdir(exist_ok=True)
+
+        # Core differential case: subdir CWD + relative path → must DENY (was ALLOW before fix)
+        results.append(run_paths_case_subdir(
+            "FIX3 subdir CWD + rel secret/key.txt → DENY",
+            repo_root=repo3,
+            cwd=os.path.join(repo3, "a", "b"),
+            file_path="secret/key.txt",
+            expect="DENY",
+        ))
+
+        # Sanity: repo-root CWD + relative path → DENY (should have always worked)
+        results.append(run_paths_case_subdir(
+            "FIX3 root CWD + rel secret/key.txt → DENY",
+            repo_root=repo3,
+            cwd=repo3,
+            file_path="secret/key.txt",
+            expect="DENY",
+        ))
+
+        # Sanity: subdir CWD + unrelated relative path → ALLOW (no false-deny)
+        results.append(run_paths_case_subdir(
+            "FIX3 subdir CWD + unrelated other/file.py → ALLOW",
+            repo_root=repo3,
+            cwd=os.path.join(repo3, "a", "b"),
+            file_path="other/file.py",
             expect="ALLOW",
         ))
 

@@ -143,6 +143,22 @@ except ValueError:
 # and block when it normalizes to .planning/auto-pilot/state.json.
 STATE_SUFFIX = os.path.join(".planning", "auto-pilot", "state.json")
 
+# FIX 1 (awk sub-case): scan the RAW command string for redirects embedded inside
+# quoted program strings (e.g. awk BEGIN-redirect-state.json). shlex.split
+# collapses {}-sanitized awk programs into one token so the token-level redirect
+# scanner below misses them. A regex scan on the raw string catches these before
+# tokenization and is conservative: any > token followed (with optional whitespace
+# and optional quote) by a path containing the STATE_SUFFIX pattern is blocked.
+_raw_redirect_re = re.compile(
+    r">+\s*[\x22\x27]{0,1}(?P<p>[^\x22\x27>\s]*\.planning[/]auto-pilot[/]state\.json)"
+)
+for _m in _raw_redirect_re.finditer(cmd):
+    _candidate = _m.group("p").strip("\x22\x27")
+    if os.path.normpath(_candidate).endswith(os.sep + STATE_SUFFIX) or \
+            os.path.normpath(_candidate) == STATE_SUFFIX:
+        print("BLOCK:shell-write-to-state:" + _candidate)
+        sys.exit(0)
+
 
 def _is_state(path):
     if not path:
@@ -153,16 +169,23 @@ def _is_state(path):
 
 redirect_targets = []
 for k, tok in enumerate(tokens):
-    if tok in (">", ">>") and k + 1 < len(tokens):
+    # FIX 2: allow optional leading fd number (e.g. 1>, 2>>, 1>|) before the
+    # redirect operator so `echo bad 1> state.json` is caught like `echo bad > state.json`.
+    if re.match(r"^[0-9]*>>?$", tok) and k + 1 < len(tokens):
         redirect_targets.append(tokens[k + 1])
     else:
-        m = re.match(r"^>>?(?P<f>[^>&].*)$", tok)
+        # Attached redirect: [fd]>file or [fd]>>file (no space between op and path)
+        m = re.match(r"^[0-9]*>>?(?P<f>[^>&].*)$", tok)
         if m:
             redirect_targets.append(m.group("f"))
 
 # tee / dd of=... / cp / mv write their target argument. dd uses of=PATH;
 # tee/cp/mv take positional path args (cp/mv final arg is the destination).
+# FIX 1: also catch sed -i, perl -i/-pi, install, ln -sf, rm, ed, ex which
+# modify or replace state.json in-place without a shell redirect operator.
 final_arg_cmds = {"cp", "mv"}
+inplace_cmds = {"sed", "perl"}
+last_arg_cmds = {"install", "ed", "ex"}
 for k, tok in enumerate(tokens):
     basename = os.path.basename(tok)
     if basename == "tee":
@@ -174,6 +197,38 @@ for k, tok in enumerate(tokens):
             if arg.startswith("of="):
                 redirect_targets.append(arg[len("of="):])
     elif basename in final_arg_cmds:
+        positionals = [a for a in tokens[k + 1:] if not a.startswith("-")]
+        if positionals:
+            redirect_targets.append(positionals[-1])
+    elif basename in inplace_cmds:
+        # sed -i and perl -i / perl -pi edit files in-place; treat every non-flag
+        # argument as a potential target when an in-place flag is present.
+        # sed -i '' / sed -i.bak consume the next token as the backup suffix on BSD
+        # but the flag is still present — check for the flag, then collect file args.
+        rest = tokens[k + 1:]
+        has_inplace = any(
+            re.match(r"^-[^-]*i", a) or a in ("-i", "-pi") for a in rest
+        )
+        if has_inplace:
+            for arg in rest:
+                if not arg.startswith("-"):
+                    redirect_targets.append(arg)
+    elif basename == "ln":
+        # ln -sf <src> <dst> replaces dst via symlink; treat the last positional as target.
+        rest = tokens[k + 1:]
+        flags = [a for a in rest if a.startswith("-")]
+        has_sf = any("f" in f or "s" in f for f in flags)
+        if has_sf:
+            positionals = [a for a in rest if not a.startswith("-")]
+            if positionals:
+                redirect_targets.append(positionals[-1])
+    elif basename == "rm":
+        # rm state.json defeats the invariant (file gone = lock lost).
+        for arg in tokens[k + 1:]:
+            if not arg.startswith("-"):
+                redirect_targets.append(arg)
+    elif basename in last_arg_cmds:
+        # install <src> <dst> and ed/ex <file> — last non-flag arg is the target.
         positionals = [a for a in tokens[k + 1:] if not a.startswith("-")]
         if positionals:
             redirect_targets.append(positionals[-1])

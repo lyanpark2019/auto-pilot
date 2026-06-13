@@ -258,3 +258,24 @@ class TestTokenEstimateFallback:
         assert state["tokens"] == 12_345
         rec = json.loads((loop_module.LOG_DIR / "usage.jsonl").read_text().splitlines()[0])
         assert rec["tokens"] == 12_345 and rec["source"] == "estimate"
+
+    def test_zero_cost_nonzero_tokens_preserved(self, loop_module, state_dir):
+        """C15 (regression pin for #60): subscription/Max plans report cost=0 but real
+        token usage.  parse_session_usage → (0.0, 5000) must accumulate 5000 tokens,
+        NOT the flat per_iter_token_estimate.  The old code unconditionally overwrote
+        log_tokens with the estimate whenever log_cost <= 0."""
+        import _budget
+        _write_state(state_dir, {"status": "running", "current_phase": 1, "total_phases": 3})
+        with patch.object(loop_module, "run_claude_session", return_value=0), \
+             patch.object(loop_module, "git_head", return_value="cafe"), \
+             patch.object(_budget, "count_claude_pids", return_value=0), \
+             patch.object(_budget, "parse_session_usage", return_value=(0.0, 5000)):
+            loop_module.loop_iteration(
+                1, _args(per_iter_cost_estimate=0.25, per_iter_token_estimate=100_000)
+            )
+        state = json.loads((state_dir / "state.json").read_text())
+        assert state["tokens"] == 5000, (
+            f"expected 5000 (parsed), got {state['tokens']} (flat estimate leaked in)"
+        )
+        rec = json.loads((loop_module.LOG_DIR / "usage.jsonl").read_text().splitlines()[0])
+        assert rec["tokens"] == 5000

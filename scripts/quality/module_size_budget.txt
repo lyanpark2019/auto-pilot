@@ -40,3 +40,9 @@ scripts/orchestrator.py|595
 # would duplicate fixture overhead or require a conftest. OBS3 adds TestWallClock
 # (3 tests) + TestUsageLedger (2 tests) = +85 lines. Cap 520 = 516 + 4 headroom.
 tests/test_headless_loop.py|520
+#
+# test_state_write_guard.py is a table-driven script-style test for the
+# state-write-guard hook; CASES + EXTRA_CASES lists cannot be split without
+# duplicating the run_case helper or adding a conftest. FIX1 + FIX2 additions
+# (14 new bypass cases) grew it past 500. Cap 520 = 515 current + 5 headroom.
+hooks/test_state_write_guard.py|520

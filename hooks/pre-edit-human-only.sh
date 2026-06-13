@@ -69,7 +69,13 @@ done
 # edit use case). Relative paths resolve against CWD before comparison.
 plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 abs_path="$file_path"
-[[ "$abs_path" != /* ]] && abs_path="$(pwd)/$abs_path"
+# FIX 3: resolve relative file_path against repo_root (consistent with tier-(b)
+# at lines 114-117 which tries repo_root/$file_path). Using CWD here caused a
+# differential: when a worker's CWD is a subdir of repo (e.g. repo/a/b) and
+# file_path is relative (e.g. "secret/key.txt"), the old code resolved it to
+# CWD/secret/key.txt which never matched repo_root-anchored entries in
+# human-only.paths, failing OPEN. Using repo_root ensures the same anchor.
+[[ "$abs_path" != /* ]] && abs_path="$repo_root/$abs_path"
 # Canonicalize ./ .. and symlinks (r2 review: lexical compare was bypassable
 # via `schemas/../schemas/x` or a symlink into the plugin). realpath works for
 # not-yet-existing files too (resolves the existing prefix lexically+symlink).

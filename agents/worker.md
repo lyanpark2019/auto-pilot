@@ -103,10 +103,11 @@ Boot sequence:
 4. Edit files matching `contract.scope_files` only (out-of-scope edits → reviewer auto-REJECT)
 5. Run the verify commands from `contract.verify_cmds` until exit 0 (max 3 attempts) — these live in `$CONTRACT_DIR/contract.json`, not a script. Run each command, stop at the first non-zero exit, tee all output to `$OUTPUT_DIR/verify.log`, then `shasum -a 256 $OUTPUT_DIR/verify.log` (hash goes in your report; the log stays in `$OUTPUT_DIR` for reviewers to recompute):
    ```bash
+   set -o pipefail
    { rc=0; while read -r cmd; do bash -c "$cmd" || { rc=$?; break; }; done \
        < <(jq -r '.verify_cmds[]' "$CONTRACT_DIR/contract.json"); exit "$rc"; } 2>&1 | tee "$OUTPUT_DIR/verify.log"
    ```
-   The verify exit code is what the reviewer evidence gate checks as `verify_rerun.exit_code`.
+   The `set -o pipefail` ensures that the subshell's non-zero exit survives the `tee` pipeline — without it, `$?` after the line is always `tee`'s exit code (0). The resulting `$?` is what the reviewer evidence gate checks as `verify_rerun.exit_code`.
 6. Write `status.json` via `_subagent_helpers.atomic_write_output($OUTPUT_DIR, "status.json", {...})`
 7. Write exit code via `_subagent_helpers.write_exit_code($OUTPUT_DIR, code)`
 8. Mark done via `_subagent_helpers.mark_done($OUTPUT_DIR)` — LAST step

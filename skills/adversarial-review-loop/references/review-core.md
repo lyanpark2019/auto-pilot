@@ -23,7 +23,7 @@
 ## Core checklist
 
 3. **Spec compliance** — the diff implements what the spec asks for in this phase, nothing extra, nothing missing. Spec drift cuts both ways: implementing something the spec doesn't ask for is as much a finding as skipping what it demands.
-4. **Verify gate** — re-run the project verify commands yourself (e.g. `pnpm test`, `pytest`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, or the contract's `verify.sh`). Paste/record full output. If anything fails → REJECT. Also cross-check the worker's verify-log SHA-256 (§Worker verify-report cross-check below).
+4. **Verify gate** — re-run the project verify commands yourself from `contract.verify_cmds` in `$CONTRACT_DIR/contract.json` (e.g. `pnpm test`, `pytest`, `pnpm lint`, `pnpm typecheck`, `pnpm build`). Paste/record full output. If anything fails → REJECT. Also cross-check the worker's verify-log SHA-256 (§Worker verify-report cross-check below).
 5. **Naming + design** — deep modules / thin interfaces, SOLID where applicable, no premature abstractions, no leaky DRY.
 6. **Project-rules / CLAUDE.md compliance** — file ≤500 lines, explicit types, dead-code 6-gate honored, no admin keys in client, plus whatever the supplied CLAUDE.md excerpts demand.
 7. **Production-readiness** — error paths handled at boundaries, no half-finished features, no `TODO`/`FIXME` left behind.

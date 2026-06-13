@@ -248,7 +248,7 @@ def _accumulate_usage(
     source = "estimate" if log_cost <= 0.0 else "parsed"
     if log_cost <= 0.0:
         log_cost = args.per_iter_cost_estimate
-        log_tokens = int(getattr(args, "per_iter_token_estimate", 0))
+        log_tokens = log_tokens or int(getattr(args, "per_iter_token_estimate", 0))
     state["cost_usd"] = float(state.get("cost_usd", 0.0)) + log_cost
     state["tokens"] = int(state.get("tokens", 0)) + log_tokens
     save_state(state)
