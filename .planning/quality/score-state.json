@@ -4,10 +4,10 @@
   "project_root": "/Users/lyan/Documents/Project/auto-pilot",
   "language": "python+bash+markdown",
   "project_type": "Claude Code plugin / autonomous development harness",
-  "current_state": "RELEASED_V0_8_8",
+  "current_state": "RELEASED_V0_8_9",
   "target_score": 90,
   "mode": "v0.8.7 quality-90 release shipped after dual adversarial rescore >=90, local full gates, hosted CI green, release tag, and plugin manifest update",
-  "head_sha": "e2ec0e14549f44ac3d5fef621bc1a06d7a823203",
+  "head_sha": "8c4a3916ac0bc182204d7f8b1a6a492477bdcba2",
   "baseline_weighted_score": 84.4,
   "weighted_score": 90.04,
   "scores_source": "Dual adversarial Wave11 rescore: Codex 90.04 MEETS_90_TARGET; Claude 90.04 MEETS_90_TARGET. Release metadata commit e3200cb passed hosted CI run 27138414829 and shipped as v0.8.7.",
@@ -111,7 +111,7 @@
     "Wave11 dual rescore covers the quality code head; the final release commit changed only plugin metadata.",
     "Future release trains should extend this invariant test with the next release tag and CI evidence."
   ],
-  "decision": "v0.8.7 shipped from e3200cb2b730c9bca60b57ca0a92ccd3d3ddb8bb with hosted CI run 27138414829 green; release URL: https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.7",
+  "decision": "v0.8.9 shipped from 8c4a3916ac0bc182204d7f8b1a6a492477bdcba2 with hosted CI run 27466105529 green (8c4a391 = PR #57 merge, all gates green); release URL: https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.9",
   "codex_wave9_r2_weighted_score": 89.93,
   "codex_wave9_r2_verdict": "BELOW_90",
   "wave10_focus": "Low-risk closure of Codex 89.93 blockers: prompt-output sanitizer/budget cap and perf cold-start CI gate.",
@@ -153,12 +153,12 @@
   "claude_wave11_weighted_score": 90.04,
   "claude_wave11_verdict": "MEETS_90_TARGET",
   "release": {
-    "tag": "v0.8.8",
-    "url": "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.8",
-    "commit": "e2ec0e14549f44ac3d5fef621bc1a06d7a823203",
-    "ci_run": 27273499973,
-    "ci_run_note": "red on tests/test_release_state.py only (release-metadata gate this follow-up completes; same lag pattern as v0.8.7 890e16f); all other gates green on that run",
-    "plugin_version": "0.8.8",
-    "marketplace_version": "0.8.8"
+    "tag": "v0.8.9",
+    "url": "https://github.com/lyanpark2019/auto-pilot/releases/tag/v0.8.9",
+    "commit": "8c4a3916ac0bc182204d7f8b1a6a492477bdcba2",
+    "ci_run": 27466105529,
+    "ci_run_note": "all gates green on this run (8c4a391 = PR #57 merge). v0.8.9 tag planted here per the v0.8.7/v0.8.8 backward-pin pattern; the tagged tree still reads plugin version 0.8.8 (metadata lag) \u2014 the version bump lands in this follow-up metadata commit",
+    "plugin_version": "0.8.9",
+    "marketplace_version": "0.8.9"
   }
 }
