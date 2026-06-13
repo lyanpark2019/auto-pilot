@@ -33,14 +33,27 @@ class PromotionError(Exception):
     """Illegal transition, unknown ticket/field, or malformed ledger entry."""
 
 
-def load_tickets(ledger: Path) -> list[Ticket]:
-    """Load and validate all tickets from ledger dir; skip .lock sidecars."""
+def load_tickets(ledger: Path, *, partial: bool = False) -> list[Ticket]:
+    """Load and validate all tickets from ledger dir; skip .lock sidecars.
+
+    When ``partial=True``, malformed tickets are skipped with a stderr warning
+    instead of raising; callers that mutate data must use the default
+    ``partial=False`` so corrupt entries are never silently processed.
+    """
+    import sys
+
     tickets: list[Ticket] = []
     for path in sorted(ledger.glob("*.json")):
         try:
             ticket = json.loads(path.read_text())
             validate_ticket(ticket)
         except Exception as exc:
+            if partial:
+                print(
+                    f"warning: skipping malformed ticket {path.name}: {exc}",
+                    file=sys.stderr,
+                )
+                continue
             raise PromotionError(f"malformed ticket {path.name}: {exc}") from exc
         tickets.append(ticket)
     return tickets
@@ -161,7 +174,7 @@ def cmd_improvements_list(args: Any) -> int:
         return 0
 
     try:
-        tickets = load_tickets(ledger)
+        tickets = load_tickets(ledger, partial=True)
     except PromotionError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
