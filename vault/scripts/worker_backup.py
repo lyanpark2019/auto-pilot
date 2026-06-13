@@ -26,6 +26,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 
 class WorkerBackup:
@@ -65,7 +66,7 @@ class WorkerBackup:
         self._log({"op": "rollback", "count": n})
         return n
 
-    def _log(self, entry: dict) -> None:
+    def _log(self, entry: dict[str, Any]) -> None:
         entry.update(
             {
                 "ts": time.time(),
@@ -78,7 +79,7 @@ class WorkerBackup:
             f.write(json.dumps(entry) + "\n")
 
     @classmethod
-    def rollback_ticket(cls, vault: Path, ticket_id: str) -> dict:
+    def rollback_ticket(cls, vault: Path, ticket_id: str) -> dict[str, Any]:
         vault = Path(vault).expanduser().resolve()
         n = 0
         for bak in vault.rglob(f"*.bak.*.{ticket_id}"):

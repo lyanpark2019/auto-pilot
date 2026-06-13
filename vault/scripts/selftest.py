@@ -118,6 +118,10 @@ def _agent_files(agents_dir: Path) -> list[Path]:
     ]
 
 
+def _all_agent_files(agents_dir: Path) -> list[Path]:
+    return sorted(f for f in agents_dir.glob("*.md") if not f.name.startswith("_"))
+
+
 def _agent_frontmatter(path: Path, c: Check) -> dict[str, Any] | None:
     m = FM_PATTERN.match(path.read_text())
     if not m:
@@ -160,7 +164,7 @@ def _check_agents() -> Check:
         c.fail(f"vault agents missing from agents/: {sorted(missing)}")
     if len(agent_files) < len(VAULT_AGENTS):
         c.fail(f"only {len(agent_files)} vault agents found (expected {len(VAULT_AGENTS)}: {sorted(VAULT_AGENTS)})")
-    for f in agent_files:
+    for f in _all_agent_files(agents_dir):
         fm = _agent_frontmatter(f, c)
         if fm is not None:
             _validate_agent_frontmatter(f, fm, c)

@@ -12,7 +12,7 @@ values fail fast before the headless loop or dispatch gate starts.
 | Setting | Env var | Default | Bounds | Consumer |
 |---|---|---:|---|---|
 | Claude binary | `CLAUDE_BIN` | `shutil.which("claude")` or `claude` | non-empty path/name | `scripts/headless-loop.py` |
-| Preflight TTL | `AUTO_PILOT_PREFLIGHT_TTL_SEC` | `900` | `60..86400` seconds | `scripts/_dispatch.py`, `scripts/_config.py` |
+| Preflight TTL | `AUTO_PILOT_PREFLIGHT_TTL_SEC` | `900` | `60..86400` seconds | `scripts/_config.py (preflight_ttl_sec())`, `scripts/_dispatch.py` |
 | Max loop iterations | `default_max_iter` dataclass field | `100` | `1..10000` | `scripts/headless-loop.py --max-iter` |
 | Sleep between iterations | `default_sleep_sec` dataclass field | `10` | `1..3600` seconds | `scripts/headless-loop.py --sleep` |
 | Per-session timeout | `default_timeout_build_sec` dataclass field | `14400` | `>0..86400` seconds | `scripts/headless-loop.py --timeout-build` |
@@ -20,6 +20,9 @@ values fail fast before the headless loop or dispatch gate starts.
 | Max tokens | `default_max_tokens` dataclass field | `50000000` | `1..1000000000` | `_budget.check_caps` |
 | Fallback per-iteration cost | `default_per_iter_cost_estimate_usd` dataclass field | `0.50` | `>0..1000` USD | `_budget.parse_session_usage` fallback |
 | Max concurrent Claude processes | `default_max_concurrent_claude` dataclass field | `4` | `1..64` | `_budget.count_claude_pids` cap |
+| Max wall-clock | `default_max_wall_clock_sec` dataclass field | `0.0` (disabled) | `-1<..604800` seconds | `scripts/headless-loop.py --max-wall-clock-sec` |
+
+Env values outside `60..86400` or non-integer fail soft to the `900` default via `preflight_ttl_sec()`, whereas direct `AutoPilotConfig` field construction with a bad value raises.
 
 ## Profiles
 

@@ -1,4 +1,4 @@
-You are the PM (claude-opus-4-7) for ${PROJECT}. Issue ONE ticket for worker-${WORKER_ID}.
+You are the PM (orchestrator PM) for ${PROJECT}. Issue ONE ticket for worker-${WORKER_ID}.
 
 ## Worker context
 

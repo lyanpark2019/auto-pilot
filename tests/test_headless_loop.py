@@ -427,3 +427,74 @@ class TestPidCount:
         with patch.object(_budget.subprocess, "run", return_value=fake):
             assert _budget.count_claude_pids() == 3
 
+
+class TestWallClock:
+    def test_wall_clock_cap_short_circuits(self, loop_module, state_dir):
+        import _budget, time  # noqa: E401
+        _write_state(state_dir, status="running")
+        args = _args(wall_clock_deadline=time.monotonic() - 1.0)
+        with patch.object(loop_module, "run_claude_session") as rcs, \
+             patch.object(_budget, "count_claude_pids", return_value=0):
+            result = loop_module.loop_iteration(1, args)
+        assert result == "time-cap"
+        rcs.assert_not_called()
+        assert json.loads((state_dir / "state.json").read_text())["status"] == "time-cap"
+
+    def test_no_wall_clock_when_deadline_none(self, loop_module, state_dir):
+        import _budget
+        _write_state(state_dir, status="running")
+        with patch.object(loop_module, "run_claude_session", return_value=0), \
+             patch.object(loop_module, "git_head", return_value="cafe"), \
+             patch.object(_budget, "count_claude_pids", return_value=0), \
+             patch.object(_budget, "parse_session_usage", return_value=(0.0, 0)):
+            result = loop_module.loop_iteration(1, _args())
+        assert result != "time-cap"
+
+    def test_main_computes_wall_clock_deadline(self, loop_module, state_dir):
+        """--max-wall-clock-sec 60 → float deadline; default 0 → None."""
+        import _budget
+        seen: dict[str, object] = {}
+
+        def fake_iter(n: int, a: argparse.Namespace) -> str:
+            seen["d"] = getattr(a, "wall_clock_deadline", "MISSING")
+            return "success"
+
+        _write_state(state_dir, status="running")
+        with patch.object(loop_module, "loop_iteration", side_effect=fake_iter), \
+             patch.object(_budget, "count_claude_pids", return_value=0):
+            loop_module.main(["--once", "--max-wall-clock-sec", "60"])
+        assert isinstance(seen["d"], float)
+        _write_state(state_dir, status="running")
+        with patch.object(loop_module, "loop_iteration", side_effect=fake_iter), \
+             patch.object(_budget, "count_claude_pids", return_value=0):
+            loop_module.main(["--once"])
+        assert seen["d"] is None
+
+
+class TestUsageLedger:
+    def test_usage_ledger_written_after_session(self, loop_module, state_dir):
+        import _budget
+        _write_state(state_dir, status="running")
+        with patch.object(loop_module, "run_claude_session", return_value=0), \
+             patch.object(loop_module, "git_head", return_value="cafe"), \
+             patch.object(_budget, "count_claude_pids", return_value=0), \
+             patch.object(_budget, "parse_session_usage", return_value=(1.5, 100)):
+            loop_module.loop_iteration(1, _args(per_iter_cost_estimate=0.1))
+        ledger = loop_module.LOG_DIR / "usage.jsonl"
+        assert ledger.exists()
+        rec = json.loads(ledger.read_text().splitlines()[0])
+        assert rec["iter"] == 1 and rec["cost_usd"] == 1.5
+        assert rec["cumulative_cost_usd"] == 1.5 and rec["source"] == "parsed"
+        assert "ts" in rec
+
+    def test_estimate_source_when_log_has_no_cost(self, loop_module, state_dir):
+        import _budget
+        _write_state(state_dir, status="running")
+        with patch.object(loop_module, "run_claude_session", return_value=0), \
+             patch.object(loop_module, "git_head", return_value="cafe"), \
+             patch.object(_budget, "count_claude_pids", return_value=0), \
+             patch.object(_budget, "parse_session_usage", return_value=(0.0, 0)):
+            loop_module.loop_iteration(1, _args(per_iter_cost_estimate=0.25))
+        rec = json.loads((loop_module.LOG_DIR / "usage.jsonl").read_text().splitlines()[0])
+        assert rec["source"] == "estimate" and rec["cost_usd"] == 0.25
+

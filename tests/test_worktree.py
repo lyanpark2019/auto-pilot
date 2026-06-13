@@ -377,3 +377,45 @@ def test_compute_merge_conflict_finding_hash():
     assert h1 == h2
     h3 = _worktree.compute_merge_conflict_finding_hash(["src/a.py"])
     assert h1 != h3
+
+
+def test_apply_result_default_trailers_applied_true():
+    assert _worktree.ApplyResult(status="applied").trailers_applied is True
+    assert _worktree.ApplyResult(status="conflict").trailers_applied is True
+
+
+def test_apply_to_main_marks_trailers_applied_false_when_amend_fails(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    contract["idempotency_token"] = "deadbeef00aabbcc"
+    contract["iter"] = 2
+    contract["phase"] = 3
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "x\n")
+    series = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(series, _worktree.PatchSeries)
+
+    orig = _worktree.subprocess.run
+
+    def fake_run(args, **kwargs):  # type: ignore[no-untyped-def]
+        if isinstance(args, list) and "--amend" in args:
+            return subprocess.CompletedProcess(args, returncode=1, stdout="", stderr="boom")
+        return orig(args, **kwargs)
+
+    monkeypatch.setattr(_worktree.subprocess, "run", fake_run)
+
+    result = mgr.apply_to_main(series.mbox, contract)
+    assert result.status == "applied"
+    assert result.trailers_applied is False
+    assert result.main_sha is not None
+
+    # Amend was stubbed, so no trailer chain in the commit body
+    log = subprocess.check_output(
+        ["git", "-C", str(repo), "log", "-1", "--format=%B"], text=True
+    )
+    assert "auto-pilot-iter" not in log

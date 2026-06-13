@@ -213,6 +213,221 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": "   "},
         }),
     ),
+    # SEC2: redirection bypass cases — previously ALLOWed, must now DENY.
+    (
+        "Bash echo redirect to file → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo x > /etc/evil"},
+        }),
+    ),
+    (
+        "Bash printf redirect → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "printf y > /tmp/out"},
+        }),
+    ),
+    (
+        "Bash cat redirect → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat a > b"},
+        }),
+    ),
+    (
+        "Bash perl -i in-place → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "perl -i -pe 's/a/b/' f"},
+        }),
+    ),
+    (
+        "Bash python3 -c open(w) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": 'python3 -c \'open("f","w").write(1)\''},
+        }),
+    ),
+    (
+        "Bash ruby -e → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": 'ruby -e "x=1"'},
+        }),
+    ),
+    (
+        "Bash cp copy → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "cp /etc/passwd /tmp/leak"},
+        }),
+    ),
+    (
+        "Bash ln symlink → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "ln -s a b"},
+        }),
+    ),
+    (
+        "Bash dd → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "dd if=x of=y"},
+        }),
+    ),
+    (
+        "Bash append redirect → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo x >> /tmp/f"},
+        }),
+    ),
+    # SEC2: regression-ALLOW — must not over-block read-only usage.
+    (
+        "Bash pytest fd-dup pipe → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "pytest 2>&1 | tail"},
+        }),
+    ),
+    (
+        "Bash python3 -m pytest → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "python3 -m pytest -q"},
+        }),
+    ),
+    (
+        "Bash git diff redirect-free → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "git diff --name-only base..HEAD"},
+        }),
+    ),
+    # --- Hardening payloads: confirmed bypasses closed by tokenizer ---
+
+    # P1: flag-before-c code exec — python3 -W -c / -X dev -c / -B -c / -O -c
+    (
+        "Bash python3 -W -c print(open) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "python3 -W -c print(open('/etc/passwd').read())"},
+        }),
+    ),
+    (
+        "Bash python3 -X dev -c exec → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "python3 -X dev -c 'import os; os.system(\"id\")'"},
+        }),
+    ),
+    # P2: command-substitution hides binary
+    (
+        "Bash r=$(rm -rf /tmp/zzz) cmd-sub → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "r=$(rm -rf /tmp/zzz)"},
+        }),
+    ),
+    # P3: subshell hides binary
+    (
+        "Bash (rm -rf /tmp/zzz) subshell → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "(rm -rf /tmp/zzz)"},
+        }),
+    ),
+    # P4: backtick hides binary
+    (
+        "Bash echo `cp a b` backtick → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo `cp a b`"},
+        }),
+    ),
+    # P5: &&-adjacent, no space
+    (
+        "Bash true&&rm -rf (&&-adjacent) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "true&&rm -rf /tmp/zzz"},
+        }),
+    ),
+    # P6: ;-adjacent, no space
+    (
+        "Bash true;rm -rf (;-adjacent) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "true;rm -rf /tmp/zzz"},
+        }),
+    ),
+    # P7: mypy redirect to /dev/null — legit reviewer idiom → ALLOW
+    (
+        "Bash mypy scripts 2>/dev/null → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "mypy scripts 2>/dev/null"},
+        }),
+    ),
+    # P8: pytest redirect to /dev/null — legit reviewer idiom → ALLOW
+    (
+        "Bash pytest -q >/dev/null → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "pytest -q >/dev/null"},
+        }),
+    ),
+    # P9: diff redirect to /dev/null — legit reviewer idiom → ALLOW
+    (
+        "Bash diff a b > /dev/null → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "diff a b > /dev/null"},
+        }),
+    ),
+    # P10: fd-dup redirect (2>&1) — already passing; regression guard → ALLOW
+    (
+        "Bash grep -r foo . 2>&1 (fd-dup) → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "grep -r foo . 2>&1"},
+        }),
+    ),
+    # P11: python3 -mpy_compile (not -c) — must NOT over-fire → ALLOW
+    (
+        "Bash python3 -mpy_compile foo.py → ALLOW",
+        "ALLOW",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "python3 -mpy_compile foo.py"},
+        }),
+    ),
 ]
 
 

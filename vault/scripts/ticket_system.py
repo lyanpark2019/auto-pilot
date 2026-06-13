@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Any, Optional, Callable
 
 
 class TicketStatus(str, Enum):
@@ -39,17 +39,17 @@ class Ticket:
     id: str
     round_num: int
     worker_type: str
-    contract: dict
+    contract: dict[str, Any]
     status: TicketStatus = TicketStatus.PENDING
-    deliverable_paths: list = field(default_factory=list)
-    verification: dict = field(default_factory=dict)
+    deliverable_paths: list[Any] = field(default_factory=list)
+    verification: dict[str, Any] = field(default_factory=dict)
     reward: float = 0.0
     feedback: str = ""
     retry_count: int = 0
     created_at: float = field(default_factory=time.time)
     delivered_at: Optional[float] = None
     verified_at: Optional[float] = None
-    history: list = field(default_factory=list)
+    history: list[Any] = field(default_factory=list)
 
     def to_prompt_context(self) -> str:
         """Generate prompt block to inject into worker dispatch."""
@@ -82,14 +82,14 @@ class TicketBoard:
         self.tickets: dict[str, Ticket] = {}
         self.load()
 
-    def load(self):
+    def load(self) -> None:
         if self.state_path.exists():
             data = json.loads(self.state_path.read_text())
             for tid, t in data.get("tickets", {}).items():
                 t["status"] = TicketStatus(t["status"])
                 self.tickets[tid] = Ticket(**t)
 
-    def save(self):
+    def save(self) -> None:
         data = {
             "tickets": {
                 tid: {**asdict(t), "status": t.status.value}
@@ -100,7 +100,7 @@ class TicketBoard:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
-    def issue(self, round_num: int, worker_type: str, contract: dict) -> Ticket:
+    def issue(self, round_num: int, worker_type: str, contract: dict[str, Any]) -> Ticket:
         """PM issues new ticket."""
         tid = f"T-R{round_num}-{worker_type[:6]}-{uuid.uuid4().hex[:4]}"
         t = Ticket(id=tid, round_num=round_num, worker_type=worker_type, contract=contract)
@@ -109,17 +109,17 @@ class TicketBoard:
         self.save()
         return t
 
-    def start(self, ticket_id: str):
+    def start(self, ticket_id: str) -> None:
         t = self.tickets[ticket_id]
         t.status = TicketStatus.IN_PROGRESS
         t.history.append({"event": "started", "at": time.time()})
         self.save()
 
-    def deliver(self, ticket_id: str, deliverable_paths: list):
+    def deliver(self, ticket_id: str, deliverable_paths: list[Any]) -> None:
         """Worker reports completion."""
         t = self.tickets[ticket_id]
         t.status = TicketStatus.DELIVERED
-        t.deliverable_paths = deliverable_paths
+        t.deliverable_paths = list(deliverable_paths)
         t.delivered_at = time.time()
         t.history.append({"event": "delivered", "at": t.delivered_at, "paths": deliverable_paths})
         self.save()
@@ -159,7 +159,7 @@ class TicketBoard:
         self.save()
         return t
 
-    def round_summary(self, round_num: int) -> dict:
+    def round_summary(self, round_num: int) -> dict[str, Any]:
         """Stats for a round."""
         round_tickets = [t for t in self.tickets.values() if t.round_num == round_num]
         return {

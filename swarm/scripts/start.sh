@@ -12,6 +12,8 @@ for arg in "$@"; do
 done
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/auto-pilot}"
+# shellcheck source=swarm/scripts/lib/swarm-models.sh
+. "$PLUGIN_ROOT/swarm/scripts/lib/swarm-models.sh"
 PROJECT="$(pwd)"
 BASE="$(basename "$PROJECT")"
 ROOT="$PROJECT/.planning/autopilot"
@@ -49,17 +51,17 @@ done
 schema_err() { echo "[start] invalid config: $1" >&2; exit 4; }
 jq -e '(.pm.engine // "claude") == "claude" or (.pm.engine // "claude") == "codex"' "$CONFIG" >/dev/null \
   || schema_err 'pm.engine must be "claude" or "codex"'
-jq -e '
-  if (.pm.engine // "claude") == "claude" then (.pm.model // "claude-opus-4-7") == "claude-opus-4-7"
-  else (.pm.model // "gpt-5.5") | test("^(gpt-5|gpt-5\\.5|o3)$") end
+jq -e --arg cm "$SWARM_PM_CLAUDE_MODEL" --arg crx "$SWARM_CODEX_MODEL_RE" '
+  if (.pm.engine // "claude") == "claude" then (.pm.model // $cm) == $cm
+  else (.pm.model // "gpt-5.5") | test($crx) end
 ' "$CONFIG" >/dev/null \
-  || schema_err 'pm.model: claude→"claude-opus-4-7" only; codex→gpt-5|gpt-5.5|o3'
+  || schema_err 'pm.model: claude→$SWARM_PM_CLAUDE_MODEL only; codex→gpt-5|gpt-5.5|o3'
 jq -e '(.workers|type=="array") and (.workers|length>=4) and (.workers|length<=10)' "$CONFIG" >/dev/null \
   || schema_err 'workers must be array length 4..10'
 jq -e '[.workers[].id] | (length == (unique|length))' "$CONFIG" >/dev/null \
   || schema_err 'worker ids must be unique'
-jq -e '.workers[] | (.id|type=="number") and (.engine=="claude" or .engine=="codex")
-  and ((.engine=="claude" and (.model|startswith("claude-"))) or (.engine=="codex" and (.model|test("^(gpt-5|gpt-5\\.5|o3)$"))))
+jq -e --arg crx "$SWARM_CODEX_MODEL_RE" '.workers[] | (.id|type=="number") and (.engine=="claude" or .engine=="codex")
+  and ((.engine=="claude" and (.model|startswith("claude-"))) or (.engine=="codex" and (.model|test($crx))))
   and ((.role|tostring) | test("^[a-z0-9][a-z0-9-]*$"))' "$CONFIG" >/dev/null \
   || schema_err 'each worker needs integer id, engine∈{claude,codex}, matching model (codex: gpt-5|gpt-5.5|o3), lowercase role tag'
 jq -e '(.initial_goal.title|type=="string") and (.initial_goal.title|length>0) and (.initial_goal.title|length<=80)' "$CONFIG" >/dev/null \
@@ -84,7 +86,7 @@ for i in $WORKER_IDS; do
   BR="autopilot/worker-$i"
   if [ ! -d "$WT" ]; then
     echo "[start] git worktree add $WT ($BR)"
-    git worktree add -B "$BR" "$WT" HEAD >/dev/null
+    git worktree add -B "$BR" "$WT" "$SWARM_BASE_BRANCH" >/dev/null
   fi
 done
 

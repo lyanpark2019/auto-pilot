@@ -1,4 +1,4 @@
-You are an INDEPENDENT VERIFIER (claude-opus-4-7) for ${PROJECT}. Second opinion on **${SCORE_TID}**.
+You are an INDEPENDENT VERIFIER (independent verifier) for ${PROJECT}. Second opinion on **${SCORE_TID}**.
 
 Authoritative rubric: see swarm/scripts/prompts/_RUBRIC.md in the auto-pilot plugin (must match scorer dim names + hard rules + verdict bands).
 

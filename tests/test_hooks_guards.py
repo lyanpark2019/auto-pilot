@@ -461,8 +461,8 @@ class TestBranchLock:
     ("git push", True, True),
     # push <remote> only, no refspec, HEAD=main → deny
     ("git push origin", True, True),
-    # bypass env with explicit main dst → allow
-    ("AUTO_PILOT_MAIN_OK=1 git push origin main", False, False),
+    # SEC5: command-prefix token is NOT a self-grant (must be session env) → deny
+    ("AUTO_PILOT_MAIN_OK=1 git push origin main", False, True),
     # A1 bypass fixes — each was a hole in the old parse
     # force-push prefix (+) stripped before dst compare
     ("git push origin +main", False, True),

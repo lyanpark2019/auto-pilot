@@ -39,8 +39,14 @@ jobs:
       - name: doc reference integrity (file:line citations in docs)
         run: python3 scripts/docs/check_doc_reference_integrity.py
 
+      - name: doc SHA freshness (STALE cited-source detection, blocking)
+        run: python3 skills/doc-management/scripts/check_design_doc_freshness.py docs
+
       - name: asset count drift (hardcoded counts in CLAUDE.md vs live filesystem)
         run: python3 scripts/docs/check_asset_counts.py
+
+      - name: codex fork provenance (every fork has a recorded upstream pin)
+        run: python3 scripts/docs/check_codex_provenance.py
 
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
@@ -51,8 +57,8 @@ jobs:
         # Devs keep running plain `pytest` locally — the gate is CI-only.
         run: python -m pytest tests/ -q --cov=scripts --cov-fail-under=80
 
-      - name: pytest vault export layer
-        run: cd vault && python -m pytest tests/ -q
+      - name: pytest vault export layer (coverage ratchet floor 48%)
+        run: cd vault && python -m pytest tests/ -q --cov=pipeline --cov=sources --cov=scripts --cov-fail-under=48
 
       - name: pytest-benchmark (perf budget + baseline + p95 gate)
         run: python -m pytest tests/test_perf.py --benchmark-only -v
@@ -95,10 +101,14 @@ jobs:
           python3 hooks/test_pre_reviewer_write.py
           python3 hooks/test_worker_scope_gate.py
           python3 hooks/test_branch_lock.py
+          python3 hooks/test_deletion_diff_guard.py
           python3 hooks/test_gh_auth_preflight.py
           python3 hooks/test_verifier_tier_gate.py
           python3 hooks/test_pre_edit_human_only.py
           python3 hooks/test_dispatch_contract_gate.py
+          python3 hooks/test_state_write_guard.py
+          python3 hooks/test_headless_sync_dispatch_guard.py
+          python3 hooks/test_preflight_handoff.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh

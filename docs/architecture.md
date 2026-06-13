@@ -90,7 +90,7 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   `insights.jsonl` — retro's structured sidecar where a `class` tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
   it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
-- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:1`, three orchestrator
+- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:32`, three orchestrator
   subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
   state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
   requires all three `promotion_gate` fields (`tests_pass`, `ci_pass`, `user_approved`) to be
@@ -130,7 +130,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 25 hooks · 12 codex-skills = 71 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 26 hooks · 12 codex-skills = 72 assets total.
 
 ```
 auto-pilot/
@@ -159,7 +159,7 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (25 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (26 scripts, P④; hooks/hooks.json is wiring SoT)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
@@ -205,7 +205,7 @@ Each worker gets `git worktree add` under `.planning/auto-pilot/worktrees/auto-p
 
 1. Agent frontmatter `tools:` whitelist — best-effort
 2. `hooks/pre-reviewer-write.sh` PreToolUse (`AUTO_PILOT_SUBAGENT_ROLE`) — blocks Edit/Write/MultiEdit outside `$AUTO_PILOT_OUTPUT_DIR` + Bash mutations. **Real wall.**
-3. PM `assert_reviewer_was_scoped` — `git status --porcelain` empty after every reviewer return. **Real wall.**
+3. PM assert_reviewer_was_scoped — git status --porcelain empty after every reviewer return. **Real wall.**
 4. `codex exec --sandbox read-only` — model-layer deterrent (not OS-level).
 
 Parallel reviewers use `scripts/_reviewer_wrapper.py` (isolated env per subprocess — prevents env-var signal race). Reviewers also write `outputs/<role>/status.json` heartbeats (`scripts/_heartbeat.py:1`), surfaced by `scripts/orchestrator.py review-status`; codex review is bounded with ABSTAIN fallback (`scripts/codex_review_bounded.py:1`).

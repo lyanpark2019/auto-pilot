@@ -40,8 +40,9 @@ from typing import IO
 import _budget
 import _config
 import _prompts
+import _recover
 from _log import event
-from _state import STATE_DIR, STATE_FILE, State, load_state, save_state
+from _state import STATE_DIR, STATE_FILE, State, load_state, save_state, utc_now as _state_utc_now
 
 # ROOT captured at import time; used only for subprocess cwd (git ops + claude
 # session). State + log paths come from _state and resolve lazily relative to
@@ -225,14 +226,34 @@ def run_claude_session(prompt: str, log_path: Path, timeout_sec: float) -> int:
     return proc.returncode
 
 
-def _accumulate_usage(log: Path, args: argparse.Namespace, state: State) -> None:
-    """Parse session usage from *log* and add it to *state* in-place; persist."""
+def _accumulate_usage(
+    log: Path,
+    args: argparse.Namespace,
+    state: State,
+    iter_n: int,
+    phase: int,
+) -> None:
+    """Parse session usage from *log*, add to *state* in-place, persist, and ledger."""
     log_cost, log_tokens = _budget.parse_session_usage(log)
+    source = "estimate" if log_cost <= 0.0 else "parsed"
     if log_cost <= 0.0:
         log_cost = args.per_iter_cost_estimate
     state["cost_usd"] = float(state.get("cost_usd", 0.0)) + log_cost
     state["tokens"] = int(state.get("tokens", 0)) + log_tokens
     save_state(state)
+    _budget.append_usage_ledger(
+        LOG_DIR / "usage.jsonl",
+        {
+            "iter": iter_n,
+            "phase": phase,
+            "cost_usd": log_cost,
+            "tokens": log_tokens,
+            "cumulative_cost_usd": float(state.get("cost_usd", 0.0)),
+            "cumulative_tokens": int(state.get("tokens", 0)),
+            "source": source,
+            "ts": _state_utc_now(),
+        },
+    )
 
 
 def _handle_timeout(iter_n: int, pre_head: str, state_after: State) -> str:
@@ -270,7 +291,7 @@ def _timeout_preserved_status(state_after: State) -> str | None:
 def _early_exit_status(state: State, args: argparse.Namespace) -> str | None:
     """Return a terminal status string if iteration should be skipped, else None."""
     current: str | None = state.get("status")
-    if current in {"success", "stopped", "pivot-needed", "failed", "cost-cap"}:
+    if current in {"success", "stopped", "pivot-needed", "failed", "cost-cap", "time-cap"}:
         assert current is not None  # narrowed by membership check above
         return current
     cap_hit = _budget.check_caps(args, state)
@@ -278,6 +299,13 @@ def _early_exit_status(state: State, args: argparse.Namespace) -> str | None:
         state["status"] = cap_hit
         save_state(state)
         return cap_hit
+    wall_hit = _budget.check_wall_clock(
+        getattr(args, "wall_clock_deadline", None), time.monotonic()
+    )
+    if wall_hit is not None:
+        state["status"] = wall_hit
+        save_state(state)
+        return wall_hit
     return None
 
 
@@ -310,7 +338,7 @@ def loop_iteration(iter_n: int, args: argparse.Namespace) -> str:
     rc = run_claude_session(prompt, log, args.timeout_build)
 
     state_after = load_state() or state
-    _accumulate_usage(log, args, state_after)
+    _accumulate_usage(log, args, state_after, iter_n, phase)
 
     if rc == 124:
         preserved = _timeout_preserved_status(state_after)
@@ -359,6 +387,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=CONFIG.default_max_concurrent_claude,
         help="abort spawn when this many claude processes are already running",
     )
+    p.add_argument(
+        "--max-wall-clock-sec",
+        type=float,
+        default=CONFIG.default_max_wall_clock_sec,
+        help="abort run when wall-clock elapsed exceeds this (s); 0 disables",
+    )
     p.add_argument("--once", action="store_true", help="run one iteration and exit (smoke test)")
     return p
 
@@ -380,8 +414,18 @@ def main(argv: list[str] | None = None) -> int:
         event("loop.no_state_file")
         return 2
 
+    try:
+        _recover.run_recovery(repo_root=ROOT, state_dir=STATE_DIR)
+    except Exception as exc:  # noqa: BLE001
+        event("recover.skipped", error_type=type(exc).__name__)
+
     args.pid_baseline = _budget.count_claude_pids()
     event("loop.pid_baseline", pids=args.pid_baseline)
+    args.wall_clock_deadline = (
+        time.monotonic() + args.max_wall_clock_sec
+        if args.max_wall_clock_sec > 0
+        else None
+    )
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -389,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         status = loop_iteration(n, args)
         event("iter.end", n=n, status=status)
 
-        if status in {"success", "stopped", "pivot-needed", "failed", "cost-cap"}:
+        if status in {"success", "stopped", "pivot-needed", "failed", "cost-cap", "time-cap"}:
             event("loop.terminal", status=status)
             return 0 if status == "success" else 1
 

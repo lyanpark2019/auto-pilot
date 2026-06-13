@@ -21,7 +21,7 @@ EMPTY_DIRS_TO_DELETE = [
 ]
 
 # Misplaced files/dirs in _legacy that belong in domain vaults.
-RELOCATIONS: list[dict] = [
+RELOCATIONS: list[dict[str, str]] = [
     {
         "from": "sportic365-Vault/_legacy/Sportic/프로토.md",
         "to": "proto-Vault/proto.md",

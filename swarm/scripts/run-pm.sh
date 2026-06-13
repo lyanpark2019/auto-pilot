@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# PM loop. Always uses claude-opus-4-7. Bootstraps once, then forever:
+# PM loop. PM model from config (default = SWARM_PM_CLAUDE_MODEL). Bootstraps once, then forever:
 # explore → goal-decompose → score → ledger → dispatch.
 set -euo pipefail
 
 PLUGIN_ROOT="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/auto-pilot}}"
+# shellcheck source=swarm/scripts/lib/swarm-models.sh
+. "$PLUGIN_ROOT/swarm/scripts/lib/swarm-models.sh"
 PROJECT="$(pwd)"
 ROOT="$PROJECT/.planning/autopilot"
 CONFIG="$ROOT/config.json"
@@ -11,7 +13,7 @@ PROMPTS="$PLUGIN_ROOT/swarm/scripts/prompts"
 LOG="$ROOT/logs/pm.log"
 LOCKDIR="$ROOT/ledger/dispatch.lock.d"
 PM_ENGINE="$(jq -r '.pm.engine // "claude"' "$CONFIG")"
-PM_MODEL="$(jq -r '.pm.model // (if .pm.engine == "codex" then "gpt-5.5" else "claude-opus-4-7" end)' "$CONFIG")"
+PM_MODEL="$(jq -r --arg cm "$SWARM_PM_CLAUDE_MODEL" '.pm.model // (if .pm.engine == "codex" then "gpt-5.5" else $cm end)' "$CONFIG")"
 PM_CALL_TIMEOUT_SEC="$(jq -r '.policy.pm_call_timeout_sec // 600' "$CONFIG")"
 DISPATCH_BACKOFF_THRESHOLD="$(jq -r '.policy.dispatch_backoff_threshold // 3' "$CONFIG")"
 DISPATCH_ABORT_THRESHOLD="$(jq -r '.policy.dispatch_abort_threshold // 10' "$CONFIG")"

@@ -16,12 +16,14 @@ import os
 import sys
 import time
 from pathlib import Path
+from types import ModuleType
 from typing import Any, TextIO
 
+_yaml: ModuleType | None
 try:
-    import yaml
+    import yaml as _yaml
 except ImportError:
-    yaml = None
+    _yaml = None
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = PLUGIN_ROOT / "templates" / "rubric.yaml"
@@ -57,11 +59,11 @@ def _data_dir(vault: Path) -> Path:
 
 
 def _load_rubric() -> dict[str, Any]:
-    if yaml is None or not RUBRIC_PATH.exists():
+    if _yaml is None or not RUBRIC_PATH.exists():
         return {}
     try:
-        return yaml.safe_load(RUBRIC_PATH.read_text()) or {}
-    except (OSError, yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
+        return _yaml.safe_load(RUBRIC_PATH.read_text()) or {}
+    except (OSError, _yaml.YAMLError, AttributeError, TypeError, ValueError) as exc:
         _warn(f"cost_tracker: failed to load rubric {RUBRIC_PATH}: {type(exc).__name__}: {exc}")
         return {}
 
@@ -106,10 +108,10 @@ class CostTracker:
         return entry
 
     def round_cost(self, round_num: int) -> float:
-        return sum(e["cost_usd"] for e in self._iter() if e["round"] == round_num)
+        return float(sum(e["cost_usd"] for e in self._iter() if e["round"] == round_num))
 
     def total_cost(self) -> float:
-        return sum(e["cost_usd"] for e in self._iter())
+        return float(sum(e["cost_usd"] for e in self._iter()))
 
     def over_budget(self, round_num: int) -> tuple[bool, str]:
         if self.mode == "subscription":
@@ -136,7 +138,7 @@ class CostTracker:
             "budget_round": self.max_round_usd,
         }
 
-    def _iter(self):
+    def _iter(self) -> Any:
         if not self.log_path.exists():
             return
         for line in self.log_path.read_text().splitlines():

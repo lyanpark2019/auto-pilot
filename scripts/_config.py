@@ -20,6 +20,8 @@ class AutoPilotConfig:
     default_max_tokens: int = 50_000_000
     default_per_iter_cost_estimate_usd: float = 0.50
     default_max_concurrent_claude: int = 4
+    # Wall-clock watchdog: abort after this many seconds; 0 = disabled (opt-in).
+    default_max_wall_clock_sec: float = 0.0
     monitored_ports: tuple[int, ...] = (8000, 3000, 5000, 8080)
     # Preflight artifact max age; mirrors PREFLIGHT_TTL_SEC in _dispatch.py.
     # Env var: AUTO_PILOT_PREFLIGHT_TTL_SEC (same name as the dispatch module reads).
@@ -40,6 +42,8 @@ class AutoPilotConfig:
         _check_float_bounds("default_per_iter_cost_estimate_usd", self.default_per_iter_cost_estimate_usd, gt=0, le=1_000)
         # _budget.check_caps: pid growth over startup baseline >= cap — at least 1 allowed
         _check_int_bounds("default_max_concurrent_claude", self.default_max_concurrent_claude, ge=1, le=64)
+        # wall-clock watchdog: 0 = disabled; gt=-1 admits 0.0; ≤7-day ceiling
+        _check_float_bounds("default_max_wall_clock_sec", self.default_max_wall_clock_sec, gt=-1, le=604_800)
         # _dispatch.py: age_sec > PREFLIGHT_TTL_SEC — 60 s minimum to avoid instant expiry
         _check_int_bounds("preflight_ttl_sec", self.preflight_ttl_sec, ge=60, le=86_400)
 
@@ -60,6 +64,25 @@ def _check_float_bounds(
         raise ValueError(f"{name}={value!r} is out of range: must be <= {le}")
 
 
+PREFLIGHT_TTL_DEFAULT = 900
+PREFLIGHT_TTL_MIN = 60
+PREFLIGHT_TTL_MAX = 86_400
+
+
+def preflight_ttl_sec() -> int:
+    """Resolve AUTO_PILOT_PREFLIGHT_TTL_SEC, fail-soft to default if invalid."""
+    raw = os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC")
+    if raw is None:
+        return PREFLIGHT_TTL_DEFAULT
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return PREFLIGHT_TTL_DEFAULT
+    if value < PREFLIGHT_TTL_MIN or value > PREFLIGHT_TTL_MAX:
+        return PREFLIGHT_TTL_DEFAULT
+    return value
+
+
 def load() -> AutoPilotConfig:
     """Resolve config from env vars with documented defaults."""
     claude_bin = (
@@ -67,5 +90,4 @@ def load() -> AutoPilotConfig:
         or shutil.which("claude")
         or "claude"
     )
-    preflight_ttl_sec = int(os.environ.get("AUTO_PILOT_PREFLIGHT_TTL_SEC", "900"))
-    return AutoPilotConfig(claude_bin=claude_bin, preflight_ttl_sec=preflight_ttl_sec)
+    return AutoPilotConfig(claude_bin=claude_bin, preflight_ttl_sec=preflight_ttl_sec())

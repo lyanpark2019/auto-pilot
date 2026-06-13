@@ -28,9 +28,10 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 
-def build_plan(vault: Path, skip_existing: bool = True) -> dict:
+def build_plan(vault: Path, skip_existing: bool = True) -> dict[str, Any]:
     """Build plan artifacts."""
     dispatches = []
     for cat_dir in sorted(p for p in vault.iterdir() if p.is_dir() and not p.name.startswith(".")):

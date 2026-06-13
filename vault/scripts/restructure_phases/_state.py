@@ -14,7 +14,7 @@ def load(state_path: Path) -> dict[str, Any]:
     if not state_path.exists():
         return _seed()
     try:
-        data = json.loads(state_path.read_text())
+        data: dict[str, Any] = json.loads(state_path.read_text())
         if data.get("schema_version") != SCHEMA_VERSION:
             data["schema_version"] = SCHEMA_VERSION
         return data
@@ -52,7 +52,7 @@ def _seed() -> dict[str, Any]:
     }
 
 
-def mark_phase(state: dict, phase_name: str, status: str, **extra) -> None:
+def mark_phase(state: dict[str, Any], phase_name: str, status: str, **extra: Any) -> None:
     """Provide the public mark phase API."""
     p = state["phases"].setdefault(phase_name, {})
     p["status"] = status
@@ -61,7 +61,7 @@ def mark_phase(state: dict, phase_name: str, status: str, **extra) -> None:
         p[k] = v
 
 
-def append_error(state: dict, phase_name: str, error: str) -> None:
+def append_error(state: dict[str, Any], phase_name: str, error: str) -> None:
     """Provide the public append error API."""
     state["errors"].append(
         {

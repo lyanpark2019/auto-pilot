@@ -23,7 +23,7 @@ import re
 import sys
 import random
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = PLUGIN_ROOT / "templates" / "rubric.yaml"
@@ -81,7 +81,7 @@ def _label_tokens(label: str) -> list[str]:
     return out
 
 
-def _edge_candidates(vault: Path, cats: list, per_cat: int, rng: random.Random) -> list:
+def _edge_candidates(vault: Path, cats: list[str], per_cat: int, rng: random.Random) -> list[Any]:
     sampled = []
     for c in cats:
         gpath = vault / c / "raw" / "graphify-out" / "graph.json"
@@ -96,11 +96,11 @@ def _edge_candidates(vault: Path, cats: list, per_cat: int, rng: random.Random) 
     return sampled
 
 
-def _raw_text_by_category(vault: Path, cats: list) -> dict:
+def _raw_text_by_category(vault: Path, cats: list[str]) -> dict[str, str]:
     return {c: " ".join(f.read_text().lower() for f in (vault / c / "raw").glob("*.md")) for c in cats}
 
 
-def _edge_grounded(raw_text: dict, category: str, source_label: str, target_label: str) -> bool:
+def _edge_grounded(raw_text: dict[str, str], category: str, source_label: str, target_label: str) -> bool:
     s_tokens = _label_tokens(source_label)
     t_tokens = _label_tokens(target_label)
     text = raw_text.get(category, "")
@@ -109,7 +109,7 @@ def _edge_grounded(raw_text: dict, category: str, source_label: str, target_labe
     return s_hit and t_hit
 
 
-def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, int, list]:
+def edge_token_check(vault: Path, cats: list[str], sample_n: int = 30) -> tuple[int, int, list[str]]:
     """Sample N edges, check both label tokens appear in same raw source md."""
     if not cats:
         return 0, 0, []
@@ -117,7 +117,7 @@ def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, 
     sampled = _edge_candidates(vault, cats, max(1, sample_n // len(cats) + 1), rng)[:sample_n]
     raw_text = _raw_text_by_category(vault, cats)
     passed = 0
-    failed_examples = []
+    failed_examples: list[str] = []
     for c, _e, s_lbl, t_lbl in sampled:
         if _edge_grounded(raw_text, c, s_lbl, t_lbl):
             passed += 1
@@ -125,7 +125,7 @@ def edge_token_check(vault: Path, cats: list, sample_n: int = 30) -> tuple[int, 
             failed_examples.append(f"{c}: {s_lbl} -X-> {t_lbl}")
     return passed, len(sampled), failed_examples
 
-def concept_accuracy(vault: Path, cats: list, sample_n: int = 14) -> tuple[int, int]:
+def concept_accuracy(vault: Path, cats: list[str], sample_n: int = 14) -> tuple[int, int]:
     """Sample concept pages, check summary tokens appear in cited source files."""
     rng = random.Random(43)
     pages = []
@@ -160,7 +160,7 @@ def concept_accuracy(vault: Path, cats: list, sample_n: int = 14) -> tuple[int, 
     return passed, len(pages) if pages else 1
 
 
-def adr_fidelity(vault: Path, cats: list) -> tuple[int, int]:
+def adr_fidelity(vault: Path, cats: list[str]) -> tuple[int, int]:
     """ADR content keywords appear in source notebook fulltext."""
     total = 0
     passed = 0
@@ -179,7 +179,7 @@ def adr_fidelity(vault: Path, cats: list) -> tuple[int, int]:
     return passed, total or 1
 
 
-def community_label_fit(vault: Path, cats: list) -> tuple[int, int]:
+def community_label_fit(vault: Path, cats: list[str]) -> tuple[int, int]:
     """Community label tokens appear in member node labels."""
     passed = 0
     total = 0
@@ -190,7 +190,7 @@ def community_label_fit(vault: Path, cats: list) -> tuple[int, int]:
             continue
         g = json.loads(gpath.read_text())
         labels = json.loads(lpath.read_text())
-        community_members = {}
+        community_members: dict[int, list[str]] = {}
         for n in g["nodes"]:
             cid = n.get("community")
             if cid is not None:
@@ -226,7 +226,7 @@ def cross_vault_relevance(vault: Path) -> tuple[int, int]:
     return passed, len(sample)
 
 
-def hot_cache_citation(vault: Path, cats: list) -> tuple[int, int]:
+def hot_cache_citation(vault: Path, cats: list[str]) -> tuple[int, int]:
     """hot.md god_nodes match actual god_nodes from analysis.json."""
     passed = 0
     total = len(cats)
@@ -244,7 +244,7 @@ def hot_cache_citation(vault: Path, cats: list) -> tuple[int, int]:
     return passed, total
 
 
-def hallucination_check(vault: Path, cats: list) -> tuple[int, int]:
+def hallucination_check(vault: Path, cats: list[str]) -> tuple[int, int]:
     """Worker-generated concept/entity pages: every claim section should have wikilink to source."""
     flagged = 0
     total = 0
@@ -274,7 +274,7 @@ def _scaled(max_points: int, passed: int, total: int) -> float:
     return round(max_points * passed / max(total, 1), 1)
 
 
-def _score_edge_fact(vault: Path, cats: list[str], scores: dict, details: dict) -> None:
+def _score_edge_fact(vault: Path, cats: list[str], scores: dict[str, float], details: dict[str, str]) -> None:
     passed, total, failures = edge_token_check(vault, cats, sample_n=30)
     scores["edge_fact"] = _scaled(30, passed, total)
     details["edge_fact"] = f"{passed}/{total} edges grounded in raw co-occurrence"
@@ -282,13 +282,13 @@ def _score_edge_fact(vault: Path, cats: list[str], scores: dict, details: dict) 
         details["edge_fact"] += f" (e.g. {failures[0]})"
 
 
-def _score_pair(scores: dict, details: dict, key: str, max_points: int, outcome: tuple[int, int], text: str) -> None:
+def _score_pair(scores: dict[str, float], details: dict[str, str], key: str, max_points: int, outcome: tuple[int, int], text: str) -> None:
     passed, total = outcome
     scores[key] = _scaled(max_points, passed, total)
     details[key] = text.format(passed=passed, total=total)
 
 
-def _score_content_dimensions(vault: Path, cats: list[str], scores: dict, details: dict) -> None:
+def _score_content_dimensions(vault: Path, cats: list[str], scores: dict[str, float], details: dict[str, str]) -> None:
     _score_edge_fact(vault, cats, scores, details)
     _score_pair(scores, details, "concept_accuracy", 20, concept_accuracy(vault, cats, sample_n=14),
                 "{passed}/{total} concepts grounded")
@@ -304,11 +304,11 @@ def _score_content_dimensions(vault: Path, cats: list[str], scores: dict, detail
     details["non_hallucinated"] = f"{grounded_pct}% pages have source linkage"
 
 
-def score_vault(vault: Path) -> dict:
+def score_vault(vault: Path) -> dict[str, Any]:
     """Score vault content against the rubric."""
     cats = _vault_categories(vault)
-    scores = {}
-    details = {}
+    scores: dict[str, float] = {}
+    details: dict[str, str] = {}
     _score_content_dimensions(vault, cats, scores, details)
     total = min(100, sum(scores.values()))
     return {
@@ -320,7 +320,7 @@ def score_vault(vault: Path) -> dict:
     }
 
 
-def main():
+def main() -> None:
     """Run the score-content command-line entry point."""
     if len(sys.argv) < 2:
         _warn("Usage: score_content.py <vault-path>")

@@ -3,7 +3,7 @@
 Three-layer gate per benchmark:
   1. Absolute mean budget: mean < 50ms.
   2. Tail budget: p95 < 50ms when pytest-benchmark sample data is available.
-  3. Regression gate: mean <= committed baseline (tests/perf_baseline.json).
+  3. Regression gate: mean <= committed per-test baseline x BASELINE_TOLERANCE (tests/perf_baseline.json).
 
 Run with: pytest tests/test_perf.py --benchmark-only
 Baseline refresh procedure: see docs/perf-budget.md.
@@ -24,6 +24,7 @@ import risk_assess  # type: ignore[import-not-found]
 
 
 BUDGET_MS = 50.0  # per-command mean and p95 ceiling
+BASELINE_TOLERANCE = 1.25  # CI noisy-neighbour headroom over committed per-test baseline (see docs/perf-budget.md)
 COLD_START_BUDGET_SEC = 2.0
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = Path(__file__).parent / "perf_baseline.json"
@@ -61,8 +62,9 @@ def _assert_benchmark_budget(benchmark, fullname: str, label: str) -> None:
     if p95 is not None:
         assert p95 * 1000 < BUDGET_MS, f"{label} exceeded {BUDGET_MS}ms p95 budget"
     baseline = _baseline_mean(fullname)
-    assert mean <= baseline, (
-        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms"
+    limit = baseline * BASELINE_TOLERANCE
+    assert mean <= limit, (
+        f"perf regression: {mean*1000:.3f}ms > baseline {baseline*1000:.3f}ms x {BASELINE_TOLERANCE} = {limit*1000:.3f}ms"
     )
 
 

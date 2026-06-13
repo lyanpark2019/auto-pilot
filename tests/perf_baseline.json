@@ -1,13 +1,13 @@
 {
-  "_comment": "Committed perf regression baseline. Sized to tolerate shared-runner variance on GitHub Actions ubuntu-latest (observed range 0.5ms-11ms across runs). Each baseline = 25ms, which sits well below the 50ms absolute budget (tests/test_perf.py) but catches a genuine ≥25x slowdown vs local ~1ms baseline. The absolute budget is the primary gate; this regression assertion is a secondary smoke that should never flake. Refresh procedure: docs/perf-budget.md.",
+  "_comment": "Per-test measured ceilings (not a uniform placeholder). Local means (Apple M-series, Python 3.13): status ~1.2ms, phase-start ~1.4ms, phase-end ~9.8ms, pivot-check ~0.037ms. CI ubuntu-latest observed range 0.5-11ms (see docs/perf-budget.md). Each baseline is set at a clean ceiling above the worst observed local mean with CI headroom; phase-end gets the largest ceiling (~2.6x local mean) because it performs real evidence-gate I/O. The regression gate is mean <= baseline * BASELINE_TOLERANCE (1.25); see tests/test_perf.py and docs/perf-budget.md. Refresh procedure: docs/perf-budget.md.",
   "benchmarks": [
     {
       "fullname": "tests/test_perf.py::test_status_within_budget",
-      "stats": {"mean": 0.025}
+      "stats": {"mean": 0.012}
     },
     {
       "fullname": "tests/test_perf.py::test_phase_start_within_budget",
-      "stats": {"mean": 0.025}
+      "stats": {"mean": 0.012}
     },
     {
       "fullname": "tests/test_perf.py::test_phase_end_within_budget",
@@ -15,7 +15,7 @@
     },
     {
       "fullname": "tests/test_perf.py::test_pivot_check_within_budget",
-      "stats": {"mean": 0.025}
+      "stats": {"mean": 0.0015}
     }
   ]
 }

@@ -44,9 +44,9 @@ class NotebookLMCreatePhase(Phase):
             notebooks = payload
         else:
             notebooks = []
-        return {nb.get("title", nb.get("name", "")) for nb in notebooks if isinstance(nb, dict)}
+        return {str(nb.get("title") or nb.get("name") or "") for nb in notebooks if isinstance(nb, dict)}
 
-    def _planned_notebooks(self) -> list[dict]:
+    def _planned_notebooks(self) -> list[dict[str, str]]:
         out = []
         for domain, notebooks in NBM_NEW_NOTEBOOKS.items():
             for nb in notebooks:
@@ -66,14 +66,14 @@ class NotebookLMCreatePhase(Phase):
             out.append(f"  {mark}  {nb['domain']:14s} {nb['name']}  ({nb['topic']})")
         return "\n".join(out)
 
-    def _write_manifest(self, planned: list[dict], existing: set[str]) -> tuple[Path, list[dict]]:
+    def _write_manifest(self, planned: list[dict[str, str]], existing: set[str]) -> tuple[Path, list[dict[str, Any]]]:
         manifest_path = self.ctx.state_path.parent / "obsidian-restructure-notebooklm-manifest.json"
         manifest = [{**nb, "already_exists": nb["name"] in existing} for nb in planned]
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
         self.ctx.trace(f"  notebooklm manifest → {manifest_path}")
         return manifest_path, manifest
 
-    def _cli_absent_result(self, manifest_path: Path, to_create: list[dict]) -> PhaseResult:
+    def _cli_absent_result(self, manifest_path: Path, to_create: list[dict[str, Any]]) -> PhaseResult:
         self.ctx.trace("  notebooklm CLI not on PATH — manifest emitted, manual create needed")
         for nb in to_create:
             self.ctx.trace(f"    pending: notebooklm create '{nb['name']}'  # {nb['topic']}")
@@ -83,7 +83,7 @@ class NotebookLMCreatePhase(Phase):
             artifacts={"manifest": str(manifest_path), "to_create": [nb["name"] for nb in to_create]},
         )
 
-    def _create_notebooks(self, nb_bin: str, to_create: list[dict]) -> tuple[list[str], list[dict]]:
+    def _create_notebooks(self, nb_bin: str, to_create: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, str]]]:
         created = []
         failed = []
         for nb in to_create:

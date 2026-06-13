@@ -18,9 +18,10 @@ Override path (intentional friction, not a bypass):
     1. Read the deny reason in the conversation.
     2. Verify the target manually (file path, table name, branch).
     3. If the destructive action is legitimate, create the marker file
-       shown in the deny message:  touch /tmp/claude-destructive-approved-YYYYMMDD-HH.marker
-    4. Retry — the hook then permits any pattern match for the rest of
-       the current calendar hour. Marker auto-expires.
+       shown in the deny message:  touch /tmp/claude-destructive-approved-<hash>.marker
+    4. Retry — the marker is bound to THIS exact command (its scrubbed hash)
+       and auto-expires after ~120s; a marker created for one command does NOT
+       authorize any other command.
 
 This hook fails OPEN: any internal exception (bad JSON, regex error, etc.)
 exits 0 silently so workflow is never blocked by the hook itself crashing.
@@ -31,13 +32,15 @@ Add new patterns by appending (regex, reason) tuples to DESTRUCTIVE_PATTERNS.
 
 from __future__ import annotations
 
+import glob
+import hashlib
 import json
 import os
 import re
 import sys
 import tempfile
+import time
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Any, cast
 
 # (regex, human-readable reason). Each regex is matched case-insensitively
@@ -120,6 +123,8 @@ DESTRUCTIVE_PATTERNS: list[tuple[str, str]] = [
     ),
 ]
 
+MARKER_TTL_SECONDS = 120
+
 
 def respond_and_exit(decision: str, reason: str) -> None:
     """Emit a PreToolUse JSON response and exit cleanly."""
@@ -162,6 +167,10 @@ def scrub_text_arguments(command: str) -> str:
     return command
 
 
+def _command_hash(scanned: str) -> str:
+    return hashlib.sha256(scanned.encode("utf-8")).hexdigest()[:16]
+
+
 def _load_payload(raw: str) -> Mapping[str, Any] | None:
     try:
         data = json.loads(raw) if raw else {}
@@ -182,28 +191,36 @@ def _bash_command(data: Mapping[str, Any]) -> str | None:
     return command if isinstance(command, str) and command else None
 
 
-def _approval_marker(now: datetime) -> str:
+def _approval_marker(cmd_hash: str) -> str:
     return os.path.join(
         tempfile.gettempdir(),
-        f"claude-destructive-approved-{now.strftime('%Y%m%d-%H')}.marker",
+        f"claude-destructive-approved-{cmd_hash}.marker",
     )
 
 
-def _marker_valid(path: str, now: datetime) -> bool:
+def _marker_valid(path: str) -> bool:
     try:
-        mtime = datetime.fromtimestamp(os.path.getmtime(path))
-        return (
-            mtime.year == now.year
-            and mtime.month == now.month
-            and mtime.day == now.day
-            and mtime.hour == now.hour
-        )
+        age = time.time() - os.path.getmtime(path)
+        return 0 <= age <= MARKER_TTL_SECONDS
     except OSError:
         return False
 
 
-def _respond_to_match(reason: str, marker: str, now: datetime) -> None:
-    if os.path.isfile(marker) and _marker_valid(marker, now):
+def _sweep_stale_markers(now_epoch: float) -> None:
+    try:
+        pattern = os.path.join(tempfile.gettempdir(), "claude-destructive-approved-*.marker")
+        for p in glob.glob(pattern):
+            try:
+                if now_epoch - os.path.getmtime(p) > MARKER_TTL_SECONDS:
+                    os.unlink(p)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _respond_to_match(reason: str, marker: str) -> None:
+    if os.path.isfile(marker) and _marker_valid(marker):
         respond_and_exit(
             "allow",
             f"destructive pattern matched ({reason}) but evidence marker present at {marker} — proceeding.",
@@ -219,14 +236,14 @@ def _respond_to_match(reason: str, marker: str, now: datetime) -> None:
     )
 
 
-def _scan_destructive_patterns(scanned: str, marker: str, now: datetime) -> None:
+def _scan_destructive_patterns(scanned: str, marker: str) -> None:
     for pattern, reason in DESTRUCTIVE_PATTERNS:
         try:
             matched = re.search(pattern, scanned, re.IGNORECASE)
         except re.error:
             continue
         if matched:
-            _respond_to_match(reason, marker, now)
+            _respond_to_match(reason, marker)
 
 
 def main() -> None:
@@ -239,9 +256,11 @@ def main() -> None:
     if command is None:
         print("[hook:guard-destructive] fail-open: not a Bash tool call or missing command key", file=sys.stderr)
         sys.exit(0)
-    now = datetime.now()
     scanned = scrub_text_arguments(command)
-    _scan_destructive_patterns(scanned, _approval_marker(now), now)
+    cmd_hash = _command_hash(scanned)
+    marker = _approval_marker(cmd_hash)
+    _sweep_stale_markers(time.time())
+    _scan_destructive_patterns(scanned, marker)
     sys.exit(0)
 
 

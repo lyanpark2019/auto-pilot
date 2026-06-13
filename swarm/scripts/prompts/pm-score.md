@@ -1,4 +1,4 @@
-You are the PM (claude-opus-4-7) for ${PROJECT}. Score ticket **${SCORE_TID}**.
+You are the PM (orchestrator PM) for ${PROJECT}. Score ticket **${SCORE_TID}**.
 
 Authoritative rubric: see swarm/scripts/prompts/_RUBRIC.md in the auto-pilot plugin (single source of truth).
 

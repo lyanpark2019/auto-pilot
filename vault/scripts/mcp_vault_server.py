@@ -223,7 +223,7 @@ def handle(req: dict[str, Any]) -> None:
     elif method == "tools/list":
         _respond(rid, {"tools": TOOLS})
     elif method == "tools/call":
-        name = params.get("name")
+        name = str(params.get("name") or "")
         args = params.get("arguments") or {}
         fn = DISPATCH.get(name)
         if not fn:
