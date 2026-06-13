@@ -59,15 +59,78 @@ for m in WRITE_VERB_RE.finditer(output_text):
         claimed_paths.append(p)
 
 missing = [p for p in claimed_paths if not os.path.exists(p)]
-if not missing:
-    sys.exit(0)
-
 for p in missing:
     print(
         f"[subagent-deliverable-check] WARNING: subagent claimed to write \x27{p}\x27 "
         f"but path does not exist on disk.",
         file=sys.stderr,
     )
+
+# --- Check (a): DONE-without-verify-evidence ---
+# If the report claims DONE but carries no verify-log SHA-256, warn.
+# A valid SHA-256 is 64 lowercase hex chars.  Only match a 64-hex that
+# appears on a line containing a "Verify log SHA-256:" label (case-insensitive,
+# bold markers allowed).  Bare hex tokens anywhere in the report do NOT count
+# — they are too broad and suppress the warning on stray content hashes,
+# diff identifiers, or context-bundle SHAs.
+DONE_STATUS_RE = re.compile(
+    r"^\*{0,2}Status\*{0,2}:?\*{0,2}\s*\*{0,2}DONE\*{0,2}\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+SHA256_RE = re.compile(
+    r"^\*{0,2}Verify\s+log\s+SHA-?256\*{0,2}\s*:.*\b([0-9a-f]{64})\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+is_done = bool(DONE_STATUS_RE.search(output_text))
+has_sha = bool(SHA256_RE.search(output_text))
+
+if is_done and not has_sha:
+    print(
+        "[subagent-deliverable-check] WARNING: report marked DONE but carries no"
+        " verify-log SHA-256 (worker.md rule 9) — verify evidence missing;"
+        " re-verify before trusting \x27completed\x27.",
+        file=sys.stderr,
+    )
+
+# --- Check (b): tests-required-but-untouched ---
+# Best-effort: only fires when AUTO_PILOT_SCOPE_FILES env var is set and
+# includes a test-file path segment.  If the DONE report changes no test
+# file, warn.
+scope_files = os.environ.get("AUTO_PILOT_SCOPE_FILES", "")
+if is_done and scope_files:
+    TEST_PATH_RE = re.compile(
+        r"(?:^|[\s,:/])tests/|test_[^/\s,]+\.py|[^/\s,]+_test\.py",
+        re.IGNORECASE,
+    )
+    scope_has_tests = bool(TEST_PATH_RE.search(scope_files))
+    if scope_has_tests:
+        # Only look for test paths inside structured sections of the report:
+        #   1. The "Files changed:" block — lines from that header until the
+        #      next blank line or next bold header.
+        #   2. "+++ b/..." lines inside a ```diff``` fenced block.
+        # Prose mentions (e.g. "I did NOT touch tests/test_foo.py") must NOT
+        # suppress the warning — they are too imprecise.
+        files_changed_block = re.search(
+            r"\*{0,2}Files\s+changed\*{0,2}:?\*{0,2}[^\n]*\n((?:[^\n]+\n)*?)(?:\n|\*{2}|\Z)",
+            output_text,
+            re.IGNORECASE,
+        )
+        files_section = files_changed_block.group(0) if files_changed_block else ""
+        diff_plus_lines = "\n".join(
+            line for line in output_text.splitlines() if line.startswith("+++ b/")
+        )
+        report_has_test = bool(
+            TEST_PATH_RE.search(files_section) or TEST_PATH_RE.search(diff_plus_lines)
+        )
+        if not report_has_test:
+            print(
+                "[subagent-deliverable-check] WARNING: contract scope includes test"
+                " files but the DONE report changed none — possible missing tests"
+                " (worker.md rule 5).",
+                file=sys.stderr,
+            )
+
 sys.exit(0)
 ' 2>&1 || true
 
