@@ -39,6 +39,9 @@ jobs:
       - name: doc reference integrity (file:line citations in docs)
         run: python3 scripts/docs/check_doc_reference_integrity.py
 
+      - name: asset count drift (hardcoded counts in CLAUDE.md vs live filesystem)
+        run: python3 scripts/docs/check_asset_counts.py
+
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
 
