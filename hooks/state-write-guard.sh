@@ -47,7 +47,7 @@ case "$tool_name" in
     fi
 
     file_path=$(printf '%s' "$input" | python3 -c '
-import json, sys
+import json, os, sys
 try:
     d = json.load(sys.stdin)
 except (json.JSONDecodeError, ValueError):
@@ -57,7 +57,13 @@ ti = d.get("tool_input")
 if not isinstance(ti, dict):
     print("__PARSE_FAIL__")
     sys.exit(0)
-print(ti.get("file_path", ""))
+raw = ti.get("file_path", "")
+# Normalize path to collapse ../ traversal before pattern matching.
+# This closes the path-traversal bypass:
+#   /repo/.planning/auto-pilot/../auto-pilot/state.json
+# normalizes to:
+#   /repo/.planning/auto-pilot/state.json  ← caught by the guard below
+print(os.path.normpath(raw) if raw else "")
 ')
 
     if [ "$file_path" = "__PARSE_FAIL__" ]; then
@@ -84,41 +90,92 @@ print(ti.get("file_path", ""))
       exit 0
     fi
 
-    cmd=$(printf '%s' "$input" | python3 -c '
-import json, sys
+    # Extract command string — fail-closed on parse failures.
+    # shellcheck disable=SC2016 # python heredoc — $ and backtick are regex literals
+    verdict=$(printf '%s' "$input" | python3 -c '
+import json, os, re, shlex, sys
+
 try:
     d = json.load(sys.stdin)
 except (json.JSONDecodeError, ValueError):
-    print("__PARSE_FAIL__")
+    print("BLOCK:unparseable JSON")
     sys.exit(0)
+
 ti = d.get("tool_input")
 if not isinstance(ti, dict):
-    print("__PARSE_FAIL__")
+    print("BLOCK:non-dict tool_input")
     sys.exit(0)
+
 cmd_val = ti.get("command", "")
 if not isinstance(cmd_val, str):
-    print("__PARSE_FAIL__")
+    print("BLOCK:non-string command")
     sys.exit(0)
-print(cmd_val)
+
+cmd = cmd_val
+
+# --- 1. Eval-construct detection (mirrors branch-lock.sh strategy) ---
+# Fail CLOSED on command-substitution $(...)/$VAR/${VAR}, backtick, eval,
+# sh/bash/zsh -c.  Any of these in the command string is treated as a
+# potential apply_to_main bypass — static analysis cannot resolve it.
+# \x27 = single-quote; avoids bash string-nesting issues in this Python block.
+_eval_construct = re.search(r"\$[\w({\x27\"]|`|\beval\b|\b(?:ba|z)?sh\s+-c\b", cmd)
+if _eval_construct:
+    print("BLOCK:eval-construct")
+    sys.exit(0)
+
+# --- 2. Normalize separators and tokenize ---
+# Strip subshell / brace-group / compound-separator metacharacters so a
+# wrapped invocation tokenizes the same as a bare one (mirrors branch-lock.sh).
+sanitized = re.sub(r"[(){}]", " ", cmd)
+sanitized = re.sub(r"&&|\|\||[;&|\n]", " ", sanitized)
+
+try:
+    tokens = shlex.split(sanitized)
+except ValueError:
+    # Unbalanced quotes — fail closed.
+    print("BLOCK:shlex-unbalanced-quotes")
+    sys.exit(0)
+
+# --- 3. Guard git am/apply/format-patch ---
+# These verbs apply patches directly to the working tree, bypassing
+# WorktreeManager.apply_to_main.  git allows intermediate value-taking flags
+# (-C <path>, -c <name=value>) before the subcommand; we skip those pairs
+# correctly so `git -C /repo am x.mbox` is still caught.
+GUARDED_VERBS = {"am", "apply", "format-patch"}
+GIT_VALUE_FLAGS = {"-C", "-c"}
+
+for i, tok in enumerate(tokens):
+    basename = os.path.basename(tok)
+    if basename != "git":
+        continue
+    j = i + 1
+    while j < len(tokens):
+        t = tokens[j]
+        if t in GIT_VALUE_FLAGS:
+            j += 2  # skip flag AND its value token
+        elif t.startswith("-"):
+            j += 1  # other flags (no value token)
+        else:
+            break   # found the subcommand
+    if j < len(tokens) and tokens[j] in GUARDED_VERBS:
+        print("BLOCK:git-apply-verb:" + tokens[j])
+        sys.exit(0)
+
+print("ALLOW")
 ')
 
-    if [ "$cmd" = "__PARSE_FAIL__" ]; then
-      echo "auto-pilot: BLOCKED state-write-guard Bash — unparseable or non-dict tool_input (fail-closed)" >&2
-      exit 2
-    fi
-
-    # Guard git am / apply / format-patch: these verbs apply patches directly to
-    # the working tree, bypassing WorktreeManager.apply_to_main.
-    # git allows intermediate -flag [value] pairs (e.g. `git -C /repo am x.mbox`),
-    # so the regex allows zero or more flag+optional-value groups before the verb.
-    # ACCEPTED TRADEOFF: `git apply --check`/`--stat` and `git format-patch` are
-    # technically read-only; guarded here anyway as manual apply_to_main-bypass
-    # attempts.  Set AUTO_PILOT_ALLOW_MAIN_MUTATE=1 for the rare legit manual case.
-    re_main='(/[^ ]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+(am|apply|format-patch)([[:space:]]|$)'
-    if printf '%s' "$cmd" | grep -qE "(^|[[:space:]]|/)$re_main"; then
-      echo "auto-pilot: BLOCKED Bash \$ROOT-mutating git verb — must go through WorktreeManager.apply_to_main (set AUTO_PILOT_ALLOW_MAIN_MUTATE=1 to override): $cmd" >&2
-      exit 2
-    fi
+    case "$verdict" in
+      ALLOW) ;;
+      BLOCK:*)
+        echo "auto-pilot: BLOCKED Bash \$ROOT-mutating git verb — must go through WorktreeManager.apply_to_main (set AUTO_PILOT_ALLOW_MAIN_MUTATE=1 to override): ${verdict#BLOCK:}" >&2
+        exit 2
+        ;;
+      *)
+        # Unexpected verdict — fail closed.
+        echo "auto-pilot: BLOCKED state-write-guard Bash — unexpected verdict: $verdict (fail-closed)" >&2
+        exit 2
+        ;;
+    esac
     ;;
 esac
 

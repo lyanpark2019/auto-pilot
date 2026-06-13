@@ -175,6 +175,53 @@ CASES: list[tuple[str, str, str]] = [
             "tool_input": {"command": "AUTO_PILOT_ALLOW_MAIN_MUTATE=1 git am patch.mbox"},
         }),
     ),
+    # --- Hardening payloads: separator-bypass and path-traversal ---
+
+    # P13: ;-adjacent separator hides git am
+    (
+        "Bash true;git am p.mbox (;-adjacent) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "true;git am p.mbox"},
+        }),
+    ),
+    # P14: &&-adjacent separator hides git apply
+    (
+        "Bash true&&git apply p.patch (&&-adjacent) → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "true&&git apply p.patch"},
+        }),
+    ),
+    # P15: subshell wrapping hides git am
+    (
+        "Bash (git am p.mbox) subshell → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "(git am p.mbox)"},
+        }),
+    ),
+    # P16: command-substitution eval-construct → fail-closed (DENY)
+    (
+        "Bash x=$(git apply p.patch) eval-construct → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": "x=$(git apply p.patch)"},
+        }),
+    ),
+    # P17: path-traversal ../ normalized before pattern match → DENY
+    (
+        "Edit /repo/.planning/auto-pilot/../auto-pilot/state.json path-traversal → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/.planning/auto-pilot/../auto-pilot/state.json"},
+        }),
+    ),
 ]
 
 # Case 4 and case 8 need env overrides injected at runtime; wire them here.
