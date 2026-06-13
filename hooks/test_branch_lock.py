@@ -253,10 +253,20 @@ def main() -> None:
             "AUTO_PILOT_MAIN_OK=1 env bypass", "ALLOW",
             "git push origin main", main_repo,
             env_extra={"AUTO_PILOT_MAIN_OK": "1"}))
-        # AUTO_PILOT_MAIN_OK command-prefix bypass.
+        # cmd-prefix is NOT a self-grant (security regression pin).
         results.append(run_case(
-            "AUTO_PILOT_MAIN_OK=1 cmd-prefix bypass", "ALLOW",
+            "AUTO_PILOT_MAIN_OK=1 cmd-prefix is NOT a self-grant", "DENY",
             "AUTO_PILOT_MAIN_OK=1 git push origin main", main_repo))
+        # Active run without real token → DENY.
+        results.append(run_case(
+            "active run (HEADLESS=1) no token → DENY", "DENY",
+            "git push origin main", main_repo,
+            env_extra={"AUTO_PILOT_HEADLESS": "1"}))
+        # Active run with real token → ALLOW.
+        results.append(run_case(
+            "active run (HEADLESS=1) + real token → ALLOW", "ALLOW",
+            "git push origin main", main_repo,
+            env_extra={"AUTO_PILOT_HEADLESS": "1", "AUTO_PILOT_MAIN_OK": "1"}))
         # Non-push/commit git command → ALLOW (no false fire).
         results.append(run_case(
             "git status (non push/commit)", "ALLOW",

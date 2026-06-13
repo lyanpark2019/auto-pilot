@@ -304,31 +304,28 @@ When `WorktreeManager.apply_to_main` returns `ApplyResult(status='conflict')`:
 ## Reviewer dispatch (v1, PR3)
 
 ### Serial path (single reviewer)
+Dispatch through `scripts/_reviewer_wrapper.spawn` — the SOLE reviewer-dispatch path. It builds an ISOLATED env dict per subprocess (`_reviewer_env`, `scripts/_reviewer_wrapper.py:178`), so the PM NEVER mutates process-global `os.environ`. A single reviewer is just `wait_all` over a one-element handle list:
 ```python
+import _reviewer_wrapper
 ticket = _dispatch.prepare_subagent_ticket(
     contract_dir=contract_dir, worktree=worktree,
     subagent_role="codex-reviewer", diff_path=frozen_diff,
 )
-prior = (os.environ.get("AUTO_PILOT_SUBAGENT_ROLE"),
-         os.environ.get("AUTO_PILOT_OUTPUT_DIR"))
-os.environ["AUTO_PILOT_SUBAGENT_ROLE"] = "codex-reviewer"
-os.environ["AUTO_PILOT_OUTPUT_DIR"]    = str(contract_dir / "outputs/codex-reviewer")
-try:
-    Agent(subagent_type="auto-pilot-codex-reviewer",
-          prompt=f"TICKET={ticket}\ncontract_dir={contract_dir}\n"
-                 "Read ticket. Refuse if ticket_sha mismatch.")
-finally:
-    for k, v in zip(("AUTO_PILOT_SUBAGENT_ROLE", "AUTO_PILOT_OUTPUT_DIR"), prior):
-        if v is None: os.environ.pop(k, None)
-        else: os.environ[k] = v
-
-_dispatch.assert_reviewer_was_scoped(repo_root, worktree,
-                                      contract_dir / "outputs/codex-reviewer")
+out_dir = contract_dir / "outputs/codex-reviewer"
+handle = _reviewer_wrapper.spawn(
+    role="codex-reviewer", ticket=ticket, output_dir=out_dir,
+    allowed_tools="Read,Grep,Glob,Bash,Write",
+    disallowed_tools="WebFetch,WebSearch",
+)
+_reviewer_wrapper.wait_all([handle], timeout_sec=1800)
+_dispatch.assert_reviewer_was_scoped(repo_root, worktree, out_dir)
 outcome = _dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec=1800)
 ```
 
+(prepare_subagent_ticket / assert_reviewer_was_scoped / collect_round_outcome kwargs verified against scripts/_dispatch.py:261-269,444,423; spawn kwargs against scripts/_reviewer_wrapper.py:205-206.)
+
 ### Parallel path (codex + claude + specialists simultaneously)
-PM env-injection is process-global → use `scripts/_reviewer_wrapper.py` which spawns each reviewer as `claude -p` subprocess with isolated env:
+Same mechanism, fanned out — `spawn` is the sole reviewer-dispatch path; it isolates env per subprocess (`_reviewer_env`) so concurrent dispatches never race on process-global `os.environ`:
 
 ```python
 import _reviewer_wrapper

@@ -18,6 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from typing import Any
+
 from ._base import Phase, PhaseResult
 from ._mapping import DOMAINS, PASS_THRESHOLD, MAX_VAULT_BUILD_ROUNDS
 
@@ -49,7 +51,7 @@ class VaultBuildPerDomainPhase(Phase):
     name = "6_vault_build_per_domain"
     deps = ["5_new_vault_skeletons"]
 
-    def _build_manifest(self) -> list[dict]:
+    def _build_manifest(self) -> list[dict[str, Any]]:
         """One entry per (domain × sub-project).
 
         Vault structure target:  <domain-Vault>/_sub-projects/<sub-name>/...
@@ -148,7 +150,7 @@ class VaultBuildPerDomainPhase(Phase):
                     _warn(f"phase06: failed to convert gap match '{m.group(1)}': {type(exc).__name__}: {exc}")
         return None
 
-    def _build_prompt(self, entry: dict) -> str:
+    def _build_prompt(self, entry: dict[str, Any]) -> str:
         return (
             f"Run the vault-builder plugin's /vault-build command to document a project.\n\n"
             f"Project path: {entry['input_repo']}\n"
@@ -173,13 +175,13 @@ class VaultBuildPerDomainPhase(Phase):
             cmd.extend(["--max-budget-usd", str(PER_DOMAIN_BUDGET_USD)])
         return cmd
 
-    def _trace_execute_mode(self, entry: dict) -> None:
+    def _trace_execute_mode(self, entry: dict[str, Any]) -> None:
         if PER_DOMAIN_BUDGET_USD > 0:
             self.ctx.trace(f"  exec: claude -p (vault-build {entry['key']}) --max-budget {PER_DOMAIN_BUDGET_USD}")
         else:
             self.ctx.trace(f"  exec: claude -p (vault-build {entry['key']}) [subscription mode]")
 
-    def _run_claude_cmd(self, cmd: list[str]) -> dict:
+    def _run_claude_cmd(self, cmd: list[str]) -> dict[str, Any]:
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=PER_DOMAIN_TIMEOUT_SEC)
             return {
@@ -190,11 +192,11 @@ class VaultBuildPerDomainPhase(Phase):
         except subprocess.TimeoutExpired:
             return {"rc": -1, "stdout_tail": "", "stderr_tail": f"timeout after {PER_DOMAIN_TIMEOUT_SEC}s"}
 
-    def _execute_one(self, claude_bin: str, entry: dict) -> dict:
+    def _execute_one(self, claude_bin: str, entry: dict[str, Any]) -> dict[str, Any]:
         self._trace_execute_mode(entry)
         return self._run_claude_cmd(self._build_claude_cmd(claude_bin, self._build_prompt(entry)))
 
-    def _load_prior_entry_state(self) -> dict:
+    def _load_prior_entry_state(self) -> dict[str, Any]:
         try:
             prior = json.loads(self.ctx.state_path.read_text())
             entries = prior.get("phases", {}).get("6_vault_build_per_domain", {}).get("entries", {})
@@ -203,7 +205,7 @@ class VaultBuildPerDomainPhase(Phase):
             _warn(f"phase06: failed to load prior state from {self.ctx.state_path}: {type(exc).__name__}: {exc}")
             return {}
 
-    def _entry_state(self, entry: dict, prior_state: dict) -> dict:
+    def _entry_state(self, entry: dict[str, Any], prior_state: dict[str, Any]) -> dict[str, Any]:
         key = entry["key"]
         existing = prior_state.get(key, {})
         return {
@@ -221,7 +223,7 @@ class VaultBuildPerDomainPhase(Phase):
             "last_exec": existing.get("last_exec"),
         }
 
-    def _pending_entries(self, manifest: list[dict], entry_state: dict[str, dict]) -> list[dict]:
+    def _pending_entries(self, manifest: list[dict[str, Any]], entry_state: dict[str, Any]) -> list[dict[str, Any]]:
         pending = [e for e in manifest if entry_state[e["key"]]["status"] == "pending"]
         only = getattr(self.ctx, "only_domain", None)
         if not only:
@@ -230,7 +232,7 @@ class VaultBuildPerDomainPhase(Phase):
         self.ctx.trace(f"  filter: only_domain={sorted(allowed)}")
         return [e for e in pending if e["domain"] in allowed]
 
-    def _score_execution(self, entry: dict, result: dict) -> tuple[int | None, str]:
+    def _score_execution(self, entry: dict[str, Any], result: dict[str, Any]) -> tuple[int | None, str]:
         project = Path(entry["input_repo"])
         score = self._score_from_verify_report(project)
         if score is not None:
@@ -238,7 +240,7 @@ class VaultBuildPerDomainPhase(Phase):
         score = self._score_from_stdout(result.get("stdout_tail", ""))
         return score, "vault-build stdout" if score is not None else "unknown"
 
-    def _record_execution(self, entry: dict, entry_state: dict[str, dict], result: dict) -> None:
+    def _record_execution(self, entry: dict[str, Any], entry_state: dict[str, Any], result: dict[str, Any]) -> None:
         key = entry["key"]
         score, source = self._score_execution(entry, result)
         entry_state[key]["last_exec"] = result
@@ -253,7 +255,7 @@ class VaultBuildPerDomainPhase(Phase):
             entry_state[key]["status"] = "partial"
         self.ctx.trace(f"  {key:36s} score={score} ({source}) rc={result['rc']} → {entry_state[key]['status']}")
 
-    def _execute_pending_entries(self, manifest: list[dict], entry_state: dict[str, dict]) -> None:
+    def _execute_pending_entries(self, manifest: list[dict[str, Any]], entry_state: dict[str, Any]) -> None:
         claude_bin = shutil.which("claude")
         if not claude_bin:
             self.ctx.trace("  ! claude CLI not on PATH; cannot execute. Manifest emitted only.")
@@ -263,7 +265,7 @@ class VaultBuildPerDomainPhase(Phase):
         for entry in pending:
             self._record_execution(entry, entry_state, self._execute_one(claude_bin, entry))
 
-    def _phase_result(self, entry_state: dict[str, dict], manifest_path: Path) -> PhaseResult:
+    def _phase_result(self, entry_state: dict[str, Any], manifest_path: Path) -> PhaseResult:
         completed = sum(1 for d in entry_state.values() if d["status"] == "completed")
         skipped = sum(1 for d in entry_state.values() if d["status"] == "skipped")
         total = len(entry_state)

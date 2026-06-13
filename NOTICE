@@ -1,0 +1,52 @@
+auto-pilot
+Copyright 2026 lyanpark2019
+
+This product includes software developed by third parties.
+
+---
+
+## migrate-to-codex (Apache-2.0)
+
+This repository bundles a vendored fork of the migrate-to-codex skill
+from the openai/codex project, located at:
+
+  codex/skills/migrate-to-codex/
+
+Copyright 2024 OpenAI
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this file except in compliance with the License.  You may obtain
+a copy of the License at:
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+The full Apache-2.0 license text is retained in-tree at:
+
+  codex/skills/migrate-to-codex/LICENSE.txt
+
+---
+
+## Matt Pocock skills forks (MIT)
+
+This repository bundles vendored forks of the following skills from Matt
+Pocock's skills repository (https://github.com/mattpocock/skills), each
+licensed under the MIT License:
+
+  codex/skills/diagnose/
+  codex/skills/grill-with-docs/
+  codex/skills/handoff/
+  codex/skills/improve-codebase-architecture/
+  codex/skills/prototype/
+  codex/skills/tdd/
+  codex/skills/to-issues/
+  codex/skills/to-prd/
+  codex/skills/triage/
+  codex/skills/zoom-out/
+
+Each fork retains its upstream attribution and MIT license text in the
+`LICENSE-upstream.txt` file within the respective skill directory.
+
+---
+
+Per-fork upstream provenance pins (commit SHAs, dates, source URLs) are
+recorded in codex/UPSTREAM.md.

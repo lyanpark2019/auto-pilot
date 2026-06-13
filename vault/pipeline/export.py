@@ -22,7 +22,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import TextIO
+from typing import Any, Callable, TextIO
 
 if __package__ in (None, ""):  # script mode (python3 vault/pipeline/export.py …)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -136,7 +136,7 @@ def _write_index(vault: Path, project_name: str) -> None:
 
 
 def export_obsidian(repo: Path, vault_root: Path | None = None,
-                    doc_root: Path | None = None, project_name: str | None = None) -> dict:
+                    doc_root: Path | None = None, project_name: str | None = None) -> dict[str, Any]:
     """Upsert docs into Obsidian vault.
 
     Existing vault: preserve manual_edit pages, replace auto-managed ones.
@@ -171,7 +171,7 @@ def export_obsidian(repo: Path, vault_root: Path | None = None,
 # ──── NotebookLM exporter ─────────────────────────────────────────────────────
 
 
-def _resolve_or_create_notebook(project_name: str) -> tuple[dict | None, bool, str | None]:
+def _resolve_or_create_notebook(project_name: str) -> tuple[dict[str, Any] | None, bool, str | None]:
     """Return (notebook_dict, created, error_msg). On error, notebook is None."""
     rc, out, err = _run(["notebooklm", "list", "--json"])
     if rc < 0:
@@ -234,7 +234,7 @@ def _sync_sources(nb_id: str, sources: list[Path], repo: Path) -> int:
 
 
 def export_notebooklm(repo: Path, doc_root: Path | None = None,
-                      project_name: str | None = None, max_sources: int = 50) -> dict:
+                      project_name: str | None = None, max_sources: int = 50) -> dict[str, Any]:
     """Upsert NotebookLM notebook.
 
     Lookup by name; if missing, create. Then sync sources (markdown files).
@@ -266,7 +266,7 @@ def export_notebooklm(repo: Path, doc_root: Path | None = None,
 # ──── graphify exporter ───────────────────────────────────────────────────────
 
 
-def export_graphify(repo: Path, doc_root: Path | None = None) -> dict:
+def export_graphify(repo: Path, doc_root: Path | None = None) -> dict[str, Any]:
     """Export graphify artifacts."""
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or (repo / "docs")).expanduser().resolve()
@@ -294,15 +294,15 @@ def export_graphify(repo: Path, doc_root: Path | None = None) -> dict:
 
 
 def export_bases(repo: Path, vault_root: Path | None = None,
-                 project_name: str | None = None) -> dict:
+                 project_name: str | None = None) -> dict[str, Any]:
     """Emit kepano `.base` dashboards under the Obsidian vault."""
     # Local import to keep optional. Dual-mode: relative when imported as a
     # package, absolute via the __package__ sys.path guard in script mode
     # (a bare relative import here broke `python3 pipeline/export.py --export bases`).
-    if __package__:
-        from .bases import generate_bases
-    else:
-        from pipeline.bases import generate_bases
+    import importlib
+    _bases_mod = importlib.import_module(".bases" if __package__ else "pipeline.bases",
+                                         package=__package__ or None)
+    _gen_bases = _bases_mod.generate_bases
 
     repo = repo.expanduser().resolve()
     vault_root = (vault_root or DEFAULT_OBSIDIAN_ROOT).expanduser().resolve()
@@ -311,7 +311,7 @@ def export_bases(repo: Path, vault_root: Path | None = None,
     if not (vault / "wikitree").exists():
         return {"destination": "bases", "skipped": True,
                 "reason": f"vault missing wikitree/: {vault}"}
-    written = generate_bases(vault)
+    written = _gen_bases(vault)
     return {
         "destination": "bases",
         "vault": str(vault),
@@ -320,19 +320,19 @@ def export_bases(repo: Path, vault_root: Path | None = None,
 
 
 def export_canvas(repo: Path, vault_root: Path | None = None,
-                  project_name: str | None = None) -> dict:
+                  project_name: str | None = None) -> dict[str, Any]:
     """Emit graph-hub canvas under the Obsidian vault."""
     # Dual-mode import — same rationale as export_bases.
-    if __package__:
-        from .canvas import emit_graph_canvas
-    else:
-        from pipeline.canvas import emit_graph_canvas
+    import importlib
+    _canvas_mod = importlib.import_module(".canvas" if __package__ else "pipeline.canvas",
+                                          package=__package__ or None)
+    _emit_canvas = _canvas_mod.emit_graph_canvas
 
     repo = repo.expanduser().resolve()
     vault_root = (vault_root or DEFAULT_OBSIDIAN_ROOT).expanduser().resolve()
     project = project_name or repo.name
     vault = vault_root / project
-    out = emit_graph_canvas(vault)
+    out = _emit_canvas(vault)
     if out is None:
         return {"destination": "canvas", "skipped": True,
                 "reason": f"graph.json missing for vault {vault}"}
@@ -340,7 +340,7 @@ def export_canvas(repo: Path, vault_root: Path | None = None,
 
 
 def auto_graphify_update(repo: Path, global_tag: str | None = None,
-                          merge_global: bool = True) -> dict:
+                          merge_global: bool = True) -> dict[str, Any]:
     """Run graphify update on repo + optional global graph merge.
 
     Returns a dict describing each step's rc. Skips silently when graphify CLI
@@ -372,7 +372,7 @@ def auto_graphify_update(repo: Path, global_tag: str | None = None,
 # ──── Driver ──────────────────────────────────────────────────────────────────
 
 
-DESTINATIONS = {
+DESTINATIONS: dict[str, Callable[..., dict[str, Any]]] = {
     "obsidian": export_obsidian,
     "notebooklm": export_notebooklm,
     "graphify": export_graphify,
@@ -381,7 +381,7 @@ DESTINATIONS = {
 }
 
 
-def export_all(repo: Path, destinations: list[str], **opts) -> dict:
+def export_all(repo: Path, destinations: list[str], **opts: Any) -> dict[str, Any]:
     """Export all artifacts."""
     source_adapter = opts.pop("source_adapter", None)
     if source_adapter is None:
@@ -435,8 +435,8 @@ def _build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def _build_opts(args: argparse.Namespace) -> dict:
-    opts: dict = {}
+def _build_opts(args: argparse.Namespace) -> dict[str, Any]:
+    opts: dict[str, Any] = {}
     if args.doc_root:
         opts["doc_root"] = args.doc_root
     if args.obsidian_path:
@@ -457,7 +457,7 @@ def _write_output(content: str, out_path: Path | None) -> None:
         _emit(content)
 
 
-def _check_failures(results: dict) -> int:
+def _check_failures(results: dict[str, Any]) -> int:
     failed = sorted(
         d for d, r in results.items()
         if isinstance(r, dict) and (r.get("failed") or (r.get("error") and not r.get("skipped")))

@@ -1,8 +1,10 @@
 """Single source of truth: project ↔ vault ↔ NotebookLM mapping."""
 from __future__ import annotations
 
+from typing import Any
+
 # Domain → vault info
-DOMAINS = {
+DOMAINS: dict[str, dict[str, Any]] = {
     "sportic365": {
         "vault": "sportic365-Vault",
         "absorbs_vaults": ["Sportic", "SporTic365"],
@@ -94,7 +96,7 @@ NBM_GENERIC_KEEP = ["ai-libraries", "llm-research"]
 
 # NotebookLM live notebooks to create per domain (name → source URLs / topic).
 # Empty source list means "skeleton notebook only — user adds sources later".
-NBM_NEW_NOTEBOOKS = {
+NBM_NEW_NOTEBOOKS: dict[str, list[dict[str, str]]] = {
     "sportic365": [
         {"name": "sportic365-app-mobile", "topic": "React Native mobile architecture"},
         {"name": "sportic365-evolution", "topic": "feature evolution + experiments"},

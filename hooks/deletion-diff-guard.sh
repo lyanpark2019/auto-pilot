@@ -37,14 +37,14 @@ if ! printf '%s' "$cmd" | grep -qE '(^|[[:space:];|&])git[[:space:]]+push([[:spa
   exit 0
 fi
 
-# Bypass — hook env OR an explicit env-prefix on the command itself. The hook
-# process inherits the SESSION env, so `AUTO_PILOT_BIG_DELETE_OK=1 git push`
-# typed as a tool call never reaches the env check below; accept the literal
-# prefix in the command string as the operator-intent signal (r3 fix).
+# Bypass is honored ONLY from the real process/session env
+# (export AUTO_PILOT_BIG_DELETE_OK=1 before launching the session).
+# A tool-call command-string prefix such as
+# `AUTO_PILOT_BIG_DELETE_OK=1 git push` is NOT honored: the env-prefix in the
+# Bash command string never reaches the hook subprocess env, and accepting it
+# as a bypass string would make the guard self-grantable by any subagent that
+# prepends the literal token.
 if [[ "${AUTO_PILOT_BIG_DELETE_OK:-0}" == "1" ]]; then
-  exit 0
-fi
-if printf '%s' "$cmd" | grep -q 'AUTO_PILOT_BIG_DELETE_OK=1'; then
   exit 0
 fi
 
@@ -93,7 +93,7 @@ if [[ "$deletions" -gt 500 ]]; then
   # Check deletions > 3× insertions
   threshold=$(( insertions * 3 ))
   if [[ "$deletions" -gt "$threshold" ]]; then
-    deny "Large deletion detected: ${deletions} deletions vs ${insertions} insertions (>${threshold} threshold). Set AUTO_PILOT_BIG_DELETE_OK=1 to override."
+    deny "Large deletion detected: ${deletions} deletions vs ${insertions} insertions (>${threshold} threshold). Set AUTO_PILOT_BIG_DELETE_OK=1 in the session env (export, not a command prefix) to override."
   fi
 fi
 

@@ -25,9 +25,10 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 
-def load_rubric(plugin_root: Path):
+def load_rubric(plugin_root: Path) -> dict[str, Any]:
     """Load rubric data."""
     rubric_path = plugin_root / "templates" / "rubric.yaml"
     if not rubric_path.exists():
@@ -40,7 +41,8 @@ def load_rubric(plugin_root: Path):
         }
     try:
         import yaml
-        return yaml.safe_load(rubric_path.read_text())
+        result: dict[str, Any] = yaml.safe_load(rubric_path.read_text())
+        return result
     except ImportError:
         # parse minimal manually if pyyaml not available
         return {
@@ -51,7 +53,7 @@ def load_rubric(plugin_root: Path):
         }
 
 
-def read_scores(vault: Path) -> dict:
+def read_scores(vault: Path) -> dict[str, Any]:
     """Read both structural and content score states."""
     out = {"structural": None, "content": None}
     s = vault / "meta" / "score-state.json"
@@ -63,9 +65,9 @@ def read_scores(vault: Path) -> dict:
     return out
 
 
-def identify_gaps(scores: dict, rubric: dict) -> list:
+def identify_gaps(scores: dict[str, Any], rubric: dict[str, Any]) -> list[dict[str, Any]]:
     """Return list of (axis, dimension, current, max) where current < max."""
-    gaps = []
+    gaps: list[dict[str, Any]] = []
     for axis in ("structural", "content"):
         if not scores.get(axis):
             continue
@@ -97,7 +99,7 @@ def delta_watchdog(vault: Path, current_total: float, consecutive: int, min_delt
     return all(abs(d) < min_delta for d in deltas)
 
 
-def round_summary(round_num: int, scores_before: dict, scores_after: dict, ticket_summary: dict) -> str:
+def round_summary(round_num: int, scores_before: dict[str, Any], scores_after: dict[str, Any], ticket_summary: dict[str, Any]) -> str:
     """Provide the public round summary API."""
     s_before = scores_before.get("structural", {}).get("total", 0)
     s_after = scores_after.get("structural", {}).get("total", 0)
@@ -118,7 +120,7 @@ def round_summary(round_num: int, scores_before: dict, scores_after: dict, ticke
 """
 
 
-def stop_check(scores: dict, rubric: dict) -> tuple[bool, str]:
+def stop_check(scores: dict[str, Any], rubric: dict[str, Any]) -> tuple[bool, str]:
     """Provide the public stop check API."""
     s_pass = scores.get("structural", {}).get("total", 0) >= rubric["structural"]["pass_threshold"]
     c_pass = (
@@ -130,7 +132,7 @@ def stop_check(scores: dict, rubric: dict) -> tuple[bool, str]:
     return False, f"structural={scores.get('structural',{}).get('total','?')} content={scores.get('content',{}).get('total','?')}"
 
 
-def main():
+def main() -> None:
     """Run the pm-loop command-line entry point."""
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: pm_loop.py <vault-path>\n")

@@ -40,6 +40,7 @@ from typing import IO
 import _budget
 import _config
 import _prompts
+import _recover
 from _log import event
 from _state import STATE_DIR, STATE_FILE, State, load_state, save_state
 
@@ -379,6 +380,11 @@ def main(argv: list[str] | None = None) -> int:
     if not STATE_FILE.exists():
         event("loop.no_state_file")
         return 2
+
+    try:
+        _recover.run_recovery(repo_root=ROOT, state_dir=STATE_DIR)
+    except Exception as exc:  # noqa: BLE001
+        event("recover.skipped", error_type=type(exc).__name__)
 
     args.pid_baseline = _budget.count_claude_pids()
     event("loop.pid_baseline", pids=args.pid_baseline)

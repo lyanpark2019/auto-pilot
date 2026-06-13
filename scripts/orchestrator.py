@@ -574,6 +574,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
 
     import _promotion  # noqa: PLC0415
     _promotion.register_cli_subparsers(sub)
+    import _recover  # noqa: PLC0415
+    _recover.register_cli_subparsers(sub)
 
     return parser
 

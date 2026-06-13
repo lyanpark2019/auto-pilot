@@ -130,3 +130,26 @@ def test_phase_for_next_session_keeps_running_phase(loop_module):
     }
 
     assert loop_module.phase_for_next_session(state) == 1
+
+
+def test_main_runs_recovery_once_at_startup(loop_module, state_dir) -> None:
+    """main() calls _recover.run_recovery exactly once before the iteration loop."""
+    from unittest.mock import MagicMock
+
+    (state_dir / "state.json").write_text(json.dumps({
+        "status": "running",
+        "current_phase": 1,
+        "total_phases": 3,
+    }))
+
+    recovery_mock = MagicMock(
+        return_value={"reaped": [], "stale_am_cleared": False, "stale_am_error": None}
+    )
+
+    with patch.object(loop_module._recover, "run_recovery", recovery_mock), \
+         patch.object(loop_module, "run_claude_session", return_value=0), \
+         patch.object(loop_module, "git_head", return_value="abc123"), \
+         patch.object(loop_module, "stash_if_dirty", return_value=None):
+        loop_module.main(["--once"])
+
+    assert recovery_mock.call_count == 1

@@ -17,6 +17,28 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/state-write-guard.sh",
+            "description": "Deny direct Edit/Write to state.json outside _state.save_state (active only for worker/reviewer roles)",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/state-write-guard.sh",
+            "description": "Deny git am/apply/format-patch outside WorktreeManager.apply_to_main (active only for worker/reviewer roles)",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/worker-scope-gate.sh",
             "description": "Block worker agent edits outside AUTO_PILOT_SCOPE_FILES allowlist (no-op when role != worker or scope unset)",
             "timeout": 5

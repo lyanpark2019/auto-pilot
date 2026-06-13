@@ -44,6 +44,62 @@ def test_spawn_uses_isolated_env(monkeypatch, tmp_path):
     assert "AUTO_PILOT_SUBAGENT_ROLE" not in os.environ
 
 
+def test_spawn_never_mutates_process_global_env(monkeypatch, tmp_path):
+    """spawn must never add, remove, or change keys in os.environ."""
+    import os
+    import _reviewer_wrapper as rw
+
+    monkeypatch.delenv("AUTO_PILOT_SUBAGENT_ROLE", raising=False)
+    monkeypatch.delenv("AUTO_PILOT_OUTPUT_DIR", raising=False)
+
+    before = dict(os.environ)
+
+    captured_envs = []
+
+    def fake_popen(cmd, env, **kwargs):
+        captured_envs.append(env)
+
+        class P:
+            def __init__(self):
+                self.returncode = 0
+
+            def wait(self):
+                return 0
+
+            def poll(self):
+                return 0
+
+            def terminate(self):
+                pass
+
+        return P()
+
+    monkeypatch.setattr(rw.subprocess, "Popen", fake_popen)
+
+    rw.spawn(
+        role="codex-reviewer",
+        ticket=tmp_path / "t1.json",
+        output_dir=tmp_path / "o1",
+        allowed_tools="Read,Bash",
+        disallowed_tools="WebFetch",
+    )
+    rw.spawn(
+        role="claude-reviewer",
+        ticket=tmp_path / "t2.json",
+        output_dir=tmp_path / "o2",
+        allowed_tools="Read,Bash",
+        disallowed_tools="WebFetch",
+    )
+
+    assert "AUTO_PILOT_SUBAGENT_ROLE" not in os.environ
+    assert "AUTO_PILOT_OUTPUT_DIR" not in os.environ
+    assert dict(os.environ) == before
+
+    assert captured_envs[0]["AUTO_PILOT_SUBAGENT_ROLE"] == "codex-reviewer"
+    assert captured_envs[1]["AUTO_PILOT_SUBAGENT_ROLE"] == "claude-reviewer"
+    assert captured_envs[0] is not captured_envs[1]
+
+
 def test_wait_all_returns_when_all_done_markers_appear(monkeypatch, tmp_path):
     import _reviewer_wrapper as rw
 

@@ -14,7 +14,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = PLUGIN_ROOT / "templates" / "rubric.yaml"
@@ -63,7 +63,8 @@ def _load_max_pts() -> dict[str, int]:
 def _load_categories(vault_root: Path) -> list[str]:
     cats_path = vault_root / "meta" / "categories.json"
     if cats_path.exists():
-        return json.loads(cats_path.read_text())
+        result: list[str] = json.loads(cats_path.read_text())
+        return result
     return [
         d.name for d in vault_root.iterdir()
         if d.is_dir() and (d / "raw").exists() and not d.name.startswith(".")
@@ -248,7 +249,7 @@ def _score_conflict_dup(vault_root: Path, cats: list[str]) -> tuple[float, str]:
     return score, f"{len(spurious_dups)} spurious dup stems"
 
 
-def score_vault(vault_root: Path) -> dict:
+def score_vault(vault_root: Path) -> dict[str, Any]:
     """Score vault content against the rubric."""
     cats = _load_categories(vault_root)
 

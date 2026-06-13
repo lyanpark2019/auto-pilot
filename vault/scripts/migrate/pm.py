@@ -17,7 +17,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
@@ -43,9 +43,10 @@ def _warn(message: str) -> None:
     _write_line(sys.stderr, message)
 
 
-def _list_notebooks() -> list[dict]:
+def _list_notebooks() -> list[dict[str, Any]]:
     r = subprocess.run(["notebooklm", "list", "--json"], capture_output=True, text=True, timeout=30)
-    return json.loads(r.stdout).get("notebooks", [])
+    result: list[dict[str, Any]] = json.loads(r.stdout).get("notebooks", [])
+    return result
 
 
 def _source_count(nid: str) -> int:
@@ -58,7 +59,7 @@ def _source_count(nid: str) -> int:
         return -1
 
 
-def cmd_issue(args) -> int:
+def cmd_issue(args: Any) -> int:
     """Run the issue subcommand."""
     board = TicketBoard(BOARD_PATH)
     nbs = _list_notebooks()
@@ -90,7 +91,7 @@ def cmd_issue(args) -> int:
     return 0
 
 
-def cmd_status(args) -> int:
+def cmd_status(args: Any) -> int:
     """Run the status subcommand."""
     board = TicketBoard(BOARD_PATH)
     summary = board.round_summary(1)
@@ -102,7 +103,7 @@ def cmd_status(args) -> int:
     return 0
 
 
-def cmd_verify(args) -> int:
+def cmd_verify(args: Any) -> int:
     """Verify all delivered tickets — check dst source count vs expected."""
     board = TicketBoard(BOARD_PATH)
     delivered = [t for t in board.tickets.values() if t.status == TicketStatus.DELIVERED]
@@ -113,7 +114,7 @@ def cmd_verify(args) -> int:
     dst_id = delivered[0].contract["dst_id"]
     dst_now = _source_count(dst_id)
 
-    def verifier(t):
+    def verifier(t: Any) -> tuple[bool, str, float]:
         added_ids = t.verification.get("added_ids") if t.verification else None
         if not added_ids and t.deliverable_paths:
             added_ids = t.deliverable_paths
@@ -132,7 +133,7 @@ def cmd_verify(args) -> int:
     return 0
 
 
-def cmd_reissue(args) -> int:
+def cmd_reissue(args: Any) -> int:
     """Reset rejected tickets to pending so workers re-process (idempotent)."""
     board = TicketBoard(BOARD_PATH)
     rejected = [t for t in board.tickets.values() if t.status == TicketStatus.REJECTED]
@@ -148,7 +149,7 @@ def cmd_reissue(args) -> int:
     return 0
 
 
-def cmd_reset(args) -> int:
+def cmd_reset(args: Any) -> int:
     """Run the reset subcommand."""
     if BOARD_PATH.exists():
         BOARD_PATH.unlink()
@@ -173,7 +174,7 @@ def main() -> int:
     sub.add_parser("reset").set_defaults(func=cmd_reset)
 
     args = ap.parse_args()
-    return args.func(args)
+    return int(args.func(args))
 
 
 if __name__ == "__main__":

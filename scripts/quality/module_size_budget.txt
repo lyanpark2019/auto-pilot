@@ -30,6 +30,7 @@ tests/test_hooks_guards.py|640
 # cmd_ledger_append + cmd_ledger_rebalance (thin glue; all logic in _ledger.py)
 # + phase-end try/except wiring (~60 lines). fix/loop-residuals adds
 # cmd_resume (~22 lines, cap-recovery); duplicate approved-count loop removed
-# (gate_phase_end now returns the count directly). Cap 590 = current 585 + 5-line
-# headroom; no new subcommands without another ADR.
-scripts/orchestrator.py|590
+# (gate_phase_end now returns the count directly). Slice RES1 adds 2 lines
+# (_recover.register_cli_subparsers wiring; all logic in _recover.py).
+# Cap 595 = 591 current + 4 headroom.
+scripts/orchestrator.py|595

@@ -29,7 +29,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Callable
+from types import ModuleType
+from typing import Any, Callable
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -39,10 +40,11 @@ else:
     from pipeline import drift as drift_mod
     from pipeline import scan_code, scan_docs
 
+_yaml: ModuleType | None
 try:
-    import yaml
+    import yaml as _yaml
 except ImportError:
-    yaml = None
+    _yaml = None
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +53,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 # ──── Named verifiers ─────────────────────────────────────────────────────────
 
 
-def _v_hallucination(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
+def _v_hallucination(ctx: dict[str, Any], dim_cfg: dict[str, Any]) -> tuple[float, str]:
     """Score 30 minus 10 per claim_drift + symbol_drift entry (floor at 0)."""
     claim = len(ctx["drift"]["claim_drift"])
     sym = len(ctx["drift"]["symbol_drift"])
@@ -61,7 +63,7 @@ def _v_hallucination(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
     return score, f"{findings} findings (claim={claim}, symbol={sym}), score {score}"
 
 
-def _v_completeness(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
+def _v_completeness(ctx: dict[str, Any], dim_cfg: dict[str, Any]) -> tuple[float, str]:
     """Score scales linearly with covered_pct = 1 - gap / total_public_modules."""
     gap = len(ctx["drift"]["gap"])
     total = sum(1 for m, info in ctx["code"].items()
@@ -75,7 +77,7 @@ def _v_completeness(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
     return score, f"{total - gap}/{total} covered ({covered_pct:.0%})"
 
 
-def _v_cross_link(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
+def _v_cross_link(ctx: dict[str, Any], dim_cfg: dict[str, Any]) -> tuple[float, str]:
     """Score by % docs that have ≥N wikilinks."""
     n_min = int(dim_cfg.get("wikilinks_per_page_min", 3))
     docs = ctx["docs"]
@@ -86,7 +88,7 @@ def _v_cross_link(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
     return score, f"{passed}/{len(docs)} docs have ≥{n_min} wikilinks"
 
 
-def _v_examples(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
+def _v_examples(ctx: dict[str, Any], dim_cfg: dict[str, Any]) -> tuple[float, str]:
     """Total file:line citations across all docs vs threshold."""
     min_total = int(dim_cfg.get("file_line_citations_min", 10))
     total = sum(
@@ -97,7 +99,7 @@ def _v_examples(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
     return score, f"{total} file:line citations (target ≥{min_total})"
 
 
-def _v_structure(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
+def _v_structure(ctx: dict[str, Any], dim_cfg: dict[str, Any]) -> tuple[float, str]:
     """% docs with required frontmatter fields."""
     required = dim_cfg.get("frontmatter_required") or []
     docs = ctx["docs"]
@@ -111,7 +113,7 @@ def _v_structure(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
     return score, f"{passed}/{len(docs)} docs have all required fm fields: {required}"
 
 
-def _v_accuracy(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
+def _v_accuracy(ctx: dict[str, Any], dim_cfg: dict[str, Any]) -> tuple[float, str]:
     """Inverse of claim_drift ratio over total signatures referenced."""
     claim = len(ctx["drift"]["claim_drift"])
     # rough denominator = signatures across code
@@ -123,7 +125,7 @@ def _v_accuracy(ctx: dict, dim_cfg: dict) -> tuple[float, str]:
     return score, f"{total_sigs - claim}/{total_sigs} sigs accurate ({accuracy:.1%})"
 
 
-VERIFIERS: dict[str, Callable[[dict, dict], tuple[float, str]]] = {
+VERIFIERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], tuple[float, str]]] = {
     "hallucination": _v_hallucination,
     "completeness": _v_completeness,
     "cross_link": _v_cross_link,
@@ -136,14 +138,14 @@ VERIFIERS: dict[str, Callable[[dict, dict], tuple[float, str]]] = {
 # ──── Driver ──────────────────────────────────────────────────────────────────
 
 
-def verify(repo: Path, doc_root: Path | None = None, rubric_path: Path | None = None) -> dict:
+def verify(repo: Path, doc_root: Path | None = None, rubric_path: Path | None = None) -> dict[str, Any]:
     """Provide the public verify API."""
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or repo).expanduser().resolve()
     rubric_path = rubric_path or (PLUGIN_ROOT / "rubrics" / "code-docs.yaml")
-    if yaml is None:
+    if _yaml is None:
         raise RuntimeError("pyyaml required for verify.py")
-    rubric = yaml.safe_load(rubric_path.read_text())
+    rubric = _yaml.safe_load(rubric_path.read_text())
 
     ctx = {
         "code": scan_code.scan_tree(repo),
@@ -151,8 +153,10 @@ def verify(repo: Path, doc_root: Path | None = None, rubric_path: Path | None = 
         "drift": drift_mod.detect(repo, doc_root).to_dict(),
     }
 
-    results = {"rubric": str(rubric_path), "repo": str(repo), "dimensions": {}, "total": 0.0, "max": 0, "pass": False}
+    results: dict[str, Any] = {"rubric": str(rubric_path), "repo": str(repo), "dimensions": {}, "total": 0.0, "max": 0, "pass": False}
     pass_threshold = rubric.get("structural", {}).get("pass_threshold", 95)
+    running_total: float = 0.0
+    running_max: int = 0
 
     for dim_name, dim_cfg in (rubric.get("structural", {}).get("dimensions") or {}).items():
         verifier = VERIFIERS.get(dim_name)
@@ -161,14 +165,15 @@ def verify(repo: Path, doc_root: Path | None = None, rubric_path: Path | None = 
                 "score": 0.0, "max": dim_cfg.get("max", 10),
                 "detail": "no verifier registered — skipped (treated as zero)",
             }
-            results["max"] += dim_cfg.get("max", 10)
+            running_max += dim_cfg.get("max", 10)
             continue
         score, detail = verifier(ctx, {**dim_cfg.get("acceptance", {}), "max": dim_cfg.get("max", 10)})
         results["dimensions"][dim_name] = {"score": score, "max": dim_cfg.get("max", 10), "detail": detail}
-        results["total"] += score
-        results["max"] += dim_cfg.get("max", 10)
+        running_total += score
+        running_max += dim_cfg.get("max", 10)
 
-    results["total"] = round(results["total"], 1)
+    results["total"] = round(running_total, 1)
+    results["max"] = running_max
     results["pass"] = results["total"] >= pass_threshold
     results["pass_threshold"] = pass_threshold
     return results

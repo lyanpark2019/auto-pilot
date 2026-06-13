@@ -34,14 +34,17 @@ fi
 
 [[ -z "$cmd" ]] && exit 0
 
-# Bypass — hook env OR an explicit env-prefix on the command itself (the hook
-# process inherits the SESSION env, so a tool-call prefix never reaches the
-# check above; accept the literal token as operator intent — r3 fix, same
-# class as deletion-diff-guard).
+# Bypass is honored ONLY from the real process/session env
+# (export AUTO_PILOT_MAIN_OK=1 before launching the session).
+# A tool-call command-string prefix such as
+# `AUTO_PILOT_MAIN_OK=1 git push origin main` is NOT honored: the env-prefix
+# in the Bash command string never reaches the hook subprocess env, and
+# accepting it as a bypass string would make the guard self-grantable by any
+# subagent that prepends the literal token.  Under an active auto-pilot run
+# (AUTO_PILOT_HEADLESS=1 / HARNESS_HEADLESS=1) a push/commit without the
+# real env token is DENIED — already the behavior here since the deny() path
+# is the default for protected branches.
 if [[ "${AUTO_PILOT_MAIN_OK:-0}" == "1" ]]; then
-  exit 0
-fi
-if printf '%s' "$cmd" | grep -q 'AUTO_PILOT_MAIN_OK=1'; then
   exit 0
 fi
 
@@ -265,7 +268,7 @@ while IFS= read -r inv; do
       while IFS= read -r b; do
         lc_b=$(printf '%s' "$b" | tr '[:upper:]' '[:lower:]')
         if [[ "$lc_b" == "main" || "$lc_b" == "master" ]]; then
-          deny "Refusing git push --mirror/--all: repo contains protected branch '$b' (target: $target). Set AUTO_PILOT_MAIN_OK=1 to override."
+          deny "Refusing git push --mirror/--all: repo contains protected branch '$b' (target: $target). Set AUTO_PILOT_MAIN_OK=1 in the session env (export, not a command prefix) to override."
         fi
       done <<< "$all_branches"
       continue
@@ -282,7 +285,7 @@ while IFS= read -r inv; do
   # Case-insensitive comparison: Main/MAIN/MaIn all match.
   lc_branch=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]')
   if [[ "$lc_branch" == "main" || "$lc_branch" == "master" ]]; then
-    deny "Refusing git commit/push on protected branch '$branch' (target: $target). Set AUTO_PILOT_MAIN_OK=1 to override."
+    deny "Refusing git commit/push on protected branch '$branch' (target: $target). Set AUTO_PILOT_MAIN_OK=1 in the session env (export, not a command prefix) to override."
   fi
 done <<< "$invocations"
 

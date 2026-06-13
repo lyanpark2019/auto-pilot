@@ -23,6 +23,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
@@ -40,10 +41,11 @@ def log(msg: str) -> None:
     sys.stdout.flush()
 
 
-def _list_sources(nid: str) -> list[dict]:
+def _list_sources(nid: str) -> list[dict[str, Any]]:
     r = subprocess.run(["notebooklm", "source", "list", "-n", nid, "--json"],
                        capture_output=True, text=True, timeout=60)
-    return json.loads(r.stdout).get("sources", [])
+    result: list[dict[str, Any]] = json.loads(r.stdout).get("sources", [])
+    return result
 
 
 def _existing_titles(dst: str) -> set[str]:
@@ -55,7 +57,7 @@ def _existing_titles(dst: str) -> set[str]:
         return set()
 
 
-def _effective_url(source: dict) -> str | None:
+def _effective_url(source: dict[str, Any]) -> str | None:
     stype = str(source.get("type", "")).split(".")[-1].lower()
     url = source.get("url")
     raw_title = source.get("title", "")
@@ -66,7 +68,7 @@ def _effective_url(source: dict) -> str | None:
     return None
 
 
-def _source_fulltext(source: dict) -> str:
+def _source_fulltext(source: dict[str, Any]) -> str:
     full = subprocess.run(
         ["notebooklm", "source", "fulltext", source["id"], "--json"],
         capture_output=True,
@@ -74,7 +76,7 @@ def _source_fulltext(source: dict) -> str:
         timeout=60,
     )
     try:
-        return json.loads(full.stdout).get("content", "")
+        return str(json.loads(full.stdout).get("content", ""))
     except (json.JSONDecodeError, AttributeError) as exc:
         log(f"  ! fulltext JSON parse failed for source {source.get('id','?')}: {exc}")
         return ""
@@ -83,13 +85,14 @@ def _source_fulltext(source: dict) -> str:
 def _parse_added_source_id(stdout: str, title: str) -> str | None:
     try:
         data = json.loads(stdout)
-        return data.get("id") or data.get("source", {}).get("id")
+        val = data.get("id") or data.get("source", {}).get("id")
+        return str(val) if val is not None else None
     except (json.JSONDecodeError, AttributeError) as exc:
         log(f"  ! add-source JSON parse failed for {title[:60]}: {exc}")
         return None
 
 
-def _add_source(dst: str, source: dict, prefix: str) -> str | None:
+def _add_source(dst: str, source: dict[str, Any], prefix: str) -> str | None:
     """Add one source to dst notebook with title prefix."""
     title = f"{prefix} {source.get('title','')}".strip()
     base = ["notebooklm", "source", "add", "-n", dst, "--title", title, "--json"]
@@ -112,7 +115,7 @@ def _add_source(dst: str, source: dict, prefix: str) -> str | None:
 LOCK_PATH = Path.home() / ".vault-builder" / "migrate-tickets.lock"
 
 
-def _claim_next(board: TicketBoard):
+def _claim_next(board: TicketBoard) -> Any:
     """Pick a pending ticket atomically. fcntl exclusive lock prevents worker races."""
     import fcntl
 
@@ -130,7 +133,7 @@ def _claim_next(board: TicketBoard):
             fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
 
 
-def process(t) -> bool:
+def process(t: Any) -> bool:
     """Provide the public process API."""
     log(f"START {t.id}  src='{t.contract['src_title'][:50]}'")
     sources = _list_sources(t.contract["src_id"])
