@@ -65,7 +65,7 @@ def make_repo_with_upstream(tmp_dir: str) -> tuple[str, str]:
                    capture_output=True, text=True, env=env)
 
     # Init work repo
-    _git(work, "init", "-q")
+    _git(work, "init", "-q", "-b", "main")
     _git(work, "remote", "add", "origin", f"file://{bare}")
 
     # Seed a file with 700 lines so upstream has content to delete
@@ -100,7 +100,7 @@ def make_small_diff_repo(tmp_dir: str) -> str:
 
     subprocess.run(["git", "init", "--bare", "-q", bare], check=True,
                    capture_output=True, text=True, env=env)
-    _git(work, "init", "-q")
+    _git(work, "init", "-q", "-b", "main")
     _git(work, "remote", "add", "origin", f"file://{bare}")
 
     seed = Path(work) / "seed.txt"
