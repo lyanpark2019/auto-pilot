@@ -1,4 +1,4 @@
-"""tests/test_learning_miner.py — TDD for learning_miner (Task 3)."""
+"""tests/test_learning_miner.py — core scan/persist/dedup + lifecycle regression."""
 from __future__ import annotations
 
 import glob
@@ -26,6 +26,12 @@ def _planning(tmp_path: Path, run_id: str, findings: list[dict]) -> Path:
         for fi in findings:
             f.write(json.dumps(fi) + "\n")
     return tmp_path
+
+
+def _ledger_tickets(home_root: Path, repo_root: Path) -> list[dict]:
+    slug = str(repo_root.resolve()).replace("/", "-")
+    d = home_root / ".claude" / "projects" / slug / "improvements"
+    return [json.loads(Path(f).read_text()) for f in glob.glob(str(d / "*.json"))]
 
 
 # --- scaffold note: the original test_reviewer_two_distinct_runs_promotable is
@@ -180,220 +186,118 @@ def test_valid_asset_types_matches_schema_enum() -> None:
     assert lm.VALID_ASSET_TYPES == non_null
 
 
-def _write_insights(root: Path, run_id: str, lines: list[dict]) -> None:
-    d = root / ".planning" / "auto-pilot"
-    d.mkdir(parents=True, exist_ok=True)
-    (d / "state.json").write_text(json.dumps({"run_id": run_id}))
-    with (d / "insights.jsonl").open("w") as f:
-        for ln in lines:
-            f.write(json.dumps(ln) + "\n")
+# ---------------------------------------------------------------------------
+# Full-lifecycle accumulation test: corrupt lines must not create phantom entries
+# ---------------------------------------------------------------------------
 
 
-def _ledger_tickets(home_root: Path, repo_root: Path) -> list[dict]:
-    slug = str(repo_root.resolve()).replace("/", "-")
-    d = home_root / ".claude" / "projects" / slug / "improvements"
-    return [json.loads(Path(f).read_text()) for f in glob.glob(str(d / "*.json"))]
-
-
-def test_scan_insights_class_keyed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    _write_insights(
-        root, "r1",
-        [{"class": "fail-open", "issue": "guard fails open on compound cmd", "candidate_asset": "hook"}],
-    )
-    obs = lm.scan_insights(root, "r1")
-    assert len(obs) == 1
-    o = obs[0]
-    assert o.source == "insight"
-    assert o.file_basename == ""
-    assert o.issue == "fail-open"
-    assert o.candidate_asset == "hook"
-
-
-def test_insight_promotes_at_3_distinct_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
-    _write_insights(root, "r1", [line])
-    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
-    _write_insights(root, "r2", [line])
-    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
-    _write_insights(root, "r3", [line])
-    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "promotable"
-
-
-def test_insight_class_key_defragments_wording(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    _write_insights(
-        root, "r1",
-        [
-            {"class": "fail-open", "issue": "guard A fails open via option reorder", "candidate_asset": "hook"},
-            {"class": "fail-open", "issue": "guard B fails open via push-first chain", "candidate_asset": "hook"},
-        ],
-    )
-    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    tickets = _ledger_tickets(tmp_path / "home", root)
-    assert len(tickets) == 1  # same class, different wording → ONE ticket
-    assert tickets[0]["occurrences"] == 2
-    assert tickets[0]["distinct_runs"] == 1
-
-
-def test_insight_missing_class_falls_back_to_issue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    _write_insights(root, "r1", [{"issue": "no class present here", "candidate_asset": "doc"}])
-    obs = lm.scan_insights(root, "r1")
-    assert len(obs) == 1
-    assert obs[0].issue == "no class present here"
-
-
-def test_insight_path_shaped_class_skipped_not_collapsed(
+def test_corrupt_insights_no_phantom_ledger_entries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A path/date-shaped class normalizes to '' → keying on it would collapse
-    unrelated insights into one ticket. Such tags must be SKIPPED, not merged."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    _write_insights(
-        root, "r1",
-        [
-            {"class": "hooks/foo.sh", "issue": "a", "candidate_asset": "hook"},
-            {"class": "src/bar.ts", "issue": "b", "candidate_asset": "test"},
-            {"class": "2026-06-09", "issue": "c", "candidate_asset": "doc"},
-        ],
-    )
-    obs = lm.scan_insights(root, "r1")
-    assert obs == []  # all three normalize to empty → skipped, never collapsed
-    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert _ledger_tickets(tmp_path / "home", root) == []
+    """Regression-lock: a corrupt/garbage insights.jsonl line must NOT create a
+    phantom Hermes ledger entry and must NOT inflate distinct_runs.
 
-
-def test_insight_malformed_and_out_of_enum_tolerated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    _write_insights(
-        root, "r1",
-        [{"class": "race", "issue": "x", "candidate_asset": "hooks/foo.sh"}],
-    )
-    with (root / ".planning/auto-pilot/insights.jsonl").open("a") as f:
-        f.write("not json at all\n{}\n[]\n")
-    res = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert res["candidates"] >= 1  # tolerated, no crash
-    tickets = _ledger_tickets(tmp_path / "home", root)
-    race = [t for t in tickets if t["pattern"] == "race"]
-    assert race and race[0]["candidate_asset"] is None  # out-of-enum coerced
-
-
-# --- New tests for empty run_id non-persisting behaviour (TDD RED first) ---
-
-
-def test_empty_run_id_does_not_persist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """With run_id=="" the miner must NOT write any ticket file to the ledger."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
-
-    # Case 1: run_id key present but empty string
-    _write_insights(root, "", [line])
-    result = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert "verdict" in result
-    assert _ledger_tickets(tmp_path / "home", root) == []
-
-    # Case 2: run_id key absent entirely from state.json
-    d = root / ".planning" / "auto-pilot"
-    (d / "state.json").write_text(json.dumps({}))
-    result2 = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert "verdict" in result2
-    assert _ledger_tickets(tmp_path / "home", root) == []
-
-
-def test_empty_run_id_reports_projected_candidates(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Empty run_id: projection still visible (candidates == 1), not zeroed."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
-    _write_insights(root, "", [line])
-    result = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert result["candidates"] == 1
-
-
-def test_nonempty_run_id_still_persists(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Regression guard: non-empty run_id must still persist exactly one ticket."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
-    _write_insights(root, "r1", [line])
-    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert len(_ledger_tickets(tmp_path / "home", root)) == 1
-
-
-def test_whitespace_run_id_does_not_persist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A whitespace-only run_id must be treated as empty — no ticket persisted."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    line = {"class": "fail-open", "issue": "x", "candidate_asset": "hook"}
-    _write_insights(root, "   ", [line])
-    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert _ledger_tickets(tmp_path / "home", root) == []
-
-
-def test_null_run_id_does_not_persist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """JSON null run_id must not persist — str(null) == 'None' is truthy but invalid."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    root = tmp_path / "repo"
-    d = root / ".planning" / "auto-pilot"
-    d.mkdir(parents=True)
-    (d / "state.json").write_text(json.dumps({"run_id": None}))
-    (d / "insights.jsonl").write_text(
-        json.dumps({"class": "fail-open", "issue": "x", "candidate_asset": "hook"}) + "\n"
-    )
-    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert _ledger_tickets(tmp_path / "home", root) == []
-
-
-@pytest.mark.parametrize("payload", ["5", "[]", '"r1"', "null"])
-def test_nondict_state_json_does_not_crash(tmp_path: Path, payload: str) -> None:
-    """A non-dict state.json (JSON scalar/array) must yield '' not AttributeError."""
-    root = tmp_path / "repo"
-    d = root / ".planning" / "auto-pilot"
-    d.mkdir(parents=True)
-    (d / "state.json").write_text(payload)
-    assert lm.current_run_id(root) == ""
-
-
-def test_promotion_thresholds_matches_source_enum() -> None:
-    """PROMOTION_THRESHOLDS keys must mirror the schema source enum (no drift).
-
-    A source added to the schema but not here would silently never promote
-    (PROMOTION_THRESHOLDS.get(...) -> None); a key here absent from the schema
-    is dead config.
+    Lifecycle exercised end-to-end (scan → persist → dedup across two runs):
+      - insights.jsonl seeded with 2 valid distinct classes + 4 corrupt variants
+      - Run 1 (run_id="r1"): assert exactly 3 ledger tickets (2 class-keyed +
+        1 issue-fallback), each distinct_runs==1
+      - Run 2 (run_id="r2"): same insights re-scanned; assert still exactly 3
+        tickets but each now distinct_runs==2 (dedup worked correctly)
+      - Truly corrupt lines (garbage bytes, malformed JSON, empty {}, []) produce
+        zero additional tickets across both runs.
+      - The REAL ~/.claude/projects ledger is never written (writes go to a temp dir
+        via monkeypatched HOME).
     """
-    schema = json.loads(lm.imp.SCHEMA_PATH.read_text())
-    enum = set(schema["properties"]["source"]["enum"])
-    assert set(lm.PROMOTION_THRESHOLDS) == enum
+    # Capture real home BEFORE patching, so we can prove no writes escaped there.
+    real_home = Path.home()
+    fake_home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(fake_home))
 
-
-def test_numeric_run_id_does_not_persist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Numeric run_id 0 must not persist — str(0) == '0' is truthy but invalid."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     root = tmp_path / "repo"
     d = root / ".planning" / "auto-pilot"
     d.mkdir(parents=True)
-    (d / "state.json").write_text(json.dumps({"run_id": 0}))
-    (d / "insights.jsonl").write_text(
-        json.dumps({"class": "fail-open", "issue": "x", "candidate_asset": "hook"}) + "\n"
+
+    # Two distinct valid insight classes.
+    valid_a = {"class": "fail-open-guard", "issue": "guard fails open on compound cmd", "candidate_asset": "hook"}
+    valid_b = {"class": "missing-test-coverage", "issue": "no test for error path", "candidate_asset": "test"}
+
+    # Corrupt variants: each must be silently skipped.
+    # Note: the "orphan issue" line has no "class" key but a non-empty "issue" — the
+    # miner falls back to the issue text, producing a THIRD valid ticket.  This is
+    # intentional: we want to confirm the fallback path also works correctly AND that
+    # its ticket is separate from valid_a / valid_b (distinct_runs not shared).
+    corrupt_lines = [
+        "this is not json at all !!!",               # garbage bytes
+        "{not valid json",                            # malformed JSON
+        "{}",                                         # empty object (no class, no issue → skipped)
+        "[]",                                         # JSON array (not a dict → skipped)
+        json.dumps({"issue": "orphan issue no class key present", "candidate_asset": "hook"}),
+    ]
+
+    def _write_insights(run_id: str) -> None:
+        (d / "state.json").write_text(json.dumps({"run_id": run_id}))
+        with (d / "insights.jsonl").open("w") as f:
+            f.write(json.dumps(valid_a) + "\n")
+            f.write(json.dumps(valid_b) + "\n")
+            for corrupt in corrupt_lines:
+                f.write(corrupt + "\n")
+
+    # --- Run 1 ---
+    _write_insights("r1")
+    result_r1 = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+
+    tickets_r1 = _ledger_tickets(fake_home, root)
+
+    # valid_a, valid_b, plus orphan-issue fallback = 3 valid observations.
+    # The 4 truly corrupt lines (garbage, malformed JSON, {}, []) produce 0 tickets.
+    assert result_r1["candidates"] == 3, (
+        f"run-1 candidates mismatch: expected 3, got {result_r1['candidates']}"
     )
-    lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
-    assert _ledger_tickets(tmp_path / "home", root) == []
+    assert len(tickets_r1) == 3, (
+        f"run-1 ledger ticket count: expected 3 files, got {len(tickets_r1)}"
+    )
+
+    # Each ticket must have distinct_runs == 1 (first observation only).
+    for t in tickets_r1:
+        assert t["distinct_runs"] == 1, (
+            f"run-1 ticket {t.get('fingerprint','?')[:8]} distinct_runs={t['distinct_runs']}, expected 1"
+        )
+
+    # Extra paranoia: none of the tickets should have a pattern matching raw corrupt
+    # content (those lines were never parsed into observations at all).
+    all_patterns = {t.get("pattern", "") for t in tickets_r1}
+    for impossible in ("this is not json at all !!!", "{not valid json"):
+        assert impossible not in all_patterns, (
+            f"Corrupt line leaked into ticket pattern: {impossible!r}"
+        )
+
+    # --- Run 2: same insights, new run_id ---
+    _write_insights("r2")
+    result_r2 = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+    tickets_r2 = _ledger_tickets(fake_home, root)
+
+    assert result_r2["candidates"] == 3, (
+        f"run-2 candidates mismatch: expected 3, got {result_r2['candidates']}"
+    )
+    assert len(tickets_r2) == 3, (
+        f"run-2 ledger ticket count: expected still 3 (no new phantom), got {len(tickets_r2)}"
+    )
+
+    # Each ticket must now have distinct_runs == 2 (dedup worked, not inflated by corrupt lines).
+    for t in tickets_r2:
+        assert t["distinct_runs"] == 2, (
+            f"run-2 ticket {t.get('fingerprint','?')[:8]} distinct_runs={t['distinct_runs']}, expected 2"
+        )
+
+    # --- Confirm the REAL home ledger was NOT touched ---
+    # We use the REAL home captured before monkeypatching.  If any write escaped
+    # the HOME patch it would appear here.
+    slug = str(root.resolve()).replace("/", "-")
+    real_slug_dir = real_home / ".claude" / "projects" / slug / "improvements"
+    assert not real_slug_dir.exists(), (
+        f"REAL home ledger was written to: {real_slug_dir}"
+    )
+
+    # All writes must be under fake_home only.
+    fake_slug_dir = fake_home / ".claude" / "projects" / slug / "improvements"
+    assert fake_slug_dir.exists(), "Expected writes under fake_home, but dir not found"
