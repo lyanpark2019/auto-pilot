@@ -1,11 +1,11 @@
 window.DASHBOARD_DATA = {
  "branch": "main",
- "commit": "bbb06bf",
+ "commit": "17d213b",
  "counts": {
   "skill": 11,
   "agent": 16,
   "command": 7,
-  "hook": 20,
+  "hook": 25,
   "codex-skill": 12
  },
  "assets": [
@@ -231,6 +231,16 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "hook",
+   "name": "headless-sync-dispatch-guard.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "learning-miner-stop.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
    "name": "notebooklm_delete_gate.sh",
    "subsystem": "other"
   },
@@ -276,7 +286,22 @@ window.DASHBOARD_DATA = {
   },
   {
    "type": "hook",
+   "name": "shellcheck-on-write.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
    "name": "subagent-deliverable-check.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "verifier-tier-gate.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "worker-scope-gate.sh",
    "subsystem": "other"
   },
   {
