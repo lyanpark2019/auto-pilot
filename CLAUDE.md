@@ -88,6 +88,7 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/asset_registry_check.py` | creation-gate | registry overlap checker; emits artifact consumed by hooks/creation-gate.sh |
 | `scripts/_learnings.py` | Hermes-loop | injection resolver: select + render gate-passed tickets for dispatch bundle; `is_gate_passed` shared predicate |
 | `scripts/_mirror_learnings.py` | Hermes-loop | promotable-ticket → vault gotcha mirror (derived, idempotent one-way sync); `orchestrator.py improvements-mirror` subcommand |
+| `scripts/measure_learnings_injection.py` | Hermes-loop | Phase-4 injection-recall measurement instrument (file-anchored vs scope-blind breakdown); `orchestrator.py measure-injection` subcommand |
 
 ## Editing this plugin
 
