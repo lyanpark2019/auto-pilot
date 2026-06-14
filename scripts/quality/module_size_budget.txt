@@ -36,8 +36,10 @@ tests/test_hooks_guards.py|640
 # for improvements-mirror subcommand; all logic in _mirror_learnings.py).
 # Phase-2a enrich-persist adds 2 lines (_enrich_persist.register_cli_subparsers
 # for enrich subcommand; all logic in _enrich_persist.py).
-# Cap 605 = 601 current + 4 headroom.
-scripts/orchestrator.py|605
+# inc3 Phase 1 adds 2 emit_escalation call sites (doom-loop + evidence_failed,
+# ~25 net lines) + datetime import; all logic delegated to _escalation_emit.py.
+# Cap 632 = 629 current + 3 headroom.
+scripts/orchestrator.py|632
 #
 # test_headless_loop.py is the integration test suite for headless-loop.py; all
 # tests share loop_module/state_dir fixtures and the _args helper, so splitting

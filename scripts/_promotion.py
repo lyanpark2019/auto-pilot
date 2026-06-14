@@ -15,6 +15,7 @@ from typing import Any
 import jsonschema
 
 from _contract import atomic_write_text
+from _escalation_emit import emit_escalation
 from _improvement import ledger_lock, validate_ticket
 
 TRANSITIONS: dict[str, frozenset[str]] = {
@@ -32,6 +33,10 @@ Ticket = dict[str, Any]
 
 class PromotionError(Exception):
     """Illegal transition, unknown ticket/field, or malformed ledger entry."""
+
+
+class PromotionGateUnmet(PromotionError):
+    """Promotion attempted while one or more gate fields are unmet."""
 
 
 def load_tickets(ledger: Path, *, partial: bool = False) -> list[Ticket]:
@@ -139,7 +144,7 @@ def transition(ledger: Path, fp: str, new_state: str) -> Ticket:
             gate = ticket["promotion_gate"]
             unmet = [f for f in GATE_FIELDS if gate.get(f) is not True]
             if unmet:
-                raise PromotionError(f"promotion gate unmet: {', '.join(unmet)}")
+                raise PromotionGateUnmet(f"promotion gate unmet: {', '.join(unmet)}")
         ticket["state"] = new_state
         return ticket
 
@@ -259,6 +264,19 @@ def cmd_improvements_set_state(args: Any) -> int:
     try:
         fp = resolve_fingerprint(ledger, args.prefix)
         out = transition(ledger, fp, args.new_state)
+    except PromotionGateUnmet as exc:
+        emit_escalation(
+            problem_class="promotion-gate-unmet",
+            suggested_enrich_query=f"satisfy promotion gate: {exc}",
+            approach=f"{getattr(args, 'prefix', '')}->promoted",
+            outcome="gate-unmet",
+            run_id="",
+            snippet=str(exc),
+            repo_root=repo_root,
+            now=datetime.now(timezone.utc),
+        )
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     except PromotionError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
