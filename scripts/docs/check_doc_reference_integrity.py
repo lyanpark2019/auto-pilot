@@ -2,21 +2,13 @@
 """
 Deterministic doc-reference integrity checker.
 
-Scans docs/*.md, CLAUDE.md, and .claude/**/*.md for file:line citations
-(e.g. ``scripts/_dispatch.py:42`` or plain ``vault/pipeline/fix.py:33``).
-For each citation:
-  (a) the cited file must exist in the repo root;
-  (b) the cited line number must be ≤ the file's line count.
-  (c) symbol proximity: for canonical docs (outside docs/specs/) a missing
-      nearby symbol is a hard VIOLATION (exit 1); for docs/specs/** it is
-      WARN-only — specs are historical planning docs, distilled+deleted per
-      CLAUDE.md convention, so stale symbol proximity there is expected.
-Also enforces inventory counts: live asset-count claims and free-text
-hook-count claims ("(N scripts)" / "N hooks") on the wiring-SoT pages must
-match the real inventory (hooks/hooks.json for hook counts).
-
-Lines containing ``<!-- cite-ignore -->`` are silently skipped.
-Exit: non-zero with a list of violations when any are found.
+Supports two citation forms in docs/*.md, CLAUDE.md, .claude/**/*.md:
+  path:line   — file must exist, line ≤ length, symbol proximity checked.
+  path#token  — line-shift-immune anchor; identifier/filename tokens must
+                appear verbatim in the target file; dash/slug tokens
+                (e.g. heading slugs) pass if normalize(token) ⊆ normalize(file).
+Also enforces asset-count and hook-count inventory claims.
+Lines with ``<!-- cite-ignore -->`` are skipped. Exit 1 on violations.
 
 Usage:
     python3 scripts/docs/check_doc_reference_integrity.py [--root REPO_ROOT]
@@ -32,23 +24,22 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
-# Pattern: optional backtick wrapper, path with extension, colon, line number.
-# Captures: (cited_path, line_number).
-# Matches both `path/file.py:42` and plain path/file.py:42.
+# path:line form — captures (cited_path, line_number, optional_end_line).
 _CITE_RE = re.compile(
     r"`?([a-zA-Z0-9_./~-]+\.[a-zA-Z][a-zA-Z0-9]*):([0-9]+)(?:-([0-9]+))?`?"
 )
+# path#token form — line-shift-immune anchor; captures (path, token).
+_ANCHOR_RE = re.compile(
+    r"`?([A-Za-z0-9_./~-]+\.[A-Za-z][A-Za-z0-9]*)#([A-Za-z0-9_.][A-Za-z0-9_.-]*)`?"
+)
+# Anchor token classifiers: identifier (def/class names) and filename-with-ext.
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
+_FILENAME_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9]+$")
 
-# Extensions treated as code/text files worth checking.
 _CHECKABLE_EXTS = frozenset(
     {".py", ".sh", ".md", ".json", ".yaml", ".yml", ".txt", ".toml"}
 )
-
-# Symbol patterns: backtick-wrapped identifiers adjacent to the citation
-# (within the same line or prev/next line).
 _SYMBOL_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
-
-# Paths to skip (version-control or build artefacts).
 _SKIP_PATH_PREFIXES = ("node_modules/", ".git/", "__pycache__/", ".planning/")
 
 _ASSET_COUNT_RE = re.compile(
@@ -65,10 +56,6 @@ _HISTORICAL_RE = re.compile(
 _SOURCE_COMMENT_RE = re.compile(r"^\s*(#|//|/\*|\*)")
 _SOURCE_COMMENT_ROOTS = ("scripts", "hooks", "swarm", "vault")
 _SOURCE_COMMENT_EXTS = frozenset({".py", ".sh", ".mjs", ".js", ".ts"})
-
-# Free-text hook-count claims ("(22 scripts)" / "22 hooks") tied to the
-# hooks.json enumeration. Narrow on purpose: only the wiring-SoT pages, only
-# lines that name hooks.json, never the asset-count line (own guard).
 _HOOK_DECL_RE = re.compile(r"\b(?P<num>\d+)\s+(?P<kind>scripts|hooks)\b", re.IGNORECASE)
 _HOOK_REF_RE = re.compile(r"hooks/([\w-]+\.(?:sh|py))")
 _HOOK_COUNT_DOCS = ("CLAUDE.md", "docs/architecture.md")
@@ -85,7 +72,6 @@ class Violation(NamedTuple):
 
 
 def _load_file_lines(path: Path) -> list[str] | None:
-    """Return 1-indexed lines for a file, or None if unreadable."""
     try:
         return path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
@@ -93,7 +79,6 @@ def _load_file_lines(path: Path) -> list[str] | None:
 
 
 def _nearby_symbols(doc_lines: list[str], doc_lineno: int) -> frozenset[str]:
-    """Extract backtick-wrapped symbols from lines around ``doc_lineno``."""
     start = max(0, doc_lineno - 3)
     end = min(len(doc_lines), doc_lineno + 2)
     symbols: set[str] = set()
@@ -105,7 +90,6 @@ def _nearby_symbols(doc_lines: list[str], doc_lineno: int) -> frozenset[str]:
 def _find_symbol_in_window(
     code_lines: list[str], target_line: int, symbols: frozenset[str]
 ) -> list[str]:
-    """Return symbols from ``symbols`` not found in a 10-line window around ``target_line``."""
     window_start = max(0, target_line - 6)
     window_end = min(len(code_lines), target_line + 5)
     window_text = "\n".join(code_lines[window_start:window_end])
@@ -113,9 +97,7 @@ def _find_symbol_in_window(
 
 
 def _is_checkable(raw_path: str) -> bool:
-    """True if this citation path has an extension we validate."""
-    suffix = Path(raw_path).suffix.lower()
-    return suffix in _CHECKABLE_EXTS
+    return Path(raw_path).suffix.lower() in _CHECKABLE_EXTS
 
 
 def _is_skipped_path(raw_path: str) -> bool:
@@ -210,7 +192,6 @@ def _asset_count_claims(raw_line: str) -> list[tuple[str, int, str]]:
 
 
 def _actual_hook_count(repo_root: Path) -> int | None:
-    """Unique hooks/<name>.(sh|py) scripts wired in hooks/hooks.json."""
     try:
         text = (repo_root / "hooks" / "hooks.json").read_text(encoding="utf-8")
         blob = json.dumps(json.loads(text))
@@ -220,7 +201,6 @@ def _actual_hook_count(repo_root: Path) -> int | None:
 
 
 def _is_hook_count_line(raw_line: str) -> bool:
-    """True only for hooks.json-enumeration lines (not the asset-count line)."""
     if _HISTORICAL_RE.search(raw_line):
         return False
     if "collect_assets" in raw_line or "build_dashboard_data" in raw_line:
@@ -248,7 +228,6 @@ def _check_hook_count_line(
 
 
 def _doc_files(repo_root: Path) -> list[Path]:
-    """Collect doc files to scan."""
     targets: list[Path] = []
     docs_dir = repo_root / "docs"
     if docs_dir.is_dir():
@@ -299,8 +278,6 @@ def _check_asset_count_line(
 
 
 class _FileCache:
-    """Memoised line loader — avoids repeated disk reads across citations."""
-
     def __init__(self) -> None:
         self._lines: dict[Path, list[str] | None] = {}
         self._counts: dict[Path, int | None] = {}
@@ -340,7 +317,6 @@ def _check_path_resolvable(
     doc_rel: str, doc_lineno_0: int, citation: str,
     raw_path: str, repo_root: Path,
 ) -> tuple[Path, None] | tuple[None, Violation]:
-    """Validate that raw_path is relative and exists; return (target_path, None) or (None, violation)."""
     if raw_path.startswith("~/") or raw_path.startswith("/"):
         return None, _violation(
             doc_rel, doc_lineno_0, citation,
@@ -371,7 +347,6 @@ def _check_line_bounds(
     cache: _FileCache, doc_rel: str, doc_lineno_0: int, citation: str,
     raw_path: str, target_path: Path, line_str: str, end_line_str: str | None,
 ) -> Violation | None:
-    """Return a Violation if cited line or range end is out of bounds, else None."""
     cited_lineno = int(line_str)
     line_count = cache.get_line_count(target_path)
     if line_count is None:
@@ -398,7 +373,6 @@ def _check_citation(
     doc_lineno_0: int, raw_path: str, line_str: str, end_line_str: str | None,
     citation: str, strict: bool,
 ) -> list[Violation]:
-    """Validate one citation; return Violations (empty = clean or WARN-only)."""
     target_path, path_violation = _check_path_resolvable(
         doc_rel, doc_lineno_0, citation, raw_path, repo_root
     )
@@ -417,6 +391,38 @@ def _check_citation(
     )
 
 
+def _normalize_anchor(s: str) -> str:
+    """Strip all non-alphanumeric chars and lowercase — used for slug matching."""
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _check_anchor_citation(
+    cache: _FileCache, repo_root: Path, doc_rel: str,
+    doc_lineno_0: int, raw_path: str, token: str, citation: str,
+) -> list[Violation]:
+    target_path, path_violation = _check_path_resolvable(
+        doc_rel, doc_lineno_0, citation, raw_path, repo_root)
+    if path_violation is not None:
+        return [path_violation]
+    assert target_path is not None
+    lines = cache.get_lines(target_path)
+    text = "\n".join(lines) if lines is not None else ""
+    if _IDENT_RE.fullmatch(token) or _FILENAME_TOKEN_RE.fullmatch(token):
+        # Identifier or filename token: require exact substring match.
+        if re.search(re.escape(token), text):
+            return []
+        return [_violation(doc_rel, doc_lineno_0, citation,
+            f"anchor symbol '{token}' not found in {raw_path}",
+            "fix the anchor or rename to a symbol present in the file")]
+    # Dash/slug token (e.g. heading slugs): normalized-substring check to catch
+    # typos while still passing real concept labels with spaces or varying case.
+    if _normalize_anchor(token) in _normalize_anchor(text):
+        return []
+    return [_violation(doc_rel, doc_lineno_0, citation,
+        f"anchor symbol '{token}' not found in {raw_path}",
+        "fix the anchor or rename to a symbol present in the file")]
+
+
 def _check_doc_lines(
     repo_root: Path, cache: _FileCache, asset_counts: dict[str, int],
     hook_count: int | None, doc_path: Path,
@@ -426,8 +432,7 @@ def _check_doc_lines(
     if doc_lines is None:
         return violations
     doc_rel = str(doc_path.relative_to(repo_root))
-    # docs/specs/ are historical planning docs (distilled+deleted per CLAUDE.md);
-    # symbol proximity mismatches there are expected — keep as WARN, non-blocking.
+    # specs/ are distilled+deleted historical docs — symbol proximity mismatch is expected (WARN only).
     strict = not doc_rel.startswith("docs/specs/")
     for lineno_0, raw_line in enumerate(doc_lines):
         if IGNORE_MARKER in raw_line:
@@ -441,6 +446,14 @@ def _check_doc_lines(
             violations.extend(_check_citation(
                 cache, repo_root, doc_rel, doc_lines, lineno_0,
                 raw_path, m.group(2), m.group(3), m.group(0).strip("`"), strict,
+            ))
+        for m in _ANCHOR_RE.finditer(raw_line):
+            raw_path = m.group(1)
+            if _is_skipped_path(raw_path) or not _is_checkable(raw_path):
+                continue
+            violations.extend(_check_anchor_citation(
+                cache, repo_root, doc_rel, lineno_0,
+                raw_path, m.group(2), m.group(0).strip("`"),
             ))
     return violations
 
