@@ -6,6 +6,7 @@ improvements-set-state.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from _promotion import (  # noqa: E402
     GATE_FIELDS,
     PromotionError,
+    Ticket,
     load_tickets,
     resolve_fingerprint,
     set_gate_field,
@@ -349,3 +351,109 @@ class TestImprovementsSetStateCLI:
         rc = _run(["improvements-set-state", "--repo-root", str(repo_root),
                    FP_A[:8], "nope"])
         assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# FIX #2 — audit timestamp on gate write
+# ---------------------------------------------------------------------------
+
+class TestGateAuditTimestamp:
+    def test_true_records_parseable_iso_timestamp(self, tmp_path):
+        """Setting a gate field to True records a parseable UTC ISO-8601 *_at timestamp."""
+        _seed_ticket(tmp_path, FP_A)
+        before = datetime.now(timezone.utc)
+        out = set_gate_field(tmp_path, FP_A, "user_approved", True)
+        after = datetime.now(timezone.utc)
+
+        ts_str = out["promotion_gate"].get("user_approved_at")
+        assert ts_str is not None, "user_approved_at should be set when value=True"
+        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        assert before <= ts <= after
+
+    def test_at_field_persisted_to_disk(self, tmp_path):
+        _seed_ticket(tmp_path, FP_A)
+        set_gate_field(tmp_path, FP_A, "ci_pass", True)
+        on_disk = json.loads((tmp_path / f"{FP_A}.json").read_text())
+        assert "ci_pass_at" in on_disk["promotion_gate"]
+        datetime.fromisoformat(on_disk["promotion_gate"]["ci_pass_at"].replace("Z", "+00:00"))
+
+    def test_false_does_not_record_at_timestamp(self, tmp_path):
+        """Setting a gate field to False must NOT record a *_at field."""
+        _seed_ticket(tmp_path, FP_A)
+        out = set_gate_field(tmp_path, FP_A, "tests_pass", False)
+        assert "tests_pass_at" not in out["promotion_gate"]
+
+    def test_at_field_schema_valid_after_set(self, tmp_path):
+        """The ticket with *_at field still passes schema validation."""
+        _seed_ticket(tmp_path, FP_A)
+        out = set_gate_field(tmp_path, FP_A, "tests_pass", True)
+        from _improvement import validate_ticket
+        validate_ticket(out)
+
+    def test_all_three_gate_fields_get_at_timestamps(self, tmp_path):
+        _seed_ticket(tmp_path, FP_A)
+        for field in GATE_FIELDS:
+            set_gate_field(tmp_path, FP_A, field, True)
+        on_disk = json.loads((tmp_path / f"{FP_A}.json").read_text())
+        gate = on_disk["promotion_gate"]
+        for field in GATE_FIELDS:
+            assert f"{field}_at" in gate, f"missing {field}_at"
+
+
+# ---------------------------------------------------------------------------
+# FIX #4 — lock teardown on exception (regression test; lock is already correct)
+# ---------------------------------------------------------------------------
+
+class TestLockTeardownOnException:
+    def test_lock_released_when_mutate_raises(self, tmp_path):
+        """Exception inside mutate must not leave a stale flock; LOCK_NB acquire proves it."""
+        import fcntl
+
+        _seed_ticket(tmp_path, FP_A)
+
+        def _raiser(ticket: Ticket) -> Ticket:
+            raise RuntimeError("injected failure")
+
+        from _promotion import _locked_update
+
+        with pytest.raises(RuntimeError, match="injected failure"):
+            _locked_update(tmp_path, FP_A, _raiser)
+
+        lock_path = tmp_path / f"{FP_A}.json.lock"
+        with lock_path.open("r+") as fd:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+
+
+# ---------------------------------------------------------------------------
+# FIX #5 — pre-mutate schema validation
+# ---------------------------------------------------------------------------
+
+class TestPreMutateSchemaValidation:
+    def test_invalid_ticket_raises_before_mutation(self, tmp_path):
+        """Schema-invalid ticket on disk raises a clear PromotionError naming the ticket;
+        mutate body must NOT be called."""
+        bad = {
+            "schema_version": 1, "fingerprint": FP_A, "state": "candidate",
+            "pattern": "x", "source": "insight", "candidate_asset": "hook",
+            "occurrences": 1, "distinct_runs": 1,
+            "first_seen": "2026-06-10T00:00:00Z", "last_seen": "2026-06-10T00:00:00Z",
+            "plugin_version": "0", "repo_fingerprint": "abc",
+            "evidence": [{"run_id": "r1", "snippet": "s"}],
+            "promotion_gate": {"tests_pass": None, "ci_pass": None, "user_approved": None},
+            "BOGUS_EXTRA_FIELD": True,
+        }
+        (tmp_path / f"{FP_A}.json").write_text(json.dumps(bad))
+
+        mutated: list[bool] = []
+
+        def tracking_mutate(t: Ticket) -> Ticket:
+            mutated.append(True)
+            return t
+
+        from _promotion import _locked_update
+        with pytest.raises(PromotionError, match="invalid before mutation") as exc_info:
+            _locked_update(tmp_path, FP_A, tracking_mutate)
+
+        assert mutated == [], "mutate body must NOT be called when pre-validation fails"
+        assert FP_A in str(exc_info.value) or "invalid before" in str(exc_info.value)

@@ -123,17 +123,29 @@
             "null"
           ]
         },
+        "tests_pass_at": {
+          "type": "string",
+          "format": "date-time"
+        },
         "ci_pass": {
           "type": [
             "boolean",
             "null"
           ]
         },
+        "ci_pass_at": {
+          "type": "string",
+          "format": "date-time"
+        },
         "user_approved": {
           "type": [
             "boolean",
             "null"
           ]
+        },
+        "user_approved_at": {
+          "type": "string",
+          "format": "date-time"
         }
       },
       "additionalProperties": false
