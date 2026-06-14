@@ -67,7 +67,7 @@ Why 층 위치는 프로젝트 선택: vault `intent/`(PickL 방식) 또는 repo
 | 레이어 | 대상 drift | 메커니즘 | 트리거 | 차단? |
 |---|---|---|---|---|
 | L1 generate | 사실 (엔드포인트/스키마) | OpenAPI 류 export + `--check` freshness | 게이트 | **차단** |
-| L2 deterministic | dead path · `:NNN`>EOF · 죽은 심볼 · retired token 부활 | doc→source ref 가드 (`check_doc_source_refs.py` 패턴: 경로 resolve + EOF + 심볼앵커 resolve + `RETIRED_SYMBOLS` denylist + `_archive` exempt + 삭제-구문("removed in") historical 허용) | 게이트 (CI) | **차단** |
+| L2 deterministic | dead path · `:NNN`>EOF · 죽은 심볼 · retired token 부활 | doc→source ref 가드 (`check-doc-reference-integrity.mjs` 패턴: 경로 resolve + EOF + 심볼앵커 resolve + `RETIRED_SYMBOLS` denylist + `_archive` exempt + 삭제-구문("removed in") historical 허용; CI 병행 `scripts/docs/check_doc_reference_integrity.py`) | 게이트 (CI) | **차단** |
 | 그래프 갱신 | 구조 lag | `graphify hook install` — post-commit 자동 재빌드 | 커밋마다 | 자동 |
 | **L3 SHA freshness** | design 문서 stale (인용 소스가 변경됨) | `check_design_doc_freshness.py` (~60줄, LLM 0): 문서별 frontmatter `source_commit` 파싱 → 본문 cited 소스 경로 수집 (L2 가드의 경로 regex 재사용) → `git diff --name-only <source_commit>..HEAD -- <paths>` 교집합 ≠ ∅ → **STALE 보고** (문서 + 바뀐 파일 목록). frontmatter 계약 검사 동봉 | 게이트 **STALE 차단 (exit 1)** + post-commit 한 줄 | **STALE 차단** (exit 1). frontmatter-contract gap 은 WARN advisory (exit 0 유지). 한계 명시: rename/move 미추적(경로 기준) |
 | MAINTAIN 실행 | STALE 해소 | freshness 출력 소비 → 문서별 refresh 에이전트: 그래프 재질의 → 소스 재독 → 인용/prose 갱신 → `source_commit` bump → 대규모면 이중리뷰 | on-demand 배치 (탐지=자동, 갱신=리뷰 동반) | — |
