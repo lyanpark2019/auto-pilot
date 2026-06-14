@@ -65,24 +65,29 @@ Build the gate before any fetch (it is the vault-rot prevention, inseparable per
   independent); advisory `llm_judge: reject` on an otherwise-ADMIT official does NOT
   flip the verdict. Full `CLAUDE.md` verify list green.
 
-**Phase-1 residuals (documented, ADR-permitted; deferred to Phase 2 when a live
-producer exists and the threat model is concrete).** The gate is not yet wired to any
-fetcher, so each below needs an adversarial/sloppy *future* producer to arise — all
-low-severity, none break sha-tamper detection or official-tier:
+**Phase-1 residuals — status as of Phase 2b.**
 
-- *Host independence is a plain-hostname heuristic*, not a true source-independence
-  proof. `www.reddit.com` vs `old.reddit.com` (same thread), a punycode `xn--` host vs
-  its Unicode IDN form, and a pathological multi-trailing-dot `a.com..` (only one dot is
-  stripped) each count as independent. (Single trailing-dot `a.com.` ≡ `a.com` IS
-  handled + tested.)
-- *Visually-blank but non-format codepoints* pass `_has_visible_content` (it rejects the
-  whitespace + Cf/Cc/Zs/Zl/Zp classes): a snippet of only U+3164 Hangul filler / U+2800
-  Braille-blank (categories Lo/So) or only combining marks (Mn) is admitted as a
-  near-empty page.
-
-Consolidated strategic fix (Phase 2): NFKC-normalise the snippet + a positive
-"has a rendering codepoint" check (closes the blank-codepoint class), and a proper
-IDNA / eTLD+1 host canonicaliser with full trailing-dot strip (closes the host class).
+- *Blank-codepoint bypass* (U+3164/U+FFA0 Hangul fillers, U+2800 Braille blank,
+  combining-mark-only Mn/Mc/Me): **CLOSED in Phase 2b** — `_has_visible_content` now
+  NFKC-normalises a local copy and applies a `_BLANK_RENDER_CODEPOINTS` set +
+  extended category block (Mn/Mc/Me added); the raw snippet passed to sha256/persist
+  is never touched.
+- *Punycode/IDN host equivalence* (`例え.テスト` vs `xn--r8jz45g.xn--zckzah`):
+  **CLOSED in Phase 2b** — `_canonical_host` now IDNA-encodes via `.encode("idna")`
+  so Unicode and xn-- forms map to the same string.
+- *Multi-trailing-dot host collision* (`example.com..` not stripping to `example.com`):
+  **CLOSED in Phase 2b** — `_canonical_host` now uses `.rstrip(".")` (full strip, not
+  `[-1]`).
+- *Registrable-domain / subdomain-collapse* (`www.reddit.com` vs `old.reddit.com`
+  for the same thread): **OPEN** — Python stdlib has no public-suffix list; a PSL-backed
+  fix requires an external dep and is deferred until evidence-justified by a live
+  producer. Mitigated agent-side: the fetch producer selects genuinely distinct domains.
+- *IDNA2003 vs UTS-46 deviation characters* — stdlib `.encode("idna")` implements
+  IDNA2003, which diverges from UTS-46/IDNA2008 for deviation chars (ß, ς, ZWJ); e.g.
+  `straße.de` IDNA2003→`strasse.de` but UTS-46→`xn--strae-oqa.de`, so the two encodings
+  of the same deviation-char domain can count as two independent hosts. **OPEN** — a
+  correct fix needs the third-party `idna` (UTS-46) library; deferred under the same
+  zero-dependency decision as eTLD+1 (exotic/organically-rare; no live consumer yet).
 
 ## Phase 2 — enrichment fetch + persist — SPLIT
 
