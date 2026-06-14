@@ -3,7 +3,12 @@
 # Deny `git commit` / `git push` when the operation targets main or master.
 #   commit  → gate on current HEAD branch
 #   push    → gate on push REFSPEC DST (not HEAD); bare push/no-refspec → HEAD
-# Bypass: AUTO_PILOT_MAIN_OK=1.
+# Bypass: AUTO_PILOT_MAIN_OK=1 (last resort — see the deny message). A commit
+#   denied here often means a concurrent session sharing this working tree
+#   flipped .git/HEAD to main: the tree really IS on main, so the bypass is a
+#   footgun (the commit would land on main). Safe path: re-checkout the feature
+#   branch, or push with an explicit feature refspec (gated on dst, not HEAD).
+#   Per-session `git worktree` (per-worktree HEAD) prevents the flip entirely.
 # Worktree-aware: uses the tool_input.cwd field when available.
 # Unparseable stdin → allow (fail-open).
 set -euo pipefail
@@ -268,7 +273,7 @@ while IFS= read -r inv; do
       while IFS= read -r b; do
         lc_b=$(printf '%s' "$b" | tr '[:upper:]' '[:lower:]')
         if [[ "$lc_b" == "main" || "$lc_b" == "master" ]]; then
-          deny "Refusing git push --mirror/--all: repo contains protected branch '$b' (target: $target). Set AUTO_PILOT_MAIN_OK=1 in the session env (export, not a command prefix) to override."
+          deny "Refusing git push --mirror/--all: it pushes ALL branches including protected '$b' (target: $target). Push specific feature refspecs instead (git push origin <feat>:<feat>). Only to genuinely sync '$b': export AUTO_PILOT_MAIN_OK=1 in the session env (not a command prefix)."
         fi
       done <<< "$all_branches"
       continue
@@ -293,7 +298,7 @@ while IFS= read -r inv; do
   # Case-insensitive comparison: Main/MAIN/MaIn all match.
   lc_branch=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]')
   if [[ "$lc_branch" == "main" || "$lc_branch" == "master" ]]; then
-    deny "Refusing git commit/push on protected branch '$branch' (target: $target). Set AUTO_PILOT_MAIN_OK=1 in the session env (export, not a command prefix) to override."
+    deny "Refusing git commit/push on protected branch '$branch' (target: $target). If a parallel session sharing this tree flipped HEAD, your working tree IS on '$branch' right now — DO NOT bypass: verify (cat .git/HEAD) and re-checkout your feature branch first, else the commit lands on '$branch'. For push, use an explicit feature refspec (git push origin <feat>:<feat>) — it gates on the destination, not HEAD, and passes without any override. Only when you genuinely intend to write '$branch': export AUTO_PILOT_MAIN_OK=1 in the session env (not a command prefix)."
   fi
 done <<< "$invocations"
 
