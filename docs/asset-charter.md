@@ -16,7 +16,7 @@ inventory" 절 (상호링크 — 이 파일이 충전, README 는 링크만).
 Pillars: ① 자율 코딩 루프 (PM-worker-이중리뷰) · ② 문서 신선도 (doc-management) ·
 ③ 지식 영속 (vault·retro·memory) · ④ 안전·집행 (hooks·contracts·gates).
 
-Round-1 스냅샷 (113 assets, 1:1 vs collector @ 36e754e73e). Round-4 스냅샷 (66 live assets post-consolidation @ 7873e39): skills 11, agents 16, commands 7, hooks 20, codex-skills 12. Verdict 집행
+Round-1 스냅샷 (113 assets, 1:1 vs collector @ 36e754e73e). Round-4 스냅샷 (66 live assets post-consolidation @ 7873e39): skills 11, agents 16, commands 7, hooks 20, codex-skills 12. Round-5 스냅샷 (72 live assets @ 1664e87): skills 11, agents 16, commands 7, hooks 26, codex-skills 12 — hooks 20→26 (round-2/3 enforcement + state-write-guard 등), total 66→72; live SoT = collect_assets() / docs/architecture.md:133. Verdict 집행
 (INTEGRATE/REMOVE) 후 rows 는 라운드마다 재생성된다 — 살아있는 표의 SoT 는
 `.planning/score/asset-roles.md` (최신 라운드), 이 파일은 freshness-추적 영속본.
 

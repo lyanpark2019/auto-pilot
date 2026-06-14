@@ -1,6 +1,6 @@
 ---
 name: vault-selftest
-description: Run plugin self-test — validate manifest, marketplace, agents frontmatter, scripts syntax, rubric, hooks, MCP config, commands. Use before publishing or after significant changes.
+description: Run plugin self-test — validate manifest, marketplace, agents frontmatter, scripts syntax, rubric, hooks, MCP config, commands, sources adapters, rubrics library, restructure phases. Use before publishing or after significant changes.
 argument-hint: "[--json]"
 allowed-tools: [Bash, Read]
 ---
@@ -24,10 +24,13 @@ Plugin internal consistency check.
 | marketplace | `.claude-plugin/marketplace.json` has license/category/etc |
 | agents | every `agents/*.md` has frontmatter with name matching stem |
 | scripts | every `scripts/*.py` parses with `ast.parse` |
-| rubric | `templates/rubric.yaml` has structural + content sections |
+| rubric | `vault/templates/rubric.yaml` has structural + content sections |
 | hooks | `hooks/hooks.json` references existing executable scripts |
 | mcp | `.mcp.json` references existing entry scripts |
-| commands | every `commands/*.md` has frontmatter with name+description |
+| commands | every `commands/*.md` has frontmatter with a `description` (`name` is not required — the filename is the command name) |
+| sources | `vault/sources/_adapter.py` present + notebooklm/code adapters auto-discover |
+| rubrics_library | `vault/rubrics/` has `notebooklm.yaml` + `code-docs.yaml` |
+| restructure | `vault/scripts/restructure_phases/` + `restructure_loop.py` present, `vault-build.md` has `--restructure` mode |
 
 ## Execution
 

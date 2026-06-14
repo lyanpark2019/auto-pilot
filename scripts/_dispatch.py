@@ -5,12 +5,16 @@ Enforcement layers for contract integrity (ⓓ-7②, 2026-06 round-2 W2):
   Layer 2 — prepare_subagent_ticket refuses dispatch when the
              dispatch-contract-check artifact is absent or stale (this file)
   Layer 3 — PreToolUse(Task) hook (contract γ builds it; the artifact format
-             is documented in dispatch_contract_check() below)
+             is produced by scripts/_contract_check.build_artifact() and
+             validated by assert_artifact_fresh()
+             (CLI: `orchestrator.py dispatch-contract-check`))
 
 Preflight gate (ⓓ-9, 2026-06 round-2 W2):
   prepare_subagent_ticket also checks for a valid preflight artifact under
   .planning/auto-pilot/preflight/phase-<N>.json.  Four rejection paths:
-  missing file, TTL > 900 s, wrong phase key, head_sha != current HEAD.
+  missing file, TTL exceeds the configured limit (`_config.preflight_ttl_sec()`,
+  env `AUTO_PILOT_PREFLIGHT_TTL_SEC`, default 900 s), wrong phase key,
+  head_sha != current HEAD.
   Interactive wiring of pm_preflight.sh via PreToolUse(Bash) is γ's hook
   contract; if γ's wiring lands as prompt-gated only that is recorded as
   residual risk (see module docstring).
@@ -367,7 +371,7 @@ class RoundCollectTimeout(Exception):
 class ContractCheckMissing(Exception):
     """Raised when the contract-check artifact is absent or contract sha does not match.
 
-    Artifact format (written by ``dispatch_contract_check``):
+    Artifact format (written by ``_contract_check.build_artifact``):
       {
         "contract_sha256": "<hex>",
         "checked_at": "<iso8601>",

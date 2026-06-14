@@ -11,7 +11,7 @@ color: blue
 Connectivity and navigation layer: targeted edge density, inbound wikilinks, cross-vault
 federation, and per-category hot caches. Serves rubric dims `graph_density`, `backlinks`,
 `cross_vault`, `hot_cache` (`vault/rubrics/notebooklm.yaml:8-12,29-36,48-51`) plus the
-unscored orphan-page hygiene flag (`agents/vault-pm-orchestrator.md:143`).
+unscored orphan-page hygiene flag (`agents/vault-pm-orchestrator.md:146`).
 
 ## When to invoke
 

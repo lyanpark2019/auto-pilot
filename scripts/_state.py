@@ -9,7 +9,10 @@ Concurrency: ``load_state`` and ``save_state`` cooperate via an exclusive
 ``flock`` on ``.planning/auto-pilot/state.lock``. Writers block readers and
 each other; readers may overlap. Writes go through ``_contract.atomic_write_text``
 (tempfile + fsync + rename) so even an abrupt kill leaves either the old or
-new JSON, never a partial file.
+new JSON, never a partial file. For an atomic read-modify-write, use
+``state_transaction`` instead — it holds the exclusive lock across the entire
+load → mutate → commit cycle, closing the TOCTOU window that a separate
+``load_state`` + ``save_state`` pair would leave open.
 
 Path note: :data:`STATE_FILE` is rooted at the *current working directory*
 (``Path(".planning/auto-pilot")``). ``orchestrator.py`` is invoked from the

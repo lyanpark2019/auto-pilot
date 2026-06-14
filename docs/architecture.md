@@ -87,10 +87,10 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
 - **Gate on `distinct_runs`, not raw occurrences** — reviewer-finding ≥2, doom-loop/insight/other ≥3
   → `promotable`; a worker re-tripping the same finding within one run cannot inflate the gate.
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
-  `insights.jsonl` — retro's structured sidecar where a `class` tag (not wording, not file) drives
+  `insights.jsonl` — retro's structured sidecar where a class tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
   it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
-- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:32`, three orchestrator
+- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:138`, three orchestrator
   subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
   state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
   requires all three `promotion_gate` fields (`tests_pass`, `ci_pass`, `user_approved`) to be

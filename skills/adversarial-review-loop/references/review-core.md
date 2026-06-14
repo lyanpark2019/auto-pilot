@@ -104,8 +104,7 @@ whole review round, same as a false positive.
 **1. Pre-mortem mandatory question**
 For every new-mechanism diff, ask: "사고 후 리뷰가 요구할 deterministic guard 가 이 PR 에
 있나?" A missing guard is a **FINDING** (not a suggestion). Precedents that define the
-standard: `check_doc_source_refs.py` (mechanical drift gate), `RETIRED_SYMBOLS` denylist
-(dead-symbol re-introduction guard).
+standard: `scripts/docs/check_doc_reference_integrity.py` (mechanical drift gate, CI-wired at .github/workflows/ci.yml), with the `RETIRED_SYMBOLS` denylist (dead-symbol re-introduction guard) in `skills/doc-management/scripts/check-doc-reference-integrity.mjs`.
 
 **2. Liveness triage**
 Before any fix round, verify each finding is LIVE — cross-check the defended layer (e.g.,
