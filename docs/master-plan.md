@@ -51,6 +51,7 @@ increment 1 produces data) — see `docs/adr/0003-gated-ondemand-enrich-two-tier
 - **Increment 3 (2-tier loop):** typed escalation records
   (`{problem_class, tried, evidence, suggested_enrich_query}`) mark the tier-1→tier-2
   boundary; that record is also increment 2's enrichment trigger (the two share one seam).
+  **Phase-specced 2026-06-15** — see `docs/specs/2026-06-15-two-tier-escalation-increment3.md`.
 
 > **Scope note (2026-05-29):** a brief mid-session idea to make auto-pilot a multi-mode "build/review/perfect" platform was **dropped**. The skill/hook → plugin packaging & management concern moved to a **separate new project, `plugin-forge`** (a plugin generator that composes managed plugins from the user's existing hand-made skills/hooks). auto-pilot stays build-only and is simply one of the plugins `plugin-forge` will manage.
 
