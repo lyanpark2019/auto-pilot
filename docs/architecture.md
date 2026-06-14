@@ -128,8 +128,13 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   persistence layer. Takes candidate enrichment-evidence JSONs (from a file/dir), runs each
   through the Phase-1 gate, and ADMITted candidates are persisted as vault
   ``enrichment/enrich-<sha256>.md`` pages. Enrichment is ADDITIVE/UPSERT — pages are
-  accumulated verified knowledge keyed by content sha, never pruned. Phase-2b (live MCP
-  fetch adapter) is the next step.
+  accumulated verified knowledge keyed by content sha, never pruned.
+- **Increment-2 Phase-2b — live MCP-fetch enrichment producer shipped 2026-06-14**
+  (`scripts/_enrich_fetch.py` + `agents/enrichment-fetcher.md`): injectable Fetcher
+  Protocol seam (MCP boundary) with `shape_hit` (sha-computing, pure) and
+  `fetch_and_persist` (Fetcher → shaped candidates → existing `persist()`). The agent
+  owns live MCP I/O (context7 → web → community); the Python module owns deterministic
+  shaping and is fully testable with FakeFetcher. Agent never writes vault pages directly.
 - **Phase-4 measurement (G1 input) — 2026-06-14** (`scripts/measure_learnings_injection.py`,
   `orchestrator.py measure-injection`): on the current real ledger all 7 gate-passed tickets are
   file-less `insight` tickets (`scope_blind=7`, `scope_addressable_pct=0.0`); the one `doom-loop`
@@ -171,7 +176,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 16 agents · 7 commands · 27 hooks · 12 codex-skills = 73 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 17 agents · 7 commands · 27 hooks · 12 codex-skills = 74 assets total.
 
 ```
 auto-pilot/
