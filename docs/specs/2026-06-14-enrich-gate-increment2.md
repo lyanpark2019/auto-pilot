@@ -84,17 +84,28 @@ Consolidated strategic fix (Phase 2): NFKC-normalise the snippet + a positive
 "has a rendering codepoint" check (closes the blank-codepoint class), and a proper
 IDNA / eTLD+1 host canonicaliser with full trailing-dot strip (closes the host class).
 
-## Phase 2 — enrichment fetch + persist (later)
+## Phase 2 — enrichment fetch + persist — SPLIT
+
+Phase 2 was split into two sub-phases:
+
+### Phase 2a — gate-and-persist (deterministic) — DONE 2026-06-14
+
+`scripts/_enrich_persist.py` + `orchestrator.py enrich` subcommand.
+Takes candidate enrichment-evidence JSONs (file or directory), runs each through
+the Phase-1 gate, persists ADMITted ones as vault `enrichment/enrich-<sha256>.md`
+pages (UPSERT by sha, additive — never prune). No network calls; fully testable.
+Tests: `tests/test_enrich_persist.py`.
+
+### Phase 2b — live MCP fetch adapter (remaining)
 
 On-demand fetch adapter (context7 → web → community via MCP), each hit shaped into an
 enrichment-evidence candidate, run through the Phase-1 gate, and ADMITted candidates
-persisted as derived vault `enrichment/<sha>.md` pages (idempotent, one-way, like the
-Phase-2 gotcha mirror). Network-touching; the fetch layer is mockable so tests stay
-deterministic.
+persisted via `_enrich_persist.persist()`. Network-touching; the fetch layer is mockable
+so tests stay deterministic. Also closes the Phase-1 host/codepoint residuals with a
+real producer.
 
-- scope: `scripts/_enrich_fetch.py` (MCP adapters), vault `enrichment/` page writer,
-  orchestrator `enrich` subcommand. acceptance: a mocked context7 hit → gate → one
-  byte-stable vault page; a community single-source hit → no page (gated out).
+- scope: `scripts/_enrich_fetch.py` (MCP adapters). acceptance: a mocked context7 hit →
+  gate → one byte-stable vault page; a community single-source hit → no page (gated out).
 
 ## Phase 3 — escalation-record schema + on-demand trigger (shared seam)
 

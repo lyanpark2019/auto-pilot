@@ -123,6 +123,13 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   corroborations (distinct hosts, each sha-valid) OR `repro_passed=True`. `llm_judge` is
   recorded in the verdict output but NEVER overrides ADMIT/REJECT ("enforce with code, not
   prompts"). ADR: `docs/adr/0003-gated-ondemand-enrich-two-tier-escalation.md`.
+- **Increment-2 Phase-2a — enrichment gate-and-persist shipped 2026-06-14**
+  (`scripts/_enrich_persist.py`, `orchestrator.py enrich` subcommand): deterministic
+  persistence layer. Takes candidate enrichment-evidence JSONs (from a file/dir), runs each
+  through the Phase-1 gate, and ADMITted candidates are persisted as vault
+  ``enrichment/enrich-<sha256>.md`` pages. Enrichment is ADDITIVE/UPSERT — pages are
+  accumulated verified knowledge keyed by content sha, never pruned. Phase-2b (live MCP
+  fetch adapter) is the next step.
 - **Phase-4 measurement (G1 input) — 2026-06-14** (`scripts/measure_learnings_injection.py`,
   `orchestrator.py measure-injection`): on the current real ledger all 7 gate-passed tickets are
   file-less `insight` tickets (`scope_blind=7`, `scope_addressable_pct=0.0`); the one `doom-loop`

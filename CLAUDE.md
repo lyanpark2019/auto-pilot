@@ -90,6 +90,7 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_mirror_learnings.py` | Hermes-loop | promotable-ticket → vault gotcha mirror (derived, idempotent one-way sync); `orchestrator.py improvements-mirror` subcommand |
 | `scripts/measure_learnings_injection.py` | Hermes-loop | Phase-4 injection-recall measurement instrument (file-anchored vs scope-blind breakdown); `orchestrator.py measure-injection` subcommand |
 | `scripts/_enrich_gate.py` | inc2-enrich | deterministic enrichment gate (source-tier floor + sha-verified evidence; LLM-judge advisory only) |
+| `scripts/_enrich_persist.py` | inc2-enrich | gate-and-persist admitted candidates → vault enrichment/ pages (upsert by sha, additive); `orchestrator.py enrich` subcommand |
 
 ## Editing this plugin
 

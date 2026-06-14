@@ -180,6 +180,9 @@ def evaluate(candidate: dict[str, Any]) -> dict[str, Any]:
     if not source_url:
         reasons.append("source_url is empty")
         evidence_complete = False
+    elif any(ch.isspace() for ch in source_url):
+        reasons.append("source_url contains whitespace")
+        evidence_complete = False
 
     if not _valid_iso_date(retrieved_date):
         reasons.append("retrieved_date not ISO")
@@ -252,6 +255,11 @@ def evaluate(candidate: dict[str, Any]) -> dict[str, Any]:
         if not _has_visible_content(corr_snippet):
             reasons.append(
                 f"corroboration snippet has no visible content for url={corr_url!r}"
+            )
+            continue
+        if any(ch.isspace() for ch in corr_url):
+            reasons.append(
+                f"corroboration source_url contains whitespace: {corr_url!r}"
             )
             continue
         corr_host = _canonical_host(corr_url)
