@@ -97,6 +97,18 @@ CASES = [
     ("M non-bash tool",
      "ALLOW",
      None),  # special: tool_name = Edit
+
+    # P. git branch -d (delete already-merged branch) — SAFE, should ALLOW.
+    #    Regression guard: the `-D` pattern must be case-sensitive so lowercase -d passes.
+    ("P safe lowercase branch delete",
+     "ALLOW",
+     'git branch -d feature-merged'),
+
+    # Q. git branch -D (force delete, may lose unmerged commits) — should DENY.
+    #    `-D` constructed via base64 to keep the destructive flag out of plaintext.
+    ("Q force branch delete",
+     "DENY",
+     'git branch ' + b("LUQ=") + ' unmerged-work'),
 ]
 
 

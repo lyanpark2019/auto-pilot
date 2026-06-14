@@ -230,10 +230,18 @@ def _respond_to_match(reason: str, marker: str) -> None:
     )
 
 
+# `git branch -D` (force-delete, loses unmerged commits) is destructive, but the
+# lowercase `git branch -d` (delete an already-merged branch) is SAFE and must NOT
+# be blocked — so this pattern is matched case-sensitively while everything else
+# keeps IGNORECASE (SQL keywords like DROP/drop legitimately need case-insensitivity).
+_CASE_SENSITIVE_PATTERNS = frozenset({r"\bgit\s+branch\s+-D\b"})
+
+
 def _scan_destructive_patterns(scanned: str, marker: str) -> None:
     for pattern, reason in DESTRUCTIVE_PATTERNS:
+        flags = 0 if pattern in _CASE_SENSITIVE_PATTERNS else re.IGNORECASE
         try:
-            matched = re.search(pattern, scanned, re.IGNORECASE)
+            matched = re.search(pattern, scanned, flags)
         except re.error:
             continue
         if matched:
