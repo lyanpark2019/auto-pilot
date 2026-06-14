@@ -16,7 +16,7 @@ Usage:
     python orchestrator.py round-budget --score-dir .planning/score --round N
     python orchestrator.py review-status
     python orchestrator.py ledger-append | ledger-rebalance [--apply] [--project-root PATH]
-    python orchestrator.py resume | discover (--check|--record) --graphify-version V [--scope-files a,b] | recover ... | improvements-list | improvements-gate | improvements-set-state ...
+    python orchestrator.py resume | discover (--check|--record) --graphify-version V [--scope-files a,b] | recover ... | improvements-list | improvements-gate | improvements-set-state | improvements-mirror ...
 """
 from __future__ import annotations
 
@@ -580,6 +580,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _promotion.register_cli_subparsers(sub)
     import _recover  # noqa: PLC0415
     _recover.register_cli_subparsers(sub)
+    import _mirror_learnings  # noqa: PLC0415
+    _mirror_learnings.register_cli_subparsers(sub)
 
     return parser
 
