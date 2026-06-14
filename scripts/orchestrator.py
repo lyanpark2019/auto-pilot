@@ -582,6 +582,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _recover.register_cli_subparsers(sub)
     import _mirror_learnings  # noqa: PLC0415
     _mirror_learnings.register_cli_subparsers(sub)
+    import measure_learnings_injection  # noqa: PLC0415
+    measure_learnings_injection.register_cli_subparsers(sub)
 
     return parser
 
