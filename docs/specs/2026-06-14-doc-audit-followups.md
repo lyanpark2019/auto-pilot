@@ -26,13 +26,14 @@ Pick ONE durable fix (do not hand-patch 52 — that's the deny-list whack-a-mole
 - Either way: the file is now honestly `manual_edit: true` (#67). If (b) ships, flip back to `false`.
 - Bonus: extend the guard's symbol-proximity to table-cell cites so this can't silently drift again.
 
-## P2 — docs/specs/2026-06-13-next-session-queue.md: 6 stale-symbol WARN
+## P2 — 2026-06-13-next-session-queue.md — DISPOSED 2026-06-14
 
-The mechanical guard emits 6 WARN for `docs/specs/2026-06-13-next-session-queue.md`
-(`lyanpark2019`, `main`, `_locked_update`, `load_tickets`, `user_approved`, `role`, `task_class`
-not found near their cited lines). WARN-only because `docs/specs/**` is exempt by design.
-Decide: refresh the cites, OR dispose the spec (per the convention — shipped specs get distilled
-into `docs/architecture.md` then deleted; `agents/retro.md` owns disposal). Likely dispose.
+Disposed per the shipped-spec convention. Every item shipped: P2a/P2b/P3 merged (#47–#53);
+P1 G1 (first external brownfield full-chain) completed on the `.pickl-g1-sandbox`
+(local-only clone, never pushed — so no commits land in this repo). Durable substance
+(Hermes promotion FSM, RED-first fixture-boundary discipline) is already captured in
+`docs/architecture.md` (Hermes ledger section) + the reviewer/worker contracts, so there was
+nothing left to distill. Session history retained in memory `next-session-queue`.
 
 ## P3 — minor cleanup
 
