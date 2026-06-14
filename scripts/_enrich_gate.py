@@ -68,31 +68,62 @@ def _valid_iso_date(s: str) -> bool:
         return False
 
 
+_BLANK_RENDER_CODEPOINTS = frozenset(
+    {
+        "ᅟ",  # HANGUL CHOSEONG FILLER (Lo, renders blank)
+        "ᅠ",  # HANGUL JUNGSEONG FILLER (Lo) — U+3164 and U+FFA0 NFKC-fold here
+        "⠀",  # BRAILLE PATTERN BLANK (So, NFKC-stable, renders blank)
+        "　",  # IDEOGRAPHIC SPACE (defensive; already Zs)
+    }
+)
+
+
 def _has_visible_content(s: str) -> bool:
-    """True iff *s* contains at least one character that is not whitespace
-    and not a Unicode format/control/separator char (incl. U+200B zero-width space)."""
+    """True iff *s* has at least one rendering codepoint.
+
+    NFKC is applied to a LOCAL copy for the decision only — the caller's
+    string (the one hashed and persisted) is never touched, so sha256
+    tamper-evidence and dedup are unaffected.
+    """
     if not isinstance(s, str):
         return False
-    for ch in s:
+    decided = unicodedata.normalize("NFKC", s)
+    for ch in decided:
         if ch.isspace():
             continue
+        if ch in _BLANK_RENDER_CODEPOINTS:
+            continue
         cat = unicodedata.category(ch)
-        # Cf=format (includes U+200B), Cc=control, Zs/Zl/Zp=separators
-        if cat in ("Cf", "Cc", "Zs", "Zl", "Zp"):
+        # Complete non-rendering category block: all C* (Cf format, Cc control,
+        # Cn unassigned, Co private-use, Cs surrogate), all M* (Mn non-spacing,
+        # Mc spacing-combining, Me enclosing mark), all Z* (Zs space, Zl line,
+        # Zp paragraph separator).  Cn/Co/Cs added here — they render as blank
+        # or tofu and must not count as visible content.
+        if cat in ("Cf", "Cc", "Cn", "Co", "Cs", "Zs", "Zl", "Zp", "Mn", "Mc", "Me"):
             continue
         return True
     return False
 
 
 def _canonical_host(url: str) -> str:
-    """Lowercased hostname with a single trailing dot stripped; '' when hostless."""
+    """IDNA/punycode-canonical, fully trailing-dot-stripped, lowercased host.
+
+    Returns '' for hostless URLs. Canonical form is ToASCII (punycode) so a
+    Unicode IDN host and its xn-- form map to one string (not two sources).
+    """
     try:
         h = urllib.parse.urlparse(url).hostname or ""
-    except Exception:  # pragma: no cover — urlparse rarely raises
+    except Exception:  # pragma: no cover
         return ""
-    h = h.lower()
-    if h.endswith("."):
-        h = h[:-1]
+    if not h:
+        return ""
+    h = h.lower().rstrip(".")
+    if not h:
+        return ""
+    try:
+        h = h.encode("idna").decode("ascii").lower()
+    except (UnicodeError, UnicodeDecodeError):
+        pass
     return h
 
 
