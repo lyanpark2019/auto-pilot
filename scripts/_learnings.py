@@ -29,7 +29,7 @@ Ticket = dict[str, object]
 _EXCLUDED_STATES: frozenset[str] = frozenset({"rejected"})
 
 
-def _is_gate_passed(ticket: Ticket) -> bool:
+def is_gate_passed(ticket: Ticket) -> bool:
     """Return True for tickets that are either already promoted or pass is_promotable.
 
     The spec's "{promotable, promoted}" set refers to:
@@ -44,6 +44,9 @@ def _is_gate_passed(ticket: Ticket) -> bool:
     if state == "promoted":
         return True
     return is_promotable(ticket)
+
+
+_is_gate_passed = is_gate_passed  # back-compat alias
 
 
 def _ticket_evidence_files(ticket: Ticket) -> list[str]:
@@ -110,7 +113,7 @@ def select_tickets(
 
     matched: list[Ticket] = []
     for ticket in all_tickets:
-        if not _is_gate_passed(ticket):
+        if not is_gate_passed(ticket):
             continue
         evidence_files = _ticket_evidence_files(ticket)
         if not evidence_files:

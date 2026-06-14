@@ -32,8 +32,10 @@ tests/test_hooks_guards.py|640
 # cmd_resume (~22 lines, cap-recovery); duplicate approved-count loop removed
 # (gate_phase_end now returns the count directly). Slice RES1 adds 2 lines
 # (_recover.register_cli_subparsers wiring; all logic in _recover.py).
-# Cap 595 = 591 current + 4 headroom.
-scripts/orchestrator.py|595
+# Phase-2 learnings mirror adds 2 lines (_mirror_learnings.register_cli_subparsers
+# for improvements-mirror subcommand; all logic in _mirror_learnings.py).
+# Cap 600 = 597 current + 3 headroom.
+scripts/orchestrator.py|600
 #
 # test_headless_loop.py is the integration test suite for headless-loop.py; all
 # tests share loop_module/state_dir fixtures and the _args helper, so splitting
@@ -94,3 +96,11 @@ scripts/docs/check_doc_reference_integrity.py|515
 # Splitting would duplicate the _run helper + repo fixture or require a conftest.
 # Cap 510 = 505 + 5 headroom.
 tests/test_doc_reference_integrity.py|510
+#
+# test_mirror_learnings.py is the full acceptance suite for _mirror_learnings.py.
+# The 16 Fix-1 / Fix-2 regression tests (prune-safety + sentinel strict ownership)
+# share _valid_ticket / _write_ticket / render_gotcha helpers with the baseline
+# tests; splitting would duplicate helper definitions or require a conftest.
+# Fix-3 (section 13) adds 2 tests for the corrupt-ticket-blocks-prune invariant
+# (88 lines). Cap 710 = 694 current + 16 headroom.
+tests/test_mirror_learnings.py|710

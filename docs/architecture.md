@@ -102,6 +102,13 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   requires all three `promotion_gate` fields (`tests_pass`, `ci_pass`, `user_approved`) to be
   `True` before the transition is accepted. Asset authoring and approval stay human — `user_approved`
   is only set on an explicit user directive; the CLI records and validates, never auto-decides.
+- **Phase-2 vault mirror shipped 2026-06-14** (`scripts/_mirror_learnings.py`, `orchestrator.py
+  improvements-mirror`): derived, idempotent one-way sync — each gate-passed ticket becomes a
+  `gotchas/gotcha-<fp>.md` page in the project vault. Ledger is SoT (ADR 0002); vault is
+  human-browsable mirror only. Re-runs are byte-stable; pages for tickets no longer promotable
+  are pruned; hand-authored pages (no generator sentinel) are never touched. Shared predicate
+  `_learnings.is_gate_passed` (public since Phase-2) defines "gate-passed" for both injection
+  (Phase-3) and mirror (Phase-2).
 - **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded).
   Once-per-session is sufficient: evidence dedups on (run_id, snippet), so re-fires cannot inflate.
   SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected (enforce with code).
