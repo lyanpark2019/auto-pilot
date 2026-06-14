@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import _dispatch  # noqa: E402  (sys.path set above)
+import _escalation  # noqa: E402
 import _promotion  # noqa: E402
 
 
@@ -182,6 +183,52 @@ def test_gate_fields_match_schema_promotion_gate_required() -> None:
     only_schema = schema_gate_required - code_gate_fields
     assert code_gate_fields == schema_gate_required, (
         f"GATE_FIELDS/promotion_gate.required drift: "
+        f"in code-not-schema={sorted(only_code)}, "
+        f"in schema-not-code={sorted(only_schema)}"
+    )
+
+
+# ── (e) _escalation.TRANSITIONS keys == escalation-record.schema.json state enum ─
+
+_ESCALATION_SCHEMA_PATH = REPO_ROOT / "schemas" / "escalation-record.schema.json"
+
+
+def test_escalation_transitions_keys_match_schema_state_enum() -> None:
+    """_escalation.TRANSITIONS keys must equal the escalation schema state enum exactly.
+
+    A state present in TRANSITIONS but absent from the schema (or vice versa) means
+    a record in that state would fail validation or FSM lookup.
+    """
+    schema = json.loads(_ESCALATION_SCHEMA_PATH.read_text())
+    schema_states = set(schema["properties"]["state"]["enum"])
+    code_states = set(_escalation.TRANSITIONS.keys())
+
+    only_code = code_states - schema_states
+    only_schema = schema_states - code_states
+    assert code_states == schema_states, (
+        f"TRANSITIONS/state enum drift: "
+        f"in code-not-schema={sorted(only_code)}, "
+        f"in schema-not-code={sorted(only_schema)}"
+    )
+
+
+# ── (f) _escalation._PROBLEM_CLASS_CHOICES == escalation-record.schema.json problem_class enum ─
+
+
+def test_escalation_problem_class_choices_match_schema_enum() -> None:
+    """_escalation._PROBLEM_CLASS_CHOICES must equal the schema problem_class enum exactly.
+
+    A choice accepted by the CLI but absent from the schema (or vice versa) means
+    a record created via the CLI would fail validation.
+    """
+    schema = json.loads(_ESCALATION_SCHEMA_PATH.read_text())
+    schema_classes = set(schema["properties"]["problem_class"]["enum"])
+    code_classes = set(_escalation._PROBLEM_CLASS_CHOICES)
+
+    only_code = code_classes - schema_classes
+    only_schema = schema_classes - code_classes
+    assert code_classes == schema_classes, (
+        f"_PROBLEM_CLASS_CHOICES/problem_class enum drift: "
         f"in code-not-schema={sorted(only_code)}, "
         f"in schema-not-code={sorted(only_schema)}"
     )

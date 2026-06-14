@@ -114,15 +114,20 @@ real producer.
   hit → gate → one byte-stable vault page; a community single-source hit → no page
   (gated out). 13 deterministic tests in `tests/test_enrich_fetch.py`, all green.
 
-## Phase 3 — escalation-record schema + on-demand trigger (shared seam)
+## Phase 3 — escalation-record schema + on-demand trigger (shared seam) — DONE 2026-06-14
 
 The typed escalation record `{problem_class, tried, evidence, suggested_enrich_query}`
 (schema + producer) — both the tier-1→tier-2 boundary marker (inc 3) and the enrich
 trigger. A tier-1 gate that cannot resolve a case emits one; `suggested_enrich_query`
 feeds Phase 2.
 
-- scope: `schemas/escalation-record.schema.json`, producer + emit seam. acceptance: a
-  worked escalation record validates and drives a Phase-2 enrich query.
+- scope: `schemas/escalation-record.schema.json` (9th schema), `scripts/_escalation.py`
+  (fingerprint, bump_or_create RMW, drive_enrich seam, CLI escalation-record/list/enrich),
+  `tests/test_escalation.py`, `agents/enrichment-fetcher.md` (Driven-by-escalation
+  subsection), `CLAUDE.md` + `docs/architecture.md` (schema count 8→9 + helper-module row).
+- acceptance: a worked escalation record validates and drives a Phase-2 enrich query;
+  drive_enrich admits a FakeFetcher official hit → state=="enriched" + enrichment block
+  stamped; all verify gates green.
 
 ## Phase 4 — verify + measure (later)
 
