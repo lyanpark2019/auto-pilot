@@ -129,7 +129,18 @@ feeds Phase 2.
   drive_enrich admits a FakeFetcher official hit → state=="enriched" + enrichment block
   stamped; all verify gates green.
 
-## Phase 4 — verify + measure (later)
+## Phase 4a — gate-precision (DONE 2026-06-15)
 
-Wire into suites; measure enrichment precision (admit/reject rate on real candidates)
-and whether enriched knowledge changed worker output — honest delta, no make-believe.
+`scripts/measure_enrich_precision.py` + `measure-enrich` CLI subcommand.
+Deterministic admit/reject rate + per-tier breakdown + reason histogram +
+evidence-complete rate + advisory-judge disagreement over candidate JSONs.
+Tested on fixtures (mirrors the G1 `measure_learnings_injection.py` precedent —
+instrument shipped, runs on real data later).
+Acceptance met: fixture batches produce honest 0%/100%/mixed rates.
+
+## Phase 4b — worker-output delta (DEFERRED)
+
+Did enriched knowledge change worker output (honest delta)?  Needs a live
+`enrichment-fetcher` MCP run + a worker A/B (pre/post vault enrichment pages);
+non-deterministic, not unit-testable.  Now organically producible via
+escalation-record → `drive_enrich`.  Defer to a dedicated experiment session.
