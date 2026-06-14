@@ -145,6 +145,7 @@ class Observation:
     candidate_asset: str | None
     run_id: str
     snippet: str
+    source_path: str = ""
 
 
 @contextmanager
@@ -191,7 +192,10 @@ def _apply_bump(ticket: Ticket, obs: Observation, repo_fp: str, ts: str) -> Tick
     seen = {(e["run_id"], e["snippet"]) for e in evidence}
     key = (obs.run_id, obs.snippet)
     if key not in seen:
-        evidence.append({"run_id": obs.run_id, "snippet": obs.snippet})
+        entry: dict[str, str] = {"run_id": obs.run_id, "snippet": obs.snippet}
+        if obs.source_path:
+            entry["source_path"] = obs.source_path
+        evidence.append(entry)
     ticket["evidence"] = evidence
     ticket["occurrences"] = len(evidence)
     ticket["distinct_runs"] = len({e["run_id"] for e in evidence})

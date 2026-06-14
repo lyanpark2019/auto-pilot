@@ -203,6 +203,7 @@ class SnapshotShas:
     spec: str
     claude_md_chain: list[str]
     project_context: str | None = None
+    learnings: str | None = None
 
 
 _CHAIN_PREFIX = "CLAUDE-chain-"
@@ -220,13 +221,18 @@ def _chain_bundle_name(idx: int, src: Path) -> str:
 
 def snapshot_context(dest_dir: Path, spec_path: Path,
                      claude_md_chain: list[Path],
-                     project_context_path: Path | None = None) -> SnapshotShas:
-    """Copy spec + CLAUDE chain (+ optional project_context) into
-    <dest_dir>/context-bundle/, write MANIFEST, return sha256s of the copied bytes.
+                     project_context_path: Path | None = None,
+                     learnings_path: Path | None = None) -> SnapshotShas:
+    """Copy spec + CLAUDE chain (+ optional project_context + optional learnings)
+    into <dest_dir>/context-bundle/, write MANIFEST, return sha256s of the copied bytes.
 
     If ``project_context_path`` is provided its bytes are copied as
     ``project-context.md`` and its sha is recorded in the returned
     :class:`SnapshotShas`.  Absent → ``project_context=None`` (context-blind run).
+
+    If ``learnings_path`` is provided its bytes are copied as ``learnings.md``
+    and its sha is recorded in the returned :class:`SnapshotShas`.
+    Absent → ``learnings=None`` (learnings-blind run, never blocks dispatch).
     """
     bundle = dest_dir / "context-bundle"
     bundle.mkdir(parents=True, exist_ok=True)
@@ -252,9 +258,16 @@ def snapshot_context(dest_dir: Path, spec_path: Path,
         context_sha = _sha256(ctx_dest.read_bytes())
         manifest_lines.append(f"{context_sha}  project-context.md")
 
+    learnings_sha: str | None = None
+    if learnings_path is not None:
+        lr_dest = bundle / "learnings.md"
+        shutil.copy2(learnings_path, lr_dest)
+        learnings_sha = _sha256(lr_dest.read_bytes())
+        manifest_lines.append(f"{learnings_sha}  learnings.md")
+
     (bundle / "MANIFEST.txt").write_text("\n".join(manifest_lines) + "\n")
     return SnapshotShas(spec=spec_sha, claude_md_chain=chain_shas,
-                        project_context=context_sha)
+                        project_context=context_sha, learnings=learnings_sha)
 
 
 def _verify_spec_sha(bundle: Path, expected_spec: str) -> None:
@@ -291,6 +304,22 @@ def _verify_project_context(bundle: Path, expected_ctx: str | None) -> None:
         )
 
 
+def _verify_learnings(bundle: Path, expected_sha: str | None) -> None:
+    if expected_sha is None:
+        sys.stderr.write("verify_snapshots: ran learnings-blind (no learnings sha declared)\n")
+        return
+    lr_file = bundle / "learnings.md"
+    if not lr_file.exists():
+        raise SnapshotMismatchError(
+            "learnings.md declared in snapshot_shas but absent from bundle"
+        )
+    actual_sha = _sha256(lr_file.read_bytes())
+    if actual_sha != expected_sha:
+        raise SnapshotMismatchError(
+            f"learnings.md sha mismatch: {actual_sha!r} != {expected_sha!r}"
+        )
+
+
 def verify_snapshots(contract_dir: Path) -> None:
     """Re-read context-bundle files, recompute SHAs, compare to contract.snapshot_shas."""
     contract = read_contract(contract_dir / "contract.json")
@@ -299,6 +328,7 @@ def verify_snapshots(contract_dir: Path) -> None:
     _verify_spec_sha(bundle, _as_str(snapshot_shas["spec"]))
     _verify_claude_chain(bundle, _as_str_list(snapshot_shas["claude_md_chain"]))
     _verify_project_context(bundle, _as_optional_str(snapshot_shas.get("project_context")))
+    _verify_learnings(bundle, _as_optional_str(snapshot_shas.get("learnings")))
 
 
 def _sha256(b: bytes) -> str:
