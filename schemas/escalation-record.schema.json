@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/escalation-record/v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "fingerprint",
+    "state",
+    "problem_class",
+    "tried",
+    "evidence",
+    "suggested_enrich_query",
+    "first_seen",
+    "last_seen",
+    "occurrences",
+    "distinct_runs",
+    "plugin_version",
+    "repo_fingerprint"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "state": {
+      "enum": ["open", "enriched", "resolved", "abandoned"]
+    },
+    "problem_class": {
+      "enum": [
+        "enrich-gate-reject",
+        "promotion-gate-unmet",
+        "contract-schema-gap",
+        "doom-loop",
+        "unknown-library",
+        "unresolved-error",
+        "other"
+      ]
+    },
+    "tried": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["approach"],
+        "additionalProperties": false,
+        "properties": {
+          "approach": {
+            "type": "string",
+            "minLength": 1
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "locator": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["run_id", "snippet"],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "locator": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "suggested_enrich_query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "first_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "occurrences": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "distinct_runs": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "plugin_version": {
+      "type": "string"
+    },
+    "repo_fingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "enrichment": {
+      "type": "object",
+      "required": ["query", "enriched_at", "counts"],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enriched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retrieved_date": {
+          "type": "string"
+        },
+        "counts": {
+          "type": "object",
+          "required": ["admitted", "rejected", "written", "unchanged"],
+          "additionalProperties": false,
+          "properties": {
+            "admitted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rejected": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "written": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unchanged": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

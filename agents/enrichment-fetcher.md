@@ -96,6 +96,16 @@ If a tier's MCP tool is absent from this session:
 
 Fewer candidates are better than hallucinated evidence.
 
+## Driven by an escalation
+
+The agent may read open escalations via:
+    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py escalation-list --json
+
+Use a record's `suggested_enrich_query` as the fetch query, run the existing
+fetch→write-candidates→`enrich` flow, then record the result via:
+    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator.py escalation-enrich <fp> \
+        --counts '<json>' --query <q> --retrieved-date <YYYY-MM-DD>
+
 ## Hard rules
 
 - Fetch + write-candidates + invoke-CLI only; **never write vault pages directly**.

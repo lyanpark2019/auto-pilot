@@ -135,6 +135,12 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   `fetch_and_persist` (Fetcher → shaped candidates → existing `persist()`). The agent
   owns live MCP I/O (context7 → web → community); the Python module owns deterministic
   shaping and is fully testable with FakeFetcher. Agent never writes vault pages directly.
+- **Increment-2 Phase-3 — escalation-record schema + producer shipped 2026-06-14**
+  (`schemas/escalation-record.schema.json` + `scripts/_escalation.py`, 9 schemas total):
+  typed escalation record `{problem_class, tried, evidence, suggested_enrich_query}` —
+  the tier-1→tier-2 boundary marker (inc 3) and the enrich trigger.  A tier-1 gate that
+  cannot resolve a case emits one; `suggested_enrich_query` feeds Phase-2 via
+  `drive_enrich`.  CLI: `orchestrator.py escalation-record|escalation-list|escalation-enrich`.
 - **Phase-4 measurement (G1 input) — 2026-06-14** (`scripts/measure_learnings_injection.py`,
   `orchestrator.py measure-injection`): on the current real ledger all 7 gate-passed tickets are
   file-less `insight` tickets (`scope_blind=7`, `scope_addressable_pct=0.0`); the one `doom-loop`
