@@ -34,8 +34,10 @@ tests/test_hooks_guards.py|640
 # (_recover.register_cli_subparsers wiring; all logic in _recover.py).
 # Phase-2 learnings mirror adds 2 lines (_mirror_learnings.register_cli_subparsers
 # for improvements-mirror subcommand; all logic in _mirror_learnings.py).
-# Cap 600 = 597 current + 3 headroom.
-scripts/orchestrator.py|600
+# Phase-2a enrich-persist adds 2 lines (_enrich_persist.register_cli_subparsers
+# for enrich subcommand; all logic in _enrich_persist.py).
+# Cap 605 = 601 current + 4 headroom.
+scripts/orchestrator.py|605
 #
 # test_headless_loop.py is the integration test suite for headless-loop.py; all
 # tests share loop_module/state_dir fixtures and the _args helper, so splitting

@@ -365,3 +365,46 @@ def test_community_two_genuinely_distinct_hosts_admits() -> None:
     result = evaluate(cand)
     assert result["verdict"] == "admit"
     assert result["evidence_complete"] is True
+
+
+# ---------------------------------------------------------------------------
+# Whitespace-in-URL gate (Fix 1)
+# ---------------------------------------------------------------------------
+
+
+def test_official_newline_in_source_url_rejects() -> None:
+    """Official candidate with a newline in source_url must be rejected.
+
+    sha256 matches the snippet — rejection is driven by the whitespace URL check,
+    not a sha mismatch.  A newline in source_url renders as malformed YAML frontmatter.
+    """
+    snippet = "The correct answer is 42."
+    cand = _official_candidate(
+        source_url="https://x.io/p\ninjected",
+        sha256=canonical_sha(snippet),
+    )
+    result = evaluate(cand)
+    assert result["verdict"] == "reject"
+    assert result["evidence_complete"] is False
+    assert any("source_url contains whitespace" in r for r in result["reasons"])
+
+
+def test_community_whitespace_url_corroboration_does_not_count() -> None:
+    """A corroboration whose source_url contains whitespace must not count.
+
+    1 valid corroboration + 1 tab-URL corroboration → only 1 valid → reject.
+    sha256 matches both corroboration snippets so the rejection is URL-whitespace, not sha.
+    """
+    corrs = [
+        _corroboration("https://stackoverflow.com/q/1", "Good first corroboration"),
+        {
+            "source_url": "https://dev.to/p\tinjected",
+            "snippet": "Corr with whitespace url",
+            "sha256": canonical_sha("Corr with whitespace url"),
+        },
+    ]
+    cand = _community_candidate(corroborations=corrs)
+    result = evaluate(cand)
+    assert result["verdict"] == "reject"
+    assert any("source_url contains whitespace" in r for r in result["reasons"])
+    assert any("community tier" in r for r in result["reasons"])
