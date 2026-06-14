@@ -25,11 +25,13 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import _evidence
 import _round_budget
+from _escalation_emit import emit_escalation
 from _log import event
 from _state import (
     STATE_DIR,
@@ -194,6 +196,16 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
                 suffix, message = result
                 _warn(message)
                 event(f"phase_end.{suffix}", phase=args.phase)
+                emit_escalation(
+                    problem_class="contract-schema-gap",
+                    suggested_enrich_query=f"fix evidence chain: {message[:80]}",
+                    approach="review-evidence-chain",
+                    outcome="evidence_failed",
+                    run_id=str(state.get("run_id", "")),
+                    snippet=message,
+                    repo_root=Path("."),
+                    now=datetime.now(timezone.utc),
+                )
                 return 2  # critical: failed gate must not persist state
             approved_count = result
 
@@ -229,10 +241,12 @@ def cmd_resume(_: argparse.Namespace) -> int:
 
 def cmd_pivot_check(args: argparse.Namespace) -> int:
     """Bump repeat counter for ``finding_hash``; return 1 (+ pivot-needed) at 3rd hit."""
+    run_id = ""
     with state_transaction() as txn:
         state = txn.state
         if not state:
             return 0
+        run_id = str(state.get("run_id", ""))
         bucket = state.setdefault("pivot_detector", {}).setdefault(f"phase-{args.phase}", {})
         bucket[args.finding_hash] = bucket.get(args.finding_hash, 0) + 1
         count = bucket[args.finding_hash]
@@ -242,6 +256,16 @@ def cmd_pivot_check(args: argparse.Namespace) -> int:
     _emit_json({"finding_hash": args.finding_hash, "count": count})
     if count >= 3:
         event("pivot.needed", reason="finding_repeated_3_rounds")
+        emit_escalation(
+            problem_class="doom-loop",
+            suggested_enrich_query=f"break repeated failure: {args.finding_hash}",
+            approach="deterministic-retry",
+            outcome="repeated-3-rounds",
+            run_id=run_id,
+            snippet=f"phase-{args.phase} finding {args.finding_hash} x{count}",
+            repo_root=Path("."),
+            now=datetime.now(timezone.utc),
+        )
         return 1
     return 0
 

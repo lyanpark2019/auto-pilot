@@ -93,6 +93,7 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_enrich_persist.py` | inc2-enrich | gate-and-persist admitted candidates → vault enrichment/ pages (upsert by sha, additive); `orchestrator.py enrich` subcommand |
 | `scripts/_enrich_fetch.py` | inc2-enrich | live-fetch shaping seam: Fetcher Protocol (MCP boundary) + shape_hit (sha-computing) + fetch_and_persist; agent owns live MCP I/O |
 | `scripts/_escalation.py` | inc2-Phase3 | escalation-record identity + durable ledger I/O: fingerprint, bump_or_create RMW, drive_enrich seam, CLI (escalation-record/list/enrich) |
+| `scripts/_escalation_emit.py` | inc3-escalation | best-effort tier-1->tier-2 boundary emit; wraps _escalation.bump_or_create at the 3 give-up points, never raises (additive) |
 | `scripts/measure_enrich_precision.py` | inc2-enrich | gate-precision measure: admit/reject rate + per-tier + reason-histogram over candidate JSONs (re-runs _enrich_gate.evaluate); CLI measure-enrich |
 
 ## Editing this plugin
