@@ -586,6 +586,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     measure_learnings_injection.register_cli_subparsers(sub)
     import _enrich_persist  # noqa: PLC0415
     _enrich_persist.register_cli_subparsers(sub)
+    import measure_enrich_precision  # noqa: PLC0415
+    measure_enrich_precision.register_cli_subparsers(sub)
     import _escalation  # noqa: PLC0415
     _escalation.register_cli_subparsers(sub)
 
