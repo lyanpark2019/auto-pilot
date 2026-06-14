@@ -11,13 +11,19 @@ manual_edit: true
 
 The main-session PM dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
-## Purpose (locked 2026-05-29)
+## Purpose
 
-auto-pilot autonomously drives **spec-based feature / refactor / bugfix work on an EXISTING codebase to merged**. Target = brownfield. Examples: "add OAuth to auth", "refactor payments", "fix these P1 bugs".
+> Two-level identity (SoT: `CONTEXT.md`; purpose narrative: `docs/master-plan.md`).
+> The **plugin** is a brownfield toolkit built on an Obsidian **vault** substrate;
+> the **loop** below is its single-purpose flagship.
 
-It is **NOT** a greenfield project generator and **NOT** a quality-eval loop.
+The auto-pilot **loop** autonomously drives **spec-based feature / refactor / bugfix work on an EXISTING codebase to merged**. Target = brownfield. Examples: "add OAuth to auth", "refactor payments", "fix these P1 bugs".
+
+The loop is single-mode — **NOT** a greenfield generator and **NOT** a quality-eval loop. The plugin around it bundles other standalone tools (vault automation, doc-management, swarm, harness).
 
 Why brownfield: every friction guard presupposes existing code — composition-root breakage (`__init__.py` must already exist), SSL cascade, source-first debug (Naver private-bug class), scope-drift REJECT (`scope_files` constrains edits inside an existing tree), worktree + atomic merge to `$ROOT`. Born from 381-session `/insights` friction, all existing-project maintenance accidents.
+
+**Vault-as-substrate reframe (2026-06-14):** the four pillars below sit on the vault as a knowledge substrate, not beside it — the vault is the shared memory the loop reads from and writes to. A continuous autoresearch loop enriches it with verified external knowledge; mistakes and the installed project's conversation history flow back in; the relevant slice is injected at dispatch. First increment = the **closed learning loop**: `docs/specs/2026-06-14-closed-learning-loop.md`. Store split (Ledger = SoT, vault = mirror): `docs/adr/0002-ledger-sot-vault-mirror.md`.
 
 ## System Anatomy (round-2 §2.5)
 
