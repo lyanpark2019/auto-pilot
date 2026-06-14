@@ -80,3 +80,17 @@ scripts/headless-loop.py|515
 # ledger_transaction concurrency conversion added a TestLedgerTransaction class
 # (6 tests incl. a multiprocessing lost-update pin). Cap 645 = 634 current + 11 headroom.
 tests/test_ledger.py|645
+#
+# check_doc_reference_integrity.py is the multi-form citation guard (path:line +
+# path#token with identifier/filename/slug branches + asset-count + hook-count
+# checkers). The slug normalization fix (P2 blind spot) added _normalize_anchor +
+# expanded _check_anchor_citation to 3 branches. Cannot split without circular
+# import (all helpers share _FileCache + _violation). Cap 515 = 512 + 3 headroom.
+scripts/docs/check_doc_reference_integrity.py|515
+#
+# test_doc_reference_integrity.py accumulates tests for all citation forms
+# (path:line, path#token identifier/filename/slug, asset-count, hook-count,
+# scan-scope, symbol-proximity). The slug normalization tests added 3 new cases.
+# Splitting would duplicate the _run helper + repo fixture or require a conftest.
+# Cap 510 = 505 + 5 headroom.
+tests/test_doc_reference_integrity.py|510

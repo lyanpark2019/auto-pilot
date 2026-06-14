@@ -370,3 +370,136 @@ class TestSpecsCarveOut:
         r = _run(repo)
         assert r.returncode == 1, "canonical doc symbol mismatch must be exit 1"
         assert "not found near" in r.stdout
+
+
+class TestAnchorCitations:
+    """path#token anchor form — line-shift-immune symbol citations."""
+
+    def test_valid_anchor_identifier_exits_clean(self, repo: Path) -> None:
+        """Doc cites pkg/mod.py#my_func where def my_func exists → 0 violations."""
+        pkg = repo / "pkg"
+        pkg.mkdir()
+        (pkg / "mod.py").write_text("def my_func():\n    pass\n")
+        (repo / "docs" / "guide.md").write_text(
+            "See `pkg/mod.py#my_func` for the implementation.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+        assert "0 violations" in r.stdout
+
+    def test_missing_symbol_is_violation(self, repo: Path) -> None:
+        """Doc cites pkg/mod.py#ghost_sym not in file → 1 violation mentioning the token."""
+        pkg = repo / "pkg"
+        pkg.mkdir()
+        (pkg / "mod.py").write_text("def my_func():\n    pass\n")
+        (repo / "docs" / "guide.md").write_text(
+            "See `pkg/mod.py#ghost_sym` — symbol does not exist.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1
+        assert "ghost_sym" in r.stdout
+        assert "anchor symbol" in r.stdout
+
+    def test_missing_file_is_violation(self, repo: Path) -> None:
+        """Doc cites pkg/nope.py#x where the file does not exist → 1 violation."""
+        (repo / "docs" / "guide.md").write_text(
+            "See `pkg/nope.py#x` — file is missing.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1
+        assert "file not found" in r.stdout
+
+    def test_filename_token_present_exits_clean(self, repo: Path) -> None:
+        """Doc cites hooks/hooks.json#branch-lock.sh where that string is in the json → 0 violations."""
+        hooks = repo / "hooks"
+        hooks.mkdir()
+        (hooks / "hooks.json").write_text(
+            '{"PreToolUse": [{"command": "hooks/branch-lock.sh"}]}\n'
+        )
+        (repo / "docs" / "guide.md").write_text(
+            "Wired in `hooks/hooks.json#branch-lock.sh`.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+    def test_filename_token_absent_is_violation(self, repo: Path) -> None:
+        """Doc cites hooks/hooks.json#missing.sh where that string is NOT in the json → 1 violation."""
+        hooks = repo / "hooks"
+        hooks.mkdir()
+        (hooks / "hooks.json").write_text(
+            '{"PreToolUse": [{"command": "hooks/branch-lock.sh"}]}\n'
+        )
+        (repo / "docs" / "guide.md").write_text(
+            "Wired in `hooks/hooks.json#missing.sh`.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1
+        assert "missing.sh" in r.stdout
+        assert "anchor symbol" in r.stdout
+
+    def test_heading_slug_file_exists_exits_clean(self, repo: Path) -> None:
+        """Slug whose normalized form is present in target (spaced heading) → 0 violations.
+
+        'some-heading' normalizes to 'someheading'; '## Some Heading' also
+        normalizes to 'someheading' — the substring check passes.
+        """
+        (repo / "docs" / "guide.md").write_text(
+            "## Some Heading\n\nBody text.\n"
+        )
+        (repo / "docs" / "other.md").write_text(
+            "See [guide](docs/guide.md#some-heading) for details.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+    def test_dash_token_absent_normalized_is_violation(self, repo: Path) -> None:
+        """Dash-slug token whose normalized form is NOT in target → exactly 1 violation.
+
+        Closes the P2 blind spot: #totally-bogus-anchor against a file that
+        has no text containing 'totallybogusanchor' must be caught.
+        """
+        (repo / "docs" / "guide.md").write_text(
+            "## Real Heading\n\nSome body text.\n"
+        )
+        (repo / "docs" / "other.md").write_text(
+            "See `docs/guide.md#totally-bogus-anchor` for details.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 1, r.stdout
+        assert "totally-bogus-anchor" in r.stdout
+        assert "anchor symbol" in r.stdout
+
+    def test_dash_token_present_as_spaced_heading_exits_clean(self, repo: Path) -> None:
+        """Slug token whose normalized form IS present (via spaced heading text) → 0 violations.
+
+        File has '## Some Heading', doc cites 'f.md#Some-Heading'.
+        normalize('Some-Heading') == normalize('## Some Heading') == 'someheading'.
+        """
+        (repo / "docs" / "ref.md").write_text(
+            "## Some Heading\n\nBody.\n"
+        )
+        (repo / "docs" / "other.md").write_text(
+            "See `docs/ref.md#Some-Heading` for an example.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0, r.stdout
+
+    def test_cite_ignore_suppresses_anchor_violation(self, repo: Path) -> None:
+        """A line with cite-ignore and a broken anchor → 0 violations."""
+        pkg = repo / "pkg"
+        pkg.mkdir()
+        (pkg / "mod.py").write_text("def my_func():\n    pass\n")
+        (repo / "docs" / "guide.md").write_text(
+            "Historical: `pkg/mod.py#gone_sym` <!-- cite-ignore -->\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0
+        assert "0 violations" in r.stdout
+
+    def test_existing_path_line_citation_unaffected(self, repo: Path) -> None:
+        """Regression: existing path:line citations still work after anchor support added."""
+        (repo / "docs" / "guide.md").write_text(
+            "See `scripts/helper.py:1` for the definition.\n"
+        )
+        r = _run(repo)
+        assert r.returncode == 0
