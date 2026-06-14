@@ -101,7 +101,7 @@ the Phase-1 gate, persists ADMITted ones as vault `enrichment/enrich-<sha256>.md
 pages (UPSERT by sha, additive — never prune). No network calls; fully testable.
 Tests: `tests/test_enrich_persist.py`.
 
-### Phase 2b — live MCP fetch adapter (remaining)
+### Phase 2b — live MCP fetch adapter — DONE 2026-06-14
 
 On-demand fetch adapter (context7 → web → community via MCP), each hit shaped into an
 enrichment-evidence candidate, run through the Phase-1 gate, and ADMITted candidates
@@ -109,8 +109,10 @@ persisted via `_enrich_persist.persist()`. Network-touching; the fetch layer is 
 so tests stay deterministic. Also closes the Phase-1 host/codepoint residuals with a
 real producer.
 
-- scope: `scripts/_enrich_fetch.py` (MCP adapters). acceptance: a mocked context7 hit →
-  gate → one byte-stable vault page; a community single-source hit → no page (gated out).
+- scope: `scripts/_enrich_fetch.py` (Fetcher Protocol + shape_hit + fetch_and_persist),
+  `agents/enrichment-fetcher.md` (live MCP I/O contract). acceptance: a mocked context7
+  hit → gate → one byte-stable vault page; a community single-source hit → no page
+  (gated out). 13 deterministic tests in `tests/test_enrich_fetch.py`, all green.
 
 ## Phase 3 — escalation-record schema + on-demand trigger (shared seam)
 
