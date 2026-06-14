@@ -50,8 +50,9 @@ tests/test_headless_loop.py|520
 # test_state_write_guard.py is a table-driven script-style test for the
 # state-write-guard hook; CASES + EXTRA_CASES lists cannot be split without
 # duplicating the run_case helper or adding a conftest. FIX1 + FIX2 additions
-# (14 new bypass cases) grew it past 500. Cap 520 = 515 current + 5 headroom.
-hooks/test_state_write_guard.py|520
+# (14 new bypass cases) grew it past 500. inc3-Phase2 adds 2 cases for the
+# escalation-resolver role. Cap 540 = 534 current + 6 headroom.
+hooks/test_state_write_guard.py|540
 #
 # _worktree.py gained atomicity helpers (FIX 2: _force_remove_worktree_and_branch +
 # try/except rollback in create) and idempotency probe (FIX 1: _token_already_in_log +
@@ -108,3 +109,10 @@ tests/test_doc_reference_integrity.py|510
 # Fix-3 (section 13) adds 2 tests for the corrupt-ticket-blocks-prune invariant
 # (88 lines). Cap 710 = 694 current + 16 headroom.
 tests/test_mirror_learnings.py|710
+#
+# _escalation.py hosts both the enrichment-record writer (_record_enrichment) and the
+# resolution writer (record_resolution) + cmd_escalation_resolve CLI handler. Splitting
+# would force the CLI handlers to import each other's writers, creating circular-import
+# risk — all cmd_* functions share _resolve_fp / _load_record / ledger_lock / validate_escalation
+# from the same module. Cap 560 = ~550 current + ~10 headroom.
+scripts/_escalation.py|560

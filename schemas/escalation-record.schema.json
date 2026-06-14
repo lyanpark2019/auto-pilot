@@ -156,6 +156,10 @@
     },
     "notes": {
       "type": "string"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
     }
   }
 }
