@@ -12,15 +12,45 @@ manual_edit: true
 
 ---
 
-## 1. Purpose (locked 2026-05-29)
+## 1. Purpose
 
-auto-pilot is an autonomous development loop that drives **spec-based feature / refactor / bugfix work on an EXISTING codebase to merged**, by **integrating the existing Claude Code skill ecosystem** into each loop stage.
+> Identity has two distinct levels — keep them separate. Canonical terms: `CONTEXT.md`.
+
+**auto-pilot plugin** = a Claude Code **brownfield development toolkit**, built on an
+Obsidian **vault** as its knowledge substrate. A continuous autoresearch loop keeps
+the vault stocked with verified external knowledge (library docs via context7, web,
+YouTube, dev/LLM communities); the dev loop runs on top of it, injecting the best
+context in and writing what it learns — including its mistakes and the installed
+project's conversation history — back out.
+
+**auto-pilot loop** = the flagship, single-purpose engine inside the plugin: drives
+**spec-based feature / refactor / bugfix work on an EXISTING codebase to merged**, by
+**integrating the existing Claude Code skill ecosystem** into each loop stage.
 
 - **Target: brownfield only.** Existing repo with code, tests, conventions. Examples: "add OAuth to auth", "refactor payments", "fix these P1 bugs".
-- **NOT** a greenfield project generator. **NOT** a standalone quality-eval scorer.
+- **The loop is single-mode** — NOT greenfield, NOT a standalone quality-eval scorer. (The 2026-05-29 decision dropped the multi-*mode* loop idea; that is about the loop, not the plugin, which legitimately bundles many standalone tools.)
 - **The novelty:** the PM→Worker→Review→Verify→Commit backbone does not reimplement each stage — it **delegates to a best-in-class skill** where one exists. auto-pilot is the orchestration glue + the safety guards (hooks, sandbox, contract layer) that let those skills run unattended.
 
 Why brownfield: every friction guard presupposes existing code (composition-root breakage, scope-drift REJECT, source-first debug, worktree + atomic merge to `$ROOT`). Born from 381-session `/insights` friction — all existing-project maintenance accidents.
+
+**Decision record — vault-as-substrate reframe (2026-06-14):** the prior "single
+brownfield loop" purpose under-described the project and conflicted with two other
+purpose statements (architecture.md's 4-pillar table, CONTEXT.md's old Hermes title).
+Resolved: the **plugin** is a vault-grounded toolkit, the **vault** is the foundation,
+the **loop** stays single-mode. Approach: cherry-pick concepts from ruflo
+(GOAP-style deterministic-plan-then-escalate, retrieval memory) — reject its heavy
+infra (vector DB, consensus, federation) until evidence demands it. First increment =
+the **closed learning loop** (mistakes + conversation history → vault → injected back
+at dispatch); see `docs/specs/2026-06-14-closed-learning-loop.md`.
+
+Increments 2 & 3 decisions are locked but not yet phase-specced (designed after
+increment 1 produces data) — see `docs/adr/0003-gated-ondemand-enrich-two-tier-escalation.md`:
+- **Increment 2 (enrich):** on-demand targeted (not continuous); gate = deterministic
+  source-tier floor + evidence persistence (snippet+URL+date+SHA), LLM-judge advisory
+  only; source order context7 → web → community.
+- **Increment 3 (2-tier loop):** typed escalation records
+  (`{problem_class, tried, evidence, suggested_enrich_query}`) mark the tier-1→tier-2
+  boundary; that record is also increment 2's enrichment trigger (the two share one seam).
 
 > **Scope note (2026-05-29):** a brief mid-session idea to make auto-pilot a multi-mode "build/review/perfect" platform was **dropped**. The skill/hook → plugin packaging & management concern moved to a **separate new project, `plugin-forge`** (a plugin generator that composes managed plugins from the user's existing hand-made skills/hooks). auto-pilot stays build-only and is simply one of the plugins `plugin-forge` will manage.
 
