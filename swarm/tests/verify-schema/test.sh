@@ -6,11 +6,9 @@ set -euo pipefail
 SWARM_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$SWARM_ROOT"
 
-SCHEMA="schemas/score.schema.json"
-VALID="tests/score-schema/valid.json"
-VALID_WITH_VERIFIER="tests/score-schema/valid-with-verifier.json"
-INVALID_BAD_VERDICT="tests/score-schema/invalid-bad-verdict.json"
-INVALID_RUBRIC_OOR="tests/score-schema/invalid-rubric-out-of-range.json"
+SCHEMA="schemas/verify.schema.json"
+VALID="tests/verify-schema/valid.json"
+INVALID_MISSING_PASSED="tests/verify-schema/invalid-missing-passed.json"
 
 # Detect validator (jq fallback is used whenever python3-jsonschema is absent)
 USE_JSONSCHEMA=0
@@ -43,16 +41,16 @@ PYEOF
 }
 
 # --- jq fallback: structural checks ---
-# (engine enum is only enforced on the jsonschema path; the jq fallback
-# checks keys/ticket_id/verdict/rubric ranges)
-VALID_VERDICTS='["merge","request-changes","reject"]'
+# Checks: all required top-level keys present, passed is boolean,
+# evidence has required sub-keys, downgraded_to is null or valid string.
+VALID_DOWNGRADE_VALUES='["request-changes","reject"]'
 
 jq_validate_valid() {
   local fixture="$1"
   # Schema and fixture must parse
   jq -e . "$SCHEMA" >/dev/null
   jq -e . "$fixture" >/dev/null
-  # All required keys present
+  # All required top-level keys present
   required_keys=$(jq -r '.required[]' "$SCHEMA")
   for key in $required_keys; do
     if ! jq -e "has(\"$key\")" "$fixture" >/dev/null 2>&1; then
@@ -60,51 +58,38 @@ jq_validate_valid() {
       return 1
     fi
   done
-  # ticket_id pattern
-  tid=$(jq -r '.ticket_id' "$fixture")
-  if ! echo "$tid" | grep -Eq '^T-[0-9]{8}-[0-9]{6}$'; then
-    echo "  BAD ticket_id pattern: $tid" >&2
+  # passed must be a boolean
+  passed=$(jq -r '.passed' "$fixture")
+  if [[ "$passed" != "true" && "$passed" != "false" ]]; then
+    echo "  BAD passed value: $passed (must be true or false)" >&2
     return 1
   fi
-  # verdict in enum
-  verdict=$(jq -r '.verdict' "$fixture")
-  if ! jq -e --arg v "$verdict" '. | index($v) != null' <<<"$VALID_VERDICTS" >/dev/null 2>&1; then
-    echo "  BAD verdict: $verdict" >&2
-    return 1
-  fi
-  # all rubric dims 0..10
-  for dim in correctness scope_discipline test_coverage code_quality alignment_with_acceptance; do
-    val=$(jq -r ".rubric.${dim}" "$fixture")
-    if ! [[ "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 0 ]] || [[ "$val" -gt 10 ]]; then
-      echo "  RUBRIC OUT OF RANGE: ${dim}=${val}" >&2
+  # evidence sub-keys present
+  for sub in cmd_output files_checked diff_sha; do
+    if ! jq -e ".evidence | has(\"$sub\")" "$fixture" >/dev/null 2>&1; then
+      echo "  MISSING evidence.$sub" >&2
       return 1
     fi
   done
-  return 0
-}
-
-jq_validate_invalid_bad_verdict() {
-  local fixture="$1"
-  jq -e . "$fixture" >/dev/null
-  verdict=$(jq -r '.verdict' "$fixture")
-  if jq -e --arg v "$verdict" '. | index($v) != null' <<<"$VALID_VERDICTS" >/dev/null 2>&1; then
-    echo "  EXPECTED bad verdict but verdict is valid: $verdict" >&2
-    return 1
+  # downgraded_to is null or one of the valid values
+  dg=$(jq -r '.downgraded_to' "$fixture")
+  if [[ "$dg" != "null" ]]; then
+    if ! jq -e --arg v "$dg" '. | index($v) != null' <<<"$VALID_DOWNGRADE_VALUES" >/dev/null 2>&1; then
+      echo "  BAD downgraded_to: $dg" >&2
+      return 1
+    fi
   fi
   return 0
 }
 
-jq_validate_invalid_rubric_oor() {
+jq_validate_invalid_missing_passed() {
   local fixture="$1"
   jq -e . "$fixture" >/dev/null
-  for dim in correctness scope_discipline test_coverage code_quality alignment_with_acceptance; do
-    val=$(jq -r ".rubric.${dim}" "$fixture")
-    if [[ "$val" -lt 0 ]] || [[ "$val" -gt 10 ]]; then
-      return 0
-    fi
-  done
-  echo "  EXPECTED out-of-range rubric dim but all dims in range" >&2
-  return 1
+  if jq -e 'has("passed")' "$fixture" >/dev/null 2>&1; then
+    echo "  EXPECTED missing 'passed' but field is present" >&2
+    return 1
+  fi
+  return 0
 }
 
 # --- Run tests ---
@@ -159,9 +144,7 @@ run_invalid() {
 }
 
 run_valid "$VALID"
-run_valid "$VALID_WITH_VERIFIER"
-run_invalid "$INVALID_BAD_VERDICT" jq_validate_invalid_bad_verdict
-run_invalid "$INVALID_RUBRIC_OOR" jq_validate_invalid_rubric_oor
+run_invalid "$INVALID_MISSING_PASSED" jq_validate_invalid_missing_passed
 
 if [[ "$FAIL" -gt 0 ]]; then
   echo "--- $FAIL test(s) failed ---" >&2

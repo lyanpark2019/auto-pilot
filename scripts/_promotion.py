@@ -8,6 +8,7 @@ promotion_gate field to be True.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,12 @@ def _locked_update(ledger: Path, fp: str, mutate: Any) -> Ticket:
         except json.JSONDecodeError as exc:
             raise PromotionError(f"corrupt ticket {fp}: {exc}") from exc
         try:
+            validate_ticket(raw)
+        except jsonschema.ValidationError as exc:
+            raise PromotionError(
+                f"ticket {fp} invalid before mutation: {exc.message}"
+            ) from exc
+        try:
             result = mutate(raw)
         except PromotionError:
             raise
@@ -110,6 +117,10 @@ def set_gate_field(ledger: Path, fp: str, field: str, value: bool) -> Ticket:
                 f"ticket {fp} is in terminal state {ticket['state']!r}; gate mutation denied"
             )
         ticket["promotion_gate"][field] = value
+        if value is True:
+            ticket["promotion_gate"][f"{field}_at"] = (
+                datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            )
         return ticket
 
     return _locked_update(ledger, fp, mutate)

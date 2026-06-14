@@ -48,6 +48,11 @@ jobs:
       - name: codex fork provenance (every fork has a recorded upstream pin)
         run: python3 scripts/docs/check_codex_provenance.py
 
+      - name: swarm schema tests (score + verify, jsonschema-validated)
+        run: |
+          bash swarm/tests/score-schema/test.sh
+          bash swarm/tests/verify-schema/test.sh
+
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
 

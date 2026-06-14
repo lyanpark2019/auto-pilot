@@ -119,6 +119,10 @@
       "additionalProperties": {
         "type": "boolean"
       }
+    },
+    "verifier": {
+      "type": "object",
+      "description": "Optional sub-block injected into the score file by swarm-verifier after a merge verdict; its inner shape is validated by verify.schema.json"
     }
   }
 }

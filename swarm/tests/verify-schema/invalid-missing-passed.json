@@ -1,0 +1,10 @@
+{
+  "evidence": {
+    "cmd_output": "tests passed",
+    "files_checked": [],
+    "diff_sha": "abc1234"
+  },
+  "reproductions": [],
+  "downgraded_to": null,
+  "notes": "Invalid: 'passed' field is missing (required)."
+}
