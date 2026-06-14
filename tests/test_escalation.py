@@ -437,7 +437,10 @@ class TestSeamVariants:
 class TestByteStabilitySourceCheck:
     def test_library_functions_have_no_datetime_now(self) -> None:
         # Check the library functions individually (cmd_* handlers are allowed)
-        for fn_name in ("bump_or_create", "_record_enrichment", "drive_enrich"):
+        for fn_name in (
+            "bump_or_create", "_record_enrichment", "drive_enrich",
+            "_seed_record", "_apply_bump", "normalize_enrich_query",
+        ):
             fn = getattr(_escalation, fn_name, None)
             if fn is None:
                 continue

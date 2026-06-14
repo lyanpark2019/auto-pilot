@@ -37,6 +37,11 @@ TRANSITIONS: dict[str, set[str]] = {
 }
 
 
+def _can_transition(cur: str, new: str) -> bool:
+    """Return True if transitioning from cur to new is legal (or a same-state refresh)."""
+    return new == cur or new in TRANSITIONS.get(cur, set())
+
+
 def _validator() -> jsonschema.Draft202012Validator:
     global _VALIDATOR
     if _VALIDATOR is None:
@@ -177,6 +182,8 @@ def bump_or_create(
     Dedup evidence on (run_id, snippet), dedup tried on (approach, outcome).
     dry_run returns projected record without disk touch.  Corrupt record reseeds.
     """
+    if not normalize_enrich_query(obs.suggested_enrich_query):
+        raise ValueError("suggested_enrich_query must contain non-whitespace content")
     fp = compute_fingerprint(obs.problem_class, obs.suggested_enrich_query)
     ts = now.isoformat().replace("+00:00", "Z")
     repo_fp = repo_fingerprint(repo_root)
@@ -208,6 +215,10 @@ def _record_enrichment(
     retrieved_date: str,
 ) -> dict[str, Any]:
     """Stamp enrichment sub-doc onto record and set state → 'enriched'."""
+    if not _can_transition(record.get("state", ""), "enriched"):
+        raise ValueError(
+            f"illegal escalation transition {record.get('state')!r}->'enriched'"
+        )
     ts = now.isoformat().replace("+00:00", "Z")
     record["enrichment"] = {
         "query": query,
@@ -245,6 +256,11 @@ def drive_enrich(
     record = _load_record(record_path)
     if record is None:
         raise FileNotFoundError(f"no escalation record at {record_path}")
+
+    if not _can_transition(record.get("state", ""), "enriched"):
+        raise ValueError(
+            f"illegal escalation transition {record.get('state')!r}->'enriched'"
+        )
 
     query: str = str(record.get("suggested_enrich_query", ""))
     counts = fetch_and_persist(
@@ -412,9 +428,13 @@ def cmd_escalation_enrich(args: Any) -> int:
     now = datetime.now(timezone.utc)
 
     if args.dry_run:
-        projected = _record_enrichment(
-            dict(record), query, counts_raw, now=now, retrieved_date=args.retrieved_date
-        )
+        try:
+            projected = _record_enrichment(
+                dict(record), query, counts_raw, now=now, retrieved_date=args.retrieved_date
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         try:
             validate_escalation(projected)
         except jsonschema.ValidationError as exc:
@@ -429,9 +449,13 @@ def cmd_escalation_enrich(args: Any) -> int:
         if record is None:
             print(f"error: record disappeared at {record_path}", file=sys.stderr)
             return 1
-        record = _record_enrichment(
-            record, query, counts_raw, now=now, retrieved_date=args.retrieved_date
-        )
+        try:
+            record = _record_enrichment(
+                record, query, counts_raw, now=now, retrieved_date=args.retrieved_date
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         try:
             validate_escalation(record)
         except jsonschema.ValidationError as exc:
