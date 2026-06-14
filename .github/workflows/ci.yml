@@ -116,6 +116,7 @@ jobs:
           python3 hooks/test_preflight_handoff.py
           python3 hooks/test_subagent_deliverable_check.py
           python3 hooks/test_doc_sync_update.py
+          python3 hooks/test_session_distill_stop.py
 
       - name: module size (≤500 lines, exceptions in module_size_budget.txt)
         run: bash scripts/quality/check-module-size.sh
