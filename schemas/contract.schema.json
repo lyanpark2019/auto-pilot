@@ -36,7 +36,8 @@
         "spec":            { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "claude_md_chain": { "type": "array", "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"} },
         "base_sha":        { "type": "string", "pattern": "^[a-f0-9]{40}$" },
-        "project_context": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        "project_context": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "learnings":       { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "additionalProperties": false
     },

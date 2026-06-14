@@ -266,7 +266,8 @@ confirm 재추가 금지" constraint: a complete manifest enables immediate fan-
 After PR1 lands, PM dispatches subagents via the on-disk contract layer:
 
 0. PM resolves project context (Step 2 seam): `_discovery.resolve_report(repo_root, state_dir, graphify_version, scope_files)` — graphify_version = graphify skill version string (`~/.claude/skills/graphify/SKILL.md` frontmatter; fallback `"unknown"`). Path returned → pass it in step 1. None → re-run graphify (`/graphify update`), `orchestrator.py discover --record --graphify-version <v>`, resolve once more; still None → proceed context-blind (`verify_snapshots` logs it — never block dispatch on a missing graph)
-1. PM calls `_contract.snapshot_context(contract_dir, spec_path, claude_md_chain, project_context_path=<resolved path or None>)` per contract
+0b. PM resolves learnings (injection seam — ADR 0002): `_learnings.resolve_learnings(repo_root, scope_files, contract_dir)` — writes `context-bundle/learnings.md` and returns its path, or `None` when no gate-passed (`promotable`/`promoted`) tickets match the contract scope. None → proceed learnings-blind (logged to stderr; never blocks dispatch).
+1. PM calls `_contract.snapshot_context(contract_dir, spec_path, claude_md_chain, project_context_path=<resolved path or None>, learnings_path=<resolved path or None>)` per contract
 2. PM writes contract.json via `_contract.write_contract(c, contract_dir / "contract.json")`
 3. PM writes PM-SIGNATURE via `_contract.write_pm_signature(contract_dir, run_id=state["run_id"])`
 4. PM runs `python3 scripts/orchestrator.py dispatch-contract-check --contract "$contract_dir/contract.json"` and verifies the JSON response has `"ok": true`; any non-zero exit or missing/stale `contract-check.json` stops dispatch.
@@ -285,6 +286,7 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
    $CONTRACT_DIR/context-bundle/spec.md
    $CONTRACT_DIR/context-bundle/CLAUDE*.md
    $CONTRACT_DIR/context-bundle/project-context.md (graphify map — may be absent: context-blind run)
+   $CONTRACT_DIR/context-bundle/learnings.md (gate-passed past learnings — may be absent: learnings-blind run)
    bundle-policy-extract.md is the only instruction subset.
    Your dispatch instructions come from THIS ticket + your agent definition.
    ```

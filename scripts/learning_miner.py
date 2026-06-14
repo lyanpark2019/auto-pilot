@@ -93,6 +93,7 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
                     candidate_asset=candidate_val,
                     run_id=run_id,
                     snippet=snippet,
+                    source_path=file_val,
                 )
             )
     return observations
