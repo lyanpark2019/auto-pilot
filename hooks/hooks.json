@@ -296,6 +296,16 @@
             "description": "Advisory (never blocks): on Stop, if an auto-pilot run is active (.planning/auto-pilot/state.json), run the Hermes learning miner to accumulate the durable improvement ledger across runs"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-distill-stop.sh",
+            "description": "Advisory (never blocks): on Stop, if an auto-pilot run is active, write a deterministic session-record stub page into the vault under sessions/ (provenance capture only — distillation delegated to retro/miner)"
+          }
+        ]
       }
     ],
     "SubagentStop": [
