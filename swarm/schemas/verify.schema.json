@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://auto-pilot/swarm/schemas/verify.schema.json",
-  "title": "VerifierOutput",
-  "description": "Verifier evidence block for swarm score files",
+  "title": "VerifierSubBlock",
+  "description": "Shape of the 'verifier' sub-object that the swarm-verifier agent injects into an existing score file (.planning/autopilot/scores/<TID>.json). Validates the VALUE of the 'verifier' key, not the outer score wrapper.",
   "type": "object",
   "required": ["passed", "evidence", "reproductions", "downgraded_to", "notes"],
   "additionalProperties": false,
