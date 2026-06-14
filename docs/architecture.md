@@ -115,6 +115,14 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
 - **No run identity → non-persisting scan** (ADR `docs/adr/0001-empty-run-id-non-persisting.md`):
   empty/non-string `run_id` projects a verdict but persists nothing — a `""` phantom run otherwise
   shortcuts the `distinct_runs` gate by one run. No fallback id synthesis (re-imports the gaming).
+- **Increment-2 Phase-1 — enrichment gate shipped 2026-06-14** (`scripts/_enrich_gate.py` +
+  `schemas/enrichment-evidence.schema.json`): deterministic gate that must pass before any
+  external fact enters the vault. Rules: `snippet` non-empty + `source_url` present +
+  `retrieved_date` valid ISO + `sha256 == sha256(snippet.utf-8)` (tamper-evident); official
+  tier admits on evidence-complete alone; community tier additionally requires ≥2 independent
+  corroborations (distinct hosts, each sha-valid) OR `repro_passed=True`. `llm_judge` is
+  recorded in the verdict output but NEVER overrides ADMIT/REJECT ("enforce with code, not
+  prompts"). ADR: `docs/adr/0003-gated-ondemand-enrich-two-tier-escalation.md`.
 - **Phase-4 measurement (G1 input) — 2026-06-14** (`scripts/measure_learnings_injection.py`,
   `orchestrator.py measure-injection`): on the current real ledger all 7 gate-passed tickets are
   file-less `insight` tickets (`scope_blind=7`, `scope_addressable_pct=0.0`); the one `doom-loop`
