@@ -22,12 +22,12 @@ Merged agent: wiki-stub-expander + stub-merger + community-labeler + cross-cat-p
 
 Routing note: PM table (`agents/vault-pm-orchestrator.md:138`) maps wiki_articles to this agent. The decision rule below replaces the old split between wiki-stub-expander and stub-merger.
 
-**Stub threshold decision rule (rubric is SoT — `vault/rubrics/notebooklm.yaml:41-43`):**
+**Stub threshold decision rule (rubric is SoT — `vault/rubrics/notebooklm.yaml:41-45`):**
 - `per_article.min_sources: 3` means ≥3 sources = NOT a stub (neither expand nor merge).
 - Stub = page with <3 source files. Per stub: attempt expand first (if union of connected nodes' source_files ≥3 → stub-expand); else stub-merge, subject to ≥8/cat floor.
 - The "≤3" phrasing in stub-merger's original description was a description-body mismatch; the corrected rule is <3 (body was correct).
 
-**Mode ordering:** `label` before `stub-merge` (stub-merge resolves parents via `.graphify_labels.json` written by label mode). `prefix-merge` before any mode reading `<vault>/graphify-out/graph.json`. If PM dispatches label + stub-merge in the same parallel round, serialize them (`agents/vault-pm-orchestrator.md:82`).
+**Mode ordering:** `label` before `stub-merge` (stub-merge resolves parents via `.graphify_labels.json` written by label mode). `prefix-merge` before any mode reading `<vault>/graphify-out/graph.json`. If PM dispatches label + stub-merge in the same parallel round, serialize them (same-doc serialization precedent: `agents/vault-pm-orchestrator.md:82`).
 
 ## Mode: stub-expand
 

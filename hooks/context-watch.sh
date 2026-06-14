@@ -11,7 +11,9 @@
 # (c17a..a6: 3.55 MB → ~211k tokens → divisor 16.8;
 #  3e1d..58: 2.92 MB → ~122k tokens → divisor 23.8;
 #  9e36..4a: 2.61 MB → ~112k tokens → divisor 23.3).
-# Token estimate = extracted text content (content[].text + tool input strings) / 4.
+# (Offline calibration only: the ground-truth token counts in the lines above were
+# approximated as (content[].text + tool-input strings) / 4. The RUNTIME estimate does
+# NOT do this — it uses raw transcript bytes / 16; see `est_tokens = size / 16` below.)
 # Divisor 16 is the p-low bound — errs toward firing slightly early rather than
 # missing the window; prior value of 8 under-estimated by ~2x.
 #

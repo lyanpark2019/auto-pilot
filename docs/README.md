@@ -37,7 +37,6 @@ This directory is the source-of-truth map for humans and AI agents working on th
 - `docs/7-phase-template.md` — phase-spec template for autonomous work.
 - `docs/specs/` — active dogfood/spec inputs.
 - `docs/history/` — distilled changelogs; historical, not current implementation truth.
-- `docs/plans/` — approved implementation/design plans; active while a branch is in flight, historical after the result is distilled.
 
 ## Doc freshness rule
 

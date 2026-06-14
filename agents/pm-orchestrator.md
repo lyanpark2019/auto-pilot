@@ -322,7 +322,7 @@ _dispatch.assert_reviewer_was_scoped(repo_root, worktree, out_dir)
 outcome = _dispatch.collect_round_outcome(contract_dir, timeout_per_agent_sec=1800)
 ```
 
-(prepare_subagent_ticket / assert_reviewer_was_scoped / collect_round_outcome kwargs verified against scripts/_dispatch.py:261-269,444,423; spawn kwargs against scripts/_reviewer_wrapper.py:205-206.)
+(prepare_subagent_ticket / assert_reviewer_was_scoped / collect_round_outcome kwargs verified against scripts/_dispatch.py:292,475,454; spawn kwargs against scripts/_reviewer_wrapper.py:205-206.)
 
 ### Parallel path (codex + claude + specialists simultaneously)
 Same mechanism, fanned out — `spawn` is the sole reviewer-dispatch path; it isolates env per subprocess (`_reviewer_env`) so concurrent dispatches never race on process-global `os.environ`:

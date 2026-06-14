@@ -210,6 +210,7 @@ Single-command autonomous restructure of `~/Documents/Obsidian/` per the project
 5. **new_vault_skeletons** — create skeleton vaults for missing domains
 6. **vault_build_per_domain** — emit `/vault-build` command manifest + score existing vaults
 7. **notebooklm_create** — emit `notebooklm create` command manifest
+8. **cleanup** — delete now-empty leftover dirs (removing `.DS_Store`) + relocate stale legacy sub-project dirs into their target vaults
 
 ### State
 

@@ -94,7 +94,7 @@ Ready to copy or invoke from this skill directory:
 | `scripts/drift-scan.sh` | Executable Step 4 drift report |
 | `scripts/score-harness.sh` / `harness-loop.sh` / `verify-harness.sh` | 15-dim score + autonomous loop + final 7-test verifier |
 | `scripts/folder-claudemd.sh` | Detect dense/layer folders + scaffold ≤10-line folder CLAUDE.md (`candidates` / `coverage` / `scaffold`) |
-| `scripts/codex-analyze.sh` | Opus-PM + Codex-worker dispatch (`init` / `dispatch` / `verify` / `publish`) |
+| `scripts/codex-analyze.sh` | Opus-PM + Codex-worker dispatch (`init` / `dispatch` / `spawn` / `verify` / `publish`) |
 | `scripts/track-read.sh` / `verify-gate.sh` / `kill-switch.sh` / `steer.sh` / `commit-on-stop.sh` | Reimplemented from `anthropics/cwc-long-running-agents` hook patterns (Apache-2.0); no upstream text retained |
 | `scripts/telemetry.sh` / `weekly-metrics.sh` | PostToolUse jsonl + OTLP emitter, jq weekly report |
 | `scripts/budget-guard.sh` / `poll-cost.sh` | PreToolUse daily/harness spend cap + Anthropic Admin API cost poll |

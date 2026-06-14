@@ -238,7 +238,7 @@ def export_notebooklm(repo: Path, doc_root: Path | None = None,
     """Upsert NotebookLM notebook.
 
     Lookup by name; if missing, create. Then sync sources (markdown files).
-    Existing sources matched by title; new sources added; obsolete removed.
+    Existing sources matched by title (== path relative to repo); new sources added; obsolete sources are NOT pruned.
     """
     repo = repo.expanduser().resolve()
     doc_root = (doc_root or (repo / "docs")).expanduser().resolve()

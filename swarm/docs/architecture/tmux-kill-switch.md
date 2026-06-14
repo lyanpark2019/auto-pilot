@@ -31,8 +31,15 @@ out of scope).
 
 ## Current state
 
-`scripts/start.sh` tmux bootstrap region — no `remain-on-exit`, no
-`swarm-monitor` pane:
+`scripts/start.sh` tmux bootstrap region. `remain-on-exit` is now SHIPPED
+per-window (`tmux set-option -t "$SESSION":auto -w remain-on-exit on` at
+start.sh:118, and again for the `auto2` window at start.sh:134) — wired per-window
+with `-w` scope, NOT the session-wide placement this proposal recommended below
+(M4 `remain-on-exit` objective DONE). Still missing: no `swarm-monitor` pane
+(`grep -q 'swarm-monitor' scripts/start.sh` returns no match today). The embedded
+block below shows the pre-`remain-on-exit` bootstrap and is retained as historical
+context; current line anchors are has-session=start.sh:110, new-session=start.sh:116,
+select-layout=start.sh:144/145:
 
 ```bash
 100  if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -113,7 +120,7 @@ Set on the **session**, not per-window. Reason: M4 success_criterion
 only requires the literal string `remain-on-exit` in start.sh, and a
 session-wide setting reaches every window/pane (`auto`, `auto2`, future
 `monitor`) without N writes. Place the call **immediately after
-`tmux new-session -d -s "$SESSION"`** (line 104), before any pane is
+`tmux new-session -d -s "$SESSION"`** (start.sh:116), before any pane is
 fed a command — so a worker that crashes before the operator attaches
 also leaves its error.
 
@@ -160,8 +167,8 @@ Spawn as **a dedicated tmux window** named `monitor` (NOT a pane in
 `auto`), single pane index `0`. Reasons:
 
 - `auto` window is tiled into 1 PM + ≤4 workers; adding a 6th pane
-  forces a layout re-tile and breaks the 5-slot invariant at
-  start.sh:117.
+  forces a layout re-tile and breaks the 5-pane gate `[ "$CUR_PANES" -ge 5 ]`
+  at start.sh:131.
 - Monitor must survive a worker pane crash; a separate window is
   independent of `auto`'s pane lifecycle.
 - `swarm-monitor.md` is read-only and outputs a single Markdown
@@ -170,7 +177,7 @@ Spawn as **a dedicated tmux window** named `monitor` (NOT a pane in
   [Open questions](#open-questions)).
 
 The launch line goes immediately **before** `tmux select-layout` at
-line 128. It must contain the literal string `swarm-monitor` to satisfy
+start.sh:144. It must contain the literal string `swarm-monitor` to satisfy
 `grep -q 'swarm-monitor' scripts/start.sh`.
 
 ### Layout diagram
@@ -286,7 +293,7 @@ bash -n scripts/stop.sh
   green.
 
 - **Auto-attach the operator to `monitor` window?** Currently
-  `start.sh:133` runs `exec tmux attach -t "$SESSION"`, which lands in
+  `start.sh:150` runs `exec tmux attach -t "$SESSION"`, which lands in
   `auto`. Switching default to `:monitor` would push diagnostic data
   first but hide PM/worker scroll. Recommend leaving default at `auto`
   and documenting `C-b 2` to flip to the monitor window in

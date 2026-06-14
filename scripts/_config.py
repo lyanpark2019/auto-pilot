@@ -23,7 +23,8 @@ class AutoPilotConfig:
     default_max_concurrent_claude: int = 4
     # Wall-clock watchdog: abort after this many seconds; 0 = disabled (opt-in).
     default_max_wall_clock_sec: float = 0.0
-    # Preflight artifact max age; mirrors PREFLIGHT_TTL_SEC in _dispatch.py.
+    # Preflight artifact max age (SoT for the value + resolver below).
+    # _dispatch._check_preflight_ttl() lazily imports _config and reads this via preflight_ttl_sec().
     # Env var: AUTO_PILOT_PREFLIGHT_TTL_SEC (same name as the dispatch module reads).
     preflight_ttl_sec: int = 900
 
@@ -46,7 +47,7 @@ class AutoPilotConfig:
         _check_int_bounds("default_max_concurrent_claude", self.default_max_concurrent_claude, ge=1, le=64)
         # wall-clock watchdog: 0 = disabled; gt=-1 admits 0.0; ≤7-day ceiling
         _check_float_bounds("default_max_wall_clock_sec", self.default_max_wall_clock_sec, gt=-1, le=604_800)
-        # _dispatch.py: age_sec > PREFLIGHT_TTL_SEC — 60 s minimum to avoid instant expiry
+        # consumed by _dispatch._check_preflight_ttl: age_sec > preflight_ttl_sec() — 60 s minimum to avoid instant expiry
         _check_int_bounds("preflight_ttl_sec", self.preflight_ttl_sec, ge=60, le=86_400)
 
 

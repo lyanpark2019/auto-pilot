@@ -6,7 +6,7 @@
 #   2. $ROOT mutations via git am/apply/format-patch must go through
 #      WorktreeManager.apply_to_main, not direct Bash invocation.
 #
-# Detection: active only under AUTO_PILOT_SUBAGENT_ROLE=worker|codex-reviewer|claude-reviewer
+# Detection: active only under AUTO_PILOT_SUBAGENT_ROLE=worker|codex-reviewer|claude-reviewer|review-gatekeeper|tech-critic-lead
 # (mirrors pre-reviewer-write.sh env-gate pattern).  Unset or unknown role → exit 0.
 # Bypass envs: AUTO_PILOT_ALLOW_STATE_WRITE=1 (Edit/Write), AUTO_PILOT_ALLOW_MAIN_MUTATE=1 (Bash).
 # Fail-closed on parse error (unparseable JSON or missing tool_name → exit 2).

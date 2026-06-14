@@ -9,8 +9,11 @@ Phase 5 (PM loop) is interactive: the actual Agent dispatch happens inside Claud
 Code via the vault-pm-orchestrator agent. This script prepares the plan + state.
 
 Usage as CLI:
-    python3 -m vault_builder.pipeline.loop <vault> --source notebooklm [--input <path>]
-    python3 -m vault_builder.pipeline.loop <vault> --source code [--input <path>]
+    python3 vault/pipeline/loop.py <vault> --source notebooklm [--input <path>]
+    python3 vault/pipeline/loop.py <vault> --source code [--input <path>]
+
+(Equivalent module form, but only when run from the vault/ directory:
+``python3 -m pipeline.loop <vault> --source ...``.)
 """
 from __future__ import annotations
 

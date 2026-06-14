@@ -51,7 +51,7 @@ def test_docs_readme_routes_humans_and_agents_to_onboarding_hub() -> None:
     assert "Developer" in text
     assert "AI agent" in text
     assert "source-of-truth" in text
-    assert "docs/plans/" in text
+    assert "docs/specs/" in text
 
 
 def test_onboarding_hub_requires_graphify_before_source_scanning() -> None:

@@ -1,11 +1,11 @@
 window.DASHBOARD_DATA = {
  "branch": "main",
- "commit": "17d213b",
+ "commit": "1664e87",
  "counts": {
   "skill": 11,
   "agent": 16,
   "command": 7,
-  "hook": 25,
+  "hook": 26,
   "codex-skill": 12
  },
  "assets": [
@@ -287,6 +287,11 @@ window.DASHBOARD_DATA = {
   {
    "type": "hook",
    "name": "shellcheck-on-write.sh",
+   "subsystem": "other"
+  },
+  {
+   "type": "hook",
+   "name": "state-write-guard.sh",
    "subsystem": "other"
   },
   {

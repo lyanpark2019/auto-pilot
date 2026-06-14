@@ -13,7 +13,7 @@ Launch the headless infinite loop driver. This is `/auto-pilot start` taken to i
 
 1. Confirm `.planning/auto-pilot/state.json` exists (run `/auto-pilot start` once first to initialize)
 2. Confirm `claude` CLI on PATH (`which claude`)
-3. Confirm git is clean OR `--allow-dirty`
+3. Confirm git is clean (no `--allow-dirty` opt-in exists; the driver auto-stashes a dirty root on the failure path via `stash_if_dirty()` with a recoverable `iter-N-failed` label)
 4. Confirm `codex` CLI on PATH (the headless sessions will need it for adversarial review)
 
 ## Launch
@@ -60,7 +60,7 @@ For iteration N at phase P:
 4. Session exits naturally
 5. Driver reads state.json
    - `status=success` (final phase done) → driver exits 0
-   - `status=stopped` (user `/auto-pilot stop`) → driver exits 0
+   - `status=stopped` (user `/auto-pilot stop`) → driver exits 1 (only `success` exits 0; every non-success terminal status — stopped/pivot-needed/failed/cost-cap/time-cap — exits 1, per `return 0 if status == "success" else 1` at scripts/headless-loop.py:492)
    - `status=pivot-needed` (3rd-round same finding) → driver exits 1
    - `status=failed` → driver stashes any dirty root changes with a recoverable `auto-pilot-iter-N-failed` label, exits 1
    - `status=running` → driver sleeps `--sleep` seconds, next iteration
@@ -82,4 +82,4 @@ For iteration N at phase P:
 
 - You want to watch each phase yourself → use `/auto-pilot start` instead (runs in current conversation)
 - Repo has no spec with phases → server will loop forever doing nothing; use `/auto-pilot start` first to validate
-- You're on flaky power / unsaved laptop work → driver is robust to crashes (resumable from state.json), but a partial commit is still a partial commit. Use `--allow-dirty` consciously.
+- You're on flaky power / unsaved laptop work → driver is robust to crashes (resumable from state.json), but a partial commit is still a partial commit; on a failed iteration the driver non-destructively stashes any dirty root changes rather than discarding them.

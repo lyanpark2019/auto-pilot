@@ -15,8 +15,8 @@ Usage:
     python orchestrator.py dispatch-contract-check --contract <path>
     python orchestrator.py round-budget --score-dir .planning/score --round N
     python orchestrator.py review-status
-    python orchestrator.py ledger-append [--project-root PATH]
-    python orchestrator.py ledger-rebalance [--apply] [--project-root PATH]
+    python orchestrator.py ledger-append | ledger-rebalance [--apply] [--project-root PATH]
+    python orchestrator.py resume | discover (--check|--record) --graphify-version V [--scope-files a,b] | recover ... | improvements-list | improvements-gate | improvements-set-state ...
 """
 from __future__ import annotations
 
