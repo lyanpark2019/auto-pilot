@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-pilot/enrichment-evidence/v1",
+  "type": "object",
+  "required": [
+    "claim",
+    "source_tier",
+    "source_url",
+    "retrieved_date",
+    "snippet",
+    "sha256"
+  ],
+  "properties": {
+    "claim": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_tier": {
+      "enum": ["official", "community"]
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1
+    },
+    "retrieved_date": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO date (YYYY-MM-DD) or ISO date-time; validated in code via _valid_iso_date"
+    },
+    "snippet": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "corroborations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_url", "snippet", "sha256"],
+        "properties": {
+          "source_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "snippet": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "repro_passed": {
+      "type": ["boolean", "null"]
+    },
+    "llm_judge": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["verdict"],
+          "properties": {
+            "verdict": {
+              "enum": ["admit", "reject", "abstain"]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
