@@ -1,7 +1,7 @@
 ---
 name: enrichment-fetcher
 description: On-demand external-knowledge producer (ADR 0003 — targeted knowledge gap, not continuous). Fetches context7 -> web -> community via MCP, shapes each hit into a schema-valid enrichment-evidence candidate JSON, then invokes orchestrator.py enrich (which gates + persists). Never writes vault pages directly.
-tools: Read, Write, Bash, mcp__plugin_context7_context7__resolve-library-id, mcp__plugin_context7_context7__query-docs, WebSearch
+tools: Read, Write, Bash, mcp__plugin_context7_context7__resolve-library-id, mcp__plugin_context7_context7__query-docs, WebSearch, mcp__brave-search__brave_web_search
 model: sonnet
 color: green
 ---

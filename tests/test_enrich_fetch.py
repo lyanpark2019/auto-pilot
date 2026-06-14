@@ -256,7 +256,16 @@ def test_shape_hit_passes_through_llm_judge_and_repro() -> None:
     assert shaped.get("llm_judge") == llm_judge
 
 
-# 13. dry_run=True → no .md files created
+# 13. Official hit whose snippet is a blank codepoint (U+3164 Hangul filler) → gated out
+def test_official_blank_codepoint_snippet_gated_out(tmp_path: Path) -> None:
+    fetcher = FakeFetcher({"official": [_official_hit(snippet="ㅤ")]})
+    counts = fetch_and_persist(fetcher, "q", tmp_path, retrieved_date=RETRIEVED)
+    assert counts["admitted"] == 0
+    assert counts["rejected"] == 1
+    assert list(tmp_path.glob("enrichment/enrich-*.md")) == []
+
+
+# 14. dry_run=True → no .md files created
 def test_fetch_and_persist_dry_run_no_writes(tmp_path: Path) -> None:
     fetcher = FakeFetcher({"official": [_official_hit()]})
     counts = fetch_and_persist(fetcher, "q", tmp_path, retrieved_date=RETRIEVED, dry_run=True)
