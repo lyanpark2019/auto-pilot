@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from _promotion import DEMOTION_THRESHOLD, Ticket, transition  # noqa: E402
+from _promotion import DEMOTION_THRESHOLD, Ticket, _compute_harmful_count, transition  # noqa: E402
 from _learnings import is_gate_passed, select_tickets  # noqa: E402
 from measure_learnings_injection import measure  # noqa: E402
 
@@ -363,3 +363,139 @@ class TestMeasureNewKeys:
         result = measure(ledger, ["scripts/"])
         # harmful_count >= DEMOTION_THRESHOLD → not harmful_pending (condition is strictly <)
         assert result["harmful_pending"] == 0
+
+
+# ---------------------------------------------------------------------------
+# P1-fix: since-watermark — reinstate resets the harmful_count clock
+# ---------------------------------------------------------------------------
+
+class TestReinstateWatermark:
+    """downvote×2 → quarantine → reinstate → ONE new downvote must STAY promoted.
+
+    Before the fix, _compute_harmful_count counted ALL demotions[] including
+    the pre-reinstatement ones, so a single post-reinstatement downvote saw
+    len(distinct_runs) == 3 >= DEMOTION_THRESHOLD and re-quarantined.
+    """
+
+    def test_reinstate_then_single_downvote_stays_promoted(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        ledger, repo = _make_ledger_and_repo(tmp_path)
+        _seed_promoted(ledger)
+
+        # Two distinct-run downvotes → quarantined
+        for run in ("run-1", "run-2"):
+            _run([
+                "improvements-downvote", "--repo-root", str(repo),
+                FP_A[:8], "--reason", "bad", "--run-id", run,
+            ])
+            capsys.readouterr()
+
+        on_disk = json.loads((ledger / f"{FP_A}.json").read_text())
+        assert on_disk["state"] == "quarantined"
+
+        # Reinstate
+        rc = _run([
+            "improvements-reinstate", "--repo-root", str(repo),
+            FP_A[:8], "--reason", "false alarm",
+        ])
+        assert rc == 0
+        capsys.readouterr()
+
+        # ONE new downvote (3rd distinct run) — should count 1 since watermark, < threshold
+        rc2 = _run([
+            "improvements-downvote", "--repo-root", str(repo),
+            FP_A[:8], "--reason", "new issue", "--run-id", "run-3",
+        ])
+        assert rc2 == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["state"] == "promoted", (
+            "single post-reinstatement downvote must NOT re-quarantine (since-watermark)"
+        )
+        assert out["harmful_count"] == 1
+
+    def test_red_without_since_watermark_would_quarantine(self) -> None:
+        """RED proof: without since=, pre-reinstatement demotions inflate the count.
+
+        Construct the scenario in pure Python (no CLI) to isolate the function.
+        """
+        reinstate_ts = "2026-06-15T10:00:00Z"
+        demotions = [
+            {"run_id": "run-1", "at": "2026-06-15T09:00:00Z", "signal": "downvote", "reason": "a"},
+            {"run_id": "run-2", "at": "2026-06-15T09:30:00Z", "signal": "downvote", "reason": "b"},
+            {"run_id": "run-3", "at": "2026-06-15T10:30:00Z", "signal": "downvote", "reason": "c"},
+        ]
+        # Without since= watermark: all 3 runs → count=3 ≥ threshold (RED path)
+        count_without_watermark = _compute_harmful_count(demotions, since=None)
+        assert count_without_watermark == 3  # would trigger re-quarantine
+
+        # With since= watermark: only run-3 (after reinstatement) → count=1 < threshold (GREEN)
+        count_with_watermark = _compute_harmful_count(demotions, since=reinstate_ts)
+        assert count_with_watermark == 1  # stays promoted
+
+
+# ---------------------------------------------------------------------------
+# P1-fix: downvote on non-promoted/quarantined ticket → rc2, no demotions
+# ---------------------------------------------------------------------------
+
+class TestDownvoteStateGuard:
+    def test_downvote_on_candidate_returns_rc2(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """downvote on a candidate ticket (not yet promoted) must exit rc2 and record nothing."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        ledger, repo = _make_ledger_and_repo(tmp_path)
+        # Override state to candidate
+        _seed_promoted(ledger, extra={"state": "candidate"})
+
+        rc = _run([
+            "improvements-downvote", "--repo-root", str(repo),
+            FP_A[:8], "--reason", "wrong state", "--run-id", "run-x",
+        ])
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "not promoted/quarantined" in err
+
+        # No demotion should have been written
+        on_disk = json.loads((ledger / f"{FP_A}.json").read_text())
+        assert not on_disk.get("demotions"), "demotions must not be recorded on state-guard failure"
+
+    def test_downvote_on_verified_returns_rc2(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """downvote on a verified ticket must exit rc2 (pre-promotion accumulation guard)."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        ledger, repo = _make_ledger_and_repo(tmp_path)
+        _seed_promoted(ledger, extra={
+            "state": "verified",
+            "promotion_gate": {"tests_pass": True, "ci_pass": True, "user_approved": True},
+        })
+
+        rc = _run([
+            "improvements-downvote", "--repo-root", str(repo),
+            FP_A[:8], "--reason", "wrong state",
+        ])
+        assert rc == 2
+        capsys.readouterr()
+
+        on_disk = json.loads((ledger / f"{FP_A}.json").read_text())
+        assert not on_disk.get("demotions")
+
+    def test_downvote_on_quarantined_appends_but_does_not_error(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """downvote on an already-quarantined ticket is allowed (appends demotions, rc=0)."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        ledger, repo = _make_ledger_and_repo(tmp_path)
+        _seed_promoted(ledger, extra={"state": "quarantined"})
+
+        rc = _run([
+            "improvements-downvote", "--repo-root", str(repo),
+            FP_A[:8], "--reason", "still bad", "--run-id", "run-q",
+        ])
+        assert rc == 0
+        capsys.readouterr()
+
+        on_disk = json.loads((ledger / f"{FP_A}.json").read_text())
+        assert len(on_disk.get("demotions", [])) == 1

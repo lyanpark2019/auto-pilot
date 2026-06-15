@@ -1,4 +1,4 @@
-"""Hermes promotion pipeline (Phase 1): ticket FSM + gate evaluation.
+"""Improvement-ticket promotion pipeline: ticket FSM + gate evaluation.
 
 Operates on the home-store ledger written by learning_miner.py. Acting on
 a promotable verdict stays human — this module validates and records
@@ -154,11 +154,22 @@ def transition(ledger: Path, fp: str, new_state: str) -> Ticket:
     return _locked_update(ledger, fp, mutate)
 
 
-def _compute_harmful_count(demotions: list[dict[str, Any]]) -> int:
-    """Distinct harmful run_ids + manual signals (entries with no run_id each count as +1)."""
+def _compute_harmful_count(
+    demotions: list[dict[str, Any]], *, since: str | None = None
+) -> int:
+    """Distinct harmful run_ids + manual signals since the watermark timestamp.
+
+    ``since`` is the ISO-8601 timestamp of the last reinstatement (derived from
+    ``reinstatements[-1]["at"]``).  Only demotions whose ``"at"`` field is
+    strictly after ``since`` are counted, so reinstatement resets the clock
+    without requiring a new schema field.  Entries without a ``run_id`` still
+    count +1 each (manual signals), but only when they fall after ``since``.
+    """
     distinct: set[str] = set()
     manual = 0
     for d in demotions:
+        if since is not None and d.get("at", "") <= since:
+            continue
         rid = d.get("run_id", "")
         if rid:
             distinct.add(rid)
@@ -168,7 +179,7 @@ def _compute_harmful_count(demotions: list[dict[str, Any]]) -> int:
 
 
 def cmd_improvements_downvote(args: Any) -> int:
-    """Record a down-vote signal on a promoted ticket; quarantine when threshold reached."""
+    """Record a down-vote signal on a promoted/quarantined ticket; quarantine when threshold reached."""
     import sys
     from _improvement import ledger_dir
 
@@ -184,21 +195,34 @@ def cmd_improvements_downvote(args: Any) -> int:
         entry["run_id"] = run_id
 
     def mutate(ticket: Ticket) -> Ticket:
+        state = ticket["state"]
+        if state not in ("promoted", "quarantined"):
+            raise PromotionError(
+                f"improvements-downvote: ticket {ticket['fingerprint']} is {state!r},"
+                f" not promoted/quarantined — nothing to demote"
+            )
         demotions: list[Any] = list(ticket.get("demotions") or [])
         demotions.append(entry)
         ticket["demotions"] = demotions
-        harmful = _compute_harmful_count(demotions)
+        reinstatements: list[Any] = ticket.get("reinstatements") or []
+        since: str | None = (
+            max(r["at"] for r in reinstatements) if reinstatements else None
+        )
+        harmful = _compute_harmful_count(demotions, since=since)
         ticket["harmful_count"] = harmful
-        if ticket["state"] == "promoted" and (harmful >= DEMOTION_THRESHOLD or force):
+        if state == "promoted" and (harmful >= DEMOTION_THRESHOLD or force):
             ticket["state"] = "quarantined"
         return ticket
+
+    _STATE_GUARD_PREFIX = "improvements-downvote: ticket"
 
     try:
         fp = resolve_fingerprint(ledger, args.prefix)
         out = _locked_update(ledger, fp, mutate)
     except PromotionError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+        msg = str(exc)
+        print(msg, file=sys.stderr)
+        return 2 if msg.startswith(_STATE_GUARD_PREFIX) else 1
 
     print(json.dumps({"state": out["state"], "harmful_count": out.get("harmful_count", 0)}))
     return 0
@@ -219,7 +243,8 @@ def cmd_improvements_reinstate(args: Any) -> int:
         reinstatement["reason"] = reason
 
     def mutate(ticket: Ticket) -> Ticket:
-        # FSM gate: transition() enforces quarantined -> promoted + gate check
+        # Inline mirror of transition()'s FSM + gate logic — kept in sync with
+        # TRANSITIONS and GATE_FIELDS; must be updated whenever those change.
         current = ticket["state"]
         if "promoted" not in TRANSITIONS.get(current, frozenset()):
             raise PromotionError(
