@@ -277,8 +277,9 @@ def build_record_from_round_dirs(
     Fields derived from evidence (with documented approximations):
     - task_id: contract id from contract.json (read from the final round dir);
       falls back to contract_dir.name for cross-phase uniqueness (F1).
-    - role, task_class: NOT in the contract schema — always defaulted to
-      worker-primary / feature-multi-file with a notes annotation.
+    - role, task_class: optional contract fields (added in contract schema v2);
+      falls back to worker-primary / feature-multi-file when absent (back-compat).
+      Absence is noted in 'notes'.
     - model: from contract.json worker_model field when present; else defaults
       to _DEFAULT_MODEL. Defaulting noted in 'notes'.
     - review_rounds: count of round-* dirs passed (ALL rounds, not just latest).
@@ -298,15 +299,18 @@ def build_record_from_round_dirs(
 
     notes_parts: list[str] = []
 
-    # F-B: role and task_class are NOT in the contract schema — always default.
-    role = _DEFAULT_ROLE
-    task_class = _DEFAULT_TASK_CLASS
-    notes_parts.append(
-        f"role defaulted to {_DEFAULT_ROLE}; contract schema carries no role field"
-    )
-    notes_parts.append(
-        f"task_class defaulted to {_DEFAULT_TASK_CLASS}; contract schema carries no task_class field"
-    )
+    # F-B: role and task_class may now be present in the contract (v2 optional fields).
+    # Fall back to defaults when absent for back-compat with existing contracts.
+    role = str(contract.get("role") or _DEFAULT_ROLE)
+    task_class = str(contract.get("task_class") or _DEFAULT_TASK_CLASS)
+    if not contract.get("role"):
+        notes_parts.append(
+            f"role defaulted to {_DEFAULT_ROLE}; contract carries no role field"
+        )
+    if not contract.get("task_class"):
+        notes_parts.append(
+            f"task_class defaulted to {_DEFAULT_TASK_CLASS}; contract carries no task_class field"
+        )
     # F-B: the schema field is worker_model, not model.
     model = str(contract.get("worker_model") or _DEFAULT_MODEL)
     if not contract.get("worker_model"):
