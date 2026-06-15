@@ -453,6 +453,82 @@ def test_resolve_learnings_not_disabled_when_env_unset(tmp_path, monkeypatch):
     assert result is not None, "without kill-switch, resolve_learnings must produce output"
 
 
+def test_resolve_learnings_not_disabled_when_env_zero(tmp_path, monkeypatch):
+    """AUTO_PILOT_DISABLE_LEARNINGS=0 must NOT disable injection (opt-in parse).
+
+    Old truthy check: ``os.environ.get("AUTO_PILOT_DISABLE_LEARNINGS")`` returns
+    the string "0" which is truthy → injection would be silently killed.
+    New explicit check: "0" is not in {"1","true","yes","on"} → injection stays ON.
+    RED: revert to the old check and this test flips to FAIL.
+    """
+    import unittest.mock as mock
+
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(state="candidate", distinct_runs=2,
+                           source_path="scripts/_contract.py")
+    _write_ticket(ledger, ticket)
+
+    monkeypatch.setenv("AUTO_PILOT_DISABLE_LEARNINGS", "0")
+    dest_dir = tmp_path / "bundle-opt-in-zero"
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+
+    assert result is not None, (
+        "=0 must NOT disable injection; only 1/true/yes/on are truthy opt-in"
+    )
+
+
+def test_resolve_learnings_not_disabled_when_env_false(tmp_path, monkeypatch):
+    """AUTO_PILOT_DISABLE_LEARNINGS=false must NOT disable injection."""
+    import unittest.mock as mock
+
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(state="candidate", distinct_runs=2,
+                           source_path="scripts/_contract.py")
+    _write_ticket(ledger, ticket)
+
+    monkeypatch.setenv("AUTO_PILOT_DISABLE_LEARNINGS", "false")
+    dest_dir = tmp_path / "bundle-opt-in-false"
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+
+    assert result is not None, "=false must NOT disable injection"
+
+
+def test_resolve_learnings_disabled_when_env_true(tmp_path, monkeypatch):
+    """AUTO_PILOT_DISABLE_LEARNINGS=true → injection disabled."""
+    import unittest.mock as mock
+
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(state="candidate", distinct_runs=2,
+                           source_path="scripts/_contract.py")
+    _write_ticket(ledger, ticket)
+
+    monkeypatch.setenv("AUTO_PILOT_DISABLE_LEARNINGS", "true")
+    dest_dir = tmp_path / "bundle-opt-in-true"
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+
+    assert result is None, "=true must disable injection"
+
+
+def test_resolve_learnings_disabled_when_env_yes(tmp_path, monkeypatch):
+    """AUTO_PILOT_DISABLE_LEARNINGS=yes → injection disabled."""
+    import unittest.mock as mock
+
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(state="candidate", distinct_runs=2,
+                           source_path="scripts/_contract.py")
+    _write_ticket(ledger, ticket)
+
+    monkeypatch.setenv("AUTO_PILOT_DISABLE_LEARNINGS", "yes")
+    dest_dir = tmp_path / "bundle-opt-in-yes"
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+
+    assert result is None, "=yes must disable injection"
+
+
 # ---------------------------------------------------------------------------
 # Integration: miner → ledger → resolver (real _apply_bump shape, not fabricated)
 # ---------------------------------------------------------------------------

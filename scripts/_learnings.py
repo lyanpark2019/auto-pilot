@@ -208,11 +208,15 @@ def resolve_learnings(
     Returns the path on success, ``None`` when no tickets match (caller logs
     "ran learnings-blind" and proceeds without the file).
 
-    If ``AUTO_PILOT_DISABLE_LEARNINGS`` is set to a non-empty value, injection is
-    skipped entirely and ``None`` is returned — the no-inject arm for outcome-level
-    A/B evals (``evals/cases/learnings-ab/``).
+    If ``AUTO_PILOT_DISABLE_LEARNINGS`` is set to ``1``, ``true``, ``yes``, or
+    ``on`` (case-insensitive), injection is skipped entirely and ``None`` is
+    returned — the no-inject arm for outcome-level A/B evals
+    (``evals/cases/learnings-ab/``).  Any other value (including ``0``,
+    ``false``, ``no``, ``off``, empty string, or unset) leaves injection ON so
+    that setting ``=0`` to mean "keep enabled" is not misread as a disable.
     """
-    if os.environ.get("AUTO_PILOT_DISABLE_LEARNINGS"):
+    _disable = os.environ.get("AUTO_PILOT_DISABLE_LEARNINGS", "").strip().lower()
+    if _disable in {"1", "true", "yes", "on"}:
         sys.stderr.write(
             "_learnings: injection disabled via AUTO_PILOT_DISABLE_LEARNINGS\n"
         )

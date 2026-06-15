@@ -153,5 +153,7 @@ tests/test_demote.py|510
 # integration.  The A/B gate-vs-ungated tests (select_tickets gated=False,
 # resolve_learnings kill-switch) share _valid_ticket / _write_ticket / _bind_snapshot
 # helpers with the baseline tests; splitting would duplicate helper definitions or
-# require a conftest.  Cap 530 = 521 current + 9 headroom.
-tests/test_learnings.py|530
+# require a conftest.  The cold-review opt-in env-parse fix added 5 new tests
+# (=0/=false/=true/=yes/not-disabled-extended) = +76 lines.
+# Cap 610 = 597 current + 13 headroom.
+tests/test_learnings.py|610

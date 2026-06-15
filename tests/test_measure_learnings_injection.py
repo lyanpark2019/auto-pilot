@@ -344,8 +344,11 @@ def test_compare_gating_byte_stable_across_write_order(tmp_path):
     for t in reversed(tickets):
         _write_ticket(ledger_b, t)
 
-    out_a = json.dumps(mi.compare_gating(ledger_a, ["scripts/"]), sort_keys=True)
-    out_b = json.dumps(mi.compare_gating(ledger_b, ["scripts/"]), sort_keys=True)
+    # No sort_keys — the function must self-enforce top-level ordering.
+    # sort_keys=True in the CLI is not a substitute: it would mask a future key
+    # inserted out of order in the return literal.
+    out_a = json.dumps(mi.compare_gating(ledger_a, ["scripts/"]))
+    out_b = json.dumps(mi.compare_gating(ledger_b, ["scripts/"]))
     assert out_a == out_b, "compare_gating must be byte-stable across write order"
 
 

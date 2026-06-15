@@ -26,6 +26,7 @@ from typing import Any
 
 from _improvement import ledger_dir, local_key, verify_ticket_provenance
 from _learnings import (
+    _EXCLUDED_STATES,
     _scope_match,
     _ticket_evidence_files,
     is_gate_passed,
@@ -286,6 +287,14 @@ def compare_gating(ledger: Path, scopes: list[str]) -> dict[str, Any]:
         tickets the gate would have blocked.
     ``scopes_measured``
         The scopes list used.
+
+    Note on denominators: ``delta.provenance_*`` fields are computed over the
+    full gate-passed/ungated POPULATION (same denominator as ``measure()``),
+    whereas ``gated_provenance`` and ``ungated_provenance`` are over each arm's
+    scope-matched INJECTED SET only — a strictly smaller subset.  Reading
+    ``legacy_unsigned: 3`` in ``delta`` vs ``2`` in ``gated_provenance`` is not
+    a contradiction: the delta counts all gate-passed tickets; the provenance
+    dict counts only those that were also scope-matched for injection.
     """
     if not ledger.exists() or not ledger.is_dir():
         empty_prov = {"legacy_unsigned": 0, "unverified": 0, "verified": 0}
@@ -321,7 +330,6 @@ def compare_gating(ledger: Path, scopes: list[str]) -> dict[str, Any]:
 
     filtered_fps = ungated_injected - gated_injected
 
-    _EXCLUDED_STATES: frozenset[str] = frozenset({"rejected", "quarantined"})
     fp_map = {str(t.get("fingerprint", "")): t for t in all_tickets}
     excluded_state = 0
     not_promotable = 0
@@ -335,7 +343,7 @@ def compare_gating(ledger: Path, scopes: list[str]) -> dict[str, Any]:
     gated_measure = measure(ledger, scopes, gated=True)
     ungated_measure = measure(ledger, scopes, gated=False)
 
-    return {
+    return dict(sorted({
         "delta": measure_delta(gated_measure, ungated_measure),
         "filtered_breakdown": {
             "excluded_state": excluded_state,
@@ -346,7 +354,7 @@ def compare_gating(ledger: Path, scopes: list[str]) -> dict[str, Any]:
         "gated_provenance": _provenance_counts(gated_injected, all_tickets, _key),
         "scopes_measured": scopes,
         "ungated_provenance": _provenance_counts(ungated_injected, all_tickets, _key),
-    }
+    }.items()))
 
 
 def register_cli_subparsers(sub: Any) -> None:
