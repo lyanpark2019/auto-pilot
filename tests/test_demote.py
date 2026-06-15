@@ -9,20 +9,9 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from _promotion import (  # noqa: E402
-    DEMOTION_THRESHOLD,
-    GATE_FIELDS,
-    PromotionError,
-    PromotionGateUnmet,
-    Ticket,
-    _locked_update,
-    resolve_fingerprint,
-    transition,
-)
+from _promotion import DEMOTION_THRESHOLD, Ticket, transition  # noqa: E402
 from _learnings import is_gate_passed, select_tickets  # noqa: E402
 from measure_learnings_injection import measure  # noqa: E402
 
