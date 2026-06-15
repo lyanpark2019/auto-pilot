@@ -86,9 +86,9 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_contract_check.py` | run-3 | producer/validator for dispatch `contract-check.json` artifacts |
 | `scripts/_recover.py` | run-3 | crash-recovery helpers for the loop (am-state cleanup, reap) |
 | `scripts/asset_registry_check.py` | creation-gate | registry overlap checker; emits artifact consumed by hooks/creation-gate.sh |
-| `scripts/_learnings.py` | improvement-ticket loop | injection resolver: select + render gate-passed tickets for dispatch bundle; `is_gate_passed` shared predicate |
+| `scripts/_learnings.py` | improvement-ticket loop | injection resolver: select + render gate-passed tickets for dispatch bundle; `is_gate_passed` shared predicate; `AUTO_PILOT_DISABLE_LEARNINGS` env var disables injection (kill-switch / no-inject arm for `evals/cases/learnings-ab/`) |
 | `scripts/_mirror_learnings.py` | improvement-ticket loop | promotable-ticket → vault gotcha mirror (derived, idempotent one-way sync); `orchestrator.py improvements-mirror` subcommand |
-| `scripts/measure_learnings_injection.py` | improvement-ticket loop | Phase-4 injection-recall measurement instrument (file-anchored vs scope-blind breakdown); `orchestrator.py measure-injection` subcommand |
+| `scripts/measure_learnings_injection.py` | improvement-ticket loop | Phase-4 injection-recall + gate-vs-ungated A/B (`--compare-gating`): what the gate filters out vs what leaks in without it; `orchestrator.py measure-injection [--compare-gating]` subcommand |
 | `scripts/_enrich_gate.py` | inc2-enrich | deterministic enrichment gate (source-tier floor + sha-verified evidence; LLM-judge advisory only) |
 | `scripts/_enrich_persist.py` | inc2-enrich | gate-and-persist admitted candidates → vault enrichment/ pages (upsert by sha, additive); `orchestrator.py enrich` subcommand |
 | `scripts/_enrich_fetch.py` | inc2-enrich | live-fetch shaping seam: Fetcher Protocol (MCP boundary) + shape_hit (sha-computing) + fetch_and_persist; agent owns live MCP I/O |

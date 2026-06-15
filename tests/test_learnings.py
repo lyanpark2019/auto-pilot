@@ -373,6 +373,90 @@ def test_resolve_learnings_returns_none_when_no_match(tmp_path):
 # Integration: miner → ledger → resolver (real _apply_bump shape, not fabricated)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# (f) gated=False includes sub-threshold and rejected tickets the gate blocks
+# ---------------------------------------------------------------------------
+
+def test_select_tickets_gated_false_includes_sub_threshold(tmp_path):
+    """select_tickets(gated=False) includes a sub-threshold ticket that gated=True blocks."""
+    ledger = tmp_path / "ledger"
+    sub_threshold = _valid_ticket(fingerprint="f" * 64, state="candidate",
+                                  distinct_runs=1, source_path="scripts/_contract.py")
+    gate_passed = _valid_ticket(fingerprint="a" * 64, state="candidate",
+                                distinct_runs=2, source_path="scripts/_contract.py")
+    _write_ticket(ledger, sub_threshold)
+    _write_ticket(ledger, gate_passed)
+
+    gated_results = lr.select_tickets(ledger, ["scripts/"])
+    ungated_results = lr.select_tickets(ledger, ["scripts/"], gated=False)
+
+    gated_fps = {t["fingerprint"] for t in gated_results}
+    ungated_fps = {t["fingerprint"] for t in ungated_results}
+
+    assert "f" * 64 not in gated_fps, "sub-threshold ticket must be excluded by gate"
+    assert "f" * 64 in ungated_fps, "sub-threshold ticket must be included when gated=False"
+    assert "a" * 64 in gated_fps, "gate-passed ticket must appear in gated results"
+    assert "a" * 64 in ungated_fps, "gate-passed ticket must appear in ungated results"
+
+
+def test_select_tickets_gated_false_includes_rejected(tmp_path):
+    """select_tickets(gated=False) includes a rejected ticket that gated=True blocks."""
+    ledger = tmp_path / "ledger"
+    rejected = _valid_ticket(fingerprint="e" * 64, state="rejected",
+                             distinct_runs=2, source_path="scripts/_contract.py")
+    _write_ticket(ledger, rejected)
+
+    gated_results = lr.select_tickets(ledger, ["scripts/"])
+    ungated_results = lr.select_tickets(ledger, ["scripts/"], gated=False)
+
+    assert gated_results == [], "rejected ticket must be excluded by gate"
+    assert len(ungated_results) == 1, "rejected ticket must appear when gated=False"
+    assert ungated_results[0]["fingerprint"] == "e" * 64
+
+
+# ---------------------------------------------------------------------------
+# (g) AUTO_PILOT_DISABLE_LEARNINGS env kill-switch
+# ---------------------------------------------------------------------------
+
+def test_resolve_learnings_disabled_by_env(tmp_path, monkeypatch):
+    """AUTO_PILOT_DISABLE_LEARNINGS=1 → resolve_learnings returns None unconditionally."""
+    import unittest.mock as mock
+
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(state="candidate", distinct_runs=2,
+                           source_path="scripts/_contract.py")
+    _write_ticket(ledger, ticket)
+
+    monkeypatch.setenv("AUTO_PILOT_DISABLE_LEARNINGS", "1")
+    dest_dir = tmp_path / "bundle-dir"
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+
+    assert result is None, "env kill-switch must prevent injection"
+    assert not (dest_dir / "context-bundle" / "learnings.md").exists()
+
+
+def test_resolve_learnings_not_disabled_when_env_unset(tmp_path, monkeypatch):
+    """Without AUTO_PILOT_DISABLE_LEARNINGS, resolve_learnings proceeds normally."""
+    import unittest.mock as mock
+
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(state="candidate", distinct_runs=2,
+                           source_path="scripts/_contract.py")
+    _write_ticket(ledger, ticket)
+
+    monkeypatch.delenv("AUTO_PILOT_DISABLE_LEARNINGS", raising=False)
+    dest_dir = tmp_path / "bundle-dir2"
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+
+    assert result is not None, "without kill-switch, resolve_learnings must produce output"
+
+
+# ---------------------------------------------------------------------------
+# Integration: miner → ledger → resolver (real _apply_bump shape, not fabricated)
+# ---------------------------------------------------------------------------
+
 def test_miner_bump_to_resolver_end_to_end(tmp_path):
     """Verify that evidence written by _apply_bump is readable by _ticket_evidence_files.
 

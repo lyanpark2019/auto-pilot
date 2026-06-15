@@ -15,6 +15,7 @@ ADR 0002: injection reads the ledger, never vault prose.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -96,8 +97,14 @@ def select_tickets(
     scope_files: Sequence[str],
     *,
     partial: bool = True,
+    gated: bool = True,
 ) -> list[Ticket]:
-    """Load ledger and return gate-passed tickets relevant to scope_files.
+    """Load ledger and return tickets relevant to scope_files.
+
+    When ``gated=True`` (default), only gate-passed tickets are returned
+    (``is_gate_passed`` filter applied — current production behaviour, byte-identical).
+    When ``gated=False``, the gate filter is skipped and every scope-matched ticket
+    is returned regardless of state or promotion status — for A/B measurement only.
 
     Returns an empty list when the ledger is absent, empty, or no tickets match.
     ``partial=True`` skips malformed tickets rather than raising (safe for
@@ -114,7 +121,7 @@ def select_tickets(
     _key = local_key()
     matched: list[Ticket] = []
     for ticket in all_tickets:
-        if not is_gate_passed(ticket):
+        if gated and not is_gate_passed(ticket):
             continue
         ok, reason = verify_ticket_provenance(ticket, key=_key)
         if not ok:
@@ -200,7 +207,16 @@ def resolve_learnings(
     renders and writes ``<dest_dir>/context-bundle/learnings.md``.
     Returns the path on success, ``None`` when no tickets match (caller logs
     "ran learnings-blind" and proceeds without the file).
+
+    If ``AUTO_PILOT_DISABLE_LEARNINGS`` is set to a non-empty value, injection is
+    skipped entirely and ``None`` is returned — the no-inject arm for outcome-level
+    A/B evals (``evals/cases/learnings-ab/``).
     """
+    if os.environ.get("AUTO_PILOT_DISABLE_LEARNINGS"):
+        sys.stderr.write(
+            "_learnings: injection disabled via AUTO_PILOT_DISABLE_LEARNINGS\n"
+        )
+        return None
     ledger = ledger_dir(repo_root, None)
     tickets = select_tickets(ledger, scope_files)
     if not tickets:

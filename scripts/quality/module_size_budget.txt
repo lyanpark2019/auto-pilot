@@ -148,3 +148,10 @@ tests/test_enrich_persist.py|530
 # (3 tests) = +75 lines.  Splitting would duplicate helper definitions or require
 # a conftest.  Cap 510 = 501 current + 9 headroom.
 tests/test_demote.py|510
+#
+# test_learnings.py is the full acceptance suite for _learnings.py + snapshot
+# integration.  The A/B gate-vs-ungated tests (select_tickets gated=False,
+# resolve_learnings kill-switch) share _valid_ticket / _write_ticket / _bind_snapshot
+# helpers with the baseline tests; splitting would duplicate helper definitions or
+# require a conftest.  Cap 530 = 521 current + 9 headroom.
+tests/test_learnings.py|530
