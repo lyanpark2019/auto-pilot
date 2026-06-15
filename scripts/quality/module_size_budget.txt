@@ -128,3 +128,10 @@ scripts/_escalation.py|560
 # require a conftest.  The measure_delta + --compare CLI tests add 241 lines
 # (sections 14 + 15).  Cap 695 = 684 current + 11 headroom.
 tests/test_measure_enrich_precision.py|695
+#
+# test_escalation.py is the full acceptance suite for _escalation.py; sections
+# 1-6 (schema, fingerprint, RMW, acceptance, seam variants, byte-stability) plus
+# the new section 7 (auto-abandon regression guards — 3 tests) share the same
+# FakeFetcher / _obs / _valid_record / Observation helpers, so splitting would
+# duplicate fixture overhead or require a conftest. Cap 550 = 540 + 10 headroom.
+tests/test_escalation.py|550
