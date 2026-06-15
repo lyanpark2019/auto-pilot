@@ -337,6 +337,101 @@ def test_cli_enrich_nonexistent_candidates_rc2(tmp_path: Path) -> None:
     assert "error" in result.stderr.lower(), f"expected error message in stderr: {result.stderr!r}"
 
 
+# ---------------------------------------------------------------------------
+# 12. enrich-gate-reject emit — all-rejected triggers escalation record
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_enrich_all_rejected_emits_escalation(tmp_path: Path) -> None:
+    """cmd_enrich with all-rejected candidates emits an enrich-gate-reject escalation.
+
+    Uses a single-source community candidate (REJECT) and an isolated repo-root
+    so the escalation ledger is discoverable via escalation-list --repo-root.
+    The emit is best-effort — rc and printed counts are unchanged.
+    """
+    from _enrich_gate import canonical_sha  # noqa: PLC0415
+
+    # Build a community candidate that will be REJECTED (single corroboration).
+    snippet = "enrich-gate-reject test snippet."
+    cand = {
+        "claim": "Test claim for rejection",
+        "source_tier": "community",
+        "source_url": "https://example.com/single",
+        "retrieved_date": "2026-06-15",
+        "snippet": snippet,
+        "sha256": canonical_sha(snippet),
+        "corroborations": [
+            {
+                "source_url": "https://only.one/corr",
+                "snippet": "Only one corroboration.",
+                "sha256": canonical_sha("Only one corroboration."),
+            }
+        ],
+    }
+    candidate_file = tmp_path / "reject_cand.json"
+    candidate_file.write_text(json.dumps(cand), encoding="utf-8")
+
+    repo_root = tmp_path / "isolated_repo"
+    repo_root.mkdir()
+    vault = tmp_path / "vault"
+
+    scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
+    # Override HOME to isolate the escalation ledger from the real home store.
+    # Preserve PYTHONPATH so site-packages (jsonschema/referencing) remain reachable.
+    import os  # noqa: PLC0415
+    import site as _site  # noqa: PLC0415
+    home_override = tmp_path / "fakehome"
+    home_override.mkdir()
+    # Preserve user site-packages explicitly so HOME override does not drop them.
+    user_site = _site.getusersitepackages()
+    existing_pp = os.environ.get("PYTHONPATH", "")
+    pythonpath = os.pathsep.join(p for p in [existing_pp, user_site, str(scripts_dir)] if p)
+    env = {
+        **os.environ,
+        "HOME": str(home_override),
+        "PYTHONPATH": pythonpath,
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_dir / "orchestrator.py"),
+            "enrich",
+            "--candidates", str(candidate_file),
+            "--vault", str(vault),
+            "--repo-root", str(repo_root),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(scripts_dir),
+        env=env,
+    )
+    # rc and counts are unchanged
+    assert result.returncode == 0, f"cmd_enrich failed:\n{result.stderr}"
+    counts_out = json.loads(result.stdout.strip())
+    assert counts_out["rejected"] == 1
+    assert counts_out["admitted"] == 0
+
+    # Verify escalation record was emitted via escalation-list
+    r_list = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_dir / "orchestrator.py"),
+            "escalation-list",
+            "--json",
+            "--repo-root", str(repo_root),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(scripts_dir),
+        env=env,
+    )
+    assert r_list.returncode == 0, f"escalation-list failed:\n{r_list.stderr}"
+    records = [json.loads(line) for line in r_list.stdout.strip().splitlines() if line.strip()]
+    assert any(
+        r.get("problem_class") == "enrich-gate-reject" for r in records
+    ), f"expected enrich-gate-reject record, got {records}"
+
+
 def test_cli_enrich_malformed_json_candidates_rc2(tmp_path: Path) -> None:
     """A malformed-JSON --candidates file must produce rc=2 with no traceback."""
     bad_json = tmp_path / "bad.json"

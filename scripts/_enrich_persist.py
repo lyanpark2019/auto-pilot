@@ -22,6 +22,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -235,4 +236,27 @@ def cmd_enrich(args: Any) -> int:
         return 2
     counts = persist(candidates, vault, dry_run=dry_run)
     print(json.dumps(counts))
+
+    if counts.get("admitted", 0) == 0 and counts.get("rejected", 0) > 0:
+        # Best-effort: emit an enrich-gate-reject escalation record.
+        # Never raises or changes exit code — emit_escalation swallows I/O failures.
+        representative_query = next(
+            (str(c.get("claim", "")) for c in candidates if c.get("claim")),
+            "enrichment",
+        )
+        try:
+            from _escalation_emit import emit_escalation  # noqa: PLC0415
+            emit_escalation(
+                problem_class="enrich-gate-reject",
+                suggested_enrich_query=representative_query,
+                approach="enrich",
+                outcome="all-rejected",
+                run_id=os.environ.get("AUTO_PILOT_RUN_ID", ""),
+                snippet=f"enrich gate rejected {counts['rejected']} candidate(s)",
+                repo_root=repo_root,
+                now=datetime.now(timezone.utc),
+            )
+        except Exception:  # noqa: BLE001 — best-effort; never perturb cmd_enrich exit
+            pass
+
     return 0

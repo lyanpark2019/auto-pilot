@@ -350,10 +350,14 @@ def test_worked_record_drives_enrich_admitted_page(tmp_path: Path) -> None:
 
 
 class TestSeamVariants:
-    def test_community_single_source_rejected_state_still_enriched(
+    def test_zero_admit_drive_enrich_auto_abandons(
         self, tmp_path: Path
     ) -> None:
-        """Community single-source → rejected==1, zero pages, state still 'enriched'."""
+        """Zero-admit enrichment (all rejected) → record auto-transitions to 'abandoned'.
+
+        Enrichment block is still stamped (captures the attempt); resolved_at is set.
+        RED: before the auto-abandon branch, this test would fail with state=='enriched'.
+        """
         ledger = tmp_path / "ledger"
         ledger.mkdir()
         vault = tmp_path / "vault"
@@ -375,7 +379,15 @@ class TestSeamVariants:
 
         record = _load_record(ledger / f"{fp}.json")
         assert record is not None
-        assert record["state"] == "enriched"
+        # Auto-abandon: zero-admit enrichment ends abandoned (not enriched).
+        assert record["state"] == "abandoned", (
+            f"expected 'abandoned' after 0-admit enrichment, got {record['state']!r}"
+        )
+        # Enrichment block still present — the attempt was recorded.
+        assert "enrichment" in record
+        assert record["enrichment"]["counts"]["admitted"] == 0
+        # resolved_at set by record_resolution.
+        assert "resolved_at" in record
 
     def test_dry_run_drive_enrich_no_files(self, tmp_path: Path) -> None:
         """dry_run drive_enrich → counts populated, no .md files, record not written."""
@@ -451,3 +463,78 @@ class TestByteStabilitySourceCheck:
             assert "date.today" not in fn_src, (
                 f"{fn_name} must not call date.today"
             )
+
+
+# ===========================================================================
+# 7. Auto-abandon behavior — regression guard (positive-admit path unchanged)
+# ===========================================================================
+
+
+class TestAutoAbandon:
+    def test_positive_admit_state_enriched(self, tmp_path: Path) -> None:
+        """≥1 admitted → state remains 'enriched'; regression guard for auto-abandon."""
+        ledger = tmp_path / "ledger"
+        ledger.mkdir()
+        vault = tmp_path / "vault"
+        vault.mkdir()
+
+        obs = _obs(
+            problem_class="unknown-library",
+            query="react useEffect cleanup positive",
+        )
+        bump_or_create(ledger, obs, repo_root=tmp_path, now=NOW, dry_run=False)
+        fp = compute_fingerprint(obs.problem_class, obs.suggested_enrich_query)
+
+        fetcher = FakeFetcher({"official": [_official_hit()]})
+        counts = drive_enrich(
+            ledger, fp, fetcher, vault,
+            retrieved_date=RETRIEVED, now=NOW,
+        )
+        assert counts["admitted"] == 1
+        record = _load_record(ledger / f"{fp}.json")
+        assert record is not None
+        assert record["state"] == "enriched", (
+            f"positive-admit must keep state 'enriched', got {record['state']!r}"
+        )
+        assert "resolved_at" not in record
+
+    def test_zero_admit_sets_resolved_at(self, tmp_path: Path) -> None:
+        """Auto-abandon sets resolved_at on the record."""
+        ledger = tmp_path / "ledger"
+        ledger.mkdir()
+        vault = tmp_path / "vault"
+        vault.mkdir()
+
+        obs = _obs(
+            problem_class="other",
+            query="zero admit test query",
+        )
+        bump_or_create(ledger, obs, repo_root=tmp_path, now=NOW, dry_run=False)
+        fp = compute_fingerprint(obs.problem_class, obs.suggested_enrich_query)
+
+        fetcher = FakeFetcher({"community": [_community_hit()]})
+        drive_enrich(ledger, fp, fetcher, vault, retrieved_date=RETRIEVED, now=NOW)
+
+        record = _load_record(ledger / f"{fp}.json")
+        assert record is not None
+        assert record["state"] == "abandoned"
+        assert "resolved_at" in record
+
+    def test_zero_admit_enrich_block_preserved(self, tmp_path: Path) -> None:
+        """Auto-abandon preserves the enrichment block for enrich_attempted accounting."""
+        ledger = tmp_path / "ledger"
+        ledger.mkdir()
+        vault = tmp_path / "vault"
+        vault.mkdir()
+
+        obs = _obs(problem_class="doom-loop", query="doom loop zero query")
+        bump_or_create(ledger, obs, repo_root=tmp_path, now=NOW, dry_run=False)
+        fp = compute_fingerprint(obs.problem_class, obs.suggested_enrich_query)
+
+        fetcher = FakeFetcher({"community": [_community_hit()]})
+        drive_enrich(ledger, fp, fetcher, vault, retrieved_date=RETRIEVED, now=NOW)
+
+        record = _load_record(ledger / f"{fp}.json")
+        assert record is not None
+        assert "enrichment" in record, "enrichment block must be present even after auto-abandon"
+        assert record["enrichment"]["counts"]["admitted"] == 0
