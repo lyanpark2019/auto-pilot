@@ -185,3 +185,196 @@ def test_result_is_json_serialisable(tmp_path):
     dumped = json.dumps(result)  # must not raise
     loaded = json.loads(dumped)
     assert loaded["gate_passed_total"] == 1
+
+
+# ---------------------------------------------------------------------------
+# A/B corpus fixture helpers
+# ---------------------------------------------------------------------------
+
+def _ticket_with_bad_provenance(fingerprint: str, source_path: str) -> dict:
+    """Gate-passed ticket with a present-but-invalid provenance block.
+
+    The HMAC attestation is set to all-f's (64 hex chars — schema-valid but
+    will fail verify_ticket_provenance → unverified bucket).
+    """
+    t = _valid_ticket(fingerprint=fingerprint, state="candidate",
+                      distinct_runs=2, source_path=source_path)
+    t["provenance"] = {
+        "algo": "hmac-sha256",
+        "attestation": "f" * 64,
+        "signed_at": "2026-06-15T00:00:00Z",
+        "identity_version": 1,
+    }
+    return t
+
+
+def _build_ab_corpus(ledger: Path) -> None:
+    """Seed the ledger with a corpus that exercises every compare_gating bucket.
+
+    Scope used: ``scripts/`` (dir prefix match for all evidence).
+
+    Tickets:
+      promoted_a   — promoted, gate-passed; in BOTH arms
+      candidate_a  — candidate reviewer-finding distinct_runs=2; gate-passed; BOTH arms
+      subthresh_a  — candidate reviewer-finding distinct_runs=1; NOT gate-passed → not_promotable
+      rejected_a   — rejected distinct_runs=2; NOT gate-passed (excluded_state)
+      quarantined_a— quarantined distinct_runs=2; NOT gate-passed (excluded_state)
+      blind_a      — gate-passed but no source_path → scope-blind; neither arm injects it
+      bad_prov_a   — gate-passed + scope-matched + invalid provenance → unverified bucket
+    """
+    promoted = _valid_ticket(fingerprint="1" * 64, state="promoted",
+                             source_path="scripts/foo.py", distinct_runs=2)
+    promoted["promotion_gate"] = {"tests_pass": True, "ci_pass": True, "user_approved": True}
+    _write_ticket(ledger, promoted)
+
+    _write_ticket(ledger, _valid_ticket(fingerprint="2" * 64, state="candidate",
+                                        distinct_runs=2, source_path="scripts/bar.py"))
+
+    _write_ticket(ledger, _valid_ticket(fingerprint="3" * 64, state="candidate",
+                                        distinct_runs=1, source_path="scripts/baz.py"))
+
+    _write_ticket(ledger, _valid_ticket(fingerprint="4" * 64, state="rejected",
+                                        distinct_runs=2, source_path="scripts/rej.py"))
+
+    _write_ticket(ledger, _valid_ticket(fingerprint="5" * 64, state="quarantined",
+                                        distinct_runs=2, source_path="scripts/qua.py"))
+
+    _write_ticket(ledger, _valid_ticket(fingerprint="6" * 64, state="candidate",
+                                        distinct_runs=2, source_path=""))
+
+    _write_ticket(ledger, _ticket_with_bad_provenance(fingerprint="7" * 64,
+                                                      source_path="scripts/prov.py"))
+
+
+# ---------------------------------------------------------------------------
+# 7. compare_gating — filtered_total and breakdown
+# ---------------------------------------------------------------------------
+
+def test_compare_gating_filtered_total_and_breakdown(tmp_path):
+    """compare_gating must correctly count the filtered set and bucket by reason."""
+    ledger = tmp_path / "ledger"
+    _build_ab_corpus(ledger)
+
+    result = mi.compare_gating(ledger, ["scripts/"])
+
+    # Gated arm: promoted + candidate_pass + bad_prov = 3 scope-matched gate-passed
+    # Ungated arm: all 5 scope-matched (promoted, candidate_pass, subthresh, rejected,
+    #              quarantined, bad_prov) = 6 (blind has no source_path → excluded both arms)
+    # filtered = 3 (subthresh + rejected + quarantined)
+    assert result["filtered_total"] == 3
+
+    bd = result["filtered_breakdown"]
+    # rejected + quarantined → excluded_state = 2
+    assert bd["excluded_state"] == 2
+    # subthresh → not_promotable = 1
+    assert bd["not_promotable"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 8. compare_gating — provenance arms
+# ---------------------------------------------------------------------------
+
+def test_compare_gating_provenance_arms(tmp_path):
+    """gated_provenance.unverified >= 1; ungated_provenance.unverified >= gated."""
+    ledger = tmp_path / "ledger"
+    _build_ab_corpus(ledger)
+
+    result = mi.compare_gating(ledger, ["scripts/"])
+
+    gp = result["gated_provenance"]
+    up = result["ungated_provenance"]
+
+    assert gp["unverified"] >= 1, "bad_prov ticket is gate-passed → unverified in gated arm"
+    assert up["unverified"] >= gp["unverified"], (
+        "ungated arm includes all gated unverified plus potentially more"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 9. measure_delta shape and injected_any_scope.delta > 0
+# ---------------------------------------------------------------------------
+
+def test_measure_delta_shape_and_delta_positive(tmp_path):
+    """measure_delta returns {a, b, delta} scalars and ungated injects more."""
+    ledger = tmp_path / "ledger"
+    _build_ab_corpus(ledger)
+
+    gated = mi.measure(ledger, ["scripts/"], gated=True)
+    ungated = mi.measure(ledger, ["scripts/"], gated=False)
+    delta = mi.measure_delta(gated, ungated)
+
+    for key in mi._SCALAR_KEYS:
+        assert key in delta, f"missing key {key!r} in measure_delta output"
+        row = delta[key]
+        assert "a" in row and "b" in row and "delta" in row
+
+    assert delta["injected_any_scope"]["delta"] > 0, (
+        "ungated must inject more than gated for this corpus"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 10. compare_gating — JSON byte-stability across ledger write order
+# ---------------------------------------------------------------------------
+
+def test_compare_gating_byte_stable_across_write_order(tmp_path):
+    """compare_gating JSON output is identical regardless of ledger write order."""
+    ledger_a = tmp_path / "ledger_a"
+    ledger_b = tmp_path / "ledger_b"
+
+    _build_ab_corpus(ledger_a)
+
+    # Write the same tickets in reversed fingerprint order
+    tickets = [
+        _valid_ticket(fingerprint="1" * 64, state="promoted", source_path="scripts/foo.py",
+                      distinct_runs=2),
+        _valid_ticket(fingerprint="2" * 64, state="candidate", distinct_runs=2,
+                      source_path="scripts/bar.py"),
+        _valid_ticket(fingerprint="3" * 64, state="candidate", distinct_runs=1,
+                      source_path="scripts/baz.py"),
+        _valid_ticket(fingerprint="4" * 64, state="rejected", distinct_runs=2,
+                      source_path="scripts/rej.py"),
+        _valid_ticket(fingerprint="5" * 64, state="quarantined", distinct_runs=2,
+                      source_path="scripts/qua.py"),
+        _valid_ticket(fingerprint="6" * 64, state="candidate", distinct_runs=2,
+                      source_path=""),
+        _ticket_with_bad_provenance(fingerprint="7" * 64, source_path="scripts/prov.py"),
+    ]
+    tickets[0]["promotion_gate"] = {"tests_pass": True, "ci_pass": True, "user_approved": True}
+    for t in reversed(tickets):
+        _write_ticket(ledger_b, t)
+
+    # No sort_keys — the function must self-enforce top-level ordering.
+    # sort_keys=True in the CLI is not a substitute: it would mask a future key
+    # inserted out of order in the return literal.
+    out_a = json.dumps(mi.compare_gating(ledger_a, ["scripts/"]))
+    out_b = json.dumps(mi.compare_gating(ledger_b, ["scripts/"]))
+    assert out_a == out_b, "compare_gating must be byte-stable across write order"
+
+
+# ---------------------------------------------------------------------------
+# 11. RED-proof: reverting gated=False to behave like gated=True breaks assertions
+# ---------------------------------------------------------------------------
+
+def test_red_proof_gated_false_differs_from_gated_true(tmp_path):
+    """If the gated=False branch behaves identically to gated=True, this must FAIL.
+
+    The assertion ``filtered_total >= 1`` and ``delta["injected_any_scope"]["delta"] >= 1``
+    together prove the gated=False branch actually skips the gate.  A revert of that
+    branch would make compare_gating return filtered_total=0 and delta=0, flipping this test.
+    """
+    ledger = tmp_path / "ledger"
+    _build_ab_corpus(ledger)
+
+    result = mi.compare_gating(ledger, ["scripts/"])
+    gated = mi.measure(ledger, ["scripts/"], gated=True)
+    ungated = mi.measure(ledger, ["scripts/"], gated=False)
+    delta = mi.measure_delta(gated, ungated)
+
+    # These two lines MUST remain true — if gated=False == gated=True they both flip to False
+    assert result["filtered_total"] >= 1, (
+        "corpus contains sub-threshold and excluded-state tickets that must be filtered"
+    )
+    assert delta["injected_any_scope"]["delta"] >= 1, (
+        "ungated must inject at least 1 more ticket than gated for this corpus"
+    )

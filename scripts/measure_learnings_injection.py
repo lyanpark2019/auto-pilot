@@ -1,4 +1,4 @@
-"""Phase-4 injection-recall measurement instrument.
+"""Phase-4 injection-recall measurement instrument + gate-vs-ungated A/B.
 
 Measures how many gate-passed Hermes ledger tickets can actually be scope-matched
 for injection — distinguishing *file-anchored* tickets (have evidence source_path →
@@ -7,6 +7,10 @@ be injected by the deterministic scope-match regardless of what scopes are liste
 
 Key metric: ``scope_addressable_pct`` = injected_any_scope / gate_passed_total * 100
               (0.0 when total is 0 OR when all tickets are scope-blind)
+
+``compare_gating`` adds the A/B view: what the gate FILTERS OUT vs what would leak
+in without it.  Both arms share the same ticket load; the gate arm applies
+``is_gate_passed``; the ungated arm skips it.
 
 ADR 0002: injection reads the Ledger, never vault prose.
 Reuses ``load_promotable`` from ``_mirror_learnings`` (authoritative gate-passed load)
@@ -21,7 +25,12 @@ from pathlib import Path
 from typing import Any
 
 from _improvement import ledger_dir, local_key, verify_ticket_provenance
-from _learnings import _ticket_evidence_files, _scope_match
+from _learnings import (
+    _EXCLUDED_STATES,
+    _scope_match,
+    _ticket_evidence_files,
+    is_gate_passed,
+)
 from _mirror_learnings import load_promotable
 from _promotion import DEMOTION_THRESHOLD, load_tickets as _load_all_tickets
 
@@ -29,73 +38,110 @@ Ticket = dict[str, Any]
 
 _DEFAULT_SCOPES: list[str] = ["hooks/", "scripts/", "tests/", "docs/"]
 
+# Top-level numeric scalars compared by measure_delta.
+_SCALAR_KEYS = (
+    "file_anchored",
+    "gate_passed_total",
+    "injected_any_scope",
+    "provenance_legacy_unsigned",
+    "provenance_unverified",
+    "provenance_verified",
+    "scope_addressable_pct",
+    "scope_blind",
+)
 
-def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
+
+def _empty_result(scopes: list[str]) -> dict[str, Any]:
+    return {
+        "gate_passed_total": 0,
+        "file_anchored": 0,
+        "scope_blind": 0,
+        "scopes_measured": scopes,
+        "matched_per_scope": {s: 0 for s in scopes},
+        "injected_any_scope": 0,
+        "scope_addressable_pct": 0.0,
+        "scope_blind_fingerprints": [],
+        "provenance_verified": 0,
+        "provenance_legacy_unsigned": 0,
+        "provenance_unverified": 0,
+        "provenance_filtered_pct": 0.0,
+        "filtered_fingerprints": [],
+        "quarantined_total": 0,
+        "demoted_excluded_from_injection": 0,
+        "harmful_pending": 0,
+        "reinstated_total": 0,
+    }
+
+
+def _prov_bucket(
+    ticket: Ticket, key: bytes
+) -> tuple[bool, bool, bool]:
+    """Return (verified, legacy_unsigned, unverified) booleans for one ticket."""
+    ok, reason = verify_ticket_provenance(ticket, key=key)
+    if reason == "legacy-unsigned":
+        return (False, True, False)
+    if ok:
+        return (True, False, False)
+    return (False, False, True)
+
+
+def measure(
+    ledger: Path,
+    scopes: list[str],
+    *,
+    gated: bool = True,
+) -> dict[str, Any]:
     """Measure injection-recall for a ledger against a list of scope entries.
+
+    When ``gated=True`` (default), only gate-passed tickets count — this is the
+    production view and produces the EXACT same output as prior versions (back-compat).
+    When ``gated=False``, ALL scope-matchable tickets are counted regardless of gate
+    state — the ungated arm for A/B comparison.
 
     Returns a JSON-able dict with the following PRECISELY-DEFINED keys:
 
     ``gate_passed_total``
-        Count of load_promotable gate-passed tickets.
+        Count of tickets in the measured population (gate-passed or all when ungated).
     ``file_anchored``
-        Gate-passed tickets with ≥1 evidence file (``_ticket_evidence_files`` non-empty).
-        ONLY these CAN be scope-matched.
+        Population tickets with ≥1 evidence file.  ONLY these CAN be scope-matched.
     ``scope_blind``
-        Gate-passed tickets with NO evidence file.  Can NEVER be injected by scope-match
-        regardless of scope.  (= gate_passed_total - file_anchored)
+        Population tickets with NO evidence file.  Can NEVER be injected by scope-match.
     ``scopes_measured``
         The scopes list passed in.
     ``matched_per_scope``
-        {scope: count of gate-passed tickets whose evidence files match that scope}.
+        {scope: count of population tickets whose evidence files match that scope}.
     ``injected_any_scope``
-        Count of gate-passed tickets matched by ≥1 measured scope.
+        Count of population tickets matched by ≥1 measured scope.
     ``scope_addressable_pct``
         injected_any_scope / gate_passed_total * 100 (0.0 when total is 0), rounded
         to 1 decimal.
     ``scope_blind_fingerprints``
-        Sorted list of ``<fp[:12]>`` for the scope_blind tickets (the G1 hole,
-        made explicit).
+        Sorted list of ``<fp[:12]>`` for the scope_blind tickets.
     """
     if not ledger.exists() or not ledger.is_dir():
-        return {
-            "gate_passed_total": 0,
-            "file_anchored": 0,
-            "scope_blind": 0,
-            "scopes_measured": scopes,
-            "matched_per_scope": {s: 0 for s in scopes},
-            "injected_any_scope": 0,
-            "scope_addressable_pct": 0.0,
-            "scope_blind_fingerprints": [],
-            "provenance_verified": 0,
-            "provenance_legacy_unsigned": 0,
-            "provenance_unverified": 0,
-            "provenance_filtered_pct": 0.0,
-            "filtered_fingerprints": [],
-            "quarantined_total": 0,
-            "demoted_excluded_from_injection": 0,
-            "harmful_pending": 0,
-            "reinstated_total": 0,
-        }
+        return _empty_result(scopes)
 
-    _, gate_passed = load_promotable(ledger)
+    if gated:
+        _, gate_passed = load_promotable(ledger)
+        population = gate_passed
+    else:
+        try:
+            population = _load_all_tickets(ledger, partial=True)
+        except Exception:
+            population = []
 
-    # Load full ticket set for demotion metrics (partial=True: skip corrupt; never blocks).
     try:
         all_tickets = _load_all_tickets(ledger, partial=True)
     except Exception:
         all_tickets = []
 
     quarantined_total = sum(1 for t in all_tickets if t.get("state") == "quarantined")
-    reinstated_total = sum(
-        1 for t in all_tickets if bool(t.get("reinstatements"))
-    )
+    reinstated_total = sum(1 for t in all_tickets if bool(t.get("reinstatements")))
     harmful_pending = sum(
         1 for t in all_tickets
         if t.get("state") != "quarantined"
         and 0 < int(t.get("harmful_count") or 0) < DEMOTION_THRESHOLD
     )
-
-    # Quarantined tickets that WOULD scope-match if promoted (excluded from injection).
     demoted_excluded = 0
     for t in all_tickets:
         if t.get("state") != "quarantined":
@@ -113,12 +159,11 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
     prov_legacy = 0
     prov_unverified_fps: list[str] = []
 
-    for ticket in gate_passed:
+    for ticket in population:
         fp = str(ticket.get("fingerprint", ""))
         ev_files = _ticket_evidence_files(ticket)
         if ev_files:
             file_anchored_count += 1
-            # Check per-scope
             for scope in scopes:
                 if _scope_match([scope], ev_files):
                     matched_per_scope[scope] += 1
@@ -126,15 +171,15 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
         else:
             scope_blind_fps.append(fp[:12])
 
-        ok, reason = verify_ticket_provenance(ticket, key=_key)
-        if reason == "legacy-unsigned":
+        verified, legacy, unverified = _prov_bucket(ticket, _key)
+        if legacy:
             prov_legacy += 1
-        elif ok:
+        elif verified:
             prov_verified += 1
         else:
             prov_unverified_fps.append(fp[:12])
 
-    gate_passed_total = len(gate_passed)
+    gate_passed_total = len(population)
     scope_blind_count = gate_passed_total - file_anchored_count
     injected_any_scope = len(injected_any)
     prov_unverified = len(prov_unverified_fps)
@@ -167,6 +212,151 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
     }
 
 
+def measure_delta(
+    baseline: dict[str, Any],
+    variant: dict[str, Any],
+) -> dict[str, Any]:
+    """Compute A/B delta between two measure() output dicts.
+
+    Covers the comparable top-level scalars defined in ``_SCALAR_KEYS``.
+    Non-comparable keys (``matched_per_scope``, ``scope_blind_fingerprints``,
+    ``filtered_fingerprints``, ``scopes_measured``, ``provenance_filtered_pct``,
+    ``quarantined_total``, ``demoted_excluded_from_injection``,
+    ``harmful_pending``, ``reinstated_total``) are omitted — they differ in
+    structure or semantics between gated and ungated.
+
+    Returns ``{metric: {"a": <baseline>, "b": <variant>, "delta": <b - a>}}``
+    with sorted keys for byte-stable serialisation.
+    """
+    delta: dict[str, Any] = {}
+    for key in _SCALAR_KEYS:
+        a_val = float(baseline.get(key, 0))
+        b_val = float(variant.get(key, 0))
+        delta[key] = {"a": a_val, "b": b_val, "delta": b_val - a_val}
+    return dict(sorted(delta.items()))
+
+
+def _provenance_counts(
+    fingerprints: set[str],
+    all_tickets: list[Ticket],
+    key: bytes,
+) -> dict[str, int]:
+    """Summarise provenance status for a set of fingerprints."""
+    fp_map = {str(t.get("fingerprint", "")): t for t in all_tickets}
+    verified = 0
+    legacy_unsigned = 0
+    unverified = 0
+    for fp in fingerprints:
+        ticket = fp_map.get(fp)
+        if ticket is None:
+            unverified += 1
+            continue
+        v, leg, u = _prov_bucket(ticket, key)
+        if leg:
+            legacy_unsigned += 1
+        elif v:
+            verified += 1
+        else:
+            unverified += 1
+    return {"legacy_unsigned": legacy_unsigned, "unverified": unverified, "verified": verified}
+
+
+def compare_gating(ledger: Path, scopes: list[str]) -> dict[str, Any]:
+    """A/B comparison: what the gate admits vs what it filters out.
+
+    Loads all tickets ONCE; computes injected-fingerprint SETS for both arms:
+    - gated: ``is_gate_passed`` AND scope-match
+    - ungated: scope-match only (no gate filter)
+
+    Returns a JSON-able dict (sorted keys, byte-stable across ledger file order):
+
+    ``delta``
+        ``measure_delta(gated_measure, ungated_measure)`` — per-scalar {a, b, delta}.
+    ``filtered_total``
+        Count of tickets the gate filters out that would otherwise be injected.
+    ``filtered_breakdown``
+        ``{"excluded_state": int, "not_promotable": int}`` — per-reason partition
+        of ``filtered_total``.  ``excluded_state`` = state ∈ {rejected, quarantined};
+        ``not_promotable`` = sub-threshold or un-promoted (everything else the gate rejects).
+    ``filtered_fingerprints``
+        Sorted ``fp[:12]`` of the filtered set.
+    ``gated_provenance``
+        ``{"verified", "legacy_unsigned", "unverified"}`` for the gated injected set.
+    ``ungated_provenance``
+        Same shape for the ungated injected set — shows extra unverified-provenance
+        tickets the gate would have blocked.
+    ``scopes_measured``
+        The scopes list used.
+
+    Note on denominators: ``delta.provenance_*`` fields are computed over the
+    full gate-passed/ungated POPULATION (same denominator as ``measure()``),
+    whereas ``gated_provenance`` and ``ungated_provenance`` are over each arm's
+    scope-matched INJECTED SET only — a strictly smaller subset.  Reading
+    ``legacy_unsigned: 3`` in ``delta`` vs ``2`` in ``gated_provenance`` is not
+    a contradiction: the delta counts all gate-passed tickets; the provenance
+    dict counts only those that were also scope-matched for injection.
+    """
+    if not ledger.exists() or not ledger.is_dir():
+        empty_prov = {"legacy_unsigned": 0, "unverified": 0, "verified": 0}
+        return {
+            "delta": measure_delta(_empty_result(scopes), _empty_result(scopes)),
+            "filtered_breakdown": {"excluded_state": 0, "not_promotable": 0},
+            "filtered_fingerprints": [],
+            "filtered_total": 0,
+            "gated_provenance": empty_prov,
+            "scopes_measured": scopes,
+            "ungated_provenance": empty_prov,
+        }
+
+    try:
+        all_tickets = _load_all_tickets(ledger, partial=True)
+    except Exception:
+        all_tickets = []
+
+    _key = local_key()
+    gated_injected: set[str] = set()
+    ungated_injected: set[str] = set()
+
+    for ticket in all_tickets:
+        fp = str(ticket.get("fingerprint", ""))
+        ev_files = _ticket_evidence_files(ticket)
+        if not ev_files:
+            continue
+        if not _scope_match(scopes, ev_files):
+            continue
+        ungated_injected.add(fp)
+        if is_gate_passed(ticket):
+            gated_injected.add(fp)
+
+    filtered_fps = ungated_injected - gated_injected
+
+    fp_map = {str(t.get("fingerprint", "")): t for t in all_tickets}
+    excluded_state = 0
+    not_promotable = 0
+    for fp in filtered_fps:
+        t = fp_map.get(fp)
+        if t is not None and t.get("state") in _EXCLUDED_STATES:
+            excluded_state += 1
+        else:
+            not_promotable += 1
+
+    gated_measure = measure(ledger, scopes, gated=True)
+    ungated_measure = measure(ledger, scopes, gated=False)
+
+    return dict(sorted({
+        "delta": measure_delta(gated_measure, ungated_measure),
+        "filtered_breakdown": {
+            "excluded_state": excluded_state,
+            "not_promotable": not_promotable,
+        },
+        "filtered_fingerprints": sorted(fp[:12] for fp in filtered_fps),
+        "filtered_total": len(filtered_fps),
+        "gated_provenance": _provenance_counts(gated_injected, all_tickets, _key),
+        "scopes_measured": scopes,
+        "ungated_provenance": _provenance_counts(ungated_injected, all_tickets, _key),
+    }.items()))
+
+
 def register_cli_subparsers(sub: Any) -> None:
     """Register ``measure-injection`` onto the orchestrator CLI parser."""
     p = sub.add_parser("measure-injection")
@@ -185,6 +375,13 @@ def register_cli_subparsers(sub: Any) -> None:
         "--json", action="store_true", dest="output_json",
         help="output pretty JSON (always true; flag kept for compat)",
     )
+    p.add_argument(
+        "--compare-gating", action="store_true", dest="compare_gating",
+        help=(
+            "Run gate-vs-ungated A/B: show what the gate filters out vs what would "
+            "leak in without it.  Prints compare_gating() JSON and exits."
+        ),
+    )
     p.set_defaults(func=cmd_measure_injection)
 
 
@@ -195,6 +392,12 @@ def cmd_measure_injection(args: Any) -> int:
     scopes = raw_scopes if raw_scopes else list(_DEFAULT_SCOPES)
 
     ledger = ledger_dir(repo_root, None)
+
+    if getattr(args, "compare_gating", False):
+        result = compare_gating(ledger, scopes)
+        sys.stdout.write(json.dumps(result, indent=2, sort_keys=True) + "\n")
+        return 0
+
     result = measure(ledger, scopes)
     sys.stdout.write(json.dumps(result, indent=2) + "\n")
     return 0
