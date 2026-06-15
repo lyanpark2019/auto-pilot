@@ -169,8 +169,12 @@ def ledger_lock(lock_path: Path) -> Iterator[None]:
 _ledger_lock = ledger_lock  # backward-compat alias
 
 
-_ATTEST_KEY_PATH = Path.home() / ".claude" / "auto-pilot" / "attest.key"
 _KEY_SIZE = 32
+
+
+def _key_path() -> Path:
+    """Resolve the attest-key path at call time so HOME overrides take effect."""
+    return Path.home() / ".claude" / "auto-pilot" / "attest.key"
 
 
 def local_key() -> bytes:
@@ -181,7 +185,7 @@ def local_key() -> bytes:
     (both callers succeed: one creates, the loser gets EEXIST and reads).
     Returns raw 32 bytes. Never overwrites an existing key.
     """
-    path = _ATTEST_KEY_PATH
+    path = _key_path()
     if path.exists():
         return path.read_bytes()
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -201,6 +205,13 @@ def local_key() -> bytes:
 def _canonical_identity(ticket: Ticket) -> bytes:
     """Stable UTF-8 bytes covering the fields that define a ticket's identity.
 
+    Bound fields: fingerprint, source, candidate_asset, pattern, evidence
+    (run_id + snippet pairs, sorted for order-independence).  ``state`` is
+    deliberately excluded — it mutates via _promotion.transition without
+    re-stamping; state-transition re-stamping is deferred to the enforcement
+    phase.  ``pattern`` never changes post-seed so binding it is safe across
+    all promotion-state transitions.
+
     Sorted by (run_id, snippet) to mirror the dedup key _apply_bump uses so
     that evidence reordering does not invalidate existing attestations.
     """
@@ -210,9 +221,10 @@ def _canonical_identity(ticket: Ticket) -> bytes:
         "fingerprint": ticket.get("fingerprint"),
         "source": ticket.get("source"),
         "candidate_asset": ticket.get("candidate_asset"),
+        "pattern": ticket.get("pattern", ""),
         "evidence": [
-            {"run_id": e["run_id"], "snippet": e["snippet"]}
-            for e in sorted(evidence, key=lambda e: (e["run_id"], e["snippet"]))
+            {"run_id": e.get("run_id", ""), "snippet": e.get("snippet", "")}
+            for e in sorted(evidence, key=lambda e: (e.get("run_id", ""), e.get("snippet", "")))
         ],
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"),
@@ -260,7 +272,7 @@ def verify_ticket_provenance(
 
     raw = ticket.get("evidence", [])
     evidence: list[dict[str, str]] = list(raw) if isinstance(raw, list) else []
-    unique_run_ids = {e["run_id"] for e in evidence}
+    unique_run_ids = {e.get("run_id", "") for e in evidence}
     distinct = ticket.get("distinct_runs", 0)
     if int(distinct if isinstance(distinct, int) else 0) > len(unique_run_ids):
         return (False, "distinct-runs-inflated")

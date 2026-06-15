@@ -276,3 +276,49 @@ def test_measure_provenance_keys_json_serialisable(tmp_path, monkeypatch):
     assert loaded["provenance_unverified"] == 0
     assert loaded["provenance_filtered_pct"] == 0.0
     assert loaded["filtered_fingerprints"] == []
+
+
+# ---------------------------------------------------------------------------
+# 10. RED-evidence: swapping pattern after stamp → attestation-mismatch
+# ---------------------------------------------------------------------------
+
+def test_pattern_swap_breaks_attestation(tmp_path):
+    """Mutating pattern after stamp → (False, 'attestation-mismatch').
+
+    Confirms the MAC binds the pattern field (the actual learning text rendered
+    into worker bundles) so a post-stamp swap cannot inject arbitrary text.
+    """
+    ticket = _base_ticket("a1" * 32)
+    imp.stamp_provenance(ticket, key=_KEY_A, now=NOW)
+
+    # Verify the original ticket passes first
+    ok, reason = imp.verify_ticket_provenance(ticket, key=_KEY_A)
+    assert ok is True, f"pre-mutation verify unexpectedly failed: {reason}"
+
+    # Now mutate the pattern — the MAC should no longer match
+    ticket["pattern"] = "malicious injected payload"
+    ok, reason = imp.verify_ticket_provenance(ticket, key=_KEY_A)
+    assert ok is False
+    assert reason == "attestation-mismatch"
+
+
+# ---------------------------------------------------------------------------
+# 11. Key isolation: local_key() uses HOME, not a module-global path
+# ---------------------------------------------------------------------------
+
+def test_local_key_isolated_under_tmp_home(tmp_path, monkeypatch):
+    """local_key() creates the key under tmp_path, not the real ~/.claude.
+
+    Confirms that monkeypatching HOME before the call redirects the key path,
+    proving _key_path() resolves at call-time rather than at import-time.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    key = imp.local_key()
+    assert len(key) == 32
+
+    expected_key_path = tmp_path / ".claude" / "auto-pilot" / "attest.key"
+    assert expected_key_path.exists(), (
+        "attest.key not found under tmp_path; real HOME may have been used"
+    )
+    assert expected_key_path.read_bytes() == key
