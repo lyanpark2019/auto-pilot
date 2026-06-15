@@ -23,6 +23,7 @@ from typing import Any
 from _improvement import ledger_dir, local_key, verify_ticket_provenance
 from _learnings import _ticket_evidence_files, _scope_match
 from _mirror_learnings import load_promotable
+from _promotion import DEMOTION_THRESHOLD, load_tickets as _load_all_tickets
 
 Ticket = dict[str, Any]
 
@@ -70,9 +71,38 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
             "provenance_unverified": 0,
             "provenance_filtered_pct": 0.0,
             "filtered_fingerprints": [],
+            "quarantined_total": 0,
+            "demoted_excluded_from_injection": 0,
+            "harmful_pending": 0,
+            "reinstated_total": 0,
         }
 
     _, gate_passed = load_promotable(ledger)
+
+    # Load full ticket set for demotion metrics (partial=True: skip corrupt; never blocks).
+    try:
+        all_tickets = _load_all_tickets(ledger, partial=True)
+    except Exception:
+        all_tickets = []
+
+    quarantined_total = sum(1 for t in all_tickets if t.get("state") == "quarantined")
+    reinstated_total = sum(
+        1 for t in all_tickets if bool(t.get("reinstatements"))
+    )
+    harmful_pending = sum(
+        1 for t in all_tickets
+        if t.get("state") != "quarantined"
+        and 0 < int(t.get("harmful_count") or 0) < DEMOTION_THRESHOLD
+    )
+
+    # Quarantined tickets that WOULD scope-match if promoted (excluded from injection).
+    demoted_excluded = 0
+    for t in all_tickets:
+        if t.get("state") != "quarantined":
+            continue
+        ev_files = _ticket_evidence_files(t)
+        if ev_files and _scope_match(list(scopes), ev_files):
+            demoted_excluded += 1
 
     _key = local_key()
     file_anchored_count = 0
@@ -130,6 +160,10 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
         "provenance_unverified": prov_unverified,
         "provenance_filtered_pct": filtered_pct,
         "filtered_fingerprints": sorted(prov_unverified_fps),
+        "quarantined_total": quarantined_total,
+        "demoted_excluded_from_injection": demoted_excluded,
+        "harmful_pending": harmful_pending,
+        "reinstated_total": reinstated_total,
     }
 
 

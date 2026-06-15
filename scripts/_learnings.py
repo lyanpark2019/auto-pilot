@@ -26,7 +26,7 @@ from learning_miner import is_promotable
 Ticket = dict[str, object]
 
 
-_EXCLUDED_STATES: frozenset[str] = frozenset({"rejected"})
+_EXCLUDED_STATES: frozenset[str] = frozenset({"rejected", "quarantined"})
 
 
 def is_gate_passed(ticket: Ticket) -> bool:
