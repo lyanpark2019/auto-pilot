@@ -152,6 +152,18 @@
     },
     "notes": {
       "type": "string"
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["algo", "attestation", "signed_at", "identity_version"],
+      "additionalProperties": false,
+      "properties": {
+        "algo": {"const": "hmac-sha256"},
+        "attestation": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "signed_at": {"type": "string", "format": "date-time"},
+        "identity_version": {"const": 1},
+        "run_id": {"type": "string"}
+      }
     }
   },
   "additionalProperties": false
