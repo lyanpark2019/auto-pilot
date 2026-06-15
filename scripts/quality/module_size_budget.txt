@@ -38,8 +38,9 @@ tests/test_hooks_guards.py|640
 # for enrich subcommand; all logic in _enrich_persist.py).
 # inc3 Phase 1 adds 2 emit_escalation call sites (doom-loop + evidence_failed,
 # ~25 net lines) + datetime import; all logic delegated to _escalation_emit.py.
-# Cap 632 = 629 current + 3 headroom.
-scripts/orchestrator.py|632
+# inc3 Phase 3 adds 2 measure_escalation wiring lines (all logic in measure_escalation.py).
+# Cap 640 = 631 current + 9 headroom.
+scripts/orchestrator.py|640
 #
 # test_headless_loop.py is the integration test suite for headless-loop.py; all
 # tests share loop_module/state_dir fixtures and the _args helper, so splitting

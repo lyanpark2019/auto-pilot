@@ -95,6 +95,7 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_escalation.py` | inc2-Phase3 | escalation-record identity + durable ledger I/O: fingerprint, bump_or_create RMW, drive_enrich seam, CLI (escalation-record/list/enrich); + record_resolution writer (resolved/abandoned) + orchestrator.py escalation-resolve subcommand (inc3 Phase 2) |
 | `scripts/_escalation_emit.py` | inc3-escalation | best-effort tier-1->tier-2 boundary emit; wraps _escalation.bump_or_create at the 3 give-up points, never raises (additive) |
 | `scripts/measure_enrich_precision.py` | inc2-enrich | gate-precision measure: admit/reject rate + per-tier + reason-histogram over candidate JSONs (re-runs _enrich_gate.evaluate); CLI measure-enrich |
+| `scripts/measure_escalation.py` | inc3-Phase3 | deterministic escalation-ledger metrics: by_state + by_problem_class + resolution/recovery rates + enrich-pages-written (re-runs over the ledger); `orchestrator.py measure-escalation` |
 
 ## Editing this plugin
 

@@ -137,13 +137,24 @@ mocked fetcher).
   (`scripts/_escalation.py:40`).
 - Abandoned records appear in the retro report (agent reads escalation ledger).
 
-## Phase 3 — measure (deferred)
+## Phase 3 — measure — **IMPLEMENTED**
 
 Signals: escalations emitted vs resolved vs abandoned; delta "determinism-stopped" →
-"escalated-then-resolved". Instrument mirrors `scripts/measure_learnings_injection.py`
-(deterministic scan over the escalation ledger, no network, CLI via
-`orchestrator.py measure-escalation`). Deferred until Phase 1 + Phase 2 produce live
-ledger data.
+"escalated-then-resolved". Instrument is `scripts/measure_escalation.py` (deterministic
+scan over the escalation ledger, no network, CLI via `orchestrator.py measure-escalation`).
+
+Output shape (all keys always present):
+- `total`, `by_state` (open/enriched/resolved/abandoned), `by_problem_class` (all 7 enum keys)
+- `resolved`, `abandoned`, `pending` (open+enriched)
+- `resolution_rate_pct` (resolved/(resolved+abandoned)*100; 0.0 when denom==0)
+- `recovery_rate_pct` (resolved/total*100; 0.0 when total==0)
+- `enrich_attempted`, `enrichment_pages_written`
+
+Mirrors `scripts/measure_learnings_injection.py:32` (rc-0-always, missing-ledger →
+all-zeros) and `scripts/measure_enrich_precision.py:41` (pure measure(list)->dict,
+byte-stable sorted sub-dicts, no datetime.now/random).
+
+Tests: `tests/test_measure_escalation.py` (15 cases incl. CLI smoke + missing-ledger).
 
 ## Residuals and decisions resolved by this spec
 
