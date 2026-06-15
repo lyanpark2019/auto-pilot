@@ -75,7 +75,7 @@ Full contract schemas and enforcement contracts: see README "Binding contracts i
 **(b) Self-improvement loop** — round-N SCORE → … → dual review (plugin targets itself):
 retro appends evidence-cited gotchas to vault `intent/gotchas/` when a vault exists and to repo `.claude/insights.md` as the always-present memory surface. Converges via same stopping rule as product loop (same finding ≥2 rounds = escalation).
 
-### Hermes ledger (discover-only self-improvement, shipped 2026-06-09/10)
+### Improvement-ticket ledger (discover-only self-improvement, shipped 2026-06-09/10)
 
 Structured layer under loop (b): `scripts/learning_miner.py` + `scripts/_improvement.py` +
 `schemas/improvement-ticket.schema.json`. Deterministic Python (no LLM), CLI shape mirrors

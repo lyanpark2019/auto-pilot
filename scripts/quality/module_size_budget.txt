@@ -141,3 +141,10 @@ tests/test_escalation.py|550
 # so splitting would duplicate helper definitions or require a conftest. The P2
 # dry-run no-escalation test (section 6b) added ~55 lines. Cap 530 = 524 + 6 headroom.
 tests/test_enrich_persist.py|530
+#
+# test_demote.py is the full acceptance suite for the downvote/reinstate path;
+# all tests share _seed_promoted / _make_ledger_and_repo / _run helpers.
+# The P1 watermark fix added TestReinstateWatermark (2 tests) + TestDownvoteStateGuard
+# (3 tests) = +75 lines.  Splitting would duplicate helper definitions or require
+# a conftest.  Cap 510 = 501 current + 9 headroom.
+tests/test_demote.py|510

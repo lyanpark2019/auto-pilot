@@ -14,7 +14,7 @@ manual_edit: true
 
 ## Problem
 
-The learning loop is **open**. Mistakes are captured (Hermes miner: critic
+The learning loop is **open**. Mistakes are captured (improvement-ticket miner: critic
 rejections, pivots, insights; retro: gotchas) but never read back: the dispatch
 `context-bundle` carries only `spec.md`, the `CLAUDE.md` chain, and the graphify
 `project-context.md`. A problem the operator already hit 2+ times is re-derived
@@ -38,7 +38,7 @@ conversation history lands in Obsidian."
   vault session-record page (this is what gets indexed and fed to the miner); the
   raw transcript is linked, not inlined. "Store everything" = raw is archived;
   vault stays clean = only the distillate is indexed.
-- **Reuse, don't rebuild** — capture is the existing Hermes miner + retro plus the
+- **Reuse, don't rebuild** — capture is the existing improvement-ticket miner + retro plus the
   new distill hook; injection is one new resolver + a `snapshot_context` extension.
 
 ## Non-goals (this increment)

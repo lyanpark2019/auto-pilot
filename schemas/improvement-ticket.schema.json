@@ -33,6 +33,7 @@
         "implemented",
         "verified",
         "promoted",
+        "quarantined",
         "rejected"
       ]
     },
@@ -163,6 +164,37 @@
         "signed_at": {"type": "string", "format": "date-time"},
         "identity_version": {"const": 1},
         "run_id": {"type": "string"}
+      }
+    },
+    "harmful_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "demotions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reason", "at"],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {"type": "string"},
+          "reason": {"type": "string", "minLength": 1},
+          "at": {"type": "string", "format": "date-time"},
+          "signal": {"enum": ["downvote", "auto-recurrence"]}
+        }
+      }
+    },
+    "reinstatements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at"],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {"type": "string"},
+          "reason": {"type": "string"},
+          "at": {"type": "string", "format": "date-time"}
+        }
       }
     }
   },

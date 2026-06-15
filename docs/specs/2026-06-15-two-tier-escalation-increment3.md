@@ -50,7 +50,7 @@ tier-2 resolver on top.
 
 - No loop rebuild — the existing PM→worker→review→verify chain is unchanged.
 - No auto-relaxation of gate rules. A needed rule change is a harness change owned
-  by the Hermes improvement-ticket path, NOT an escalation resolution.
+  by the improvement-ticket loop, NOT an escalation resolution.
 - No continuous or background escalation scanning — on-demand only.
 - No heavy infra (no vector DB, no consensus, no federation).
 - No new `problem_class` enum values in Phase 1. The existing set in
@@ -115,7 +115,7 @@ disposal` — retro reports them as unresolved gaps, does not fix them).
 - Inject enriched knowledge into the dispatch bundle for the retry.
 
 **What tier-2 MAY NOT do:**
-- Rewrite a gate rule (a gate-rule change is a Hermes improvement-ticket, not a
+- Rewrite a gate rule (a gate-rule change is an improvement-ticket loop ticket, not a
   resolution).
 - Perform more than one enrich+retry per escalation.
 - Emit a new escalation for the retry failure (the FSM `abandoned` terminal is the
