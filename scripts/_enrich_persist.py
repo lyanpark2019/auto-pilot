@@ -237,7 +237,7 @@ def cmd_enrich(args: Any) -> int:
     counts = persist(candidates, vault, dry_run=dry_run)
     print(json.dumps(counts))
 
-    if counts.get("admitted", 0) == 0 and counts.get("rejected", 0) > 0:
+    if not dry_run and counts.get("admitted", 0) == 0 and counts.get("rejected", 0) > 0:
         # Best-effort: emit an enrich-gate-reject escalation record.
         # Never raises or changes exit code — emit_escalation swallows I/O failures.
         representative_query = next(

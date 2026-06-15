@@ -230,7 +230,22 @@ class TestProblemClassSpread:
 
 def test_cli_seed_then_measure(tmp_path: Path) -> None:
     """seed --count=10 --resolved-pct=40 → measure-escalation → total=10, recovery_rate=40.0."""
+    import os as _os  # noqa: PLC0415
+    import site as _site  # noqa: PLC0415
+
     scripts_dir = ROOT / "scripts"
+
+    # Isolate the HOME ledger so this test never writes to the real
+    # ~/.claude/projects/ store.  Both seed and measure must share the same
+    # fake HOME so they operate on the same ledger namespace.
+    fake_home = tmp_path / "fakehome"
+    fake_home.mkdir()
+    user_site = _site.getusersitepackages()
+    existing_pp = _os.environ.get("PYTHONPATH", "")
+    pythonpath = _os.pathsep.join(
+        p for p in [existing_pp, user_site, str(scripts_dir)] if p
+    )
+    env = {**_os.environ, "HOME": str(fake_home), "PYTHONPATH": pythonpath}
 
     # Seed 10 records: 40% resolved = 4, 30% abandoned = 3, 10% enriched = 1, open = 2
     r_seed = subprocess.run(
@@ -248,6 +263,7 @@ def test_cli_seed_then_measure(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         cwd=str(scripts_dir),
+        env=env,
     )
     assert r_seed.returncode == 0, (
         f"escalation-seed failed:\nstdout={r_seed.stdout}\nstderr={r_seed.stderr}"
@@ -258,7 +274,7 @@ def test_cli_seed_then_measure(tmp_path: Path) -> None:
     assert seed_out["by_state"]["resolved"] == 4
     assert seed_out["by_state"]["abandoned"] == 3
 
-    # Now measure
+    # Now measure — same fake HOME so the ledger path resolves identically.
     r_meas = subprocess.run(
         [
             sys.executable,
@@ -269,6 +285,7 @@ def test_cli_seed_then_measure(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         cwd=str(scripts_dir),
+        env=env,
     )
     assert r_meas.returncode == 0, (
         f"measure-escalation failed:\nstdout={r_meas.stdout}\nstderr={r_meas.stderr}"

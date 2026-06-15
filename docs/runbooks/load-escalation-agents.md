@@ -41,9 +41,10 @@ See also: `docs/adr/0003-gated-ondemand-enrich-two-tier-escalation.md`
    claude plugin install .claude-plugin/plugin.json
    ```
 
-3. **RESTART the Claude Code session.**  The SessionStart hook reloads the
-   agent registry from the cache.  A running session sees the stale cache;
-   there is no hot-reload.
+3. **RESTART the Claude Code session.**  Restarting re-runs plugin discovery,
+   which reloads the agent registry from the bumped cache.  A running session
+   sees the stale cache; there is no hot-reload — the SessionStart hook is a
+   path-preflight guard, not a registry loader.
 
 4. **Verify the agents are present in the new cache:**
 

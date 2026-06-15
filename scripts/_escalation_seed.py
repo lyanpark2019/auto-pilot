@@ -5,8 +5,12 @@ distribution so the measure-escalation instrument can be exercised and
 measured without a real session.
 
 IMPORTANT: seeded records are SYNTHETIC — they validate the instrument and
-distribution logic, not real-world escalation rates.  Always use an isolated
---repo-root; never point at the home ledger.
+distribution logic, not real-world escalation rates.  Records are written to
+the HOME ledger (~/.claude/projects/<slug>/escalations/), namespaced by the
+repo-root slug.  This is NOT filesystem-isolated: two different --repo-root
+values with the same slug write to the same ledger directory.  To avoid
+polluting the real HOME store, pass a throwaway --repo-root (e.g. a tmp_path)
+to get a distinct slug, and clean ~/.claude/projects/<that-slug>/ afterward.
 
 No datetime.now() / random in library functions — ``now`` is a required
 caller parameter.  ``cmd_escalation_seed`` may call datetime.now(timezone.utc).
@@ -144,7 +148,10 @@ def register_cli_subparsers(sub: Any) -> None:
     """Register ``escalation-seed`` onto the orchestrator CLI parser.
 
     SYNTHETIC: seeded records validate the instrument + distribution logic,
-    NOT real-world rates.  Always use an isolated --repo-root.
+    NOT real-world rates.  Records are written to the HOME ledger
+    (~/.claude/projects/<slug>/escalations/), namespaced by the repo-root slug.
+    Use a throwaway --repo-root to get a distinct slug; clean the slug dir
+    from ~/.claude/projects/ afterward if persistence is unwanted.
     """
     p = sub.add_parser(
         "escalation-seed",
@@ -180,8 +187,10 @@ def register_cli_subparsers(sub: Any) -> None:
         required=True,
         dest="repo_root",
         help=(
-            "REQUIRED: isolated repo root for the synthetic ledger. "
-            "Never point at your real project home."
+            "REQUIRED: repo root whose slug names the HOME ledger directory "
+            "(~/.claude/projects/<slug>/escalations/). "
+            "Use a throwaway path to get a distinct slug and avoid polluting "
+            "the real project's ledger; clean ~/.claude/projects/<that-slug>/ afterward."
         ),
     )
     p.add_argument(

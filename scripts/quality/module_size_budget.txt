@@ -135,3 +135,9 @@ tests/test_measure_enrich_precision.py|695
 # FakeFetcher / _obs / _valid_record / Observation helpers, so splitting would
 # duplicate fixture overhead or require a conftest. Cap 550 = 540 + 10 headroom.
 tests/test_escalation.py|550
+#
+# test_enrich_persist.py is the full acceptance suite for _enrich_persist.py;
+# sections 1-12 share the _official / _community helpers + canonical_sha import,
+# so splitting would duplicate helper definitions or require a conftest. The P2
+# dry-run no-escalation test (section 6b) added ~55 lines. Cap 530 = 524 + 6 headroom.
+tests/test_enrich_persist.py|530
