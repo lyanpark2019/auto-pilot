@@ -56,7 +56,7 @@ tier-2 resolver on top.
 - No new `problem_class` enum values in Phase 1. The existing set in
   `scripts/_escalation.py:28–31` covers all three give-up points.
 
-## Phase 1 — emit seam (deterministic, pure, testable)
+## Phase 1 — emit seam (deterministic, pure, testable) — **IMPLEMENTED**
 
 Wire `_escalation.bump_or_create` at the three tier-1 give-up points. Each call is
 additive — the existing terminal behavior is preserved; escalation is emitted in
@@ -88,10 +88,10 @@ not new gates.
   point; existing terminal behavior is byte-identical.
 - Full CLAUDE.md verify list green (pytest + mypy + ruff + module-size gate).
 
-## Phase 2 — tier-2 resolver + bounded retry (agent-driven)
+## Phase 2 — tier-2 resolver + bounded retry (agent-driven) — **CORE IMPLEMENTED; LIVE RUN DEFERRED**
 
 A tier-2 step reads ONE open escalation record, drives enrichment via
-`_escalation.drive_enrich` (`scripts/_escalation.py:238`), retries the failed tier-1
+`_escalation.drive_enrich` (`scripts/_escalation.py:257`), retries the failed tier-1
 operation once with enriched knowledge available, then transitions the record per
 the `TRANSITIONS` FSM (`scripts/_escalation.py:32`):
 
@@ -110,7 +110,7 @@ disposal` — retro reports them as unresolved gaps, does not fix them).
 
 **What tier-2 MAY do:**
 - Fetch external knowledge via `drive_enrich` → `fetch_and_persist`
-  (`scripts/_escalation.py:238`) using `suggested_enrich_query` from the record.
+  (`scripts/_escalation.py:257`) using `suggested_enrich_query` from the record.
 - Retry the failed tier-1 gate once with enriched vault pages available.
 - Inject enriched knowledge into the dispatch bundle for the retry.
 

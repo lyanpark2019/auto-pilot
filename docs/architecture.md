@@ -183,7 +183,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 17 agents · 7 commands · 27 hooks · 12 codex-skills = 74 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 18 agents · 7 commands · 27 hooks · 12 codex-skills = 75 assets total.
 
 ```
 auto-pilot/

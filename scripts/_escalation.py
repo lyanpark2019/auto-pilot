@@ -235,6 +235,25 @@ def _record_enrichment(
     return record
 
 
+def record_resolution(
+    record: dict[str, Any], new_state: str, *, now: datetime
+) -> dict[str, Any]:
+    """Transition enriched|open -> resolved|abandoned; FSM-guarded. Caller holds the
+    lock + validates + atomic-writes (mirrors _record_enrichment)."""
+    if new_state not in ("resolved", "abandoned"):
+        raise ValueError(f"invalid resolution state {new_state!r}")
+    cur = record.get("state", "")
+    if cur in ("resolved", "abandoned"):
+        raise ValueError(f"record already terminal: {cur!r}")
+    if not _can_transition(cur, new_state):
+        raise ValueError(
+            f"illegal escalation transition {cur!r}->{new_state!r}"
+        )
+    record["resolved_at"] = now.isoformat().replace("+00:00", "Z")
+    record["state"] = new_state
+    return record
+
+
 def drive_enrich(
     ledger: Path,
     fp: str,
@@ -291,7 +310,7 @@ def drive_enrich(
 
 
 def register_cli_subparsers(sub: Any) -> None:
-    """Register escalation-record / escalation-list / escalation-enrich."""
+    """Register escalation-record / escalation-list / escalation-enrich / escalation-resolve."""
     p_er = sub.add_parser("escalation-record")
     p_er.add_argument("--problem-class", required=True, choices=_PROBLEM_CLASS_CHOICES,
                       dest="problem_class")
@@ -320,6 +339,13 @@ def register_cli_subparsers(sub: Any) -> None:
     p_ee.add_argument("--vault", default=None)
     p_ee.add_argument("--dry-run", action="store_true", dest="dry_run")
     p_ee.set_defaults(func=cmd_escalation_enrich)
+
+    p_er2 = sub.add_parser("escalation-resolve")
+    p_er2.add_argument("prefix")
+    p_er2.add_argument("new_state", choices=["resolved", "abandoned"])
+    p_er2.add_argument("--repo-root", default=".", dest="repo_root")
+    p_er2.add_argument("--dry-run", action="store_true", dest="dry_run")
+    p_er2.set_defaults(func=cmd_escalation_resolve)
 
 
 def _resolve_fp(ledger: Path, prefix: str) -> str:
@@ -465,4 +491,60 @@ def cmd_escalation_enrich(args: Any) -> int:
             record_path, json.dumps(record, indent=2, sort_keys=True) + "\n"
         )
     print(json.dumps(counts_raw))
+    return 0
+
+
+def cmd_escalation_resolve(args: Any) -> int:
+    """Transition an escalation record to resolved|abandoned via prefix."""
+    import sys  # noqa: PLC0415
+
+    repo_root = Path(getattr(args, "repo_root", "."))
+    led = ledger_dir(repo_root, None)
+    try:
+        fp = _resolve_fp(led, args.prefix)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    record_path = led / f"{fp}.json"
+    now = datetime.now(timezone.utc)
+
+    if args.dry_run:
+        record = _load_record(record_path)
+        if record is None:
+            print(f"error: no valid record at {record_path}", file=sys.stderr)
+            return 2
+        try:
+            projected = record_resolution(dict(record), args.new_state, now=now)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        try:
+            validate_escalation(projected)
+        except jsonschema.ValidationError as exc:
+            print(f"error: validation failed: {exc.message}", file=sys.stderr)
+            return 2
+        print(json.dumps(projected, indent=2, sort_keys=True))
+        return 0
+
+    lock_path = led / f"{fp}.json.lock"
+    with ledger_lock(lock_path):
+        record = _load_record(record_path)
+        if record is None:
+            print(f"error: no valid record at {record_path}", file=sys.stderr)
+            return 2
+        try:
+            record = record_resolution(record, args.new_state, now=now)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        try:
+            validate_escalation(record)
+        except jsonschema.ValidationError as exc:
+            print(f"error: validation failed: {exc.message}", file=sys.stderr)
+            return 2
+        _contract.atomic_write_text(
+            record_path, json.dumps(record, indent=2, sort_keys=True) + "\n"
+        )
+    print(json.dumps(record, indent=2, sort_keys=True))
     return 0

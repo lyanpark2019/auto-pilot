@@ -492,6 +492,25 @@ EXTRA_CASES: list[tuple[str, str, str, dict[str, str] | None, str]] = [
         None,
         _WORKER_ROLE,
     ),
+    # escalation-resolver role: Edit to state.json must be DENY (role is gated)
+    (
+        "escalation-resolver Edit state.json → DENY",
+        "DENY",
+        json.dumps({
+            "tool_name": "Edit",
+            "tool_input": {"file_path": ".planning/auto-pilot/state.json"},
+        }),
+        None,
+        "escalation-resolver",
+    ),
+    # escalation-resolver role: Bash redirect to state.json must be DENY
+    (
+        "escalation-resolver redirect to state.json → DENY",
+        "DENY",
+        _state("echo bad > .planning/auto-pilot/state.json"),
+        None,
+        "escalation-resolver",
+    ),
 ]
 
 
