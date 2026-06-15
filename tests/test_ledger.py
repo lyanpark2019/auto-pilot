@@ -261,7 +261,7 @@ class TestBuildRecord:
         assert "task_id" in _ledger.build_record_from_round_dirs(rd.parent, [rd])
 
     def test_worker_model_field_used(self, tmp_path: Path) -> None:
-        # F-B: contract uses worker_model field; role/task_class always defaulted.
+        # F-B: contract uses worker_model field; role/task_class absent → defaulted.
         rd = _make_round_dir(tmp_path, contract_id="iter-1/phase-1/contract-10/round-1")
         (rd / "contract.json").write_text(json.dumps(
             {"id": "contract-10", "worker_model": "opus", "schema_version": 1}
@@ -270,6 +270,111 @@ class TestBuildRecord:
         assert rec["model"] == "opus"
         assert "role defaulted" in rec.get("notes", "")
         assert "task_class defaulted" in rec.get("notes", "")
+
+
+# ---------------------------------------------------------------------------
+# Contract role/task_class fields → append_phase_records record derivation
+# ---------------------------------------------------------------------------
+
+class TestContractRoleTaskClass:
+    def test_explicit_role_task_class_used_in_record(self, tmp_path: Path) -> None:
+        # (a) contract carrying explicit role/task_class → record has those exact values.
+        rd = _make_round_dir(tmp_path, contract_id="iter-1/phase-1/contract-rc1/round-1")
+        (rd / "contract.json").write_text(json.dumps({
+            "id": "contract-rc1",
+            "worker_model": "sonnet",
+            "role": "worker-heavy",
+            "task_class": "arch-refactor",
+            "schema_version": 1,
+        }))
+        rec = _ledger.build_record_from_round_dirs(rd.parent, [rd])
+        assert rec["role"] == "worker-heavy", (
+            f"Expected role='worker-heavy' from contract, got {rec['role']!r}"
+        )
+        assert rec["task_class"] == "arch-refactor", (
+            f"Expected task_class='arch-refactor' from contract, got {rec['task_class']!r}"
+        )
+        # No "defaulted" note when contract supplies the fields.
+        assert "role defaulted" not in rec.get("notes", "")
+        assert "task_class defaulted" not in rec.get("notes", "")
+
+    def test_missing_role_task_class_defaults_preserved(self, tmp_path: Path) -> None:
+        # (b) contract WITHOUT role/task_class → defaults preserved (back-compat).
+        rd = _make_round_dir(tmp_path, contract_id="iter-1/phase-1/contract-rc2/round-1")
+        (rd / "contract.json").write_text(json.dumps({
+            "id": "contract-rc2",
+            "worker_model": "sonnet",
+            "schema_version": 1,
+        }))
+        rec = _ledger.build_record_from_round_dirs(rd.parent, [rd])
+        assert rec["role"] == "worker-primary"
+        assert rec["task_class"] == "feature-multi-file"
+        assert "role defaulted" in rec.get("notes", "")
+        assert "task_class defaulted" in rec.get("notes", "")
+
+    def test_different_task_class_lands_in_separate_rebalance_group(
+        self, tmp_path: Path
+    ) -> None:
+        # (c) two contracts with different task_class → _group_records puts them
+        # in SEPARATE groups (different rebalance buckets).
+        import _rebalance  # noqa: PLC0415
+
+        rec_a: dict[str, Any] = {
+            "ts": "2026-06-15T00:00:00+00:00",
+            "task_id": "contract-rc3a",
+            "role": "worker-primary",
+            "task_class": "feature-multi-file",
+            "model": "sonnet",
+            "outcome": {"gates_first_try": False, "review_rounds": 1, "rejects_real": 0},
+        }
+        rec_b: dict[str, Any] = {
+            "ts": "2026-06-15T00:01:00+00:00",
+            "task_id": "contract-rc3b",
+            "role": "worker-primary",
+            "task_class": "arch-refactor",
+            "model": "sonnet",
+            "outcome": {"gates_first_try": False, "review_rounds": 1, "rejects_real": 0},
+        }
+        groups = _rebalance._group_records([rec_a, rec_b])
+        assert len(groups) == 2, (
+            f"Expected 2 groups (distinct task_class), got {len(groups)}: {list(groups)}"
+        )
+        assert ("worker-primary", "feature-multi-file") in groups
+        assert ("worker-primary", "arch-refactor") in groups
+
+    def test_contract_schema_accepts_role_task_class(self) -> None:
+        # Contract fixture WITH role/task_class must validate against the schema.
+        import jsonschema  # noqa: PLC0415
+        schema = json.loads(
+            (Path(__file__).resolve().parent.parent / "schemas" / "contract.schema.json")
+            .read_text()
+        )
+        data = json.loads(
+            (Path(__file__).resolve().parent / "fixtures" / "contracts" / "sample_contract.json")
+            .read_text()
+        )
+        data["role"] = "worker-heavy"
+        data["task_class"] = "arch-refactor"
+        jsonschema.Draft202012Validator(
+            schema, format_checker=jsonschema.FormatChecker()
+        ).validate(data)
+
+    def test_contract_schema_accepts_missing_role_task_class(self) -> None:
+        # Existing contract WITHOUT role/task_class must still validate (back-compat).
+        import jsonschema  # noqa: PLC0415
+        schema = json.loads(
+            (Path(__file__).resolve().parent.parent / "schemas" / "contract.schema.json")
+            .read_text()
+        )
+        data = json.loads(
+            (Path(__file__).resolve().parent / "fixtures" / "contracts" / "sample_contract.json")
+            .read_text()
+        )
+        assert "role" not in data
+        assert "task_class" not in data
+        jsonschema.Draft202012Validator(
+            schema, format_checker=jsonschema.FormatChecker()
+        ).validate(data)
 
 
 # ---------------------------------------------------------------------------

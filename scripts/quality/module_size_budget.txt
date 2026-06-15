@@ -88,8 +88,10 @@ scripts/headless-loop.py|515
 # tmp ledger / contracts-tree fixtures + the schema-valid record builders, so
 # splitting would duplicate fixture overhead or require a conftest. The
 # ledger_transaction concurrency conversion added a TestLedgerTransaction class
-# (6 tests incl. a multiprocessing lost-update pin). Cap 645 = 634 current + 11 headroom.
-tests/test_ledger.py|645
+# (6 tests incl. a multiprocessing lost-update pin). The routing-ledger v2 contract
+# role/task_class fields added TestContractRoleTaskClass (5 tests, +106 lines).
+# Cap 750 = 739 current + 11 headroom.
+tests/test_ledger.py|750
 #
 # check_doc_reference_integrity.py is the multi-form citation guard (path:line +
 # path#token with identifier/filename/slug branches + asset-count + hook-count
@@ -119,3 +121,10 @@ tests/test_mirror_learnings.py|710
 # risk — all cmd_* functions share _resolve_fp / _load_record / ledger_lock / validate_escalation
 # from the same module. Cap 560 = ~550 current + ~10 headroom.
 scripts/_escalation.py|560
+#
+# test_measure_enrich_precision.py is the full acceptance suite for
+# measure_enrich_precision.py.  All tests share the _official / _community_two_corr /
+# _community_single fixture builders; splitting would duplicate these helpers or
+# require a conftest.  The measure_delta + --compare CLI tests add 241 lines
+# (sections 14 + 15).  Cap 695 = 684 current + 11 headroom.
+tests/test_measure_enrich_precision.py|695

@@ -69,7 +69,17 @@
       "items": { "type": "string", "minLength": 1 },
       "minItems": 1
     },
-    "pattern_refs":       { "type": "array", "items": {"type": "string"} }
+    "pattern_refs":       { "type": "array", "items": {"type": "string"} },
+    "role": {
+      "type": "string",
+      "enum": ["worker-primary", "worker-heavy", "worker-mechanical", "worker-narrow", "verifier"],
+      "description": "Matrix role from routing-ledger.schema.json; used by _ledger.append_phase_records to group records for rebalance."
+    },
+    "task_class": {
+      "type": "string",
+      "enum": ["feature-multi-file", "narrow-port", "mechanical", "arch-refactor", "docs", "review"],
+      "description": "Task class from routing-ledger.schema.json; used by _ledger.append_phase_records to group records for rebalance."
+    }
   },
   "additionalProperties": false
 }

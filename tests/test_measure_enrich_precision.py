@@ -428,3 +428,257 @@ def test_measure_deterministic_across_shuffled_input() -> None:
     assert json.dumps(r1, sort_keys=True) == json.dumps(r2, sort_keys=True), (
         "json.dumps with sort_keys differ — by_tier not stable"
     )
+
+
+# ---------------------------------------------------------------------------
+# 14. measure_delta — correct math on known dicts
+# ---------------------------------------------------------------------------
+
+
+def _make_measure_a() -> dict:
+    """Known baseline measure() result for delta tests."""
+    return {
+        "admitted": 2,
+        "admit_rate_pct": 66.7,
+        "advisory_judge_abstains": 0,
+        "advisory_judge_disagreements": 1,
+        "by_tier": {
+            "community": {"admitted": 1, "rejected": 1},
+            "official": {"admitted": 1, "rejected": 0},
+        },
+        "evidence_complete_pct": 100.0,
+        "reason_histogram": {"some reason": 1},
+        "rejected": 1,
+        "total": 3,
+    }
+
+
+def _make_measure_b() -> dict:
+    """Known variant measure() result for delta tests."""
+    return {
+        "admitted": 3,
+        "admit_rate_pct": 100.0,
+        "advisory_judge_abstains": 1,
+        "advisory_judge_disagreements": 0,
+        "by_tier": {
+            "community": {"admitted": 2, "rejected": 0},
+            "official": {"admitted": 1, "rejected": 0},
+        },
+        "evidence_complete_pct": 100.0,
+        "reason_histogram": {},
+        "rejected": 0,
+        "total": 3,
+    }
+
+
+def test_measure_delta_scalar_math() -> None:
+    """measure_delta scalar keys carry correct a/b/delta values."""
+    a = _make_measure_a()
+    b = _make_measure_b()
+    delta = mep.measure_delta(a, b)
+
+    assert delta["admitted"] == {"a": 2.0, "b": 3.0, "delta": 1.0}
+    assert delta["rejected"] == {"a": 1.0, "b": 0.0, "delta": -1.0}
+    # admit_rate_pct: 66.7 -> 100.0, delta = 33.3 (float; check approximately)
+    assert abs(delta["admit_rate_pct"]["delta"] - 33.3) < 0.01, (
+        f"admit_rate_pct delta wrong: {delta['admit_rate_pct']}"
+    )
+    assert delta["advisory_judge_disagreements"] == {
+        "a": 1.0, "b": 0.0, "delta": -1.0
+    }
+    assert delta["advisory_judge_abstains"] == {"a": 0.0, "b": 1.0, "delta": 1.0}
+    assert delta["total"] == {"a": 3.0, "b": 3.0, "delta": 0.0}
+
+
+def test_measure_delta_by_tier_nesting() -> None:
+    """measure_delta by_tier carries nested admitted/rejected deltas per tier."""
+    a = _make_measure_a()
+    b = _make_measure_b()
+    delta = mep.measure_delta(a, b)
+
+    # community: admitted 1->2 (+1), rejected 1->0 (-1)
+    assert delta["by_tier"]["community"]["admitted"] == {"a": 1.0, "b": 2.0, "delta": 1.0}
+    assert delta["by_tier"]["community"]["rejected"] == {"a": 1.0, "b": 0.0, "delta": -1.0}
+    # official: admitted 1->1 (0), rejected 0->0 (0)
+    assert delta["by_tier"]["official"]["admitted"] == {"a": 1.0, "b": 1.0, "delta": 0.0}
+    assert delta["by_tier"]["official"]["rejected"] == {"a": 0.0, "b": 0.0, "delta": 0.0}
+
+
+def test_measure_delta_reason_histogram_absent() -> None:
+    """reason_histogram is not present in the delta output."""
+    a = _make_measure_a()
+    b = _make_measure_b()
+    delta = mep.measure_delta(a, b)
+    assert "reason_histogram" not in delta, (
+        "reason_histogram must be omitted from measure_delta output"
+    )
+
+
+def test_measure_delta_keys_are_sorted() -> None:
+    """measure_delta output keys are sorted (byte-stable JSON)."""
+    delta = mep.measure_delta(_make_measure_a(), _make_measure_b())
+    keys = list(delta.keys())
+    assert keys == sorted(keys), f"delta keys not sorted: {keys}"
+
+
+def test_measure_delta_byte_stable() -> None:
+    """Same inputs produce identical JSON on two calls (no datetime.now/random)."""
+    a = _make_measure_a()
+    b = _make_measure_b()
+    j1 = json.dumps(mep.measure_delta(a, b), indent=2, sort_keys=True)
+    j2 = json.dumps(mep.measure_delta(a, b), indent=2, sort_keys=True)
+    assert j1 == j2, "measure_delta is not byte-stable"
+
+
+def test_measure_delta_source_no_datetime_random() -> None:
+    """measure_delta source must contain no datetime.now or random calls."""
+    import ast  # noqa: PLC0415
+    src = inspect.getsource(mep.measure_delta)
+    tree = ast.parse(src)
+    call_names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                call_names.append(
+                    f"{ast.unparse(node.func.value)}.{node.func.attr}"
+                )
+            elif isinstance(node.func, ast.Name):
+                call_names.append(node.func.id)
+    now_calls = [c for c in call_names if "now" in c.lower() or "today" in c.lower()]
+    random_calls = [c for c in call_names if "random" in c.lower()]
+    assert not now_calls, f"measure_delta must not call datetime.now/date.today: {now_calls}"
+    assert not random_calls, f"measure_delta must not call random: {random_calls}"
+
+
+def test_measure_delta_sign_correct() -> None:
+    """RED-prove delta sign: b - a, not a - b."""
+    # If a.admitted=10, b.admitted=5: delta must be -5, not +5.
+    a = {
+        "admitted": 10, "admit_rate_pct": 100.0,
+        "advisory_judge_abstains": 0, "advisory_judge_disagreements": 0,
+        "by_tier": {"official": {"admitted": 10, "rejected": 0}},
+        "evidence_complete_pct": 100.0, "reason_histogram": {},
+        "rejected": 0, "total": 10,
+    }
+    b = {
+        "admitted": 5, "admit_rate_pct": 50.0,
+        "advisory_judge_abstains": 0, "advisory_judge_disagreements": 0,
+        "by_tier": {"official": {"admitted": 5, "rejected": 5}},
+        "evidence_complete_pct": 100.0, "reason_histogram": {},
+        "rejected": 5, "total": 10,
+    }
+    delta = mep.measure_delta(a, b)
+    assert delta["admitted"]["delta"] == -5.0, (
+        f"delta sign wrong: expected -5.0 (b - a), got {delta['admitted']['delta']}"
+    )
+    assert delta["rejected"]["delta"] == 5.0, (
+        f"delta sign wrong for rejected: expected +5.0 (b - a), got {delta['rejected']['delta']}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 15. CLI --compare: subprocess test
+# ---------------------------------------------------------------------------
+
+
+def test_cli_compare_two_paths(tmp_path: Path) -> None:
+    """CLI --compare BASELINE VARIANT -> valid delta JSON, rc=0."""
+    # Baseline dir: 2 official (admitted)
+    baseline_dir = tmp_path / "baseline"
+    baseline_dir.mkdir()
+    for i in range(2):
+        (baseline_dir / f"c{i}.json").write_text(
+            json.dumps(_official(snippet=f"Baseline fact {i}.")), encoding="utf-8"
+        )
+
+    # Variant dir: 3 official (admitted) — admit rate goes up
+    variant_dir = tmp_path / "variant"
+    variant_dir.mkdir()
+    for i in range(3):
+        (variant_dir / f"c{i}.json").write_text(
+            json.dumps(_official(snippet=f"Variant fact {i}.")), encoding="utf-8"
+        )
+
+    scripts_dir = ROOT / "scripts"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_dir / "orchestrator.py"),
+            "measure-enrich",
+            "--compare",
+            str(baseline_dir),
+            str(variant_dir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(scripts_dir),
+    )
+    assert result.returncode == 0, (
+        f"--compare failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    delta = json.loads(result.stdout.strip())
+
+    # Structure: each scalar key must have a/b/delta
+    assert "admitted" in delta, f"missing 'admitted' in delta: {list(delta)}"
+    assert set(delta["admitted"]) == {"a", "b", "delta"}, (
+        f"unexpected delta shape: {delta['admitted']}"
+    )
+
+    # Values: baseline admitted=2, variant admitted=3 → delta=+1
+    assert delta["admitted"]["a"] == 2.0
+    assert delta["admitted"]["b"] == 3.0
+    assert delta["admitted"]["delta"] == 1.0
+
+    # by_tier present and nested
+    assert "by_tier" in delta
+    assert "official" in delta["by_tier"]
+    assert delta["by_tier"]["official"]["admitted"]["delta"] == 1.0
+
+    # reason_histogram must not appear
+    assert "reason_histogram" not in delta
+
+
+def test_cli_compare_missing_path_rc2(tmp_path: Path) -> None:
+    """--compare with a nonexistent path -> rc=2, no traceback."""
+    scripts_dir = ROOT / "scripts"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_dir / "orchestrator.py"),
+            "measure-enrich",
+            "--compare",
+            str(tmp_path / "noexist_a"),
+            str(tmp_path / "noexist_b"),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(scripts_dir),
+    )
+    assert result.returncode == 2, f"expected rc=2, got {result.returncode}"
+    assert "Traceback" not in result.stderr
+
+
+def test_cli_candidates_still_works_after_compare_added(tmp_path: Path) -> None:
+    """--candidates single-batch path is unaffected by --compare addition."""
+    (tmp_path / "c.json").write_text(
+        json.dumps(_official(snippet="Compat check.")), encoding="utf-8"
+    )
+    scripts_dir = ROOT / "scripts"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_dir / "orchestrator.py"),
+            "measure-enrich",
+            "--candidates",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(scripts_dir),
+    )
+    assert result.returncode == 0, (
+        f"--candidates failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    out = json.loads(result.stdout.strip())
+    assert out["total"] == 1
+    assert out["admitted"] == 1
