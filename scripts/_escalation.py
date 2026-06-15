@@ -297,6 +297,12 @@ def drive_enrich(
         record = _record_enrichment(
             record, query, counts, now=now, retrieved_date=retrieved_date
         )
+        if counts.get("admitted", 0) == 0:
+            # Zero-admit enrichment: auto-abandon.  The enrichment block stays to
+            # capture the attempt; record_resolution transitions enriched→abandoned.
+            from _log import event as _ev  # noqa: PLC0415
+            record = record_resolution(record, "abandoned", now=now)
+            _ev("escalation.auto_abandon", fingerprint=fp, counts=counts)
         validate_escalation(record)
         _contract.atomic_write_text(
             record_path, json.dumps(record, indent=2, sort_keys=True) + "\n"
