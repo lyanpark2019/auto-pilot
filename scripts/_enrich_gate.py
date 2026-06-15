@@ -112,8 +112,9 @@ def _canonical_host(url: str) -> str:
     Unicode IDN host and its xn-- form map to one string (not two sources).
 
     KNOWN LIMITATION (Path A — deferred, zero-dep posture retained):
-    Host identity here is the full lowercased hostname (one trailing dot
-    stripped + IDNA2003 encoding); it does NOT compute the eTLD+1 registrable
+    Host identity here is the full lowercased hostname (all trailing dots
+    stripped via ``rstrip('.')`` + IDNA2003 encoding); it does NOT compute
+    the eTLD+1 registrable
     domain and does NOT apply UTS-46/IDNA2008 normalization.  Consequences:
     - Multi-label public suffixes (e.g. ``github.io``, ``co.uk``,
       ``s3.amazonaws.com``) let subdomains count as independent hosts, which

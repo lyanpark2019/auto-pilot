@@ -109,3 +109,19 @@ class TestCmdRoundBudgetCli:
         _write_findings(tmp_path, 4, 1)
         rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "5"])
         assert rc == 2
+
+    def test_n_gt_3_count_curr_ge_prev_returns_3_hard_stop(self, tmp_path, capsys):
+        _write_findings(tmp_path, 4, 2)
+        _write_findings(tmp_path, 5, 2)  # curr == prev → HARD-STOP
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "5"])
+        assert rc == 3
+        out = json.loads(capsys.readouterr().out)
+        assert out["verdict"] == "HARD-STOP: 전략 전환 필요"
+
+    def test_n_gt_3_count_curr_lt_prev_returns_0(self, tmp_path, capsys):
+        _write_findings(tmp_path, 4, 5)
+        _write_findings(tmp_path, 5, 3)  # curr < prev → progress, rc 0
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "5"])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["verdict"] == "round 4 = final cap"
