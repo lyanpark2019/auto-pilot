@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import _round_budget  # noqa: E402
+import orchestrator  # noqa: E402
 
 
 def test_load_findings_missing_file_returns_empty(tmp_path):
@@ -58,3 +59,53 @@ def test_load_findings_valid_round_trips(tmp_path):
     data = _round_budget.load_findings(tmp_path, 1)
     assert data == payload
     assert _round_budget.count_findings(data) == 1
+
+
+# ---------------------------------------------------------------------------
+# CLI handler tests (cmd_round_budget via orchestrator.main)
+# ---------------------------------------------------------------------------
+
+def _write_findings(d: Path, r: int, count: int) -> None:
+    payload = {"reviewers": {"codex": {"count": count}}}
+    (d / f"findings-round-{r}.json").write_text(json.dumps(payload))
+
+
+class TestCmdRoundBudgetCli:
+    """Drive cmd_round_budget through orchestrator.main to verify CLI wiring."""
+
+    def test_n_lt_3_present_file_returns_0(self, tmp_path, capsys):
+        _write_findings(tmp_path, 2, 5)
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "2"])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["round"] == 2
+        assert out["count"] == 5
+        assert out["status"] == "informational"
+
+    def test_n_lt_3_missing_file_returns_2(self, tmp_path):
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "2"])
+        assert rc == 2
+
+    def test_n_eq_3_count_curr_ge_prev_returns_3_hard_stop(self, tmp_path, capsys):
+        _write_findings(tmp_path, 2, 3)
+        _write_findings(tmp_path, 3, 3)  # curr == prev → HARD-STOP
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "3"])
+        assert rc == 3
+        out = json.loads(capsys.readouterr().out)
+        assert out["verdict"] == "HARD-STOP: 전략 전환 필요"
+        assert out["count_curr"] == 3
+        assert out["count_prev"] == 3
+
+    def test_n_eq_3_count_curr_lt_prev_returns_0(self, tmp_path, capsys):
+        _write_findings(tmp_path, 2, 5)
+        _write_findings(tmp_path, 3, 3)  # curr < prev → round 4 = final cap
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "3"])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["verdict"] == "round 4 = final cap"
+
+    def test_n_gt_3_missing_file_returns_2(self, tmp_path):
+        # Only round-4 file present but round-3 missing → rc 2
+        _write_findings(tmp_path, 4, 1)
+        rc = orchestrator.main(["round-budget", "--score-dir", str(tmp_path), "--round", "5"])
+        assert rc == 2

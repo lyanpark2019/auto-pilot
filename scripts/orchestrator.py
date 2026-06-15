@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 import _evidence
-import _round_budget
 from _escalation_emit import emit_escalation
 from _log import event
 from _state import (
@@ -341,50 +340,6 @@ def cmd_dispatch_contract_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def _emit_hard_stop(n: int, c_prev: int, c_curr: int) -> int:
-    """Print HARD-STOP verdict to stdout+stderr and return exit 3."""
-    msg = "HARD-STOP: 전략 전환 필요"
-    _emit_json({
-        "round": n, "count_prev": c_prev, "count_curr": c_curr, "verdict": msg,
-    }, indent=2)
-    _warn(msg)
-    return 3
-
-
-def cmd_round_budget(args: argparse.Namespace) -> int:
-    """Deterministic gate: check whether the review round budget is exhausted.
-
-    Reads findings-round-{N-1,N}.json from ``--score-dir``.  Rules:
-      N < 3  → exit 0 informational.
-      N == 3, count(N) >= count(N-1)  → exit 3 HARD-STOP.
-      N == 3, count(N) < count(N-1)   → exit 0 "round 4 = final cap".
-      Missing file → exit 2.
-
-    Returns 0 (ok/informational), 2 (missing file), or 3 (HARD-STOP).
-    """
-    score_dir = Path(args.score_dir)
-    n = args.round
-    if n < 3:
-        data_n = _round_budget.load_findings(score_dir, n)
-        if not data_n:
-            return 2
-        c = _round_budget.count_findings(data_n)
-        _emit_json({"round": n, "count": c, "status": "informational"}, indent=2)
-        return 0
-    data_prev = _round_budget.load_findings(score_dir, n - 1)
-    data_curr = _round_budget.load_findings(score_dir, n)
-    if not data_prev or not data_curr:
-        return 2
-    c_prev = _round_budget.count_findings(data_prev)
-    c_curr = _round_budget.count_findings(data_curr)
-    if c_curr >= c_prev:
-        return _emit_hard_stop(n, c_prev, c_curr)
-    _emit_json({
-        "round": n, "count_prev": c_prev, "count_curr": c_curr,
-        "verdict": "round 4 = final cap",
-    }, indent=2)
-    return 0
-
 
 def cmd_review_status(_: argparse.Namespace) -> int:
     """Print the reviewer heartbeat table for the active phase (§4 PM visibility)."""
@@ -577,11 +532,6 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     p_dcc.add_argument("--contract", required=True)
     p_dcc.set_defaults(func=cmd_dispatch_contract_check)
 
-    p_rb = sub.add_parser("round-budget")
-    p_rb.add_argument("--score-dir", required=True)
-    p_rb.add_argument("--round", type=int, required=True)
-    p_rb.set_defaults(func=cmd_round_budget)
-
     p_disc = sub.add_parser("discover")
     disc_mode = p_disc.add_mutually_exclusive_group(required=True)
     disc_mode.add_argument("--check", action="store_true")
@@ -604,6 +554,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _promotion.register_cli_subparsers(sub)
     import _recover  # noqa: PLC0415
     _recover.register_cli_subparsers(sub)
+    import _round_budget  # noqa: PLC0415
+    _round_budget.register_cli_subparsers(sub)
     import _mirror_learnings  # noqa: PLC0415
     _mirror_learnings.register_cli_subparsers(sub)
     import measure_learnings_injection  # noqa: PLC0415

@@ -76,7 +76,7 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_routing.py` | A+B | model-routing.yaml resolver: codex effort by risk tier, verifier tier floor, verifier agent list |
 | `scripts/_heartbeat.py` | A+B | reviewer status.json beats + review-status table renderer |
 | `scripts/codex_review_bounded.py` | A+B | bounded codex exec: tiered effort → timeout → retry → ABSTAIN |
-| `scripts/_round_budget.py` | A+B | round-budget findings loaders (extracted from orchestrator for size) |
+| `scripts/_round_budget.py` | A+B | round-budget findings loaders + CLI handler (`cmd_round_budget`, `_emit_hard_stop`, `register_cli_subparsers`) extracted from orchestrator.py |
 | `scripts/_evidence.py` | run-3 | review-round evidence exit gate; claude APPROVE + codex APPROVE-or-honest-ABSTAIN |
 | `scripts/_improvement.py` | Hermes-loop | improvement-ticket identity + durable ledger I/O for the miner |
 | `scripts/_promotion.py` | Hermes-loop | ticket FSM + Phase-1 promotion gate evaluation |
