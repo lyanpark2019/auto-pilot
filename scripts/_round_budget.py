@@ -1,11 +1,15 @@
-"""Pure helpers for the orchestrator round-budget gate (extracted for size).
+"""Round-budget gate helpers + CLI handler for orchestrator.py.
 
-orchestrator.py sits at the 500-line module budget; these two pure functions
-moved here when the review-status subcommand was added (2026-06-12).
+Pure loaders (load_findings / count_findings) were extracted from orchestrator.py
+when the review-status subcommand was added (2026-06-12). The CLI handler
+(_emit_hard_stop / cmd_round_budget / register_cli_subparsers) followed when
+the round-budget inline block was extracted to restore orchestrator.py headroom.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -49,3 +53,56 @@ def count_findings(data: dict[str, Any]) -> int:
         for v in reviewers.values()
         if isinstance(v, dict)
     )
+
+
+def _emit_hard_stop(n: int, c_prev: int, c_curr: int) -> int:
+    """Print HARD-STOP verdict to stdout+stderr and return exit 3."""
+    msg = "HARD-STOP: 전략 전환 필요"
+    print(json.dumps({
+        "round": n, "count_prev": c_prev, "count_curr": c_curr, "verdict": msg,
+    }, indent=2))
+    print(msg, file=sys.stderr)
+    return 3
+
+
+def cmd_round_budget(args: argparse.Namespace) -> int:
+    """Deterministic gate: check whether the review round budget is exhausted.
+
+    Reads findings-round-{N-1,N}.json from ``--score-dir``.  Rules:
+      N < 3  → exit 0 informational.
+      N == 3, count(N) >= count(N-1)  → exit 3 HARD-STOP.
+      N == 3, count(N) < count(N-1)   → exit 0 "round 4 = final cap".
+      Missing file → exit 2.
+
+    Returns 0 (ok/informational), 2 (missing file), or 3 (HARD-STOP).
+    """
+    score_dir = Path(args.score_dir)
+    n = args.round
+    if n < 3:
+        data_n = load_findings(score_dir, n)
+        if not data_n:
+            return 2
+        c = count_findings(data_n)
+        print(json.dumps({"round": n, "count": c, "status": "informational"}, indent=2))
+        return 0
+    data_prev = load_findings(score_dir, n - 1)
+    data_curr = load_findings(score_dir, n)
+    if not data_prev or not data_curr:
+        return 2
+    c_prev = count_findings(data_prev)
+    c_curr = count_findings(data_curr)
+    if c_curr >= c_prev:
+        return _emit_hard_stop(n, c_prev, c_curr)
+    print(json.dumps({
+        "round": n, "count_prev": c_prev, "count_curr": c_curr,
+        "verdict": "round 4 = final cap",
+    }, indent=2))
+    return 0
+
+
+def register_cli_subparsers(sub: Any) -> None:
+    """Register the ``round-budget`` subparser onto ``sub``."""
+    p = sub.add_parser("round-budget")
+    p.add_argument("--score-dir", required=True)
+    p.add_argument("--round", type=int, required=True)
+    p.set_defaults(func=cmd_round_budget)

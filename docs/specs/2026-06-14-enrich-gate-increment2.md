@@ -79,15 +79,16 @@ Build the gate before any fetch (it is the vault-rot prevention, inseparable per
   **CLOSED in Phase 2b** — `_canonical_host` now uses `.rstrip(".")` (full strip, not
   `[-1]`).
 - *Registrable-domain / subdomain-collapse* (`www.reddit.com` vs `old.reddit.com`
-  for the same thread): **OPEN** — Python stdlib has no public-suffix list; a PSL-backed
+  for the same thread): **OPEN (Path A — eTLD+1/IDNA host-canonicalization deferred,
+  zero-dep posture retained)** — Python stdlib has no public-suffix list; a PSL-backed
   fix requires an external dep and is deferred until evidence-justified by a live
   producer. Mitigated agent-side: the fetch producer selects genuinely distinct domains.
 - *IDNA2003 vs UTS-46 deviation characters* — stdlib `.encode("idna")` implements
   IDNA2003, which diverges from UTS-46/IDNA2008 for deviation chars (ß, ς, ZWJ); e.g.
   `straße.de` IDNA2003→`strasse.de` but UTS-46→`xn--strae-oqa.de`, so the two encodings
-  of the same deviation-char domain can count as two independent hosts. **OPEN** — a
-  correct fix needs the third-party `idna` (UTS-46) library; deferred under the same
-  zero-dependency decision as eTLD+1 (exotic/organically-rare; no live consumer yet).
+  of the same deviation-char domain can count as two independent hosts. **OPEN (Path A —
+  same zero-dep / no live consumer deferral as eTLD+1 above)** — a correct fix needs
+  the third-party `idna` (UTS-46) library.
 
 ## Phase 2 — enrichment fetch + persist — SPLIT
 

@@ -39,7 +39,9 @@ tests/test_hooks_guards.py|640
 # inc3 Phase 1 adds 2 emit_escalation call sites (doom-loop + evidence_failed,
 # ~25 net lines) + datetime import; all logic delegated to _escalation_emit.py.
 # inc3 Phase 3 adds 2 measure_escalation wiring lines (all logic in measure_escalation.py).
-# Cap 640 = 631 current + 9 headroom.
+# round-budget handler (_emit_hard_stop + cmd_round_budget) extracted to _round_budget.py
+# via register_cli_subparsers pattern; 2 wiring lines replace ~45 inline lines.
+# Cap 640 = 631 current + 9 headroom (freed headroom is intentional runway).
 scripts/orchestrator.py|640
 #
 # test_headless_loop.py is the integration test suite for headless-loop.py; all
