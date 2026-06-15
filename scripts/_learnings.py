@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from _improvement import ledger_dir
+from _improvement import ledger_dir, local_key, verify_ticket_provenance
 from _promotion import load_tickets
 from learning_miner import is_promotable
 
@@ -111,10 +111,17 @@ def select_tickets(
         sys.stderr.write(f"_learnings: ledger load error (learnings-blind): {exc}\n")
         return []
 
+    _key = local_key()
     matched: list[Ticket] = []
     for ticket in all_tickets:
         if not is_gate_passed(ticket):
             continue
+        ok, reason = verify_ticket_provenance(ticket, key=_key)
+        if not ok:
+            fp = str(ticket.get("fingerprint", ""))
+            sys.stderr.write(
+                f"_learnings: provenance unverified {fp[:12]} ({reason})\n"
+            )
         evidence_files = _ticket_evidence_files(ticket)
         if not evidence_files:
             continue

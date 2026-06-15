@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import hmac
 import json
+import os
 import re
 import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -167,6 +169,117 @@ def ledger_lock(lock_path: Path) -> Iterator[None]:
 _ledger_lock = ledger_lock  # backward-compat alias
 
 
+_KEY_SIZE = 32
+
+
+def _key_path() -> Path:
+    """Resolve the attest-key path at call time so HOME overrides take effect."""
+    return Path.home() / ".claude" / "auto-pilot" / "attest.key"
+
+
+def local_key() -> bytes:
+    """Return the local HMAC key, creating it (mode 0600) if absent.
+
+    The key directory is created with mode 0700. The key file is written
+    atomically with O_CREAT|O_EXCL so concurrent first-call races are safe
+    (both callers succeed: one creates, the loser gets EEXIST and reads).
+    Returns raw 32 bytes. Never overwrites an existing key.
+    """
+    path = _key_path()
+    if path.exists():
+        return path.read_bytes()
+    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    raw = os.urandom(_KEY_SIZE)
+    try:
+        fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(fd, raw)
+        finally:
+            os.close(fd)
+    except FileExistsError:
+        # Another process created the file between our exists() check and open.
+        pass
+    return path.read_bytes()
+
+
+def _canonical_identity(ticket: Ticket) -> bytes:
+    """Stable UTF-8 bytes covering the fields that define a ticket's identity.
+
+    Bound fields: fingerprint, source, candidate_asset, pattern, evidence
+    (run_id + snippet pairs, sorted for order-independence).  ``state`` is
+    deliberately excluded — it mutates via _promotion.transition without
+    re-stamping; state-transition re-stamping is deferred to the enforcement
+    phase.  ``pattern`` never changes post-seed so binding it is safe across
+    all promotion-state transitions.
+
+    Sorted by (run_id, snippet) to mirror the dedup key _apply_bump uses so
+    that evidence reordering does not invalidate existing attestations.
+    """
+    raw = ticket.get("evidence", [])
+    evidence: list[dict[str, str]] = list(raw) if isinstance(raw, list) else []
+    payload = {
+        "fingerprint": ticket.get("fingerprint"),
+        "source": ticket.get("source"),
+        "candidate_asset": ticket.get("candidate_asset"),
+        "pattern": ticket.get("pattern", ""),
+        "evidence": [
+            {"run_id": e.get("run_id", ""), "snippet": e.get("snippet", "")}
+            for e in sorted(evidence, key=lambda e: (e.get("run_id", ""), e.get("snippet", "")))
+        ],
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode("utf-8")
+
+
+def stamp_provenance(ticket: Ticket, *, key: bytes, now: datetime) -> Ticket:
+    """Attach an HMAC-SHA-256 attestation to a ticket dict (mutates in place).
+
+    ``now`` is injected by the caller so the stamp path remains datetime.now()-free
+    and fully testable. The MAC covers the canonical identity bytes derived from
+    the ticket's fingerprint, source, candidate_asset, and deduplicated evidence.
+    """
+    ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    mac = hmac.new(key, _canonical_identity(ticket), hashlib.sha256).hexdigest()
+    ticket["provenance"] = {
+        "algo": "hmac-sha256",
+        "attestation": mac,
+        "signed_at": ts,
+        "identity_version": 1,
+    }
+    return ticket
+
+
+def verify_ticket_provenance(
+    ticket: Ticket, *, key: bytes, strict: bool = False
+) -> tuple[bool, str]:
+    """Pure provenance verifier — never calls datetime.now().
+
+    Returns (ok, reason) where reason is one of:
+      "legacy-unsigned"       — no provenance field (ok=True unless strict=True)
+      "attestation-mismatch"  — HMAC does not match (ok=False)
+      "distinct-runs-inflated" — distinct_runs > len(unique run_ids) (ok=False)
+      "verified"              — MAC matches and counts are consistent (ok=True)
+    """
+    prov = ticket.get("provenance")
+    if prov is None:
+        return (not strict, "legacy-unsigned")
+
+    prov_dict: dict[str, object] = prov if isinstance(prov, dict) else {}
+    expected = hmac.new(key, _canonical_identity(ticket), hashlib.sha256).hexdigest()
+    actual = str(prov_dict.get("attestation", ""))
+    if not hmac.compare_digest(expected, actual):
+        return (False, "attestation-mismatch")
+
+    raw = ticket.get("evidence", [])
+    evidence: list[dict[str, str]] = list(raw) if isinstance(raw, list) else []
+    unique_run_ids = {e.get("run_id", "") for e in evidence}
+    distinct = ticket.get("distinct_runs", 0)
+    if int(distinct if isinstance(distinct, int) else 0) > len(unique_run_ids):
+        return (False, "distinct-runs-inflated")
+
+    return (True, "verified")
+
+
 def _seed_ticket(fp: str, obs: Observation, repo_fp: str, ts: str) -> Ticket:
     return {
         "schema_version": 1,
@@ -242,9 +355,12 @@ def bump_or_create(ledger: Path, obs: Observation, *, repo_root: Path,
     repo_fp = repo_fingerprint(repo_root)
     ticket_path = ledger / f"{fp}.json"
 
+    key = local_key()
+
     if dry_run:
         ticket = _load_ticket(ticket_path) or _seed_ticket(fp, obs, repo_fp, ts)
         ticket = _apply_bump(ticket, obs, repo_fp, ts)
+        stamp_provenance(ticket, key=key, now=now)
         validate_ticket(ticket)
         return ticket
 
@@ -252,6 +368,7 @@ def bump_or_create(ledger: Path, obs: Observation, *, repo_root: Path,
     with _ledger_lock(lock_path):
         ticket = _load_ticket(ticket_path) or _seed_ticket(fp, obs, repo_fp, ts)
         ticket = _apply_bump(ticket, obs, repo_fp, ts)
+        stamp_provenance(ticket, key=key, now=now)
         validate_ticket(ticket)
         _contract.atomic_write_text(
             ticket_path, json.dumps(ticket, indent=2, sort_keys=True) + "\n"
