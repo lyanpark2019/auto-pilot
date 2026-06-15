@@ -121,3 +121,10 @@ tests/test_mirror_learnings.py|710
 # risk — all cmd_* functions share _resolve_fp / _load_record / ledger_lock / validate_escalation
 # from the same module. Cap 560 = ~550 current + ~10 headroom.
 scripts/_escalation.py|560
+#
+# test_measure_enrich_precision.py is the full acceptance suite for
+# measure_enrich_precision.py.  All tests share the _official / _community_two_corr /
+# _community_single fixture builders; splitting would duplicate these helpers or
+# require a conftest.  The measure_delta + --compare CLI tests add 241 lines
+# (sections 14 + 15).  Cap 695 = 684 current + 11 headroom.
+tests/test_measure_enrich_precision.py|695

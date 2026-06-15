@@ -148,13 +148,73 @@ def measure(candidates: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# Top-level numeric keys in the measure() output that are compared by measure_delta.
+_SCALAR_KEYS = (
+    "admit_rate_pct",
+    "admitted",
+    "advisory_judge_abstains",
+    "advisory_judge_disagreements",
+    "evidence_complete_pct",
+    "rejected",
+    "total",
+)
+
+
+def measure_delta(baseline: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
+    """Compute A/B delta between two measure() output dicts.
+
+    Pure, deterministic, and byte-stable — no datetime.now() or random.
+
+    Covers every numeric metric in measure()'s output:
+    - Top-level scalars: admit_rate_pct, admitted, advisory_judge_abstains,
+      advisory_judge_disagreements, evidence_complete_pct, rejected, total.
+    - Nested by_tier: for each tier key present in either dict, produces
+      a nested delta for admitted and rejected counts.
+
+    Non-numeric keys (reason_histogram) are omitted — histograms differ in
+    structure and are not meaningfully subtracted.
+
+    Returns a JSON-able dict ``{metric: {"a": <baseline>, "b": <variant>,
+    "delta": <b - a>}}`` with sorted top-level keys.  by_tier is a nested
+    dict ``{tier: {"admitted": {...}, "rejected": {...}}}`` with the same
+    {a, b, delta} shape per sub-key.
+    """
+    delta: dict[str, Any] = {}
+
+    for key in _SCALAR_KEYS:
+        a_val: float = float(baseline.get(key, 0))
+        b_val: float = float(variant.get(key, 0))
+        delta[key] = {"a": a_val, "b": b_val, "delta": b_val - a_val}
+
+    # by_tier: union of tier keys from both dicts
+    a_by_tier: dict[str, Any] = baseline.get("by_tier") or {}
+    b_by_tier: dict[str, Any] = variant.get("by_tier") or {}
+    all_tiers = sorted(set(a_by_tier) | set(b_by_tier))
+    tier_delta: dict[str, Any] = {}
+    for tier in all_tiers:
+        a_tier = a_by_tier.get(tier) or {}
+        b_tier = b_by_tier.get(tier) or {}
+        tier_delta[tier] = {}
+        for sub_key in ("admitted", "rejected"):
+            a_sub = float(a_tier.get(sub_key, 0))
+            b_sub = float(b_tier.get(sub_key, 0))
+            tier_delta[tier][sub_key] = {
+                "a": a_sub,
+                "b": b_sub,
+                "delta": b_sub - a_sub,
+            }
+    delta["by_tier"] = tier_delta
+
+    return dict(sorted(delta.items()))
+
+
 def register_cli_subparsers(sub: Any) -> None:
     """Register ``measure-enrich`` onto the orchestrator CLI parser."""
     p = sub.add_parser("measure-enrich")
     p.add_argument(
         "--candidates",
-        required=True,
         dest="candidates",
+        default=None,
         help=(
             "Path to a JSON file (single candidate object or list) "
             "or a directory whose *.json files are each a candidate."
@@ -166,13 +226,46 @@ def register_cli_subparsers(sub: Any) -> None:
         dest="output_json",
         help="output JSON (always true; flag kept for compat)",
     )
+    p.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("BASELINE", "VARIANT"),
+        dest="compare",
+        default=None,
+        help=(
+            "Compare two candidate paths (file or dir).  Loads each, runs "
+            "measure() on both, prints measure_delta() as JSON.  "
+            "Mutually exclusive with --candidates."
+        ),
+    )
     p.set_defaults(func=cmd_measure_enrich)
 
 
 def cmd_measure_enrich(args: Any) -> int:
     """CLI handler: measure gate precision over a candidates file or directory."""
-    candidates_path = Path(getattr(args, "candidates")).resolve()
+    compare: list[str] | None = getattr(args, "compare", None)
 
+    if compare is not None:
+        baseline_path = Path(compare[0]).resolve()
+        variant_path = Path(compare[1]).resolve()
+        try:
+            baseline_cands = _load_candidates(baseline_path)
+            variant_cands = _load_candidates(variant_path)
+        except (OSError, json.JSONDecodeError) as exc:
+            sys.stderr.write(f"error loading candidates for --compare: {exc}\n")
+            return 2
+        result = measure_delta(measure(baseline_cands), measure(variant_cands))
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    candidates_arg: str | None = getattr(args, "candidates", None)
+    if candidates_arg is None:
+        sys.stderr.write(
+            "error: one of --candidates or --compare is required\n"
+        )
+        return 2
+
+    candidates_path = Path(candidates_arg).resolve()
     try:
         candidates = _load_candidates(candidates_path)
     except (OSError, json.JSONDecodeError) as exc:
