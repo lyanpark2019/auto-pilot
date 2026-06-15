@@ -23,7 +23,8 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "accepted": frozenset({"implemented", "rejected"}),
     "implemented": frozenset({"verified", "rejected"}),
     "verified": frozenset({"promoted", "rejected"}),
-    "promoted": frozenset(),
+    "promoted": frozenset({"quarantined"}),
+    "quarantined": frozenset({"promoted", "rejected"}),
     "rejected": frozenset(),
 }
 GATE_FIELDS: tuple[str, ...] = ("tests_pass", "ci_pass", "user_approved")
@@ -106,7 +107,7 @@ def _locked_update(ledger: Path, fp: str, mutate: Any) -> Ticket:
     return result
 
 
-_TERMINAL_STATES: frozenset[str] = frozenset({"promoted", "rejected"})
+_TERMINAL_STATES: frozenset[str] = frozenset({"quarantined", "rejected"})
 
 
 def set_gate_field(ledger: Path, fp: str, field: str, value: bool) -> Ticket:

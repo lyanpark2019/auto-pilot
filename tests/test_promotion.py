@@ -137,11 +137,20 @@ class TestSetGateField:
         with pytest.raises(PromotionError, match="corrupt"):
             set_gate_field(tmp_path, FP_A, "tests_pass", True)
 
-    def test_terminal_state_promoted_blocks_gate(self, tmp_path):
-        _seed_ticket(tmp_path, FP_A, state="promoted",
+    def test_terminal_state_quarantined_blocks_gate(self, tmp_path):
+        """quarantined is a terminal state — gate mutations are denied."""
+        _seed_ticket(tmp_path, FP_A, state="quarantined",
                      gates={"tests_pass": True, "ci_pass": True, "user_approved": True})
         with pytest.raises(PromotionError, match="terminal"):
             set_gate_field(tmp_path, FP_A, "tests_pass", False)
+
+    def test_promoted_state_allows_gate_mutation(self, tmp_path):
+        """promoted→quarantined edge: promoted is NOT terminal so gate field is mutable."""
+        _seed_ticket(tmp_path, FP_A, state="promoted",
+                     gates={"tests_pass": True, "ci_pass": True, "user_approved": True})
+        # Should NOT raise — promoted is no longer a terminal state
+        out = set_gate_field(tmp_path, FP_A, "tests_pass", False)
+        assert out["promotion_gate"]["tests_pass"] is False
 
     def test_terminal_state_rejected_blocks_gate(self, tmp_path):
         _seed_ticket(tmp_path, FP_A, state="rejected")
@@ -180,6 +189,20 @@ class TestTransition:
         _seed_ticket(tmp_path, FP_A, state="rejected")
         with pytest.raises(PromotionError):
             transition(tmp_path, FP_A, "candidate")
+
+    def test_quarantined_blocks_forward_transitions(self, tmp_path):
+        """quarantined can only go to promoted or rejected — not candidate/etc."""
+        _seed_ticket(tmp_path, FP_A, state="quarantined",
+                     gates={"tests_pass": True, "ci_pass": True, "user_approved": True})
+        with pytest.raises(PromotionError, match="quarantined -> candidate"):
+            transition(tmp_path, FP_A, "candidate")
+
+    def test_promoted_to_quarantined_transition(self, tmp_path):
+        """promoted -> quarantined is a valid FSM edge."""
+        _seed_ticket(tmp_path, FP_A, state="promoted",
+                     gates={"tests_pass": True, "ci_pass": True, "user_approved": True})
+        out = transition(tmp_path, FP_A, "quarantined")
+        assert out["state"] == "quarantined"
 
     def test_transition_result_still_schema_valid(self, tmp_path):
         _seed_ticket(tmp_path, FP_A)
