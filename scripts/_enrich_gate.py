@@ -110,6 +110,19 @@ def _canonical_host(url: str) -> str:
 
     Returns '' for hostless URLs. Canonical form is ToASCII (punycode) so a
     Unicode IDN host and its xn-- form map to one string (not two sources).
+
+    KNOWN LIMITATION (Path A — deferred, zero-dep posture retained):
+    Host identity here is the full lowercased hostname (one trailing dot
+    stripped + IDNA2003 encoding); it does NOT compute the eTLD+1 registrable
+    domain and does NOT apply UTS-46/IDNA2008 normalization.  Consequences:
+    - Multi-label public suffixes (e.g. ``github.io``, ``co.uk``,
+      ``s3.amazonaws.com``) let subdomains count as independent hosts, which
+      can mis-count corroboration-host independence.
+    - IDNA2003 vs UTS-46 deviation characters (ß, ς, ZWJ) can produce two
+      distinct canonical strings for the same real domain.
+    Proper fix requires the ``publicsuffix2`` (PSL) and ``idna`` (UTS-46)
+    third-party packages.  Deferred until evidence-justified by a live
+    producer; see docs/specs/2026-06-14-enrich-gate-increment2.md.
     """
     try:
         h = urllib.parse.urlparse(url).hostname or ""
