@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from _improvement import ledger_dir
+from _improvement import ledger_dir, local_key, verify_ticket_provenance
 from _learnings import _ticket_evidence_files, _scope_match
 from _mirror_learnings import load_promotable
 
@@ -65,14 +65,23 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
             "injected_any_scope": 0,
             "scope_addressable_pct": 0.0,
             "scope_blind_fingerprints": [],
+            "provenance_verified": 0,
+            "provenance_legacy_unsigned": 0,
+            "provenance_unverified": 0,
+            "provenance_filtered_pct": 0.0,
+            "filtered_fingerprints": [],
         }
 
     _, gate_passed = load_promotable(ledger)
 
+    _key = local_key()
     file_anchored_count = 0
     scope_blind_fps: list[str] = []
     matched_per_scope: dict[str, int] = {s: 0 for s in scopes}
     injected_any: set[str] = set()
+    prov_verified = 0
+    prov_legacy = 0
+    prov_unverified_fps: list[str] = []
 
     for ticket in gate_passed:
         fp = str(ticket.get("fingerprint", ""))
@@ -87,14 +96,25 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
         else:
             scope_blind_fps.append(fp[:12])
 
+        ok, reason = verify_ticket_provenance(ticket, key=_key)
+        if reason == "legacy-unsigned":
+            prov_legacy += 1
+        elif ok:
+            prov_verified += 1
+        else:
+            prov_unverified_fps.append(fp[:12])
+
     gate_passed_total = len(gate_passed)
     scope_blind_count = gate_passed_total - file_anchored_count
     injected_any_scope = len(injected_any)
+    prov_unverified = len(prov_unverified_fps)
 
     if gate_passed_total == 0:
         pct = 0.0
+        filtered_pct = 0.0
     else:
         pct = round(injected_any_scope / gate_passed_total * 100, 1)
+        filtered_pct = round(prov_unverified / gate_passed_total * 100, 1)
 
     return {
         "gate_passed_total": gate_passed_total,
@@ -105,6 +125,11 @@ def measure(ledger: Path, scopes: list[str]) -> dict[str, Any]:
         "injected_any_scope": injected_any_scope,
         "scope_addressable_pct": pct,
         "scope_blind_fingerprints": sorted(scope_blind_fps),
+        "provenance_verified": prov_verified,
+        "provenance_legacy_unsigned": prov_legacy,
+        "provenance_unverified": prov_unverified,
+        "provenance_filtered_pct": filtered_pct,
+        "filtered_fingerprints": sorted(prov_unverified_fps),
     }
 
 
