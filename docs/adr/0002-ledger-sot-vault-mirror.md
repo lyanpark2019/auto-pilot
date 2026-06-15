@@ -2,8 +2,13 @@
 
 Status: accepted (2026-06-14)
 
+> **Naming note (2026-06-15):** the internal codename "Hermes loop" / "Hermes ledger" was
+> renamed to "improvement-ticket loop" / "improvement-ticket ledger" to avoid collision with
+> Nous Research's Hermes Agent (an OSS agent whose flagship feature is also a "closed learning
+> loop"). Code identifiers (`learning_miner`, `_improvement`, `_promotion`, etc.) are unchanged.
+
 The closed learning loop needs a store that injection can read deterministically —
-only **gate-passed** learnings, machine-readable, fast. The existing Hermes
+only **gate-passed** learnings, machine-readable, fast. The existing improvement-ticket
 **Ledger** (JSON, outside the target repo) already is that: fingerprinted tickets
 with `distinct_runs` gate counters. So the Ledger stays the **single source of
 truth** for injection. The Obsidian **vault** receives a one-way **mirror** of
@@ -12,7 +17,7 @@ only `promotable`+ tickets as human-browsable gotcha pages — giving the operat
 
 ## Considered options
 
-- **Make the vault the single store** — write Hermes tickets as Obsidian pages with
+- **Make the vault the single store** — write improvement-ticket ledger entries as Obsidian pages with
   gate counters in frontmatter. **Rejected.** The promotion gate would then parse
   markdown frontmatter on every scan — fragile, and it pollutes a human-curated vault
   with raw one-off observations (most never reach `promotable`). The vision "everything
