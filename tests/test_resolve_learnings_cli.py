@@ -196,6 +196,40 @@ def test_gate_passed_promoted_state_writes_learnings(tmp_path, capsys):
 
 
 # ---------------------------------------------------------------------------
+# (b2) I/O failure on write → controlled exit 0 (learnings-blind), never crash
+# ---------------------------------------------------------------------------
+
+def test_io_error_on_write_returns_zero_blind(tmp_path, capsys):
+    """A non-directory dest-dir parent makes the bundle write raise OSError;
+    cmd degrades to learnings-blind (ok=False, matched=0) and still returns 0."""
+    ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(
+        fingerprint="d" * 64,
+        state="candidate",
+        distinct_runs=2,  # gate-passed → resolve_learnings proceeds to write
+        source_path="scripts/_contract.py",
+    )
+    _write_ticket(ledger, ticket)
+
+    # dest-dir parent is a regular FILE → mkdir/write under it raises NotADirectoryError
+    blocker = tmp_path / "afile"
+    blocker.write_text("not a dir")
+    dest_dir = blocker / "bundle"
+    args = _make_args(scope_files=["scripts/"], dest_dir=str(dest_dir))
+
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        rc = cli.cmd_resolve_learnings(args)
+
+    captured = capsys.readouterr()
+    output = json.loads(captured.out.strip())
+
+    assert rc == 0  # never blocks dispatch
+    assert output["ok"] is False
+    assert output["learnings_path"] is None
+    assert output["matched"] == 0
+
+
+# ---------------------------------------------------------------------------
 # (c) register_cli_subparsers wires resolve-learnings onto a sub-parser group
 # ---------------------------------------------------------------------------
 

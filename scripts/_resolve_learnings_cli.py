@@ -50,7 +50,15 @@ def cmd_resolve_learnings(args: Any) -> int:
     scope_files: list[str] = list(args.scope_files)
     dest_dir = Path(args.dest_dir)
 
-    result_path = _learnings.resolve_learnings(repo_root, scope_files, dest_dir)
+    try:
+        result_path = _learnings.resolve_learnings(repo_root, scope_files, dest_dir)
+    except OSError as exc:
+        # I/O failure writing the bundle (e.g. a non-directory dest-dir parent) must
+        # not crash dispatch — injection is additive, so degrade to learnings-blind.
+        sys.stderr.write(f"resolve-learnings: I/O error, ran learnings-blind: {exc}\n")
+        sys.stdout.write(
+            json.dumps({"ok": False, "learnings_path": None, "matched": 0}) + "\n")
+        return 0
 
     payload: dict[str, Any] = {
         "ok": True,
