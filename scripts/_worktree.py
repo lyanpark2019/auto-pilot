@@ -354,7 +354,7 @@ class WorktreeManager:
         """Return True when main's git log already contains an idempotency trailer for token.
 
         Probes git log with --grep so no Python-side log parsing is needed.
-        A missing or empty token is treated as not-present (cannot safely skip).
+        apply_to_main fails closed on an empty/missing token upstream; this guard is defense in depth.
         """
         if not token:
             return False
