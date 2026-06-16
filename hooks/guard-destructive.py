@@ -41,7 +41,11 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _stdin_contract import full_payload_or_none  # noqa: E402
 
 # (regex, human-readable reason). Each regex is matched case-insensitively
 # against the full Bash command string.
@@ -181,6 +185,7 @@ def _load_payload(raw: str) -> Mapping[str, Any] | None:
     return cast(Mapping[str, Any], data)
 
 
+
 def _bash_command(data: Mapping[str, Any]) -> str | None:
     if data.get("tool_name") != "Bash":
         return None
@@ -248,7 +253,7 @@ def _scan_destructive_patterns(scanned: str, marker: str) -> None:
 
 def main() -> None:
     """Run the guard-destructive command-line entry point."""
-    payload = _load_payload(sys.stdin.read())
+    payload = full_payload_or_none(sys.stdin)
     if payload is None:
         print("[hook:guard-destructive] fail-open: unparseable or non-mapping stdin", file=sys.stderr)
         sys.exit(0)

@@ -25,7 +25,11 @@ import json
 import os
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _stdin_contract import full_payload_or_none  # noqa: E402
 
 MARKER = ".codex-conductor"
 
@@ -120,7 +124,7 @@ def _always_allowed(fpath: str, marker_root: str) -> bool:
 
 def main() -> None:
     """Run the codex-conductor-guard command-line entry point."""
-    data = _load_payload(sys.stdin.read())
+    data = full_payload_or_none(sys.stdin)
     if data is None:
         sys.exit(0)
     fpath = _target_path(data)
