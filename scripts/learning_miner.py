@@ -85,13 +85,23 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
             if candidate_val not in VALID_ASSET_TYPES:
                 candidate_val = None
             snippet = json.dumps(finding)[:500]
+            # Use the line's own run_id (stamped at capture time) so that
+            # re-mining the same JSONL under a new state run_id does not
+            # inflate distinct_runs for observations from prior runs.
+            # Legacy lines (no run_id key) fall back to the state run_id.
+            line_run_id = finding.get("run_id")
+            effective_run_id = (
+                line_run_id
+                if isinstance(line_run_id, str) and line_run_id.strip()
+                else run_id
+            )
             observations.append(
                 Observation(
                     source="reviewer-finding",
                     file_basename=Path(file_val).name if file_val else "",
                     issue=issue_val,
                     candidate_asset=candidate_val,
-                    run_id=run_id,
+                    run_id=effective_run_id,
                     snippet=snippet,
                     source_path=file_val,
                 )
