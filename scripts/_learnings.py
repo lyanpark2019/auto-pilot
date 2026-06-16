@@ -29,6 +29,13 @@ Ticket = dict[str, object]
 
 _EXCLUDED_STATES: frozenset[str] = frozenset({"rejected", "quarantined"})
 
+# Written to context-bundle/learnings.md on the blind paths so the file ALWAYS
+# exists once resolve_learnings has run.  The dispatch-contract-gate keys worker
+# dispatch on this file's presence — file-present ≡ resolve ran (possibly blind);
+# absent ≡ the PM skipped injection.  Returning None still signals "blind" to the
+# caller's ``matched`` count; the marker is data, never a real learning.
+_BLIND_MARKER = "# No gate-passed learnings for this scope\n"
+
 
 def is_gate_passed(ticket: Ticket) -> bool:
     """Return True for tickets that are either already promoted or pass is_promotable.
@@ -201,34 +208,41 @@ def resolve_learnings(
     scope_files: Sequence[str],
     dest_dir: Path,
 ) -> Path | None:
-    """Resolve and write ``context-bundle/learnings.md`` for a contract.
+    """Resolve and ALWAYS write ``context-bundle/learnings.md`` for a contract.
 
-    Loads the ledger for ``repo_root``, selects relevant gate-passed tickets,
-    renders and writes ``<dest_dir>/context-bundle/learnings.md``.
-    Returns the path on success, ``None`` when no tickets match (caller logs
-    "ran learnings-blind" and proceeds without the file).
+    Loads the ledger for ``repo_root``, selects relevant gate-passed tickets, and
+    writes ``<dest_dir>/context-bundle/learnings.md`` — real content when tickets
+    match, the ``_BLIND_MARKER`` when none do (or injection is disabled).  The
+    file is written on EVERY path so the dispatch-contract-gate can treat its
+    presence as proof injection ran.
+
+    Returns the path when real tickets matched, ``None`` on a blind path (caller's
+    ``matched`` count keys off this) — but the marker file is written either way.
 
     If ``AUTO_PILOT_DISABLE_LEARNINGS`` is set to ``1``, ``true``, ``yes``, or
-    ``on`` (case-insensitive), injection is skipped entirely and ``None`` is
-    returned — the no-inject arm for outcome-level A/B evals
+    ``on`` (case-insensitive), injection is skipped (marker written, ``None``
+    returned) — the no-inject arm for outcome-level A/B evals
     (``evals/cases/learnings-ab/``).  Any other value (including ``0``,
     ``false``, ``no``, ``off``, empty string, or unset) leaves injection ON so
     that setting ``=0`` to mean "keep enabled" is not misread as a disable.
     """
+    bundle = dest_dir / "context-bundle"
+    bundle.mkdir(parents=True, exist_ok=True)
+    learnings_path = bundle / "learnings.md"
+
     _disable = os.environ.get("AUTO_PILOT_DISABLE_LEARNINGS", "").strip().lower()
     if _disable in {"1", "true", "yes", "on"}:
         sys.stderr.write(
             "_learnings: injection disabled via AUTO_PILOT_DISABLE_LEARNINGS\n"
         )
+        learnings_path.write_text(_BLIND_MARKER)
         return None
     ledger = ledger_dir(repo_root, None)
     tickets = select_tickets(ledger, scope_files)
     if not tickets:
         sys.stderr.write("_learnings: no relevant promotable tickets — ran learnings-blind\n")
+        learnings_path.write_text(_BLIND_MARKER)
         return None
 
-    bundle = dest_dir / "context-bundle"
-    bundle.mkdir(parents=True, exist_ok=True)
-    learnings_path = bundle / "learnings.md"
     learnings_path.write_text(render_learnings(tickets))
     return learnings_path

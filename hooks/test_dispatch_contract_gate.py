@@ -66,6 +66,82 @@ def _real_contract(cwd: Path, *, signed: bool = True,
     return str(ticket_path)
 
 
+def _real_worker_contract(cwd: Path, *, with_learnings: bool) -> str:
+    """Build a valid signed contract with a WORKER ticket; optionally write the
+    context-bundle/learnings.md the inject gate requires. Returns ticket path."""
+    base = cwd / ".planning" / "auto-pilot"
+    contract_dir = base / "contracts" / "phase-1"
+    tickets_dir = contract_dir / "tickets"
+    tickets_dir.mkdir(parents=True, exist_ok=True)
+    contract_json = contract_dir / "contract.json"
+    contract_json.write_text(json.dumps({"id": "phase-1", "phase": "1", "scope": []}))
+    sha = hashlib.sha256(contract_json.read_bytes()).hexdigest()
+    bundle = contract_dir / "context-bundle"
+    bundle.mkdir()
+    manifest = bundle / "MANIFEST.txt"
+    manifest.write_text("fixture manifest\n")
+    if with_learnings:
+        (bundle / "learnings.md").write_text("# No gate-passed learnings for this scope\n")
+    sig = {
+        "contract_sha": sha,
+        "manifest_sha": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "run_id": "test-run",
+        "signed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    sig_path = contract_dir / "PM-SIGNATURE"
+    sig_path.write_text(json.dumps(sig) + "\n")
+    (contract_dir / "contract-check.json").write_text(json.dumps({
+        "contract_sha256": sha,
+        "result": "pass",
+        "pm_signature": {
+            "verified": True,
+            "signature_sha256": hashlib.sha256(sig_path.read_bytes()).hexdigest(),
+            "contract_sha256": sha,
+            "manifest_sha256": sig["manifest_sha"],
+        },
+    }))
+    ticket_path = tickets_dir / "worker.json"
+    ticket_path.write_text("{}")
+    preflight_dir = base / "preflight"
+    preflight_dir.mkdir(parents=True, exist_ok=True)
+    (preflight_dir / "phase-1.json").write_text(json.dumps({
+        "generated_ts": datetime.now(timezone.utc).isoformat(),
+        "head_sha": "",
+    }))
+    return str(ticket_path)
+
+
+def run_worker_learnings_case(label: str, with_learnings: bool, expect: str,
+                              marker: str = "ticket") -> bool:
+    """Inject gate: a worker contract must carry context-bundle/learnings.md.
+
+    marker="ticket" dispatches via TICKET=<worker ticket>; marker="contract_dir"
+    dispatches via contract_dir=<dir> ALONE (no TICKET=) — proving the gate keys on
+    the worker ticket's presence in the contract, not the prompt's TICKET= line.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        _running_state(cwd)
+        ticket_path = _real_worker_contract(cwd, with_learnings=with_learnings)
+        if marker == "contract_dir":
+            contract_dir = str(Path(ticket_path).parent.parent)
+            prompt = "contract_dir=" + contract_dir + " do work"
+        else:
+            prompt = "TICKET=" + ticket_path + " do work"
+        payload = {"tool_name": "Task",
+                   "tool_input": {"subagent_type": "general-purpose", "prompt": prompt}}
+        result = subprocess.run(["bash", HOOK], input=json.dumps(payload),
+                                capture_output=True, text=True, cwd=cwd,
+                                env={**os.environ, "PATH": os.environ["PATH"]})
+    stdout = result.stdout.strip()
+    actual = "DENY" if (stdout and "deny" in stdout) else "ALLOW"
+    ok = actual == expect
+    print(f"[{'OK  ' if ok else 'FAIL'}] {label:52s} expect={expect:5s} got={actual:5s}")
+    if not ok:
+        print(f"       stdout={stdout!r} stderr={result.stderr.strip()!r}")
+    return ok
+
+
 def run_case(label: str, subagent_type: str, prompt: str | None,
              active_run: bool, build_contract: bool, expect: str,
              signed_contract: bool = True, signature_status: bool = True) -> bool:
@@ -323,6 +399,16 @@ def main() -> None:
         "git rev-parse failure (non-repo) → DENY (FIX 1)",
         "DENY",
     ))
+    # Inject gate (D2 PR-2): worker dispatch requires resolved learnings in the bundle.
+    results.append(run_worker_learnings_case(
+        "worker dispatch WITH learnings.md → ALLOW", True, "ALLOW"))
+    results.append(run_worker_learnings_case(
+        "worker dispatch MISSING learnings.md → DENY", False, "DENY"))
+    # Asymmetry fix: a worker dispatched via contract_dir= alone (no TICKET=) is
+    # ALSO gated, because the trigger is the worker ticket's presence in the contract.
+    results.append(run_worker_learnings_case(
+        "worker via contract_dir= marker, MISSING learnings → DENY", False, "DENY",
+        marker="contract_dir"))
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)

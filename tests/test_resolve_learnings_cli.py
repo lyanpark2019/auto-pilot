@@ -112,7 +112,10 @@ def test_no_match_returns_null_matched_zero(tmp_path, capsys):
     assert output["ok"] is True
     assert output["learnings_path"] is None
     assert output["matched"] == 0
-    assert not (dest_dir / "context-bundle" / "learnings.md").exists()
+    # Always-write contract (D2 PR-2): blind path writes the marker so the dispatch
+    # gate can treat file-presence as "resolve ran". matched=0 still signals blind.
+    marker = dest_dir / "context-bundle" / "learnings.md"
+    assert marker.exists() and "No gate-passed learnings" in marker.read_text()
 
 
 def test_empty_ledger_returns_null_matched_zero(tmp_path, capsys):

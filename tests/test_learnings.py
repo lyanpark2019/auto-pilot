@@ -333,6 +333,32 @@ def test_verify_snapshots_passes_without_learnings(tmp_path):
     _contract.verify_snapshots(dest_dir)
 
 
+def test_snapshot_context_learnings_path_is_bundle_file_no_samefile_error(tmp_path):
+    """resolve_learnings writes into the bundle; the PM threads that SAME path back
+    into snapshot_context. The same-file guard (B2) must avoid SameFileError and
+    still record the learnings sha + verify cleanly.
+    """
+    import unittest.mock as mock
+
+    spec = tmp_path / "spec.md"
+    spec.write_text("# spec\n")
+    ledger = tmp_path / "ledger"
+    _write_ticket(ledger, _valid_ticket(state="candidate", distinct_runs=2,
+                                        source_path="scripts/_contract.py"))
+
+    dest_dir = tmp_path / "contract" / "round-1"
+    dest_dir.mkdir(parents=True)
+    with mock.patch("_learnings.ledger_dir", return_value=ledger):
+        learnings_path = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
+    assert learnings_path == dest_dir / "context-bundle" / "learnings.md"
+
+    # learnings_path IS the bundle file — must not raise SameFileError.
+    shas = _contract.snapshot_context(dest_dir, spec, [], learnings_path=learnings_path)
+    assert shas.learnings is not None and len(shas.learnings) == 64
+    _bind_snapshot_to_contract(dest_dir, shas)
+    _contract.verify_snapshots(dest_dir)
+
+
 # ---------------------------------------------------------------------------
 # Integration: resolve_learnings writes the file
 # ---------------------------------------------------------------------------
@@ -367,6 +393,9 @@ def test_resolve_learnings_returns_none_when_no_match(tmp_path):
         result = lr.resolve_learnings(tmp_path, ["src/unrelated/file.py"], dest_dir)
 
     assert result is None
+    # Always-write contract (D2 PR-2): blind path still writes the marker file.
+    marker = dest_dir / "context-bundle" / "learnings.md"
+    assert marker.exists() and "No gate-passed learnings" in marker.read_text()
 
 
 # ---------------------------------------------------------------------------
@@ -433,7 +462,12 @@ def test_resolve_learnings_disabled_by_env(tmp_path, monkeypatch):
         result = lr.resolve_learnings(tmp_path, ["scripts/_contract.py"], dest_dir)
 
     assert result is None, "env kill-switch must prevent injection"
-    assert not (dest_dir / "context-bundle" / "learnings.md").exists()
+    # Always-write contract (D2 PR-2): the marker IS written even when disabled,
+    # so the dispatch gate can treat file-presence as "resolve ran". result=None
+    # still signals blind (no real tickets injected).
+    marker = dest_dir / "context-bundle" / "learnings.md"
+    assert marker.exists(), "blind/disabled path must still write the marker file"
+    assert "No gate-passed learnings" in marker.read_text()
 
 
 def test_resolve_learnings_not_disabled_when_env_unset(tmp_path, monkeypatch):

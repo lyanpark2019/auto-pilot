@@ -31,8 +31,11 @@ Arm A wins if `pass_rate_A > pass_rate_B` at p < 0.05 (Fisher's exact) over ≥1
 
 ## Toggle
 
-`AUTO_PILOT_DISABLE_LEARNINGS=1` → `resolve_learnings` returns `None` (no file written,
-no learnings in context bundle).  See `scripts/_learnings.py:resolve_learnings`.
+`AUTO_PILOT_DISABLE_LEARNINGS=1` → `resolve_learnings` returns `None` (no real learnings
+injected — arm B is learnings-blind).  Since D2 PR-2 a benign `# No gate-passed learnings`
+marker IS written to `context-bundle/learnings.md` so the dispatch-contract-gate's
+file-presence check passes; the marker is not a real learning and carries no ticket content,
+so arm B remains effectively no-inject.  See `scripts/_learnings.py:resolve_learnings`.
 
 ## What the unit tests already cover
 
