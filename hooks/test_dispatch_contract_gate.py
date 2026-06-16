@@ -111,15 +111,25 @@ def _real_worker_contract(cwd: Path, *, with_learnings: bool) -> str:
     return str(ticket_path)
 
 
-def run_worker_learnings_case(label: str, with_learnings: bool, expect: str) -> bool:
-    """Inject gate: a worker dispatch must carry context-bundle/learnings.md."""
+def run_worker_learnings_case(label: str, with_learnings: bool, expect: str,
+                              marker: str = "ticket") -> bool:
+    """Inject gate: a worker contract must carry context-bundle/learnings.md.
+
+    marker="ticket" dispatches via TICKET=<worker ticket>; marker="contract_dir"
+    dispatches via contract_dir=<dir> ALONE (no TICKET=) — proving the gate keys on
+    the worker ticket's presence in the contract, not the prompt's TICKET= line.
+    """
     with tempfile.TemporaryDirectory() as td:
         cwd = Path(td)
         _running_state(cwd)
         ticket_path = _real_worker_contract(cwd, with_learnings=with_learnings)
+        if marker == "contract_dir":
+            contract_dir = str(Path(ticket_path).parent.parent)
+            prompt = "contract_dir=" + contract_dir + " do work"
+        else:
+            prompt = "TICKET=" + ticket_path + " do work"
         payload = {"tool_name": "Task",
-                   "tool_input": {"subagent_type": "general-purpose",
-                                  "prompt": "TICKET=" + ticket_path + " do work"}}
+                   "tool_input": {"subagent_type": "general-purpose", "prompt": prompt}}
         result = subprocess.run(["bash", HOOK], input=json.dumps(payload),
                                 capture_output=True, text=True, cwd=cwd,
                                 env={**os.environ, "PATH": os.environ["PATH"]})
@@ -394,6 +404,11 @@ def main() -> None:
         "worker dispatch WITH learnings.md → ALLOW", True, "ALLOW"))
     results.append(run_worker_learnings_case(
         "worker dispatch MISSING learnings.md → DENY", False, "DENY"))
+    # Asymmetry fix: a worker dispatched via contract_dir= alone (no TICKET=) is
+    # ALSO gated, because the trigger is the worker ticket's presence in the contract.
+    results.append(run_worker_learnings_case(
+        "worker via contract_dir= marker, MISSING learnings → DENY", False, "DENY",
+        marker="contract_dir"))
     passed = sum(results)
     print(f"\n{passed}/{len(results)} passed")
     sys.exit(0 if passed == len(results) else 1)
