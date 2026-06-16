@@ -61,6 +61,18 @@ def _round_dir(repo: Path, *, iter_n: int = 1, phase: int = 1,
     )
 
 
+def _write_signature(round_dir: Path, run_id: str) -> None:
+    """Write a minimal PM-SIGNATURE (run_id is all _provenance_run_id reads)."""
+    round_dir.mkdir(parents=True, exist_ok=True)
+    (round_dir / "PM-SIGNATURE").write_text(json.dumps({"run_id": run_id}))
+
+
+def _set_state(repo: Path, run_id: str) -> None:
+    d = repo / ".planning" / "auto-pilot"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "state.json").write_text(json.dumps({"run_id": run_id, "status": "running"}))
+
+
 # ---------------------------------------------------------------------------
 # (a) REJECT with P1 and P2 — only P1 written, keys exact
 # ---------------------------------------------------------------------------
@@ -283,3 +295,93 @@ def test_run_id_empty_when_no_state_json(tmp_path: Path) -> None:
     assert lines[0]["run_id"] == "", (
         "absent state.json → current_run_id returns '' → line run_id must be ''"
     )
+
+
+# ---------------------------------------------------------------------------
+# (i) PM-SIGNATURE present → captured line carries the PROVENANCE run_id,
+#     not the scan-time state run_id
+# ---------------------------------------------------------------------------
+
+def test_provenance_run_id_overrides_state(tmp_path: Path) -> None:
+    _set_state(tmp_path, "state-run")          # scan-time run_id
+    rd = _round_dir(tmp_path)
+    _write_signature(rd, "sig-run")            # run that PRODUCED the review
+    review = _make_review(
+        "REJECT",
+        [{"severity": "P1", "file": "scripts/foo.py", "line": 1,
+          "issue": "some issue", "fix": "fix it", "finding_hash": _FINDING_HASH}],
+    )
+    _write_review(rd / "outputs" / "codex-reviewer" / "review.json", review)
+
+    _capture_reviews.capture_phase(tmp_path, 1)
+
+    jsonl = tmp_path / ".planning" / "auto-pilot" / "critic-rejections-phase-1.jsonl"
+    lines = [json.loads(ln) for ln in jsonl.read_text().splitlines() if ln.strip()]
+    assert len(lines) == 1
+    assert lines[0]["run_id"] == "sig-run", "provenance (PM-SIGNATURE) must win over state run_id"
+
+
+def test_provenance_missing_signature_falls_back_to_state(tmp_path: Path) -> None:
+    _set_state(tmp_path, "state-run")
+    rd = _round_dir(tmp_path)                   # no PM-SIGNATURE written
+    review_path = rd / "outputs" / "codex-reviewer" / "review.json"
+    assert _capture_reviews._provenance_run_id(review_path, "state-run") == "state-run"
+
+
+# ---------------------------------------------------------------------------
+# (j) Cross-session re-scan must NOT inflate — the inflation regression lock.
+#     A persisted review.json re-swept in a LATER session (different state
+#     run_id) reads the SAME provenance run_id from PM-SIGNATURE → identical
+#     canonical key → deduped → no 2nd line.
+# ---------------------------------------------------------------------------
+
+def test_cross_session_rescan_no_inflation(tmp_path: Path) -> None:
+    rd = _round_dir(tmp_path)
+    _write_signature(rd, "run-A")              # the review was produced by run-A
+    review = _make_review(
+        "REJECT",
+        [{"severity": "P1", "file": "scripts/foo.py", "line": 10,
+          "issue": "unchecked None deref", "fix": "add guard", "finding_hash": _FINDING_HASH}],
+    )
+    _write_review(rd / "outputs" / "codex-reviewer" / "review.json", review)
+
+    # Session A captures.
+    _set_state(tmp_path, "run-A")
+    assert _capture_reviews.capture_phase(tmp_path, 1) == 1
+
+    # Session B (later) re-sweeps the SAME persisted review under a new state run_id.
+    _set_state(tmp_path, "run-B")
+    assert _capture_reviews.capture_phase(tmp_path, 1) == 0, (
+        "re-scan of a persisted review must add 0 lines (provenance run_id is stable)"
+    )
+
+    jsonl = tmp_path / ".planning" / "auto-pilot" / "critic-rejections-phase-1.jsonl"
+    lines = [json.loads(ln) for ln in jsonl.read_text().splitlines() if ln.strip()]
+    assert len(lines) == 1
+    assert lines[0]["run_id"] == "run-A"
+
+
+# ---------------------------------------------------------------------------
+# (k) capture_all_phases sweeps every phase under the contracts tree
+# ---------------------------------------------------------------------------
+
+def test_capture_all_phases_sweeps_multiple(tmp_path: Path) -> None:
+    _set_state(tmp_path, "run-1")
+    for phase in (1, 2):
+        rd = _round_dir(tmp_path, phase=phase)
+        _write_review(
+            rd / "outputs" / "codex-reviewer" / "review.json",
+            _make_review(
+                "REJECT",
+                [{"severity": "P1", "file": f"scripts/p{phase}.py", "line": 1,
+                  "issue": f"issue in phase {phase}", "fix": "x",
+                  "finding_hash": _FINDING_HASH}],
+                contract_id=f"iter-1/phase-{phase}/contract-1/round-1",
+            ),
+        )
+
+    total = _capture_reviews.capture_all_phases(tmp_path)
+    assert total == 2
+    planning = tmp_path / ".planning" / "auto-pilot"
+    assert (planning / "critic-rejections-phase-1.jsonl").exists()
+    assert (planning / "critic-rejections-phase-2.jsonl").exists()

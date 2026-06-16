@@ -30,6 +30,13 @@ PROMOTION_THRESHOLDS: dict[str, int] = {
     "insight": 3,
 }
 
+# A legacy JSONL line (written before the run_id stamp, or by agent prose) has no
+# run_id. Crediting it to the live state run_id lets a single persisted line be
+# re-mined under a fresh run_id each run → false distinct_runs inflation. All such
+# lines collapse to ONE synthetic run instead, so legacy evidence contributes at
+# most 1 to distinct_runs and can never on its own clear a promotion gate.
+_LEGACY_RUN_ID = "__legacy_no_run_id__"
+
 # Mirrors candidate_asset enum in schemas/improvement-ticket.schema.json (SoT).
 # A producer-written value outside this set is coerced to None so a
 # mis-classified finding still becomes a ticket instead of being dropped on
@@ -88,12 +95,14 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
             # Use the line's own run_id (stamped at capture time) so that
             # re-mining the same JSONL under a new state run_id does not
             # inflate distinct_runs for observations from prior runs.
-            # Legacy lines (no run_id key) fall back to the state run_id.
+            # Legacy lines (no run_id key) collapse to a single synthetic run
+            # (_LEGACY_RUN_ID) — NOT the live state run_id, which would let one
+            # persisted line accrue a fresh distinct run each mine.
             line_run_id = finding.get("run_id")
             effective_run_id = (
                 line_run_id
                 if isinstance(line_run_id, str) and line_run_id.strip()
-                else run_id
+                else _LEGACY_RUN_ID
             )
             observations.append(
                 Observation(

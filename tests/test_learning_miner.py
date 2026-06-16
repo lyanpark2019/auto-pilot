@@ -42,17 +42,45 @@ def _ledger_tickets(home_root: Path, repo_root: Path) -> list[dict]:
 def test_same_root_two_runs_promotable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     root = tmp_path / "repo"
-    f = [{"file": "a.py", "line": 10, "issue": "missing token check", "candidate_asset": "hook"}]
-    # run 1
     (root / ".planning" / "auto-pilot").mkdir(parents=True)
-    (root / ".planning/auto-pilot/state.json").write_text(json.dumps({"run_id": "r1"}))
-    (root / ".planning/auto-pilot/critic-rejections-phase-1.jsonl").write_text(
-        json.dumps(f[0]) + "\n"
-    )
+    state = root / ".planning/auto-pilot/state.json"
+    jsonl = root / ".planning/auto-pilot/critic-rejections-phase-1.jsonl"
+    # run 1: the finding captured under run r1 (per-line run_id, as the producer stamps).
+    state.write_text(json.dumps({"run_id": "r1"}))
+    jsonl.write_text(json.dumps(
+        {"file": "a.py", "issue": "missing token check", "candidate_asset": "hook", "run_id": "r1"}
+    ) + "\n")
     assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
-    # run 2 (new run_id, same finding)
-    (root / ".planning/auto-pilot/state.json").write_text(json.dumps({"run_id": "r2"}))
+    # run 2: the SAME finding recurs in a genuinely distinct run r2 — a NEW line
+    # stamped with r2 (not a re-mine of the r1 line). distinct_runs -> 2 -> promotable.
+    state.write_text(json.dumps({"run_id": "r2"}))
+    with jsonl.open("a") as fh:
+        fh.write(json.dumps(
+            {"file": "a.py", "issue": "missing token check", "candidate_asset": "hook", "run_id": "r2"}
+        ) + "\n")
     assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "promotable"
+
+
+def test_legacy_no_run_id_line_not_inflated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A legacy line with no run_id must NOT inflate distinct_runs across mines.
+
+    Pre-D2 the no-run_id line fell back to the live state run_id, so re-mining the
+    same persisted line under a fresh state run_id climbed distinct_runs to 2 (false
+    promotion). It now collapses to a single synthetic run -> stays thin forever.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    # No run_id key on the finding (legacy / agent-prose-written line).
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({"file": "a.py", "issue": "missing token check", "candidate_asset": "hook"}) + "\n"
+    )
+    (d / "state.json").write_text(json.dumps({"run_id": "r1"}))
+    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
+    # Flip the state run_id and re-mine the SAME persisted line — must stay thin.
+    (d / "state.json").write_text(json.dumps({"run_id": "r2"}))
+    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
 
 
 def test_empty_inputs_thin_no_crash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -203,10 +231,12 @@ def test_fail_on_exit_code_two_when_promotable(
     root = tmp_path / "repo"
     d = root / ".planning" / "auto-pilot"
     d.mkdir(parents=True)
-    finding = {"file": "a.py", "line": 1, "issue": "missing token check", "candidate_asset": "hook"}
-    (d / "critic-rejections-phase-1.jsonl").write_text(json.dumps(finding) + "\n")
-    (d / "state.json").write_text(json.dumps({"run_id": "r1"}))
-    lm.main(["--repo-root", str(root)])
+    # Genuine recurrence across two distinct runs (per-line run_id, as the producer stamps).
+    base = {"file": "a.py", "issue": "missing token check", "candidate_asset": "hook"}
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({**base, "run_id": "r1"}) + "\n"
+        + json.dumps({**base, "run_id": "r2"}) + "\n"
+    )
     (d / "state.json").write_text(json.dumps({"run_id": "r2"}))
     assert lm.main(["--repo-root", str(root), "--fail-on", "promotable"]) == 2
 
