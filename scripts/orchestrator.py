@@ -581,6 +581,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _escalation_seed.register_cli_subparsers(sub)
     import _resolve_learnings_cli  # noqa: PLC0415
     _resolve_learnings_cli.register_cli_subparsers(sub)
+    import _capture_reviews  # noqa: PLC0415
+    _capture_reviews.register_cli_subparsers(sub)
 
     return parser
 
