@@ -26,7 +26,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _stdin_contract import full_payload_or_none  # noqa: E402
@@ -76,16 +76,6 @@ def find_marker_root(start: str) -> str | None:
         if parent == cur:
             return None
         cur = parent
-
-
-def _load_payload(raw: str) -> Mapping[str, Any] | None:
-    try:
-        data = json.loads(raw or "{}")
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, Mapping):
-        return None
-    return cast(Mapping[str, Any], data)
 
 
 def _target_path(data: Mapping[str, Any]) -> str | None:

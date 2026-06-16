@@ -42,7 +42,7 @@ import tempfile
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _stdin_contract import full_payload_or_none  # noqa: E402
@@ -173,17 +173,6 @@ def scrub_text_arguments(command: str) -> str:
 
 def _command_hash(scanned: str) -> str:
     return hashlib.sha256(scanned.encode("utf-8")).hexdigest()[:16]
-
-
-def _load_payload(raw: str) -> Mapping[str, Any] | None:
-    try:
-        data = json.loads(raw) if raw else {}
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(data, Mapping):
-        return None
-    return cast(Mapping[str, Any], data)
-
 
 
 def _bash_command(data: Mapping[str, Any]) -> str | None:
