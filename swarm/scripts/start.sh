@@ -4,6 +4,17 @@
 # --no-attach: start detached (headless callers, e.g. bench.sh --auto-start).
 set -euo pipefail
 
+# 0. core-loop conflict guard — MUST run before sourcing the plugin lib so it
+# fires unconditionally: the source below is an environment-dependent precondition
+# (PLUGIN_ROOT may be absent on a fresh host), and a core-loop conflict must be
+# reported regardless. They share the project tree; concurrent agentic mutations
+# race git and the state schema.
+_core_state="$(pwd)/.planning/auto-pilot/state.json"
+if [ -f "$_core_state" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"running"' "$_core_state"; then
+  echo "swarm: refusing to start — core auto-pilot loop is running (state.json status=running)" >&2
+  exit 3
+fi
+
 ATTACH=1
 for arg in "$@"; do
   case "$arg" in
@@ -19,15 +30,6 @@ BASE="$(basename "$PROJECT")"
 ROOT="$PROJECT/.planning/autopilot"
 CONFIG="$ROOT/config.json"
 SESSION="autopilot-$BASE"
-
-# 0. core-loop conflict guard — refuse to start if the core auto-pilot loop
-# is actively running; they share the same project tree and concurrent agentic
-# mutations cause git and state-schema races.
-CORE_STATE="$PROJECT/.planning/auto-pilot/state.json"
-if [ -f "$CORE_STATE" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"running"' "$CORE_STATE"; then
-  echo "swarm: refusing to start — core auto-pilot loop is running (state.json status=running)" >&2
-  exit 3
-fi
 
 # 1. config + git prerequisites
 if [ ! -f "$CONFIG" ]; then

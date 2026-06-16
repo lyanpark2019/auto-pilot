@@ -10,6 +10,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SWARM_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 START_SH="$SWARM_ROOT/scripts/start.sh"
 
+# start.sh sources $CLAUDE_PLUGIN_ROOT/swarm/scripts/lib/swarm-models.sh; point it
+# at this repo so the source resolves on a clean CI runner (no installed plugin).
+# The running-state guard runs BEFORE that source, so case (a) does not depend on it.
+CLAUDE_PLUGIN_ROOT="$(cd -- "$SWARM_ROOT/.." && pwd)"
+export CLAUDE_PLUGIN_ROOT
+
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
@@ -55,10 +61,10 @@ test_absent_state_no_block() {
   local rc
   rc="$(cd "$dir" && run_start_in_tmp "$dir")"
 
-  # Guard exit = 3; config-missing exit = 2. We must NOT see 3.
+  # Guard must NOT fire: no exit 3 and no guard message on stderr. We assert on
+  # the guard's observable effect, not the incidental post-guard exit code.
   [ "$rc" -ne 3 ] || fail "absent state: guard fired falsely (exit 3)"
-  # Confirm it stopped at the expected config-missing checkpoint.
-  [ "$rc" -eq 2 ] || fail "absent state: expected exit 2 (config missing), got $rc"
+  ! grep -q "refusing to start" "$dir/err.txt" || fail "absent state: guard message emitted falsely"
 
   rm -rf "$dir"
 }
@@ -78,8 +84,7 @@ test_terminal_status_no_block() {
     rc="$(cd "$dir" && run_start_in_tmp "$dir")"
 
     [ "$rc" -ne 3 ] || fail "terminal status '$status': guard fired falsely (exit 3)"
-    # Stopped at config-missing (exit 2), not the guard.
-    [ "$rc" -eq 2 ] || fail "terminal status '$status': expected exit 2, got $rc"
+    ! grep -q "refusing to start" "$dir/err.txt" || fail "terminal status '$status': guard message emitted falsely"
 
     rm -rf "$dir"
   done
