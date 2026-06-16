@@ -92,17 +92,23 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   paths / line numbers / ISO dates / `phase-N`, keeps FULL issue text (8-token truncation collided).
 - **Gate on `distinct_runs`, not raw occurrences** — reviewer-finding ≥2, doom-loop/insight/other ≥3
   → `promotable`; a worker re-tripping the same finding within one run cannot inflate the gate.
-  Captured reviewer-finding lines carry their own capture `run_id`; `scan_reviewer_findings` credits
-  that per-line id (legacy prose lines without it fall back to the state run_id), so re-mining a
-  persisted finding under a new run_id after the next `init` cannot inflate `distinct_runs` —
-  genuine cross-run recurrence is required (D1, 2026-06-16).
+  Captured reviewer-finding lines carry the `run_id` of the run that PRODUCED the review (read from
+  the contract's `PM-SIGNATURE`), so a later session re-sweeping persisted `review.json` files stamps
+  the SAME id and cannot inflate `distinct_runs` (an unsigned contract dir falls back to the
+  scan-time run_id — unreachable in normal dispatch, where ticket prep verifies the signature).
+  `scan_reviewer_findings` credits that per-line id;
+  a legacy line with no `run_id` collapses to one synthetic sentinel (`__legacy_no_run_id__`), never
+  the live state run_id, so re-mining it after the next `init` cannot inflate either. Genuine
+  cross-run recurrence is required (D1 2026-06-16; provenance + sentinel hardening D2 2026-06-17).
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
   `insights.jsonl` — retro's structured sidecar where a class tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
   it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
   The first scanner is fed by a deterministic CODE producer — `scripts/_capture_reviews.py`
-  (`orchestrator.py capture-reviews`) converts dual-reviewer REJECT `review.json` findings (P0/P1)
-  into JSONL lines, closing the prose-only capture gap (symmetric to resolve-learnings injection).
+  (`orchestrator.py capture-reviews` / `capture-all-phases`) converts dual-reviewer REJECT
+  `review.json` findings (P0/P1) into JSONL lines. The Stop hook (below) calls `capture-all-phases`
+  before mining, so capture fires automatically at session end across every phase — including
+  pivot-aborted phases that never reach a clean phase-end — with no PM prose (D2 2026-06-17).
 - **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:138`, three orchestrator
   subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
   state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
@@ -116,9 +122,11 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   are pruned; hand-authored pages (no generator sentinel) are never touched. Shared predicate
   `_learnings.is_gate_passed` (public since Phase-2) defines "gate-passed" for both injection
   (Phase-3) and mirror (Phase-2).
-- **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded).
-  Once-per-session is sufficient: evidence dedups on (run_id, snippet), so re-fires cannot inflate.
-  SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected (enforce with code).
+- **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded):
+  it sweeps capture (`capture-all-phases`) THEN mines, so the producer→consumer chain runs at session
+  end with no PM prose. Once-per-session is sufficient: evidence dedups on (run_id, snippet), so
+  re-fires cannot inflate. SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected
+  (enforce with code).
 - **No run identity → non-persisting scan** (ADR `docs/adr/0001-empty-run-id-non-persisting.md`):
   empty/non-string `run_id` projects a verdict but persists nothing — a `""` phantom run otherwise
   shortcuts the `distinct_runs` gate by one run. No fallback id synthesis (re-imports the gaming).

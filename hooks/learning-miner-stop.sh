@@ -45,8 +45,17 @@ fi
 # The miner lives in the plugin (auto-pilot is a brownfield driver, so it is not
 # in the target repo); self-locate it from this hook's directory.
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+orchestrator="$script_dir/../scripts/orchestrator.py"
 miner="$script_dir/../scripts/learning_miner.py"
 [[ -f "$miner" ]] || exit 0
+
+# CAPTURE chokepoint: sweep every phase's reviewer REJECT findings into the
+# critic-rejections JSONL BEFORE mining, so the dual reviewers' findings reach
+# learning organically without depending on PM prose to invoke capture.
+# Best-effort: advisory, stderr-only, never fails the Stop.
+if [[ -f "$orchestrator" ]]; then
+  python3 "$orchestrator" capture-all-phases --repo-root "$root" 1>&2 || true
+fi
 
 # Advisory run: verdict to stderr (keep hook stdout clean for the harness), and
 # never let a miner failure fail the Stop.

@@ -65,6 +65,32 @@ def _repo_relative(file_str: str, repo_root: Path) -> str:
     return raw
 
 
+def _provenance_run_id(review_path: Path, fallback: str) -> str:
+    """Return the run_id that PRODUCED this review, read from its PM-SIGNATURE.
+
+    A review at ``<contract_dir>/outputs/<role>/review.json`` is signed at
+    ``<contract_dir>/PM-SIGNATURE`` (``_contract.write_pm_signature``) with the
+    dispatching run's run_id.  Stamping captured lines with THAT run_id — not the
+    scan-time state run_id — makes a re-scan of a persisted ``review.json``
+    idempotent: the same physical finding always carries the same run_id, so a
+    later session re-scanning an earlier run's persisted reviews cannot inflate
+    ``distinct_runs``.  Missing/unreadable/empty signature → ``fallback``.
+    """
+    try:
+        contract_dir = review_path.parents[2]
+    except IndexError:
+        return fallback
+    try:
+        sig = json.loads((contract_dir / "PM-SIGNATURE").read_text())
+    except (OSError, json.JSONDecodeError, ValueError):
+        return fallback
+    if isinstance(sig, dict):
+        run_id = sig.get("run_id")
+        if isinstance(run_id, str) and run_id.strip():
+            return run_id
+    return fallback
+
+
 # ---------------------------------------------------------------------------
 # Core producer
 # ---------------------------------------------------------------------------
@@ -72,10 +98,11 @@ def _repo_relative(file_str: str, repo_root: Path) -> str:
 def capture_phase(repo_root: Path, phase: int, *, dedupe: bool = True) -> int:
     """Convert reviewer REJECT findings for ``phase`` into critic-rejections JSONL.
 
-    Each written line carries the current run_id from state.json so the miner
-    credits each observation to the run in which the finding was first captured
-    (not the run in which the miner re-scans), preventing false distinct_runs
-    inflation across re-mines.
+    Each written line carries the run_id of the run that PRODUCED the review
+    (read from the contract's PM-SIGNATURE), falling back to the live state
+    run_id when no signature is present.  Provenance stamping makes a re-scan of
+    a persisted ``review.json`` idempotent, so a later session sweeping an
+    earlier run's reviews cannot inflate distinct_runs.
 
     Returns the number of NEW lines appended.  Best-effort: a malformed or
     missing ``review.json`` is skipped, never raised.  Idempotent at the file
@@ -83,7 +110,7 @@ def capture_phase(repo_root: Path, phase: int, *, dedupe: bool = True) -> int:
     """
     import _dispatch  # noqa: PLC0415 — local import keeps the module importable without the full env
 
-    current_run_id: str = _learning_miner.current_run_id(repo_root)
+    fallback_run_id: str = _learning_miner.current_run_id(repo_root)
 
     planning = repo_root / ".planning" / "auto-pilot"
     jsonl_path = planning / f"critic-rejections-phase-{phase}.jsonl"
@@ -122,6 +149,8 @@ def capture_phase(repo_root: Path, phase: int, *, dedupe: bool = True) -> int:
         if review.get("verdict") != "REJECT":
             continue
 
+        line_run_id = _provenance_run_id(review_path, fallback_run_id)
+
         raw_findings = review.get("findings", [])
         findings: list[Any] = list(raw_findings) if isinstance(raw_findings, list) else []
         for finding in findings:
@@ -143,7 +172,7 @@ def capture_phase(repo_root: Path, phase: int, *, dedupe: bool = True) -> int:
                 "file": file_str,
                 "issue": issue_str,
                 "candidate_asset": None,
-                "run_id": current_run_id,
+                "run_id": line_run_id,
             }
             canon_key = json.dumps(line, sort_keys=True)
             if dedupe and (canon_key in existing_keys or canon_key in new_keys):
@@ -163,12 +192,44 @@ def capture_phase(repo_root: Path, phase: int, *, dedupe: bool = True) -> int:
     return len(new_lines)
 
 
+def _discover_phases(repo_root: Path) -> list[int]:
+    """Distinct phase numbers present under the contracts tree, sorted."""
+    contracts_base = repo_root / ".planning" / "auto-pilot" / "contracts"
+    phases: set[int] = set()
+    for phase_dir in contracts_base.glob("iter-*/phase-*"):
+        name = phase_dir.name
+        if phase_dir.is_dir() and name.startswith("phase-"):
+            try:
+                phases.add(int(name[len("phase-"):]))
+            except ValueError:
+                continue
+    return sorted(phases)
+
+
+def capture_all_phases(repo_root: Path, *, dedupe: bool = True) -> int:
+    """Sweep every phase under the contracts tree through ``capture_phase``.
+
+    Driven by the Stop-hook chokepoint (``hooks/learning-miner-stop.sh``) so
+    capture runs deterministically at session end across ALL phases — including
+    phases that pivot-aborted before a clean phase-end (their ``review.json``
+    persist on disk).  Best-effort: a per-phase failure is swallowed so one bad
+    phase never blocks the rest.  Returns total NEW lines appended.
+    """
+    total = 0
+    for phase in _discover_phases(repo_root):
+        try:
+            total += capture_phase(repo_root, phase, dedupe=dedupe)
+        except Exception:  # advisory sweep — one bad phase must not block the rest
+            continue
+    return total
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 def register_cli_subparsers(sub: Any) -> None:
-    """Register ``capture-reviews`` onto the orchestrator CLI sub-parser group."""
+    """Register ``capture-reviews`` + ``capture-all-phases`` onto the orchestrator CLI."""
     p = sub.add_parser("capture-reviews")
     p.add_argument(
         "--repo-root", default=".", dest="repo_root",
@@ -179,6 +240,13 @@ def register_cli_subparsers(sub: Any) -> None:
         help="phase number to capture",
     )
     p.set_defaults(func=cmd_capture_reviews)
+
+    pa = sub.add_parser("capture-all-phases")
+    pa.add_argument(
+        "--repo-root", default=".", dest="repo_root",
+        help="project root (default: .)",
+    )
+    pa.set_defaults(func=cmd_capture_all_phases)
 
 
 def cmd_capture_reviews(args: Any) -> int:
@@ -204,4 +272,17 @@ def cmd_capture_reviews(args: Any) -> int:
         json.dumps({"ok": True, "phase": int(args.phase), "appended": appended,
                     "jsonl_path": str(jsonl_path)}) + "\n"
     )
+    return 0
+
+
+def cmd_capture_all_phases(args: Any) -> int:
+    """Sweep every phase's reviewer REJECT findings into JSONL. Always returns 0."""
+    repo_root = Path(args.repo_root).resolve()
+    try:
+        appended = capture_all_phases(repo_root)
+    except Exception as exc:  # advisory: capture failure must never fail the loop
+        sys.stderr.write(f"capture-all-phases: error, captured nothing: {exc}\n")
+        sys.stdout.write(json.dumps({"ok": False, "appended": 0}) + "\n")
+        return 0
+    sys.stdout.write(json.dumps({"ok": True, "appended": appended}) + "\n")
     return 0

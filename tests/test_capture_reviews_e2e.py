@@ -88,6 +88,12 @@ def _write_review(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data))
 
 
+def _write_signature(round_dir: Path, run_id: str) -> None:
+    """Write a minimal PM-SIGNATURE so capture stamps the PROVENANCE run_id."""
+    round_dir.mkdir(parents=True, exist_ok=True)
+    (round_dir / "PM-SIGNATURE").write_text(json.dumps({"run_id": run_id}))
+
+
 def _round_dir(repo: Path, *, iter_n: int = 1, phase: int = 1,
                contract: int = 1, round_n: int = 1) -> Path:
     return (
@@ -276,6 +282,80 @@ def test_capture_mine_resolve_measure_two_runs(
     assert ok, (
         f"provenance check must return ok=True; got ok={ok}, reason={reason!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Sweep-path + provenance proof: capture_all_phases (the Stop-hook code path),
+# genuine 2-run recurrence stamped via PM-SIGNATURE, inflation-safe across
+# re-sweeps, 0 -> 100 scope_addressable_pct.
+# ---------------------------------------------------------------------------
+
+def test_capture_all_phases_organic_two_runs_with_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drive capture via capture_all_phases (what the Stop hook calls), with each
+    run's review signed by its OWN PM-SIGNATURE run_id.  Proves: (1) genuine 2-run
+    recurrence promotes, (2) re-sweeping persisted reviews adds 0 lines (provenance
+    is stable, no inflation), (3) scope_addressable_pct flips 0 -> 100.
+    """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    planning = repo / ".planning" / "auto-pilot"
+    planning.mkdir(parents=True)
+    tmp_ledger = tmp_path / "ledger"
+    jsonl = planning / "critic-rejections-phase-1.jsonl"
+
+    # run-A: review under contract-1, signed run-A.
+    (planning / "state.json").write_text(json.dumps({"run_id": "run-A", "status": "running"}))
+    rd_a = _round_dir(repo, contract=1)
+    _write_review(rd_a / "outputs" / "codex-reviewer" / "review.json",
+                  _make_reject_review(finding_hash=_FINDING_HASH_1))
+    _write_signature(rd_a, "run-A")
+
+    assert _capture_reviews.capture_all_phases(repo) == 1
+    # Re-sweep within run-A → 0 (provenance run-A is stable).
+    assert _capture_reviews.capture_all_phases(repo) == 0
+
+    learning_miner.run_miner(repo, commit_to=tmp_ledger, now=_T0, dry_run=False)
+    t_a = _find_ticket_for_path(tmp_ledger, "scripts/foo.py")
+    assert t_a is not None and t_a.get("distinct_runs") == 1
+    assert not learning_miner.is_promotable(t_a)
+
+    # run-B genuine recurrence: NEW review under contract-2, signed run-B.
+    (planning / "state.json").write_text(json.dumps({"run_id": "run-B", "status": "running"}))
+    rd_b = _round_dir(repo, contract=2)
+    _write_review(rd_b / "outputs" / "codex-reviewer" / "review.json",
+                  _make_reject_review(finding_hash=_FINDING_HASH_2))
+    _write_signature(rd_b, "run-B")
+
+    # Sweep re-scans contract-1 (sig run-A → already present, deduped) AND
+    # contract-2 (sig run-B → new) → exactly 1 new line.
+    assert _capture_reviews.capture_all_phases(repo) == 1
+    lines = [json.loads(ln) for ln in jsonl.read_text().splitlines() if ln.strip()]
+    assert {ln["run_id"] for ln in lines} == {"run-A", "run-B"}
+
+    # Re-sweep again (later "session", state still run-B) → 0 new: BOTH reviews
+    # carry stable provenance run_ids, so neither is re-stamped. Inflation closed.
+    assert _capture_reviews.capture_all_phases(repo) == 0
+
+    learning_miner.run_miner(repo, commit_to=tmp_ledger, now=_T1, dry_run=False)
+    t_b = _find_ticket_for_path(tmp_ledger, "scripts/foo.py")
+    assert t_b is not None and t_b.get("distinct_runs") == 2
+    assert learning_miner.is_promotable(t_b)
+    assert _learnings.is_gate_passed(t_b)
+
+    # resolve + measure: 0 -> 100.
+    dest_dir = tmp_path / "bundle-dest"
+    with mock.patch("_learnings.ledger_dir", return_value=tmp_ledger):
+        result_path = _learnings.resolve_learnings(repo, ["scripts/"], dest_dir)
+    assert result_path is not None and "unchecked None deref" in result_path.read_text()
+
+    assert measure_learnings_injection.measure(tmp_ledger, ["scripts/"])["scope_addressable_pct"] == 100.0
+    assert measure_learnings_injection.measure(tmp_path / "empty", ["scripts/"])["scope_addressable_pct"] == 0.0
 
 
 # ---------------------------------------------------------------------------
