@@ -276,6 +276,35 @@ def test_assert_reviewer_was_scoped_raises_on_dirty(tmp_path):
         _dispatch.assert_reviewer_was_scoped(repo, repo, tmp_path / "outputs")
 
 
+def test_assert_reviewer_was_scoped_raises_scope_violation_on_git_timeout(monkeypatch, tmp_path):
+    import _dispatch
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+
+    def _slow_run(cmd, *args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(_dispatch.subprocess, "run", _slow_run)
+    # The raw TimeoutExpired must be wrapped, not leaked.
+    with pytest.raises(_dispatch.ScopeViolation):
+        _dispatch.assert_reviewer_was_scoped(repo, repo, tmp_path / "outputs")
+
+
+def test_assert_reviewer_was_scoped_raises_scope_violation_on_git_error(monkeypatch, tmp_path):
+    import _dispatch
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+
+    def _erroring_run(cmd, *args, **kwargs):
+        raise subprocess.CalledProcessError(128, cmd)
+
+    monkeypatch.setattr(_dispatch.subprocess, "run", _erroring_run)
+    with pytest.raises(_dispatch.ScopeViolation):
+        _dispatch.assert_reviewer_was_scoped(repo, repo, tmp_path / "outputs")
+
+
 def _abstain_review() -> dict:
     return {
         "schema_version": 1,

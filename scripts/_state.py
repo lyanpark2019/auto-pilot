@@ -35,6 +35,32 @@ STATE_DIR = Path(".planning/auto-pilot")
 STATE_FILE = STATE_DIR / "state.json"
 STATE_LOCK = STATE_DIR / "state.lock"
 
+# Loop lifecycle status values (running + the terminal set headless-loop checks).
+# SoT for the terminal subset: headless-loop.py early-exit guard.
+KNOWN_STATUSES = frozenset(
+    {"running", "success", "failed", "stopped", "pivot-needed", "cost-cap", "time-cap"}
+)
+
+
+class CorruptStateError(Exception):
+    """state.json parsed but violates a load-time invariant (shape or status)."""
+
+
+def _validate_state(state: object) -> None:
+    """Raise CorruptStateError on a clearly-corrupt parsed state.
+
+    Conservative by design: only the top-level shape and a present ``status``
+    value are checked. Keys the loop adds later are not required, so minimal
+    fabricated states still load.
+    """
+    if not isinstance(state, dict):
+        raise CorruptStateError(f"state.json must be a JSON object, got {type(state).__name__}")
+    status = state.get("status")
+    if status is not None and (not isinstance(status, str) or status not in KNOWN_STATUSES):
+        raise CorruptStateError(
+            f"state.json has unknown status {status!r}; expected one of {sorted(KNOWN_STATUSES)}"
+        )
+
 
 class PhaseEntry(TypedDict):
     """One element of ``state['phases']`` — a single phase's lifecycle record."""
@@ -178,7 +204,9 @@ def load_state() -> State:
     if not STATE_FILE.exists():
         return cast(State, {})
     with _state_read_lock():
-        return cast(State, json.loads(STATE_FILE.read_text()))
+        parsed = json.loads(STATE_FILE.read_text())
+    _validate_state(parsed)
+    return cast(State, parsed)
 
 
 def save_state(state: State) -> None:

@@ -64,12 +64,21 @@ hooks/test_state_write_guard.py|540
 # Cap 520 = 506 current + 14 headroom.
 scripts/_worktree.py|520
 #
+# _dispatch.py is the PM-owned dispatch composition unit (ticket prep, preflight +
+# contract-check gates, diff freeze, round collection, scope assert) — all helpers
+# share the JsonObject coercers + the schema-validator singletons + the Exception
+# types, so splitting would force circular imports across the gate seam. The Fix-3
+# scope-check timeout/error guard (try/except wrapping the git status call) added
+# 7 net lines past the prior exact-500 size. Cap 515 = 506 current + 9 headroom.
+scripts/_dispatch.py|515
+#
 # test_worktree.py is a table-driven integration test suite for WorktreeManager;
 # all tests share _init_repo / _fake_contract / _commit_one helpers + the
 # _ready_to_apply / _brownfield_repo fixtures. Splitting would duplicate fixture
 # overhead or require a conftest import chain. FIX 1/2/3 tests added 150 lines
-# (4 new test functions). Cap 660 = 644 current + 16 headroom.
-tests/test_worktree.py|660
+# (4 new test functions). The fail-closed empty-token rewrite + missing-key test
+# (MissingIdempotencyTokenError) added 28 lines. Cap 680 = 672 current + 8 headroom.
+tests/test_worktree.py|680
 #
 # test_reviewer_wrapper.py grew past 500 from prior worktree changes (not audit-r2-fix
 # scope); table-driven matrix tests for ReviewerWrapper dispatch; cannot split without

@@ -441,6 +441,44 @@ class TestPhaseEndEvidenceGate:
         assert s["status"] == "running"
         assert s["phases"][-1]["status"] == "running"
 
+    def test_approved_count_below_expected_returns_2_and_no_advance(
+        self, in_tmp_cwd: Path, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """The gate passing on FEWER contracts than the phase declared must block.
+
+        A contract producing no evidence dir would otherwise be silently
+        accepted; phase-end must return 2 and leave state running.
+        """
+        spec = tmp_path / "one.md"
+        spec.write_text("## Phase 1\n")
+        _run(["init", "--spec", str(spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "2"])
+        monkeypatch.delenv("AUTO_PILOT_SKIP_EVIDENCE", raising=False)
+        # Evidence gate succeeds but for only 1 of the 2 declared contracts.
+        monkeypatch.setattr(orchestrator._evidence, "gate_phase_end", lambda _root: 1)
+        rc = _run(["phase-end", "--phase", "1", "--status", "success"])
+        assert rc == 2
+        assert "event=phase_end.approved_count_mismatch" in capsys.readouterr().err
+        s = _state()
+        assert s["status"] == "running"
+        assert s["phases"][-1]["status"] == "running"
+
+    def test_approved_count_matching_expected_advances(
+        self, in_tmp_cwd: Path, tmp_path: Path, monkeypatch
+    ) -> None:
+        """When the gate-approved count equals the declared contract count, success advances."""
+        spec = tmp_path / "one.md"
+        spec.write_text("## Phase 1\n")
+        _run(["init", "--spec", str(spec)])
+        _run(["phase-start", "--phase", "1", "--contracts", "2"])
+        monkeypatch.delenv("AUTO_PILOT_SKIP_EVIDENCE", raising=False)
+        monkeypatch.setattr(orchestrator._evidence, "gate_phase_end", lambda _root: 2)
+        rc = _run(["phase-end", "--phase", "1", "--status", "success"])
+        assert rc == 0
+        s = _state()
+        assert s["status"] == "success"
+        assert s["phases"][-1]["approved"] == 2
+
 
 class TestStopNoState:
     """cmd_stop on missing state must return 0 and write nothing."""

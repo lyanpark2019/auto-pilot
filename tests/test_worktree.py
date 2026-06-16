@@ -542,8 +542,9 @@ def test_apply_to_main_returns_already_applied_on_second_call(tmp_path):
     assert not (repo / ".git" / "rebase-apply").exists()
 
 
-def test_apply_to_main_does_not_skip_with_empty_token(tmp_path):
-    """A missing/empty idempotency_token must NOT trigger the already_applied path."""
+def test_apply_to_main_raises_on_empty_token(tmp_path):
+    """An empty idempotency_token fails closed — an un-probeable token cannot be
+    safely re-applied on crash-restart, so apply_to_main refuses outright."""
     repo = _init_repo(tmp_path)
     wt_base = tmp_path / "worktrees"
     wt_base.mkdir()
@@ -557,9 +558,36 @@ def test_apply_to_main_does_not_skip_with_empty_token(tmp_path):
     series = mgr.collect_patches(handle, contract_dir=contract_dir)
     assert isinstance(series, _worktree.PatchSeries)
 
-    result = mgr.apply_to_main(series.mbox, contract)
-    # Must proceed normally, not short-circuit
-    assert result.status == "applied"
+    head_before = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+    with pytest.raises(_worktree.MissingIdempotencyTokenError):
+        mgr.apply_to_main(series.mbox, contract)
+    # Fail-closed: nothing applied, HEAD unmoved.
+    head_after = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+    assert head_after == head_before
+
+
+def test_apply_to_main_raises_on_missing_token_key(tmp_path):
+    """A contract with NO idempotency_token key also fails closed."""
+    repo = _init_repo(tmp_path)
+    wt_base = tmp_path / "worktrees"
+    wt_base.mkdir()
+    contract_dir = tmp_path / "contract"
+    contract_dir.mkdir()
+    contract = _fake_contract(repo, contract_dir)
+    contract.update(iter=1, phase=1)
+    contract.pop("idempotency_token", None)
+    mgr = _worktree.WorktreeManager(repo_root=repo, worktree_base=wt_base)
+    handle = mgr.create(contract, contract_dir=contract_dir)
+    _commit_one(handle.path, "b.txt", "missing-key-test\n")
+    series = mgr.collect_patches(handle, contract_dir=contract_dir)
+    assert isinstance(series, _worktree.PatchSeries)
+
+    with pytest.raises(_worktree.MissingIdempotencyTokenError):
+        mgr.apply_to_main(series.mbox, contract)
 
 
 # ---------------------------------------------------------------------------
