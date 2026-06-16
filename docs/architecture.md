@@ -94,7 +94,9 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   → `promotable`; a worker re-tripping the same finding within one run cannot inflate the gate.
   Captured reviewer-finding lines carry the `run_id` of the run that PRODUCED the review (read from
   the contract's `PM-SIGNATURE`), so a later session re-sweeping persisted `review.json` files stamps
-  the SAME id and cannot inflate `distinct_runs`. `scan_reviewer_findings` credits that per-line id;
+  the SAME id and cannot inflate `distinct_runs` (an unsigned contract dir falls back to the
+  scan-time run_id — unreachable in normal dispatch, where ticket prep verifies the signature).
+  `scan_reviewer_findings` credits that per-line id;
   a legacy line with no `run_id` collapses to one synthetic sentinel (`__legacy_no_run_id__`), never
   the live state run_id, so re-mining it after the next `init` cannot inflate either. Genuine
   cross-run recurrence is required (D1 2026-06-16; provenance + sentinel hardening D2 2026-06-17).
