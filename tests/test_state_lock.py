@@ -279,3 +279,40 @@ class TestStateTxn:
         assert final["tokens"] == N, (
             f"lost-update regression: expected {N}, got {final['tokens']}"
         )
+
+
+class TestLoadStateValidation:
+    """load_state validates the parsed object's shape + status (Fix 4)."""
+
+    def test_valid_running_state_loads(self, cwd):
+        _state.save_state({"status": "running", "current_phase": 1})
+        loaded = _state.load_state()
+        assert loaded["status"] == "running"
+
+    def test_state_without_status_loads(self, cwd):
+        _state.save_state({"current_phase": 2})
+        loaded = _state.load_state()
+        assert loaded["current_phase"] == 2
+
+    def test_all_known_terminal_statuses_load(self, cwd):
+        for status in ("success", "failed", "stopped", "pivot-needed", "cost-cap", "time-cap"):
+            _state.save_state({"status": status})
+            assert _state.load_state()["status"] == status
+
+    def test_unknown_status_raises(self, cwd):
+        _state.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _state.STATE_FILE.write_text(json.dumps({"status": "bogus", "current_phase": 1}))
+        with pytest.raises(_state.CorruptStateError):
+            _state.load_state()
+
+    def test_non_string_status_raises(self, cwd):
+        _state.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _state.STATE_FILE.write_text(json.dumps({"status": 7}))
+        with pytest.raises(_state.CorruptStateError):
+            _state.load_state()
+
+    def test_non_object_top_level_raises(self, cwd):
+        _state.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _state.STATE_FILE.write_text(json.dumps(["not", "a", "dict"]))
+        with pytest.raises(_state.CorruptStateError):
+            _state.load_state()

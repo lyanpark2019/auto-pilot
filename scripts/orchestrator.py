@@ -207,6 +207,15 @@ def cmd_phase_end(args: argparse.Namespace) -> int:
                 )
                 return 2  # critical: failed gate must not persist state
             approved_count = result
+            expected = current.get("contracts")
+            if expected is not None and approved_count != expected:
+                _warn(
+                    f"BLOCKED phase-end --status success: evidence-approved count "
+                    f"{approved_count} != expected contract count {expected}"
+                )
+                event("phase_end.approved_count_mismatch", phase=args.phase,
+                      approved=approved_count, expected=expected)
+                return 2  # critical: incomplete phase must not advance state
 
         # Auto-append ledger records — telemetry; runs inside state lock so the
         # ledger append_phase_records acquires the separate LEDGER lock.

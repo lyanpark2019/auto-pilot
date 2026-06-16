@@ -487,11 +487,18 @@ def assert_reviewer_was_scoped(repo_root: Path, worktree: Path,
         if not (path / ".git").exists() and path.exists() and not (path.is_dir()):
             continue
         start = _time.monotonic()
-        result = subprocess.run(
-            ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
-            capture_output=True, text=True, check=True,
-            timeout=_GIT_QUICK_TIMEOUT,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
+                capture_output=True, text=True, check=True,
+                timeout=_GIT_QUICK_TIMEOUT,
+            )
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
+            raise ScopeViolation(
+                f"scope check could not be completed for {path} "
+                f"(allowed_output_dir={allowed_output_dir}): git status failed "
+                f"({type(exc).__name__})"
+            ) from exc
         event("dispatch.git_status", duration_ms=int((_time.monotonic() - start) * 1000), path=str(path))
         if result.stdout.strip():
             raise ScopeViolation(

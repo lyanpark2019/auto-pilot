@@ -94,6 +94,10 @@ class StaleAmStateError(Exception):
     """`.git/rebase-apply` still exists after auto-abort attempt; human intervention required."""
 
 
+class MissingIdempotencyTokenError(Exception):
+    """Contract reached apply_to_main without an idempotency_token; refuse to re-apply blind."""
+
+
 @dataclass(frozen=True)
 class ApplyResult:
     """Represent ApplyResult data for this module."""
@@ -374,11 +378,21 @@ class WorktreeManager:
         ``already_applied`` without re-running git am — preventing a duplicate commit or
         a spurious conflict from git am --empty=stop (git ≥ 2.45 default).
 
+        Raises MissingIdempotencyTokenError when the contract carries no token —
+        an empty token cannot be probed in the log, so re-applying on crash-restart
+        would risk a duplicate commit; fail closed instead.
+
         Raises MainTreeDirtyError, StaleAmStateError, or subprocess.TimeoutExpired.
         TimeoutExpired propagates safely — flock is released in _main_apply_lock finally.
         """
         with self._main_apply_lock():
             token: str = contract.get("idempotency_token", "")
+            if not token:
+                raise MissingIdempotencyTokenError(
+                    f"contract {contract.get('id', '<unknown>')!r} reached apply_to_main "
+                    "without an idempotency_token; refusing to apply (cannot probe log "
+                    "for an already-applied commit on crash-restart)"
+                )
             if self._token_already_in_log(token):
                 current_sha = self._head_sha()
                 event("worktree.apply.already_applied",
