@@ -53,6 +53,9 @@ jobs:
           bash swarm/tests/score-schema/test.sh
           bash swarm/tests/verify-schema/test.sh
 
+      - name: swarm start guard (core-loop conflict detection)
+        run: bash swarm/tests/start/test.sh
+
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
 

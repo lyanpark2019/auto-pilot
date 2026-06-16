@@ -232,7 +232,7 @@ def main() -> None:
         expect_allow=True,
         expect_advisory=True,
     ))
-    # O. Valid JSON but non-mapping (list) → _load_payload returns None → advisory
+    # O. Valid JSON but non-mapping (list) → full_payload_or_none returns None → advisory
     results.append(run_raw(
         "O non-mapping JSON (list) → ALLOW + advisory",
         raw_stdin="[1, 2, 3]",

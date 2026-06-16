@@ -4,6 +4,17 @@
 # --no-attach: start detached (headless callers, e.g. bench.sh --auto-start).
 set -euo pipefail
 
+# 0. core-loop conflict guard — MUST run before sourcing the plugin lib so it
+# fires unconditionally: the source below is an environment-dependent precondition
+# (PLUGIN_ROOT may be absent on a fresh host), and a core-loop conflict must be
+# reported regardless. They share the project tree; concurrent agentic mutations
+# race git and the state schema.
+_core_state="$(pwd)/.planning/auto-pilot/state.json"
+if [ -f "$_core_state" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"running"' "$_core_state"; then
+  echo "swarm: refusing to start — core auto-pilot loop is running (state.json status=running)" >&2
+  exit 3
+fi
+
 ATTACH=1
 for arg in "$@"; do
   case "$arg" in
@@ -20,7 +31,7 @@ ROOT="$PROJECT/.planning/autopilot"
 CONFIG="$ROOT/config.json"
 SESSION="autopilot-$BASE"
 
-# 0. config required
+# 1. config + git prerequisites
 if [ ! -f "$CONFIG" ]; then
   echo "[start] no config at $CONFIG. Run /auto-pilot:swarm init first." >&2
   exit 2
@@ -42,12 +53,12 @@ if [ -z "$(git -C "$PROJECT" config user.email)" ] || [ -z "$(git -C "$PROJECT" 
   exit 2
 fi
 
-# 1. dependencies
+# 2. dependencies
 for cmd in tmux jq envsubst claude codex git; do
   command -v "$cmd" >/dev/null || { echo "[start] missing dependency: $cmd (install: brew install $cmd; envsubst comes from gettext)" >&2; exit 3; }
 done
 
-# 1b. schema validation — every value that flows into bash/jq/tmux must be sane
+# 2b. schema validation — every value that flows into bash/jq/tmux must be sane
 schema_err() { echo "[start] invalid config: $1" >&2; exit 4; }
 jq -e '(.pm.engine // "claude") == "claude" or (.pm.engine // "claude") == "codex"' "$CONFIG" >/dev/null \
   || schema_err 'pm.engine must be "claude" or "codex"'
@@ -69,7 +80,7 @@ jq -e '(.initial_goal.title|type=="string") and (.initial_goal.title|length>0) a
 jq -e '(.initial_goal.success_criteria|type=="array") and (.initial_goal.success_criteria|length>=1)' "$CONFIG" >/dev/null \
   || schema_err 'initial_goal.success_criteria needs ≥1 entry'
 
-# 2. message bus
+# 3. message bus
 mkdir -p "$ROOT"/{in_progress,done,scores,ledger,knowledge,archive,logs,bench}
 WORKER_IDS=$(jq -r '.workers[].id' "$CONFIG")
 for i in $WORKER_IDS; do
@@ -79,7 +90,7 @@ done
 {"workers":{},"processed":[],"policy":{"incentive_threshold":40,"penalty_threshold":20,"weight_step":0.1,"weight_min":0.5,"weight_max":1.5}}
 EOF
 
-# 3. worktrees per worker
+# 4. worktrees per worker
 cd "$PROJECT"
 for i in $WORKER_IDS; do
   WT="$PROJECT/../$BASE-worker-$i"
@@ -90,7 +101,7 @@ for i in $WORKER_IDS; do
   fi
 done
 
-# 4. tmux session — 1 PM + N workers, split across windows if N>4
+# 5. tmux session — 1 PM + N workers, split across windows if N>4
 N=$(echo "$WORKER_IDS" | wc -l | tr -d ' ')
 
 run_in_pane() {

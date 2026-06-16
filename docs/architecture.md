@@ -183,7 +183,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 18 agents · 7 commands · 27 hooks · 12 codex-skills = 75 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 18 agents · 7 commands · 28 hooks · 12 codex-skills = 76 assets total.
 
 ```
 auto-pilot/
@@ -212,7 +212,7 @@ auto-pilot/
 │   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (27 scripts, P④; hooks/hooks.json is wiring SoT)
+├── hooks/  (27 wired, P④; hooks/hooks.json is wiring SoT; + _stdin_contract.py helper = 28 files)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)

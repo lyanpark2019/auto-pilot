@@ -25,7 +25,11 @@ import json
 import os
 import sys
 from collections.abc import Mapping
-from typing import Any, cast
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _stdin_contract import full_payload_or_none  # noqa: E402
 
 MARKER = ".codex-conductor"
 
@@ -74,16 +78,6 @@ def find_marker_root(start: str) -> str | None:
         cur = parent
 
 
-def _load_payload(raw: str) -> Mapping[str, Any] | None:
-    try:
-        data = json.loads(raw or "{}")
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, Mapping):
-        return None
-    return cast(Mapping[str, Any], data)
-
-
 def _target_path(data: Mapping[str, Any]) -> str | None:
     if data.get("tool_name", "") not in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
         return None
@@ -120,7 +114,7 @@ def _always_allowed(fpath: str, marker_root: str) -> bool:
 
 def main() -> None:
     """Run the codex-conductor-guard command-line entry point."""
-    data = _load_payload(sys.stdin.read())
+    data = full_payload_or_none(sys.stdin)
     if data is None:
         sys.exit(0)
     fpath = _target_path(data)
