@@ -92,10 +92,17 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   paths / line numbers / ISO dates / `phase-N`, keeps FULL issue text (8-token truncation collided).
 - **Gate on `distinct_runs`, not raw occurrences** — reviewer-finding ≥2, doom-loop/insight/other ≥3
   → `promotable`; a worker re-tripping the same finding within one run cannot inflate the gate.
+  Captured reviewer-finding lines carry their own capture `run_id`; `scan_reviewer_findings` credits
+  that per-line id (legacy prose lines without it fall back to the state run_id), so re-mining a
+  persisted finding under a new run_id after the next `init` cannot inflate `distinct_runs` —
+  genuine cross-run recurrence is required (D1, 2026-06-16).
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
   `insights.jsonl` — retro's structured sidecar where a class tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
   it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
+  The first scanner is fed by a deterministic CODE producer — `scripts/_capture_reviews.py`
+  (`orchestrator.py capture-reviews`) converts dual-reviewer REJECT `review.json` findings (P0/P1)
+  into JSONL lines, closing the prose-only capture gap (symmetric to resolve-learnings injection).
 - **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:138`, three orchestrator
   subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
   state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
@@ -155,6 +162,17 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   non-file relevance signal (source/asset-type or semantic) would be needed for file-less tickets —
   but per "measure before optimizing", DEFER G1 until an external-repo run produces file-anchored
   reviewer-finding tickets to measure the file-anchored recall in the wild.
+- **D1 — code-side capture + organic recurrence proof shipped 2026-06-16** (`scripts/_capture_reviews.py`,
+  PR #97): the deterministic producer above plus the run-scoped `distinct_runs` fix make the
+  reviewer-finding path injectable from real reviewer output, not just a synthetic seed.
+  `tests/test_capture_reviews_e2e.py` drives capture→mine→resolve→measure on `review.json` fixtures
+  only (no `_improvement.bump_or_create` seeding): a genuine 2-run recurrence flips
+  `scope_addressable_pct` 0.0→100.0, and `test_stale_finding_not_recredited_to_new_run` guards the
+  anti-inflation semantics. Honest limits: fixtures hold issue wording constant — `normalize_issue`
+  strips path/line/date/phase noise but NOT wording, so real-reviewer phrasing variance across genuine
+  runs may prevent `distinct_runs` accumulation (untested in the wild); legacy prose lines without
+  `run_id` remain re-mine-inflatable; L2 (does injection improve outcomes) stays deferred per
+  `evals/cases/learnings-ab`.
 
 ### Memory 3-layer
 
