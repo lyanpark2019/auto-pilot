@@ -163,6 +163,9 @@ tests/test_demote.py|510
 # resolve_learnings kill-switch) share _valid_ticket / _write_ticket / _bind_snapshot
 # helpers with the baseline tests; splitting would duplicate helper definitions or
 # require a conftest.  The cold-review opt-in env-parse fix added 5 new tests
-# (=0/=false/=true/=yes/not-disabled-extended) = +76 lines.
-# Cap 610 = 597 current + 13 headroom.
-tests/test_learnings.py|610
+# (=0/=false/=true/=yes/not-disabled-extended) = +76 lines.  D2 PR-2 (always-write
+# marker + snapshot same-file guard) added test_snapshot_context_learnings_path_is_bundle_file
+# + marker assertions = +34 lines.  Conftest-split to share helpers is the deferred
+# cleaner fix (tracked since #92); bumping here keeps the acceptance suite cohesive.
+# Cap 640 = 631 current + 9 headroom.
+tests/test_learnings.py|640

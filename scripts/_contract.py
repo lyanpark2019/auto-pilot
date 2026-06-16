@@ -261,7 +261,11 @@ def snapshot_context(dest_dir: Path, spec_path: Path,
     learnings_sha: str | None = None
     if learnings_path is not None:
         lr_dest = bundle / "learnings.md"
-        shutil.copy2(learnings_path, lr_dest)
+        # resolve_learnings writes directly into <dest_dir>/context-bundle/, so the
+        # PM-threaded learnings_path can already BE lr_dest — copying onto itself
+        # raises SameFileError. Skip the copy in that case; the bytes are in place.
+        if learnings_path.resolve() != lr_dest.resolve():
+            shutil.copy2(learnings_path, lr_dest)
         learnings_sha = _sha256(lr_dest.read_bytes())
         manifest_lines.append(f"{learnings_sha}  learnings.md")
 

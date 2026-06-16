@@ -181,6 +181,17 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   runs may prevent `distinct_runs` accumulation (untested in the wild); legacy prose lines without
   `run_id` remain re-mine-inflatable; L2 (does injection improve outcomes) stays deferred per
   `evals/cases/learnings-ab`.
+- **D2 — both-sides invocation enforcement + provenance run_id shipped 2026-06-17** (PR #99 capture
+  side + inject-side runtime gate): neither learning-loop side depends on PM prose any more. CAPTURE
+  fires automatically at the Stop hook (`learning-miner-stop.sh` runs `capture-all-phases` before
+  mining); each captured line's `run_id` comes from the contract's `PM-SIGNATURE` (provenance), so a
+  later session re-sweeping persisted `review.json` cannot inflate `distinct_runs`, and legacy
+  no-`run_id` lines collapse to one synthetic sentinel — superseding D1's "legacy lines remain
+  re-mine-inflatable" limit. INJECT is runtime-gated: `_learnings.resolve_learnings` ALWAYS writes
+  `context-bundle/learnings.md` (a marker on the blind path), and `hooks/dispatch-contract-gate.sh`
+  DENIES a worker dispatch whose bundle lacks it — skipping resolve blocks the loop. Residual: the
+  inject gate fires only on marked dispatches (the gate's documented no-marker bypass is unchanged);
+  R1 phrasing variance + L2 outcome stay deferred.
 
 ### Memory 3-layer
 
@@ -352,7 +363,7 @@ write contract.json
      contract_dir=<contract_dir>
 ```
 
-`hooks/dispatch-contract-gate.sh` derives the contract directory from those markers and rejects reviewer dispatch (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) during an active run when no `TICKET=` or `contract_dir=` marker is present — catching ad-hoc reviewer bypasses that skip the frozen-diff sha binding. Workers dispatch as `general-purpose` (non-reviewer type) and are covered by the exit gate instead.
+`hooks/dispatch-contract-gate.sh` derives the contract directory from those markers and rejects reviewer dispatch (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) during an active run when no `TICKET=` or `contract_dir=` marker is present — catching ad-hoc reviewer bypasses that skip the frozen-diff sha binding. Workers dispatch as `general-purpose` (non-reviewer type) but carry `TICKET=<contract_dir>/tickets/worker.json`, so the gate additionally DENIES a worker dispatch whose `context-bundle/learnings.md` is absent (D2 inject enforcement — `resolve_learnings` always writes that file, so absence means injection was skipped); other worker invariants are covered by the exit gate.
 
 Regression pins: `tests/test_pm_protocol_contract_dispatch.py` asserts `dispatch-contract-check` appears before `prepare_subagent_ticket` in the protocol section, and that `TICKET={ticket_path}` / `contract_dir={contract_dir}` literals are preserved.
 

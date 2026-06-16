@@ -193,6 +193,20 @@ print("OK")
 PY
 ) || deny "PM-SIGNATURE invalid in $contract_dir: $signature_result"
 
+# ── inject enforcement: a WORKER dispatch requires resolved learnings ──
+# resolve_learnings ALWAYS writes <contract_dir>/context-bundle/learnings.md
+# (a marker on the blind path), so its ABSENCE means the PM skipped the injection
+# step (orchestrator resolve-learnings). Scope to the worker role — reviewers
+# share the same bundle but do not trigger injection; the role is the ticket stem.
+dispatch_ticket=$(printf '%s' "$prompt" | grep -oE '^[[:space:]]*TICKET=[^[:space:]]+' | head -1 | sed 's/^[[:space:]]*TICKET=//' || echo "")
+case "$dispatch_ticket" in
+  */tickets/worker.json)
+    if [[ ! -f "$contract_dir/context-bundle/learnings.md" ]]; then
+      deny "Worker dispatch missing context-bundle/learnings.md in $contract_dir. Run orchestrator resolve-learnings (injection seam) before dispatch."
+    fi
+    ;;
+esac
+
 # ── ⓓ-9: preflight phase check ──
 # Parse phase from contract.json (id or phase field)
 phase=$(python3 -c '
