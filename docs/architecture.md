@@ -11,6 +11,8 @@ manual_edit: true
 
 The main-session PM dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
+> Single index of every policy the loop enforces (budget / routing / risk / sandbox / scope / escalation / learnings gate / state): `docs/governance.md`.
+
 ## Purpose
 
 > Two-level identity (SoT: `CONTEXT.md`; purpose narrative: `docs/master-plan.md`).
