@@ -83,9 +83,9 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
     """Parse critic-rejections-phase-*.jsonl → Observations.
 
     The fingerprint keys on a reviewer-emitted controlled-vocab ``class`` (the
-    review.schema.json findings enum) when present and valid, else on the free
-    ``issue`` text — so the same recurring defect, phrased differently each run,
-    collapses to one ticket and ``distinct_runs`` can reach the promotion gate.
+    ``REVIEWER_FINDING_CLASSES`` allow-list) when present and valid, else on the
+    free ``issue`` text — so the same recurring defect, phrased differently each
+    run, collapses to one ticket and ``distinct_runs`` can reach the promotion gate.
     """
     planning = repo_root / ".planning" / "auto-pilot"
     observations: list[Observation] = []

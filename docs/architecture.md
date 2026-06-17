@@ -105,9 +105,9 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
 - **R1 — reviewer-finding keys on a controlled-vocab `class`, not free prose (2026-06-17)** — R1
   measured that `normalize_issue` keeps wording, so one defect phrased N ways fingerprints N times →
   a 100%-recurring bug reviewed 6× yielded 0 promotable tickets. Fix: reviewers emit an optional
-  `class` from the `schemas/review.schema.json` `findings[].class` enum; `_capture_reviews` carries it
-  into the JSONL; `scan_reviewer_findings` seeds the fingerprint on `class` (basename kept) when it is
-  in `learning_miner.REVIEWER_FINDING_CLASSES`, else falls back to `issue`. Same defect, different
+  `class` from the `learning_miner.REVIEWER_FINDING_CLASSES` vocab (mirrored for reviewers in
+  `review-core.md`); `_capture_reviews` carries it into the JSONL; `scan_reviewer_findings` seeds the
+  fingerprint on `class` (basename kept) when it is in that allow-list, else falls back to `issue`. Same defect, different
   wording, now collapses to ONE ticket so `distinct_runs` accumulates. Mirrors the long-standing
   `insight` class-tag pattern. The vocab is enforced in the miner allow-list, not the schema —
   `review.schema.json` keeps `class` a permissive `string|null` so a reviewer typo or `null` can
