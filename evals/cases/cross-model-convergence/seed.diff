@@ -1,0 +1,34 @@
+diff --git a/stats.py b/stats.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/stats.py
+@@ -0,0 +1,13 @@
++def percentile(values, p):
++    """Return the p-th percentile (0.0..1.0) of a non-empty numeric list.
++
++    p=1.0 must return the maximum.
++    """
++    s = sorted(values)
++    if not s:
++        raise ValueError("percentile() of empty sequence")
++    k = int(len(s) * p)
++    return s[k]
++
++
++MEDIAN = lambda xs: percentile(xs, 0.5)
+diff --git a/parse.py b/parse.py
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/parse.py
+@@ -0,0 +1,9 @@
++def first_token(text):
++    """Return the first whitespace-delimited token of text, uppercased."""
++    tokens = text.split()
++    head = tokens[0]
++    return head.upper()
++
++
++def initials(names):
++    return [first_token(n)[0] for n in names]

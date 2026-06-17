@@ -1,0 +1,84 @@
+{
+  "abstain": {
+    "codex-reviewer": 3
+  },
+  "overall": {
+    "cross_model_convergence_pct": 0.0,
+    "defects_cross_model_agree": 0,
+    "defects_cross_model_promotable": 0,
+    "defects_measurable": 0,
+    "defects_total": 2
+  },
+  "passes_per_model": {
+    "claude-reviewer": 3,
+    "codex-reviewer": 3
+  },
+  "per_defect": [
+    {
+      "both_models_classified": false,
+      "both_models_reported": false,
+      "claude_classes": {
+        "unguarded-empty-input": 3
+      },
+      "claude_modal_class": "unguarded-empty-input",
+      "codex_classes": {},
+      "codex_modal_class": null,
+      "cross_model_agree": false,
+      "cross_model_promotable": false,
+      "defect": "first-token-empty-input",
+      "expected_class": "unguarded-empty-input",
+      "file_basename": "parse.py",
+      "fingerprints": [
+        {
+          "cross_model_promotable": false,
+          "distinct_runs": 3,
+          "fingerprint": "91d2ed258bd572b4",
+          "models": [
+            "claude-reviewer"
+          ],
+          "promotable": true,
+          "spans_both_models": false
+        }
+      ]
+    },
+    {
+      "both_models_classified": false,
+      "both_models_reported": false,
+      "claude_classes": {
+        "dead-code": 1,
+        "index-out-of-bounds": 3
+      },
+      "claude_modal_class": "index-out-of-bounds",
+      "codex_classes": {},
+      "codex_modal_class": null,
+      "cross_model_agree": false,
+      "cross_model_promotable": false,
+      "defect": "percentile-p1-boundary",
+      "expected_class": "index-out-of-bounds",
+      "file_basename": "stats.py",
+      "fingerprints": [
+        {
+          "cross_model_promotable": false,
+          "distinct_runs": 1,
+          "fingerprint": "a056b243df70f318",
+          "models": [
+            "claude-reviewer"
+          ],
+          "promotable": false,
+          "spans_both_models": false
+        },
+        {
+          "cross_model_promotable": false,
+          "distinct_runs": 3,
+          "fingerprint": "cd673779eaadb08a",
+          "models": [
+            "claude-reviewer"
+          ],
+          "promotable": true,
+          "spans_both_models": false
+        }
+      ]
+    }
+  ],
+  "reviewer_finding_threshold": 2
+}

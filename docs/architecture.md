@@ -121,8 +121,16 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   `issue` whose `normalize_issue` form equals a bare class token (e.g. a finding whose entire issue is
   `null-deref`) aliases that class — near-unreachable with real sentence-form issues, not namespaced
   (a prefix would migrate every prose-keyed fingerprint); (4) efficacy across the CROSS-MODEL pair
-  (codex vs claude independently picking the SAME token for one defect) is the real R1 unknown and is
-  UNPROVEN — class-keying is a hypothesis the first live run measures, not a closed result.
+  (codex vs claude independently picking the SAME token for one defect) — the real R1 unknown — now has
+  a built, deterministic-tested measurement harness: a pure analyzer `scripts/measure_cross_model.py`
+  (`orchestrator.py measure-cross-model`, reuses the real miner for the fingerprint/distinct_runs verdict),
+  a live producer `scripts/measure_cross_model_collect.py`, and a seeded fixture under
+  `evals/cases/cross-model-convergence/`. The first live attempt (2026-06-17) was codex-usage-blocked, so
+  cross-MODEL convergence stays UNMEASURED (evidence
+  `evals/cases/cross-model-convergence/results/2026-06-17-codex-usage-blocked.json`,
+  sha256 124a708ee2f4c6a22989deac455e531fe1d12a9b9169a8253912e8217f52471e; re-run the producer when codex
+  credits return). That run did re-confirm SAME-model class stability on real claude output (modal class
+  stable across 3 passes per defect); cross-model remains a hypothesis, not a closed result.
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
   `insights.jsonl` — retro's structured sidecar where a class tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
