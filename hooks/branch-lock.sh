@@ -125,7 +125,7 @@ _eval_construct = re.search(r"\$[\w({\x27\"]|`|\beval\b|\b(?:ba|z)?sh\s+-c\b", c
 if _eval_construct:
     # 1. Literal "push" word present alongside a construct → fail closed.
     if re.search(r"\bpush\b", cmd):
-        print("push NONE main")
+        print("push NONE __EVAL_BLOCKED__")
         sys.exit(0)
     # 2. Word-building: a construct delimiter directly adjacent to word chars
     #    (e.g. p$(...)h, $(cmd)push, pu${X}sh) means the construct is
@@ -136,7 +136,7 @@ if _eval_construct:
         r"|\w\$\{[^}]*\}|\$\{[^}]*\}\w"
         r"|\w`[^`]*`|`[^`]*`\w", cmd)
     if _word_build and re.search(r"\bgit\b", cmd):
-        print("push NONE main")
+        print("push NONE __EVAL_BLOCKED__")
         sys.exit(0)
 
 # Normalize backslash-newline continuations (shell line continuation) so the
@@ -267,7 +267,13 @@ while IFS= read -r inv; do
   fi
 
   if [[ "$subcmd" == "push" ]]; then
-    if [[ "$dst" == "__ALL__" ]]; then
+    if [[ "$dst" == "__EVAL_BLOCKED__" ]]; then
+      # The push command contained a shell variable / command-substitution /
+      # backtick / eval / sh -c, so the refspec target cannot be verified
+      # statically (anti-evasion: `\$(printf git) push origin main`). This is a
+      # fail-closed deny, NOT "you are on main" — re-run with a literal refspec.
+      deny "branch-lock: this git push contains a shell variable or command-substitution (\$VAR / \$(...) / backtick / eval / sh -c), so branch-lock cannot statically verify the refspec target and fail-closes (anti-evasion) — this is NOT a 'you are on main' block. Re-run with a LITERAL feature refspec and no variables: git push origin <feature>:<feature>. Run any \$(...) (e.g. a gh auth switch) as a SEPARATE command first. Genuine main sync only: export AUTO_PILOT_MAIN_OK=1 in the session env (not a command prefix)."
+    elif [[ "$dst" == "__ALL__" ]]; then
       # --mirror / --all: check if ANY local branch is protected.
       all_branches=$(git -C "$target" branch --format='%(refname:short)' 2>/dev/null || echo "")
       while IFS= read -r b; do
