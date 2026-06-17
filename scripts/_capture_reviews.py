@@ -174,6 +174,15 @@ def capture_phase(repo_root: Path, phase: int, *, dedupe: bool = True) -> int:
                 "candidate_asset": None,
                 "run_id": line_run_id,
             }
+            # Carry a reviewer-emitted controlled-vocab `class` through to the
+            # JSONL so the miner can key the fingerprint on it instead of the
+            # free `issue` prose (R1: phrasing variance fragments the key 1:1).
+            # Only added when present, so class-less findings keep byte-identical
+            # canonical dedup keys (idempotent re-scan preserved). The miner
+            # validates against its REVIEWER_FINDING_CLASSES allow-list.
+            class_str = finding.get("class")
+            if isinstance(class_str, str) and class_str.strip():
+                line["class"] = class_str
             canon_key = json.dumps(line, sort_keys=True)
             if dedupe and (canon_key in existing_keys or canon_key in new_keys):
                 continue

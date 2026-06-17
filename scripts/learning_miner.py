@@ -45,6 +45,24 @@ VALID_ASSET_TYPES: frozenset[str] = frozenset(
     {"skill", "hook", "schema", "test", "doc", "cache"}
 )
 
+# Controlled-vocab SoT for reviewer-finding defect classes (review-core.md mirrors
+# this list for reviewers; review.schema.json keeps `class` a permissive string so a
+# typo/null can never sink a whole review — coercion lives HERE, not in the schema).
+# R1 fix: a reviewer-finding's fingerprint keys on this class instead of the free
+# `issue` prose, so the SAME defect phrased differently across runs collapses to ONE
+# ticket and distinct_runs can accumulate to the promotion gate. A line whose `class`
+# is absent or outside this set falls back to the issue text (legacy/unclassified
+# findings keep working unchanged).
+REVIEWER_FINDING_CLASSES: frozenset[str] = frozenset(
+    {
+        "index-out-of-bounds", "null-deref", "unguarded-empty-input",
+        "off-by-one", "unchecked-return", "resource-leak", "race-condition",
+        "injection", "missing-input-validation", "incorrect-error-handling",
+        "type-confusion", "scope-violation", "missing-test",
+        "spec-noncompliance", "doc-drift", "dead-code",
+    }
+)
+
 
 def current_run_id(repo_root: Path) -> str:
     """Return state.json 'run_id'; '' if absent, non-string, non-dict, or unparseable."""
@@ -62,7 +80,13 @@ def current_run_id(repo_root: Path) -> str:
 
 
 def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
-    """Parse critic-rejections-phase-*.jsonl → Observations."""
+    """Parse critic-rejections-phase-*.jsonl → Observations.
+
+    The fingerprint keys on a reviewer-emitted controlled-vocab ``class`` (the
+    ``REVIEWER_FINDING_CLASSES`` allow-list) when present and valid, else on the
+    free ``issue`` text — so the same recurring defect, phrased differently each
+    run, collapses to one ticket and ``distinct_runs`` can reach the promotion gate.
+    """
     planning = repo_root / ".planning" / "auto-pilot"
     observations: list[Observation] = []
     for jsonl_path in sorted(planning.glob("critic-rejections-phase-*.jsonl")):
@@ -91,6 +115,17 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
                 candidate_val = str(candidate_val)
             if candidate_val not in VALID_ASSET_TYPES:
                 candidate_val = None
+            # R1 fix: key the fingerprint on the controlled-vocab `class` when the
+            # reviewer emitted a valid one; else fall back to the free issue text.
+            # The fingerprint seeds on Observation.issue, so a valid class makes
+            # the SAME defect phrased differently collapse to ONE ticket (basename
+            # is kept, so the same class in a different file stays a distinct one).
+            class_val = finding.get("class")
+            keyed_issue = (
+                class_val
+                if isinstance(class_val, str) and class_val in REVIEWER_FINDING_CLASSES
+                else issue_val
+            )
             snippet = json.dumps(finding)[:500]
             # Use the line's own run_id (stamped at capture time) so that
             # re-mining the same JSONL under a new state run_id does not
@@ -108,7 +143,7 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
                 Observation(
                     source="reviewer-finding",
                     file_basename=Path(file_val).name if file_val else "",
-                    issue=issue_val,
+                    issue=keyed_issue,
                     candidate_asset=candidate_val,
                     run_id=effective_run_id,
                     snippet=snippet,

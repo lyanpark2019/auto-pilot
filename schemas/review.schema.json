@@ -23,6 +23,7 @@
           "file":             { "type": "string" },
           "line":             { "type": ["integer", "null"] },
           "issue":            { "type": "string" },
+          "class":            { "type": ["string", "null"] },
           "fix":              { "type": "string" },
           "finding_hash":     { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "addresses_prior":  { "type": ["string", "null"] }
