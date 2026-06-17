@@ -96,6 +96,8 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_escalation_emit.py` | inc3-escalation | best-effort tier-1->tier-2 boundary emit; wraps _escalation.bump_or_create at the 3 give-up points, never raises (additive) |
 | `scripts/measure_enrich_precision.py` | inc2-enrich | gate-precision measure: admit/reject rate + per-tier + reason-histogram over candidate JSONs (re-runs _enrich_gate.evaluate); CLI measure-enrich |
 | `scripts/measure_escalation.py` | inc3-Phase3 | deterministic escalation-ledger metrics: by_state + by_problem_class + resolution/recovery rates + enrich-pages-written (re-runs over the ledger); `orchestrator.py measure-escalation` |
+| `scripts/measure_cross_model.py` | R1 cross-model | pure byte-stable analyzer: per-defect codex-vs-claude class agreement + cross-model-promotable (reuses the real miner for the fingerprint/distinct_runs verdict, no R1 logic reimplemented); `orchestrator.py measure-cross-model` |
+| `scripts/measure_cross_model_collect.py` | R1 cross-model | live producer: drives the real claude+codex reviewers over a frozen seed.diff (review-core class instruction), K passes, schema-valid review.json per pass, honest ABSTAIN reasons (usage-limit vs exec-failed vs timeout) |
 
 ## Editing this plugin
 
