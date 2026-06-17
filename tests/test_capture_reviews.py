@@ -385,3 +385,35 @@ def test_capture_all_phases_sweeps_multiple(tmp_path: Path) -> None:
     planning = tmp_path / ".planning" / "auto-pilot"
     assert (planning / "critic-rejections-phase-1.jsonl").exists()
     assert (planning / "critic-rejections-phase-2.jsonl").exists()
+
+
+# ---------------------------------------------------------------------------
+# R1: a reviewer-emitted controlled-vocab `class` survives capture into JSONL
+# ---------------------------------------------------------------------------
+
+def test_class_carried_to_jsonl_when_present(tmp_path: Path) -> None:
+    """A finding's `class` is carried into the JSONL line; a finding without it
+    keeps the exact 4-key shape (class-less canonical dedup key unchanged)."""
+    _set_state(tmp_path, "run-class")
+    review = _make_review(
+        "REJECT",
+        [
+            {"severity": "P1", "file": "metrics.py", "line": 5,
+             "issue": "p=1.0 IndexError", "class": "index-out-of-bounds",
+             "fix": "use len-1", "finding_hash": _FINDING_HASH},
+            {"severity": "P1", "file": "other.py", "line": 9,
+             "issue": "no class here", "fix": "x", "finding_hash": "c" * 64},
+        ],
+    )
+    review_path = _round_dir(tmp_path) / "outputs" / "codex-reviewer" / "review.json"
+    _write_review(review_path, review)
+
+    count = _capture_reviews.capture_phase(tmp_path, 1)
+    assert count == 2
+
+    jsonl = tmp_path / ".planning" / "auto-pilot" / "critic-rejections-phase-1.jsonl"
+    lines = [json.loads(ln) for ln in jsonl.read_text().splitlines() if ln.strip()]
+    by_file = {ln["file"]: ln for ln in lines}
+    assert by_file["metrics.py"]["class"] == "index-out-of-bounds"
+    assert "class" not in by_file["other.py"]
+    assert set(by_file["other.py"].keys()) == {"file", "issue", "candidate_asset", "run_id"}

@@ -102,6 +102,14 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   a legacy line with no `run_id` collapses to one synthetic sentinel (`__legacy_no_run_id__`), never
   the live state run_id, so re-mining it after the next `init` cannot inflate either. Genuine
   cross-run recurrence is required (D1 2026-06-16; provenance + sentinel hardening D2 2026-06-17).
+- **R1 — reviewer-finding keys on a controlled-vocab `class`, not free prose (2026-06-17)** — R1
+  measured that `normalize_issue` keeps wording, so one defect phrased N ways fingerprints N times →
+  a 100%-recurring bug reviewed 6× yielded 0 promotable tickets. Fix: reviewers emit an optional
+  `class` from the `schemas/review.schema.json` `findings[].class` enum; `_capture_reviews` carries it
+  into the JSONL; `scan_reviewer_findings` seeds the fingerprint on `class` (basename kept) when it is
+  in `learning_miner.REVIEWER_FINDING_CLASSES`, else falls back to `issue`. Same defect, different
+  wording, now collapses to ONE ticket so `distinct_runs` accumulates. Mirrors the long-standing
+  `insight` class-tag pattern. Honest limit: the long tail with no fitting class still keys on prose.
 - **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
   `insights.jsonl` — retro's structured sidecar where a class tag (not wording, not file) drives
   identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments

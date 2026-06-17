@@ -364,3 +364,96 @@ def test_corrupt_insights_no_phantom_ledger_entries(
     # All writes must be under fake_home only.
     fake_slug_dir = fake_home / ".claude" / "projects" / slug / "improvements"
     assert fake_slug_dir.exists(), "Expected writes under fake_home, but dir not found"
+
+
+# ---------------------------------------------------------------------------
+# R1: controlled-vocab `class` keys recurrence (not free `issue` prose)
+# ---------------------------------------------------------------------------
+
+
+def test_reviewer_class_collapses_phrasing_two_runs_promotable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R1 regression-lock: ONE defect class, DIFFERENT issue wording across two
+    runs, collapses to ONE fingerprint and reaches distinct_runs==2 (promotable).
+    Pre-fix, free phrasing fragmented the key 1:1 → 0 promotable (R1 measure)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    (root / ".planning" / "auto-pilot").mkdir(parents=True)
+    state = root / ".planning/auto-pilot/state.json"
+    jsonl = root / ".planning/auto-pilot/critic-rejections-phase-1.jsonl"
+    state.write_text(json.dumps({"run_id": "r1"}))
+    jsonl.write_text(json.dumps(
+        {"file": "metrics.py", "issue": "percentile() crashes at p=1.0 (IndexError)",
+         "class": "index-out-of-bounds", "run_id": "r1"}) + "\n")
+    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
+    state.write_text(json.dumps({"run_id": "r2"}))
+    with jsonl.open("a") as fh:
+        fh.write(json.dumps(
+            {"file": "metrics.py", "issue": "index out of range when p==1 in percentile()",
+             "class": "index-out-of-bounds", "run_id": "r2"}) + "\n")
+    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "promotable"
+    tickets = [t for t in _ledger_tickets(tmp_path / "home", root)
+               if t.get("source") == "reviewer-finding"]
+    assert len(tickets) == 1
+    assert tickets[0]["distinct_runs"] == 2
+
+
+def test_reviewer_no_class_phrasing_stays_fragmented(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Causality control: WITHOUT a class, the same two phrasings fingerprint
+    separately → two distinct_runs==1 tickets → never promotable. Proves the
+    class tag (not something else) is what collapses recurrence."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    (root / ".planning" / "auto-pilot").mkdir(parents=True)
+    state = root / ".planning/auto-pilot/state.json"
+    jsonl = root / ".planning/auto-pilot/critic-rejections-phase-1.jsonl"
+    state.write_text(json.dumps({"run_id": "r1"}))
+    jsonl.write_text(json.dumps(
+        {"file": "metrics.py", "issue": "percentile() crashes at p=1.0 (IndexError)",
+         "run_id": "r1"}) + "\n")
+    state.write_text(json.dumps({"run_id": "r2"}))
+    with jsonl.open("a") as fh:
+        fh.write(json.dumps(
+            {"file": "metrics.py", "issue": "index out of range when p==1 in percentile()",
+             "run_id": "r2"}) + "\n")
+    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
+    tickets = [t for t in _ledger_tickets(tmp_path / "home", root)
+               if t.get("source") == "reviewer-finding"]
+    assert len(tickets) == 2
+    assert all(t["distinct_runs"] == 1 for t in tickets)
+
+
+def test_reviewer_out_of_vocab_class_falls_back_to_issue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `class` outside REVIEWER_FINDING_CLASSES is ignored; keying falls back to
+    the issue text. Same bogus class + different issue across runs → two tickets
+    (proves it did NOT key on the unrecognised class)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    (root / ".planning" / "auto-pilot").mkdir(parents=True)
+    state = root / ".planning/auto-pilot/state.json"
+    jsonl = root / ".planning/auto-pilot/critic-rejections-phase-1.jsonl"
+    state.write_text(json.dumps({"run_id": "r1"}))
+    jsonl.write_text(json.dumps(
+        {"file": "m.py", "issue": "bug A", "class": "totally-made-up", "run_id": "r1"}) + "\n")
+    state.write_text(json.dumps({"run_id": "r2"}))
+    with jsonl.open("a") as fh:
+        fh.write(json.dumps(
+            {"file": "m.py", "issue": "bug B", "class": "totally-made-up", "run_id": "r2"}) + "\n")
+    assert lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)["verdict"] == "thin"
+    tickets = [t for t in _ledger_tickets(tmp_path / "home", root)
+               if t.get("source") == "reviewer-finding"]
+    assert len(tickets) == 2
+
+
+def test_reviewer_finding_classes_matches_schema_enum() -> None:
+    """REVIEWER_FINDING_CLASSES must mirror review.schema.json findings[].class enum."""
+    review_schema = json.loads(
+        (Path(lm.__file__).resolve().parents[1] / "schemas" / "review.schema.json").read_text()
+    )
+    enum = review_schema["properties"]["findings"]["items"]["properties"]["class"]["enum"]
+    assert lm.REVIEWER_FINDING_CLASSES == set(enum)

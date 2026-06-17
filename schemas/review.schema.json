@@ -23,6 +23,7 @@
           "file":             { "type": "string" },
           "line":             { "type": ["integer", "null"] },
           "issue":            { "type": "string" },
+          "class":            { "enum": ["index-out-of-bounds", "null-deref", "unguarded-empty-input", "off-by-one", "unchecked-return", "resource-leak", "race-condition", "injection", "missing-input-validation", "incorrect-error-handling", "type-confusion", "scope-violation", "missing-test", "spec-noncompliance", "doc-drift", "dead-code"] },
           "fix":              { "type": "string" },
           "finding_hash":     { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "addresses_prior":  { "type": ["string", "null"] }
