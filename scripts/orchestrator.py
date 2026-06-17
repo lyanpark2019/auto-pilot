@@ -583,6 +583,8 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     _resolve_learnings_cli.register_cli_subparsers(sub)
     import _capture_reviews  # noqa: PLC0415
     _capture_reviews.register_cli_subparsers(sub)
+    import measure_cross_model  # noqa: PLC0415
+    measure_cross_model.register_cli_subparsers(sub)
 
     return parser
 
