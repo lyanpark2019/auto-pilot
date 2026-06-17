@@ -14,9 +14,10 @@ import argparse
 import json
 import sys
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import _improvement as imp
 from _improvement import Observation
@@ -79,6 +80,42 @@ def current_run_id(repo_root: Path) -> str:
         return ""
 
 
+def _iter_jsonl_dicts(path: Path) -> Iterator[dict[str, Any]]:
+    """Yield each non-blank, valid-JSON, dict line from a JSONL file.
+
+    Missing/unreadable file (OSError), blank lines, malformed JSON, and non-dict
+    payloads are silently skipped — the miner degrades, never crashes. Shared by
+    the reviewer-finding and insight scanners.
+    """
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            finding = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(finding, dict):
+            yield finding
+
+
+def _coerce_candidate_asset(finding: dict[str, Any]) -> str | None:
+    """Return the finding's candidate_asset if it is in VALID_ASSET_TYPES, else None.
+
+    A non-str value is stringified first; anything outside the schema enum
+    (SoT: improvement-ticket.schema.json) coerces to None so a mis-classified
+    finding still becomes a ticket instead of being dropped on ValidationError.
+    """
+    val = finding.get("candidate_asset")
+    if val is not None and not isinstance(val, str):
+        val = str(val)
+    return val if val in VALID_ASSET_TYPES else None
+
+
 def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
     """Parse critic-rejections-phase-*.jsonl → Observations.
 
@@ -90,31 +127,14 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
     planning = repo_root / ".planning" / "auto-pilot"
     observations: list[Observation] = []
     for jsonl_path in sorted(planning.glob("critic-rejections-phase-*.jsonl")):
-        try:
-            lines = jsonl_path.read_text().splitlines()
-        except OSError:
-            continue
-        for raw in lines:
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                finding = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(finding, dict):
-                continue
+        for finding in _iter_jsonl_dicts(jsonl_path):
             file_val = finding.get("file", "")
             issue_val = finding.get("issue", "")
-            candidate_val = finding.get("candidate_asset")
             if not isinstance(file_val, str):
                 file_val = str(file_val)
             if not isinstance(issue_val, str):
                 issue_val = str(issue_val)
-            if candidate_val is not None and not isinstance(candidate_val, str):
-                candidate_val = str(candidate_val)
-            if candidate_val not in VALID_ASSET_TYPES:
-                candidate_val = None
+            candidate_val = _coerce_candidate_asset(finding)
             # R1 fix: key the fingerprint on the controlled-vocab `class` when the
             # reviewer emitted a valid one; else fall back to the free issue text.
             # The fingerprint seeds on Observation.issue, so a valid class makes
@@ -205,20 +225,7 @@ def scan_insights(repo_root: Path, run_id: str) -> list[Observation]:
     """
     path = repo_root / ".planning" / "auto-pilot" / "insights.jsonl"
     observations: list[Observation] = []
-    try:
-        lines = path.read_text().splitlines()
-    except OSError:
-        return observations
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            finding = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(finding, dict):
-            continue
+    for finding in _iter_jsonl_dicts(path):
         class_val = finding.get("class")
         issue_val = finding.get("issue", "")
         if not (isinstance(class_val, str) and class_val.strip()):
@@ -230,11 +237,7 @@ def scan_insights(repo_root: Path, run_id: str) -> list[Observation]:
         # exact fragmentation this source exists to prevent). Skip such a tag.
         if not imp.normalize_issue(class_val).strip():
             continue
-        candidate_val = finding.get("candidate_asset")
-        if candidate_val is not None and not isinstance(candidate_val, str):
-            candidate_val = str(candidate_val)
-        if candidate_val not in VALID_ASSET_TYPES:
-            candidate_val = None
+        candidate_val = _coerce_candidate_asset(finding)
         observations.append(
             Observation(
                 source="insight",

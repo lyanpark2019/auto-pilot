@@ -471,3 +471,24 @@ def test_review_schema_class_is_permissive() -> None:
     cls = schema["properties"]["findings"]["items"]["properties"]["class"]
     assert "enum" not in cls
     assert set(cls["type"]) == {"string", "null"}
+
+
+def test_reviewer_multi_file_glob_skips_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A multi-file reviewer glob with one unreadable path still processes the
+    others — locks the shared `_iter_jsonl_dicts` per-path OSError semantics after
+    the scan-loop extraction (one path's OSError must not abort the glob loop)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    (d / "state.json").write_text(json.dumps({"run_id": "r1"}))
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({"file": "a.py", "issue": "bug a", "run_id": "r1"}) + "\n")
+    # phase-2 is a DIRECTORY → read_text() raises IsADirectoryError (OSError) → skipped.
+    (d / "critic-rejections-phase-2.jsonl").mkdir()
+    (d / "critic-rejections-phase-3.jsonl").write_text(
+        json.dumps({"file": "c.py", "issue": "bug c", "run_id": "r1"}) + "\n")
+    obs = lm.scan_reviewer_findings(root, "r1")
+    assert sorted(o.file_basename for o in obs) == ["a.py", "c.py"]
