@@ -47,8 +47,9 @@ VALID_ASSET_TYPES: frozenset[str] = frozenset(
 )
 
 # Controlled-vocab SoT for reviewer-finding defect classes (review-core.md mirrors
-# this list for reviewers; review.schema.json keeps `class` a permissive string so a
-# typo/null can never sink a whole review — coercion lives HERE, not in the schema).
+# this list for reviewers; review.schema.json tolerates ANY `class` value — string,
+# null, or a malformed non-string — so no tag can sink a whole review at validation;
+# coercion + the strip/lower normalization live HERE, not in the schema).
 # R1 fix: a reviewer-finding's fingerprint keys on this class instead of the free
 # `issue` prose, so the SAME defect phrased differently across runs collapses to ONE
 # ticket and distinct_runs can accumulate to the promotion gate. A line whose `class`
@@ -135,17 +136,22 @@ def scan_reviewer_findings(repo_root: Path, run_id: str) -> list[Observation]:
             if not isinstance(issue_val, str):
                 issue_val = str(issue_val)
             candidate_val = _coerce_candidate_asset(finding)
-            # R1 fix: key the fingerprint on the controlled-vocab `class` when the
-            # reviewer emitted a valid one; else fall back to the free issue text.
-            # The fingerprint seeds on Observation.issue, so a valid class makes
-            # the SAME defect phrased differently collapse to ONE ticket (basename
-            # is kept, so the same class in a different file stays a distinct one).
-            class_val = finding.get("class")
-            keyed_issue = (
-                class_val
-                if isinstance(class_val, str) and class_val in REVIEWER_FINDING_CLASSES
-                else issue_val
-            )
+            # R1 fix: key the fingerprint on the controlled-vocab `class` (normalized
+            # for trailing-space / case variants) when valid; else fall back to the
+            # free issue text. The fingerprint seeds on Observation.issue, so a valid
+            # class makes the SAME defect phrased differently collapse to ONE ticket
+            # (basename is kept, so the same class in a different file stays distinct).
+            # A finding with neither a valid class nor a non-empty issue carries no
+            # defect identity → skip it, so empty-keyed findings cannot collapse into
+            # one falsely-promoting ticket (mirrors the scan_insights empty guard).
+            class_raw = finding.get("class")
+            class_norm = class_raw.strip().lower() if isinstance(class_raw, str) else ""
+            if class_norm in REVIEWER_FINDING_CLASSES:
+                keyed_issue = class_norm
+            elif imp.normalize_issue(issue_val).strip():
+                keyed_issue = issue_val
+            else:
+                continue
             snippet = json.dumps(finding)[:500]
             # Use the line's own run_id (stamped at capture time) so that
             # re-mining the same JSONL under a new state run_id does not
