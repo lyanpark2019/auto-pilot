@@ -450,10 +450,24 @@ def test_reviewer_out_of_vocab_class_falls_back_to_issue(
     assert len(tickets) == 2
 
 
-def test_reviewer_finding_classes_matches_schema_enum() -> None:
-    """REVIEWER_FINDING_CLASSES must mirror review.schema.json findings[].class enum."""
-    review_schema = json.loads(
+def test_reviewer_finding_classes_documented_in_review_core() -> None:
+    """Every REVIEWER_FINDING_CLASSES member must appear (backticked) in review-core.md
+    so the reviewer-facing vocab and the miner allow-list (the SoT) cannot silently drift."""
+    review_core = (
+        Path(lm.__file__).resolve().parents[1]
+        / "skills" / "adversarial-review-loop" / "references" / "review-core.md"
+    ).read_text()
+    missing = [c for c in lm.REVIEWER_FINDING_CLASSES if f"`{c}`" not in review_core]
+    assert not missing, f"classes missing from review-core.md vocab list: {missing}"
+
+
+def test_review_schema_class_is_permissive() -> None:
+    """`class` must stay a permissive string|null in review.schema so an out-of-vocab or
+    null class can never fail review.json validation (the miner coerces instead). Locks the
+    design decision that the controlled vocab is enforced in the miner, not the schema."""
+    schema = json.loads(
         (Path(lm.__file__).resolve().parents[1] / "schemas" / "review.schema.json").read_text()
     )
-    enum = review_schema["properties"]["findings"]["items"]["properties"]["class"]["enum"]
-    assert lm.REVIEWER_FINDING_CLASSES == set(enum)
+    cls = schema["properties"]["findings"]["items"]["properties"]["class"]
+    assert "enum" not in cls
+    assert set(cls["type"]) == {"string", "null"}

@@ -45,12 +45,14 @@ VALID_ASSET_TYPES: frozenset[str] = frozenset(
     {"skill", "hook", "schema", "test", "doc", "cache"}
 )
 
-# Mirrors the findings[].class enum in schemas/review.schema.json (SoT).
-# R1 fix: a reviewer-finding's fingerprint keys on this controlled-vocab class
-# instead of the free `issue` prose, so the SAME defect phrased differently
-# across runs collapses to ONE ticket and distinct_runs can accumulate to the
-# promotion gate. A line whose `class` is absent or outside this set falls back
-# to the issue text (legacy/unclassified findings keep working unchanged).
+# Controlled-vocab SoT for reviewer-finding defect classes (review-core.md mirrors
+# this list for reviewers; review.schema.json keeps `class` a permissive string so a
+# typo/null can never sink a whole review — coercion lives HERE, not in the schema).
+# R1 fix: a reviewer-finding's fingerprint keys on this class instead of the free
+# `issue` prose, so the SAME defect phrased differently across runs collapses to ONE
+# ticket and distinct_runs can accumulate to the promotion gate. A line whose `class`
+# is absent or outside this set falls back to the issue text (legacy/unclassified
+# findings keep working unchanged).
 REVIEWER_FINDING_CLASSES: frozenset[str] = frozenset(
     {
         "index-out-of-bounds", "null-deref", "unguarded-empty-input",
