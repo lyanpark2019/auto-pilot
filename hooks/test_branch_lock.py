@@ -239,6 +239,26 @@ def main() -> None:
         for label, cmd in deny_eval:
             results.append(run_case(label, "DENY", cmd, feat_repo))
 
+        # --- UX lock (2026-06-17): the eval-construct fail-closed deny must carry
+        # the CLEAR guidance ("re-run with a LITERAL feature refspec"), NOT the
+        # misleading "on protected branch 'main'" text — the user's push was
+        # denied for a $VAR/$() it contained, not because HEAD is main. ---
+        _eval_payload = json.dumps({"tool_name": "Bash", "tool_input": {
+            "command": "git push origin $BRANCH", "cwd": feat_repo}})
+        _eval_out = subprocess.run(
+            ["bash", HOOK], input=_eval_payload, capture_output=True, text=True,
+            cwd=feat_repo, env={**os.environ, "AUTO_PILOT_MAIN_OK": "0"},
+        ).stdout
+        _msg_ok = (
+            '"permissionDecision":"deny"' in _eval_out
+            and "LITERAL feature refspec" in _eval_out
+            and "on protected branch" not in _eval_out
+        )
+        print(f"[{'OK  ' if _msg_ok else 'FAIL'}] {'eval-construct deny carries clear fail-closed guidance':55s}  msg_clear={_msg_ok}")
+        if not _msg_ok:
+            print(f"       stdout: {_eval_out.strip()!r}")
+        results.append(_msg_ok)
+
         # --- ALLOW cases ---
         # Feature-branch push while HEAD=main (gates on DST, not HEAD).
         results.append(run_case(
