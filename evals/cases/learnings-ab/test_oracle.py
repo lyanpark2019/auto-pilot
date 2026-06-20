@@ -66,6 +66,25 @@ def test_not_caught_right_class_wrong_file() -> None:
     assert oracle.caught(review, "off-by-one", "src/parser.py") is False
 
 
+# dot-slash-prefixed finding path matches a repo-relative golden -> caught True
+# (location-correct catch must not be undercounted on path-form mismatch)
+def test_caught_dot_slash_finding_path() -> None:
+    review = _review([_finding("P1", "./pkg/mod.py", "off-by-one")])
+    assert oracle.caught(review, "off-by-one", "pkg/mod.py") is True
+
+
+# absolute finding path matches a repo-relative golden by trailing segment
+def test_caught_absolute_finding_path() -> None:
+    review = _review([_finding("P1", "/work/repo/pkg/mod.py", "off-by-one")])
+    assert oracle.caught(review, "off-by-one", "pkg/mod.py") is True
+
+
+# normalization keeps location semantics: a different file still misses
+def test_not_caught_dot_slash_different_file() -> None:
+    review = _review([_finding("P1", "./pkg/other.py", "off-by-one")])
+    assert oracle.caught(review, "off-by-one", "pkg/mod.py") is False
+
+
 # right file, WRONG class -> caught False
 def test_not_caught_wrong_class_right_file() -> None:
     review = _review([_finding("P1", "src/parser.py", "null-deref")])

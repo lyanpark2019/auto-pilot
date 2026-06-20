@@ -21,8 +21,9 @@ Pipeline (spec ``docs/specs/2026-06-20-learning-loop-archon-port.md`` Task 10):
   5. PILOT gate: keep only OFF catch-rate in [0.30,0.70]; require >=1 class with
      a real OFF-miss -> ON-catch on >=2 discordant pairs before any powered run;
      else INCONCLUSIVE / KILL.
-  6. Stats: Fisher exact one-sided + McNemar (exact) + paired catch-rate delta
-     with 95% CI.  PROCEED bar = +0.20.
+  6. Verdict (``_decide``) enforces EVERY validity gate (Task 11): delta>=+0.20,
+     CI excludes 0, Fisher + McNemar one-sided significant, noise<=+0.10, and a
+     flat negative control; KILL on the hard-failure side of any of those.
   7. ON-arm-blind guard: ``resolve-learnings`` must have selected >=1 ticket in
      the ON arm before scoring.
 
@@ -51,6 +52,10 @@ _SCRIPTS = _REPO_ROOT / "scripts"
 PROCEED_DELTA = 0.20
 SATURATION_BAND = (0.30, 0.70)
 MIN_DISCORDANT_PAIRS = 2
+# Significance + guardrail thresholds the verdict ENFORCES (spec Task 11).
+SIG_ALPHA = 0.05  # Fisher + McNemar one-sided significance bar
+NOISE_DELTA_MAX = 0.10  # kill if ON noise exceeds OFF by more than this
+NEG_CONTROL_MAX = 0.0  # negative control must be FLAT: ON must not lift an unlearned class
 
 # ---------------------------------------------------------------------------
 # Mocked Archon-run seam.  ``run_workflow`` is replaced wholesale in tests.
@@ -299,30 +304,81 @@ class ABVerdict:
     fisher_p: float
     mcnemar_p: float
     noise_delta: float
+    negative_control_delta: float
     scored: list[dict[str, Any]]
     ledger_sha: str
 
+    def to_dict(self) -> dict[str, Any]:
+        """Machine-readable verdict — recomputable from the SHA-logged review set."""
+        return {
+            "verdict": self.verdict,
+            "catch_rate_on": self.catch_rate_on,
+            "catch_rate_off": self.catch_rate_off,
+            "delta": self.delta,
+            "ci_low": self.ci_low,
+            "ci_high": self.ci_high,
+            "fisher_p": self.fisher_p,
+            "mcnemar_p": self.mcnemar_p,
+            "noise_delta": self.noise_delta,
+            "negative_control_delta": self.negative_control_delta,
+            "ledger_sha": self.ledger_sha,
+            "scored": self.scored,
+            "generated_at": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+        }
+
     def to_json(self) -> str:
-        return json.dumps(
-            {
-                "verdict": self.verdict,
-                "catch_rate_on": self.catch_rate_on,
-                "catch_rate_off": self.catch_rate_off,
-                "delta": self.delta,
-                "ci_low": self.ci_low,
-                "ci_high": self.ci_high,
-                "fisher_p": self.fisher_p,
-                "mcnemar_p": self.mcnemar_p,
-                "noise_delta": self.noise_delta,
-                "ledger_sha": self.ledger_sha,
-                "scored": self.scored,
-                "generated_at": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
-            },
-            indent=2,
-            sort_keys=True,
-        )
+        return json.dumps(self.to_dict(), indent=2, sort_keys=True)
+
+    def write(self, path: Path) -> Path:
+        """Write ``verdict.json`` (machine-readable, recomputable from the set)."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.to_json())
+        return path
+
+
+def _paired_catch_delta(
+    seeds: list[Seed],
+    *,
+    frozen_ledger: Path,
+    work_root: Path,
+    run_workflow_fn: RunWorkflow,
+    expected_ledger_sha: str,
+    assert_on_selected: bool,
+) -> float:
+    """Mean paired ON−OFF catch-rate over ``seeds`` (0.0 on an empty set).
+
+    Negative-control arm: an UNLEARNED class must stay FLAT (ON must not lift
+    it).  ``assert_on_selected=False`` bypasses the ON-blind guard — by design
+    no ticket matches an unlearned class's scope.
+    """
+    if not seeds:
+        return 0.0
+    on_hits = off_hits = 0
+    for seed in seeds:
+        arm_dir = work_root / f"negctl-{seed.name}"
+        for arm, bucket in (("ON", "on"), ("OFF", "off")):
+            arm_ledger = copy_ledger(frozen_ledger, arm_dir / f"ledger-{bucket}")
+            if arm == "ON" and assert_on_selected:
+                assert_on_arm_selected(arm_ledger, seed.scope)
+            run_dir = arm_dir / bucket
+            run_dir.mkdir(parents=True, exist_ok=True)
+            result = run_workflow_fn(arm, seed, run_dir)
+            review = oracle.load_review(result.review_path)
+            hit = int(oracle.caught(review, seed.golden_class, seed.golden_file))
+            post_sha = ledger_sha(arm_ledger)
+            if post_sha != expected_ledger_sha:
+                raise AssertionError(
+                    f"negative-control ledger mutated for {arm}/{seed.name}: "
+                    f"{post_sha} != {expected_ledger_sha}"
+                )
+            if arm == "ON":
+                on_hits += hit
+            else:
+                off_hits += hit
+    n = len(seeds)
+    return on_hits / n - off_hits / n
 
 
 def run_ab(
@@ -331,14 +387,16 @@ def run_ab(
     frozen_ledger: Path,
     work_root: Path,
     run_workflow_fn: RunWorkflow,
+    negative_control: list[Seed] | None = None,
+    verdict_path: Path | None = None,
 ) -> ABVerdict:
     """Powered paired A/B over the admitted seeds → killable verdict.
 
     Scores ON and OFF on byte-identical seed diffs against per-arm copies of the
-    frozen ledger (asserting the SHA never drifts across the scored set), then
-    computes Fisher one-sided + McNemar exact + paired delta CI.  PROCEED iff
-    delta>=+0.20 AND the 95% CI excludes 0; KILL on delta<=0 / CI spans 0;
-    KEEP-DEFERRED on the narrow remaining ambiguity.
+    frozen ledger (asserting the SHA never drifts), computes Fisher + McNemar +
+    paired delta CI + noise delta + negative-control delta, and delegates the
+    full multi-gate verdict to ``_decide`` (spec Task 11).  Writes
+    ``verdict.json`` when ``verdict_path`` is given.
     """
     frozen_sha = ledger_sha(frozen_ledger)
     on_outcomes: list[int] = []
@@ -381,10 +439,15 @@ def run_ab(
     mcnemar_p = ab_stats.mcnemar_exact(table, one_sided=True)
     ci = ab_stats.catch_rate_delta_ci(on_outcomes, off_outcomes)
     noise_delta = (on_noise - off_noise) / n if n else 0.0
+    neg_delta = _paired_catch_delta(
+        negative_control or [], frozen_ledger=frozen_ledger, work_root=work_root,
+        run_workflow_fn=run_workflow_fn, expected_ledger_sha=frozen_sha,
+        assert_on_selected=False,
+    )
 
-    verdict = _decide(ci, mcnemar_p)
-    return ABVerdict(
-        verdict=verdict,
+    verdict_str = _decide(ci, fisher_p, mcnemar_p, noise_delta, neg_delta)
+    verdict = ABVerdict(
+        verdict=verdict_str,
         catch_rate_on=ci.catch_rate_on,
         catch_rate_off=ci.catch_rate_off,
         delta=ci.delta,
@@ -393,15 +456,45 @@ def run_ab(
         fisher_p=fisher_p,
         mcnemar_p=mcnemar_p,
         noise_delta=noise_delta,
+        negative_control_delta=neg_delta,
         scored=scored,
         ledger_sha=frozen_sha,
     )
+    if verdict_path is not None:
+        verdict.write(verdict_path)
+    return verdict
 
 
-def _decide(ci: ab_stats.DeltaCI, mcnemar_p: float) -> str:
-    """Kill-or-proceed decision from the paired delta CI (PROCEED bar +0.20)."""
+def _decide(
+    ci: ab_stats.DeltaCI,
+    fisher_p: float,
+    mcnemar_p: float,
+    noise_delta: float,
+    negative_control_delta: float,
+) -> str:
+    """Kill-or-proceed decision enforcing ALL validity gates (spec Task 11).
+
+    KILL on any hard failure: no positive effect (delta<=0), CI spans 0, excess
+    noise (>+0.10), or a lifted negative control (an unlearned class catching
+    MORE with memory on → confound, not learning).  PROCEED requires EVERY
+    precondition: delta>=+0.20 AND CI excludes 0 AND Fisher significant AND
+    McNemar significant AND noise within bound AND negative control flat.
+    Anything else (e.g. a positive effect whose significance falls short) is the
+    narrow ambiguity → KEEP-DEFERRED.
+    """
     if ci.delta <= 0.0 or ci.ci_low <= 0.0:
         return "KILL"
-    if ci.delta >= PROCEED_DELTA and ci.ci_low > 0.0:
+    if noise_delta > NOISE_DELTA_MAX:
+        return "KILL"
+    if negative_control_delta > NEG_CONTROL_MAX:
+        return "KILL"
+    if (
+        ci.delta >= PROCEED_DELTA
+        and ci.ci_low > 0.0
+        and fisher_p < SIG_ALPHA
+        and mcnemar_p < SIG_ALPHA
+        and noise_delta <= NOISE_DELTA_MAX
+        and negative_control_delta <= NEG_CONTROL_MAX
+    ):
         return "PROCEED"
     return "KEEP-DEFERRED"

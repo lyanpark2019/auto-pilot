@@ -49,6 +49,42 @@ def normalize_class(value: Any) -> str:
     return norm if norm in REVIEWER_FINDING_CLASSES else ""
 
 
+def _normalize_path(value: Any) -> str:
+    """Canonical path form for location comparison; mirrors archon adapter's ``_repo_relative``.
+
+    Strips a leading ``./`` and collapses ``Path`` separators (POSIX-normalized).
+    Absolute paths are returned as-is here; ``_paths_match`` handles the
+    absolute-vs-repo-relative case by suffix. Non-strings normalize to "".
+    """
+    if not isinstance(value, str) or not value:
+        return ""
+    raw = value.replace("\\", "/")
+    while raw.startswith("./"):
+        raw = raw[2:]
+    return raw
+
+
+def _paths_match(finding_file: Any, golden_file: str) -> bool:
+    """True iff a finding's ``file`` locates the golden file, tolerant of path form.
+
+    A live reviewer may emit ``"./src/x.py"`` or an absolute path while the golden
+    is repo-relative ``"src/x.py"``. Both sides are ``./``-stripped/normalized; an
+    absolute finding path matches when it ends on the repo-relative golden segment
+    (``/<golden>``). Distinct files still mismatch (location semantics intact).
+    """
+    f = _normalize_path(finding_file)
+    g = _normalize_path(golden_file)
+    if not f or not g:
+        return False
+    if f == g:
+        return True
+    if f.startswith("/") and not g.startswith("/"):
+        return f.endswith("/" + g)
+    if g.startswith("/") and not f.startswith("/"):
+        return g.endswith("/" + f)
+    return False
+
+
 def _iter_findings(review: dict[str, Any]) -> list[dict[str, Any]]:
     """Return the review's findings list, tolerating a missing/malformed field."""
     findings = review.get("findings")
@@ -69,8 +105,7 @@ def caught(review: dict[str, Any], golden_class: str, golden_file: str) -> bool:
     for finding in _iter_findings(review):
         if normalize_class(finding.get("class")) != target_class:
             continue
-        file_val = finding.get("file")
-        if isinstance(file_val, str) and file_val == golden_file:
+        if _paths_match(finding.get("file"), golden_file):
             return True
     return False
 

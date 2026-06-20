@@ -215,6 +215,115 @@ def test_strong_effect_proceeds(seeded: dict[str, Path], tmp_path: Path) -> None
     assert parsed["catch_rate_on"] == 1.0
 
 
+# --- (D) verdict enforces its own validity gates -----------------------------
+def test_high_noise_kills_despite_strong_delta(
+    seeded: dict[str, Path], tmp_path: Path
+) -> None:
+    """Strong catch delta but ON adds excess noise (>+0.10) -> KILL (codex/Claude D)."""
+    frozen = seeded["ledger"]
+    seeds = [_make_seed(tmp_path, f"noisy{i}") for i in range(8)]
+    work = tmp_path / "work"
+    outcomes: dict[tuple[str, str], dict[str, object]] = {}
+    for s in seeds:
+        # ON catches the golden but drags in 3 P2 noise findings; OFF catches none, clean.
+        outcomes[("ON", s.name)] = _review(True, s.golden_file, noise=3)
+        outcomes[("OFF", s.name)] = _review(False, s.golden_file)
+    fn = _mock_workflow(outcomes, work)
+
+    verdict = drv.run_ab(seeds, frozen_ledger=frozen, work_root=work, run_workflow_fn=fn)
+    assert verdict.delta == pytest.approx(1.0)  # delta is strong...
+    assert verdict.noise_delta > drv.NOISE_DELTA_MAX  # ...but noise blows the guardrail
+    assert verdict.verdict == "KILL"
+
+
+def test_nonsignificant_with_strong_delta_not_proceed(
+    seeded: dict[str, Path], tmp_path: Path
+) -> None:
+    """delta>=+0.20 but tiny N -> Fisher/McNemar non-significant -> NOT PROCEED."""
+    frozen = seeded["ledger"]
+    # 2 pairs, both OFF-miss->ON-catch: delta=+1.0 but McNemar P(X>=2|2)=0.25, Fisher>0.05.
+    seeds = [_make_seed(tmp_path, f"ns{i}") for i in range(2)]
+    work = tmp_path / "work"
+    outcomes: dict[tuple[str, str], dict[str, object]] = {}
+    for s in seeds:
+        outcomes[("ON", s.name)] = _review(True, s.golden_file)
+        outcomes[("OFF", s.name)] = _review(False, s.golden_file)
+    fn = _mock_workflow(outcomes, work)
+
+    verdict = drv.run_ab(seeds, frozen_ledger=frozen, work_root=work, run_workflow_fn=fn)
+    assert verdict.delta >= drv.PROCEED_DELTA
+    assert not (verdict.fisher_p < drv.SIG_ALPHA and verdict.mcnemar_p < drv.SIG_ALPHA)
+    assert verdict.verdict != "PROCEED"
+
+
+def test_negative_control_lift_kills(seeded: dict[str, Path], tmp_path: Path) -> None:
+    """A lifted negative control (ON catches an unlearned class more) -> KILL."""
+    frozen = seeded["ledger"]
+    seeds = [_make_seed(tmp_path, f"nc{i}") for i in range(8)]
+    neg = [
+        drv.Seed(
+            name=f"neg{i}", diff_path=tmp_path / f"neg{i}.diff",
+            golden_class="race-condition", golden_file="src/other.py",
+            scope=["src/other.py"],
+        )
+        for i in range(4)
+    ]
+    for s in neg:
+        s.diff_path.write_text("x")
+    work = tmp_path / "work"
+    outcomes: dict[tuple[str, str], dict[str, object]] = {}
+    for s in seeds:
+        outcomes[("ON", s.name)] = _review(True, s.golden_file)
+        outcomes[("OFF", s.name)] = _review(False, s.golden_file)
+    for s in neg:
+        # negative control LIFTS: ON catches its (unlearned) class, OFF does not.
+        outcomes[("ON", s.name)] = {
+            "reviewer": "claude", "verdict": "REJECT",
+            "findings": [{"severity": "P1", "title": "race", "detail": "d",
+                          "file": s.golden_file, "class": s.golden_class}],
+        }
+        outcomes[("OFF", s.name)] = {"reviewer": "claude", "verdict": "REJECT", "findings": []}
+    fn = _mock_workflow(outcomes, work)
+
+    verdict = drv.run_ab(
+        seeds, frozen_ledger=frozen, work_root=work, run_workflow_fn=fn,
+        negative_control=neg,
+    )
+    assert verdict.negative_control_delta > drv.NEG_CONTROL_MAX
+    assert verdict.verdict == "KILL"
+
+
+def test_verdict_json_written_and_validates(
+    seeded: dict[str, Path], tmp_path: Path
+) -> None:
+    """run_ab writes a verdict.json with all gate fields, recomputable from the set."""
+    frozen = seeded["ledger"]
+    seeds = [_make_seed(tmp_path, f"vj{i}") for i in range(8)]
+    work = tmp_path / "work"
+    outcomes: dict[tuple[str, str], dict[str, object]] = {}
+    for s in seeds:
+        outcomes[("ON", s.name)] = _review(True, s.golden_file)
+        outcomes[("OFF", s.name)] = _review(False, s.golden_file)
+    fn = _mock_workflow(outcomes, work)
+    out = tmp_path / "verdict.json"
+
+    verdict = drv.run_ab(
+        seeds, frozen_ledger=frozen, work_root=work, run_workflow_fn=fn,
+        verdict_path=out,
+    )
+    assert out.exists()
+    parsed = json.loads(out.read_text())
+    for key in (
+        "verdict", "catch_rate_on", "catch_rate_off", "delta", "ci_low",
+        "ci_high", "fisher_p", "mcnemar_p", "noise_delta",
+        "negative_control_delta", "ledger_sha", "scored", "generated_at",
+    ):
+        assert key in parsed
+    assert parsed["verdict"] == verdict.verdict == "PROCEED"
+    # the ledger SHA the verdict logs is the (untouched) frozen ledger SHA
+    assert parsed["ledger_sha"] == drv.ledger_sha(frozen)
+
+
 # --- (d) ON-blind guard fails loud -------------------------------------------
 def test_on_blind_guard_fails_loud(seeded: dict[str, Path], tmp_path: Path) -> None:
     """ON arm with a scope that matches NO ticket -> AssertionError (not silent)."""

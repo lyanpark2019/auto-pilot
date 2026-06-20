@@ -22,7 +22,7 @@ from typing import Sequence
 
 from _improvement import ledger_dir, local_key, verify_ticket_provenance
 from _promotion import load_tickets
-from learning_miner import is_promotable
+from learning_miner import REVIEWER_FINDING_CLASSES, is_promotable
 
 Ticket = dict[str, object]
 
@@ -176,6 +176,13 @@ def render_learnings_sanitized(tickets: list[Ticket]) -> str:
     miner sets ``pattern = normalize_issue(class)`` — already path/line-stripped
     at creation).  Tickets are sorted by class then fingerprint and de-duplicated
     on class so the output is byte-reproducible and free of identifying detail.
+
+    Experiment-validity guard (fix B): a ticket whose ``pattern`` is NOT in the
+    controlled vocabulary ``REVIEWER_FINDING_CLASSES`` is SKIPPED entirely.  Such
+    a ticket's pattern was seeded from the free-form finding TITLE (the miner
+    falls back to ``normalize_issue(issue)`` when the finding carries no valid
+    ``class``) — emitting it would print the issue title and spoil the A/B oracle.
+    Only controlled-vocab class nudges are injected; everything else is dropped.
     """
     tickets = sorted(
         tickets,
@@ -186,6 +193,8 @@ def render_learnings_sanitized(tickets: list[Ticket]) -> str:
     for ticket in tickets:
         cls = str(ticket.get("pattern", "")).strip()
         if not cls or cls in seen:
+            continue
+        if cls not in REVIEWER_FINDING_CLASSES:
             continue
         seen.add(cls)
         classes.append(cls)

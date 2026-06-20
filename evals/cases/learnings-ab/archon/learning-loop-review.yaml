@@ -21,9 +21,14 @@ provider: claude
 # keeps every run on the same canonical checkout so the slug — and thus the ledger dir — is
 # stable across runs. The inject/mine nodes ALSO pass an explicit stable --repo-root and a
 # pinned --ledger-dir so durability never relies on cwd alone.
+# mutates_checkout:true serializes concurrent runs on the same live checkout via Archon's
+# path-exclusive lock (workflow.ts:82). REQUIRED here because worktree.enabled:false pins
+# every run to ONE canonical checkout and capture-mine WRITES into it
+# (.planning/auto-pilot/state.json + the critic-rejections JSONL). With mutates_checkout:false
+# Archon would skip the lock and concurrent runs would race on those shared files.
 worktree:
   enabled: false
-mutates_checkout: false
+mutates_checkout: true
 tags: [review, poc, learning-loop, memory]
 
 # NO persist_sessions here (and the reviewer pins context: fresh) — opt-in provider-session
@@ -81,6 +86,16 @@ nodes:
       STABLE_REPO_ROOT="${AUTO_PILOT_REPO_ROOT:-$PWD}"
       LEDGER_DIR="${AUTO_PILOT_LEDGER_DIR:?AUTO_PILOT_LEDGER_DIR must point at the durable ledger}"
       SCOPE="${AUTO_PILOT_SCOPE:-}"
+      # ON-ARM-BLIND GUARD (spec Claude P2-2): selection is scope-gated — an ON arm with no
+      # scope can never match a ticket, so it would inject NOTHING yet look identical to a
+      # working ON arm and silently corrupt the A/B (false KILL). The OFF arm legitimately
+      # injects the _BLIND_MARKER and is identified by AUTO_PILOT_DISABLE_LEARNINGS=1 inlined
+      # on this command. So: only the ON arm (flag unset/empty) with an empty scope is an
+      # error. The OFF arm is exempt.
+      if [ "${AUTO_PILOT_DISABLE_LEARNINGS:-0}" != "1" ] && [ -z "${SCOPE// /}" ]; then
+        echo "inject: ON arm with empty AUTO_PILOT_SCOPE — selection is scope-gated, this would inject nothing and silently blind the A/B" >&2
+        exit 1
+      fi
       SCOPE_ARGS=()
       for s in $SCOPE; do SCOPE_ARGS+=(--scope "$s"); done
       "$PYBIN" "$SCRIPTS/orchestrator.py" resolve-learnings \
@@ -176,6 +191,11 @@ nodes:
       SCRIPTS="${AUTO_PILOT_SCRIPTS:-$HOME/Documents/Project/auto-pilot/scripts}"
       ARCHON_SCRIPTS="${AUTO_PILOT_ARCHON_SCRIPTS:-$(dirname "$0")}"
       STABLE_REPO_ROOT="${AUTO_PILOT_REPO_ROOT:-$PWD}"
+      # SAME durable ledger the inject node reads via --ledger-dir. The miner's default is
+      # the per-repo-root home path (learning_miner.py ledger_dir(repo_root, None)); without
+      # an explicit --commit-to the mine would WRITE the home ledger while inject READS
+      # $AUTO_PILOT_LEDGER_DIR → write/read diverge → the ON arm injects nothing → false KILL.
+      LEDGER_DIR="${AUTO_PILOT_LEDGER_DIR:?AUTO_PILOT_LEDGER_DIR must point at the durable ledger}"
 
       # 1) Stable run_id for the reviewed work unit (NEVER $WORKFLOW_ID).
       # shellcheck source=/dev/null
@@ -197,11 +217,13 @@ nodes:
       "$PYBIN" "$ARCHON_SCRIPTS/archon_review_to_jsonl.py" "$REVIEW_JSON" "$STABLE_REPO_ROOT"
 
       # 4) Mine: bump the DURABLE ledger. --run-id satisfies the gate without relying on the
-      # state.json read path; the ledger lands at the per-repo-root home path resolved from
-      # the stable --repo-root.
+      # state.json read path; --commit-to pins the SAME ledger dir the inject node reads
+      # (learning_miner.py ledger_dir(repo_root, commit_to) returns commit_to verbatim), so
+      # write and read share ONE ledger and the accumulated memory is actually injectable.
       "$PYBIN" "$SCRIPTS/learning_miner.py" \
         --repo-root "$STABLE_REPO_ROOT" \
         --run-id "$RUN_ID" \
+        --commit-to "$LEDGER_DIR" \
         --json
       echo "[$WORKFLOW_ID] capture-mine: mined run_id=$RUN_ID" >&2
       printf '{"mined": true, "run_id": "%s"}\n' "$RUN_ID"

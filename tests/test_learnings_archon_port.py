@@ -136,3 +136,49 @@ def test_resolve_learnings_full_mode_still_renders_evidence(tmp_path):
     body = result.read_text()
     # full render keeps the evidence sample (run id + snippet)
     assert "run-leaky-9" in body
+
+
+# ---------------------------------------------------------------------------
+# Fix B — sanitized render emits controlled-vocab classes ONLY (experiment-validity)
+# ---------------------------------------------------------------------------
+
+def test_render_sanitized_skips_free_form_title_pattern():
+    """A ticket whose pattern is a free-form leaky TITLE is dropped, not printed.
+
+    For an out-of-vocab / class-less reviewer finding the miner falls back to
+    keying on the normalized issue prose, so the seeded ``pattern`` is the issue
+    TITLE — printing it would spoil the A/B oracle.
+    """
+    leaky_title = "sql string built by concatenation in build_query"
+    t = _leaky_ticket()
+    t["pattern"] = leaky_title
+    body = lr.render_learnings_sanitized([t])
+    assert leaky_title not in body, "free-form title must not leak into the nudge"
+    assert "build_query" not in body
+    assert "concatenation" not in body
+    # nothing of vocabulary value to inject → no nudge bullet
+    assert "check for them" not in body
+
+
+def test_render_sanitized_skips_out_of_vocab_class():
+    """class:'none' / arbitrary out-of-vocab pattern → skipped (no nudge)."""
+    for bogus in ("none", "some-made-up-class", ""):
+        t = _leaky_ticket()
+        t["pattern"] = bogus
+        body = lr.render_learnings_sanitized([t])
+        assert "check for them" not in body, f"{bogus!r} must be skipped"
+        if bogus:
+            assert bogus not in body
+
+
+def test_render_sanitized_renders_in_vocab_class_among_leaky():
+    """An in-vocab ticket still renders its class nudge even alongside a leaky one."""
+    in_vocab = _leaky_ticket()
+    in_vocab["pattern"] = "injection"  # controlled vocab
+    in_vocab["fingerprint"] = "c" * 64
+    leaky = _leaky_ticket()
+    leaky["pattern"] = "sql string built by concatenation in build_query"
+    leaky["fingerprint"] = "d" * 64
+    body = lr.render_learnings_sanitized([in_vocab, leaky])
+    assert "`injection`" in body and "check for them" in body
+    assert "build_query" not in body, "the leaky free-form title stays out"
