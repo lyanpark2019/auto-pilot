@@ -4,7 +4,6 @@ generated: {{DATE}}
 sources:
   - notebook-3c01cb29 (Claude Code & Codex)
   - notebook-5b5fb594 (Harness Engineering)
-  - skill-improve-codebase-architecture
   - codex-supervisor-session-{{DATE}}
 ---
 

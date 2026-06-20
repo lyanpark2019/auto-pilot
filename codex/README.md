@@ -11,11 +11,10 @@ Never hand-edit `~/.codex/skills/<name>/` for a managed skill — the next sync
 overwrites it. If a hotfix landed there anyway, port it back into the repo first
 (`-d` shows exactly what differs), then sync.
 
-## Managed skills (12)
+## Managed skills (11)
 
 | Skill | Purpose |
 |---|---|
-| `codex-orchestra` | Codex-side conductor mode: Opus/Claude acts as PM + review gate, Codex is the implementation worker (plan → implement → review loop). |
 | `diagnose` | Disciplined diagnosis loop for hard bugs and perf regressions: reproduce → minimize → hypothesize → instrument → fix → regression-test. |
 | `grill-with-docs` | Stress-test a plan against the repo's domain model, `CONTEXT.md`, and ADRs; sharpen terminology and update domain/decision docs inline. |
 | `handoff` | Compact the current conversation into a handoff document so a fresh agent or session can continue the work. |
@@ -42,9 +41,6 @@ overwrites it. If a hotfix landed there anyway, port it back into the repo first
 
 ## Notes
 
-- `migrate-to-codex` carries its upstream Apache-2.0 license (`LICENSE.txt`); ten
-  others carry an upstream attribution file (`LICENSE-upstream.txt`);
-  `codex-orchestra` is self-authored (no upstream license). Keep these files when editing.
-- `codex-orchestra` here is the **Codex-side sibling** of the Claude-side
-  `skills/codex-orchestra/` plugin skill — same workflow, opposite seat. They are
-  intentionally separate documents, not duplicates.
+- `migrate-to-codex` carries its upstream Apache-2.0 license (`LICENSE.txt`); the
+  other ten carry an upstream attribution file (`LICENSE-upstream.txt`). Keep these
+  files when editing.

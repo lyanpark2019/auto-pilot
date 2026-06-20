@@ -35,27 +35,27 @@ def run_case(label: str, subagent_type: str | None, model: str | None,
 
 CASES: list[tuple[str, str | None, str | None, str]] = [
     ("verifier + haiku override", "auto-pilot-claude-reviewer", "haiku", "DENY"),
-    ("verifier + sonnet override", "swarm-verifier", "sonnet", "DENY"),
+    ("verifier + sonnet override", "review-gatekeeper", "sonnet", "DENY"),
     ("verifier + opus override (at tier)", "auto-pilot-codex-reviewer", "opus", "ALLOW"),
     ("verifier + fable override (above tier)", "review-gatekeeper", "fable", "ALLOW"),
     ("plugin-prefixed verifier + haiku", "auto-pilot:tech-critic-lead", "haiku", "DENY"),
     ("non-verifier + haiku", "auto-pilot-worker", "haiku", "ALLOW"),
     ("verifier, no model override", "auto-pilot-claude-reviewer", None, "ALLOW"),
-    ("verifier + unknown model token", "swarm-verifier", "gpt-5.5", "ALLOW"),
-    ("whitespace strip: ' swarm-verifier ' + ' haiku '", " swarm-verifier ", " haiku ", "DENY"),
+    ("verifier + unknown model token", "review-gatekeeper", "gpt-5.5", "ALLOW"),
+    ("whitespace strip: ' review-gatekeeper ' + ' haiku '", " review-gatekeeper ", " haiku ", "DENY"),
     # Case-sensitivity hardening (FIX 1): uppercase model token must DENY.
-    ("uppercase model HAIKU -> DENY", "swarm-verifier", "HAIKU", "DENY"),
-    ("mixed-case model Haiku -> DENY", "swarm-verifier", "Haiku", "DENY"),
+    ("uppercase model HAIKU -> DENY", "review-gatekeeper", "HAIKU", "DENY"),
+    ("mixed-case model Haiku -> DENY", "review-gatekeeper", "Haiku", "DENY"),
     ("uppercase model SONNET -> DENY", "auto-pilot-claude-reviewer", "SONNET", "DENY"),
     # Case-sensitivity hardening (FIX 1): uppercase agent name must DENY.
-    ("uppercase agent SWARM-VERIFIER + haiku -> DENY",
-     "auto-pilot:SWARM-VERIFIER", "haiku", "DENY"),
-    ("mixed-case agent Swarm-Verifier + haiku -> DENY",
-     "auto-pilot:Swarm-Verifier", "haiku", "DENY"),
+    ("uppercase agent REVIEW-GATEKEEPER + haiku -> DENY",
+     "auto-pilot:REVIEW-GATEKEEPER", "haiku", "DENY"),
+    ("mixed-case agent Review-Gatekeeper + haiku -> DENY",
+     "auto-pilot:Review-Gatekeeper", "haiku", "DENY"),
     # Uppercase model on non-verifier still ALLOW (no regression).
     ("non-verifier + uppercase HAIKU -> ALLOW", "auto-pilot-worker", "HAIKU", "ALLOW"),
     # Uppercase model at-tier (OPUS) must still ALLOW.
-    ("uppercase model OPUS at tier -> ALLOW", "swarm-verifier", "OPUS", "ALLOW"),
+    ("uppercase model OPUS at tier -> ALLOW", "review-gatekeeper", "OPUS", "ALLOW"),
     # Uppercase model above-tier (FABLE) must still ALLOW.
     ("uppercase model FABLE above tier -> ALLOW", "review-gatekeeper", "FABLE", "ALLOW"),
 ]
@@ -73,8 +73,8 @@ def _make_payload(subagent_type: str, model: str) -> str:
 
 def run_concurrency_case() -> bool:
     """8 simultaneous hook invocations must ALL return deny (rc=0)."""
-    label = "concurrency: 8 parallel swarm-verifier+haiku invocations"
-    payload = _make_payload("swarm-verifier", "haiku")
+    label = "concurrency: 8 parallel review-gatekeeper+haiku invocations"
+    payload = _make_payload("review-gatekeeper", "haiku")
     env = os.environ.copy()
     env["CLAUDE_PLUGIN_ROOT"] = str(Path(__file__).resolve().parent.parent)
     procs: list[subprocess.Popen[str]] = [
@@ -138,11 +138,11 @@ def run_temp_hygiene_case() -> bool:
 
 def run_big_payload_case() -> bool:
     """512KiB filler in tool_input.prompt must not crash stdin path; must DENY."""
-    label = "big payload (512KiB prompt field): swarm-verifier+haiku"
+    label = "big payload (512KiB prompt field): review-gatekeeper+haiku"
     tool_input: dict[str, object] = {
         "prompt": "A" * (512 * 1024),
         "description": "x",
-        "subagent_type": "swarm-verifier",
+        "subagent_type": "review-gatekeeper",
         "model": "haiku",
     }
     payload = json.dumps({"tool_name": "Task", "tool_input": tool_input})
@@ -227,7 +227,7 @@ def _make_temp_root(
             "auto-pilot-codex-reviewer",
             "auto-pilot-claude-reviewer",
             "review-gatekeeper",
-            "swarm-verifier",
+            "review-gatekeeper",
             "tech-critic-lead",
         ]
         yaml_parts.append("verifier_agents:")

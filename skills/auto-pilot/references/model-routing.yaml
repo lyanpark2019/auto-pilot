@@ -41,7 +41,6 @@ verifier_agents:
   - auto-pilot-codex-reviewer
   - auto-pilot-claude-reviewer
   - review-gatekeeper
-  - swarm-verifier
   - tech-critic-lead
 
 codex:

@@ -58,7 +58,7 @@ read-only, verdict returned straight to the PM.
 - Dual (codex + cold Claude, adversarial): risk-high merge gates, phase-end
   milestones, or the user's explicit deep-review keyword.
 - Reuse existing agents — `feature-dev:code-reviewer`, `codex:codex-rescue`,
-  `auto-pilot:swarm-verifier`, `auto-pilot:review-gatekeeper`, `goal-judge`.
+  `auto-pilot:review-gatekeeper`, `goal-judge`.
   Do not author new verifier agents; this doc only assigns model tiers.
 - Enforced: `hooks/verifier-tier-gate.sh` denies a verifier Task dispatch whose
   explicit `model:` override is below `verifier_min_tier`

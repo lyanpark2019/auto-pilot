@@ -103,7 +103,7 @@ You are a Codex worker invoked via the harness supervisor pattern.
 
 MUST read first:
   - ${doctrine_rel}  (15 principles + 12 sources)
-  - ~/.claude/skills/improve-codebase-architecture/SKILL.md  (Module / Interface / Seam / Depth / Leverage / Locality)
+  - apply the Module / Interface / Seam / Depth / Leverage / Locality lens to every boundary
 
 Ticket:
 $(cat "$ticket")

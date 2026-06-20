@@ -36,7 +36,7 @@ REQUIRED_FRONTMATTER = ("type", "topic", "source_commit", "manual_edit")
 _DEFAULT_PREFIXES = (
     "app", "src", "lib", "libs", "scripts", "hooks", "skills", "agents", "commands",
     "packages", "cmd", "internal", "services", "core", "api",
-    "vault", "swarm", "deploy", "codex", "dashboard",
+    "vault", "deploy", "codex", "dashboard",
 )
 _ENV_PREFIXES = tuple(
     p.strip().strip("/")

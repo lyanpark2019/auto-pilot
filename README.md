@@ -1,6 +1,6 @@
 # auto-pilot
 
-Unified automated AI coding system for Claude Code. Core: a self-driving development loop — an operator-selected main-session PM + Sonnet 4.6 (1M) parallel workers + Codex/Claude dual adversarial review + phase verify gates, full auto, no confirms. Around it: quality lift, harness bootstrap, graphify-native doc management (flagship), a swarm tmux parallel backend, a SHA-pin deploy standard, codex conductor mode, and a vault export layer.
+Unified automated AI coding system for Claude Code. Core: a self-driving development loop — an operator-selected main-session PM + Sonnet 4.6 (1M) parallel workers + Codex/Claude dual adversarial review + phase verify gates, full auto, no confirms. Around it: quality lift, harness bootstrap, graphify-native doc management (flagship), a SHA-pin deploy standard, and a vault export layer.
 
 Built from `/insights` friction analysis on 381 sessions — every recurring failure mode is hardcoded as a guard.
 
@@ -13,12 +13,10 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 | Task | Entry |
 |---|---|
 | Autonomous spec-driven build (phased, in-session) | `/auto-pilot` — true headless: `/auto-pilot-server` |
-| Long-running parallel execution / tmux multi-worker pool / mixed Claude+Codex worker pools | `swarm` skill (`/auto-pilot:swarm <init\|start\|status\|stop\|ticket\|bench>` — bench absorbed swarm-bench 2026-06-07); swarm assets live under `swarm/`, agents `swarm-{explorer,monitor,verifier}` at top-level `agents/` |
 | PR / branch dual review (Codex + cold Claude, loop until both APPROVE) | `adversarial-review-loop` (branch mode) |
 | Codebase quality score + fix loop | `adversarial-review-loop` (codebase mode) |
 | Full quality lifecycle: lift → adversarial bug-hunt → harness-doc sync → autonomous merge | `adversarial-review-loop --lifecycle` (absorbed pm-quality-harness-loop 2026-06-07) |
 | Dead code / duplicates / residue removal | `residue-audit` |
-| Architecture improvement / module boundaries | `improve-codebase-architecture` |
 | Harness bootstrap (CLAUDE.md, hooks, MCP, agents, drift guards) | `setup-harness` (+ `/setup-claude-md`; `/harness` and `/harness-ops` deleted 2026-06-07 — use `bootstrap.sh`/`harness-loop.sh` directly) |
 | Docs rotten / 문서 개판 / rebuild docs from code | `doc-management` (REBUILD mode) |
 | Code changed, docs behind / doc sync / 문서 동기화 | `doc-management` (MAINTAIN mode — `skills/doc-management/scripts/check_design_doc_freshness.py` STALE feed) |
@@ -26,18 +24,16 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 | Vault export to Obsidian / NotebookLM / bases / canvas / dashboard | `/vault-build` (+`--restructure`/`--resume`) · `/vault-score` (+`--audit`/`--content-verify`/`--drift`) · `/vault-dashboard` · `/vault-selftest`. Vault/Obsidian/NotebookLM export is **NOT** doc-management. |
 | Vault-internal drift (exported vault vs source repo) | `/vault-score --drift` — repo code↔doc drift belongs to `doc-management` (AUDIT mode) instead |
 | CI/CD setup / SHA-based deploy / rollback standard | `sha-deploy-standard` skill + `/sha-deploy-init` command — templates at `deploy/templates/` |
-| Conductor mode (Codex writes code, Claude plans/reviews/gates) | `codex-orchestra` — opt-in via `.codex-conductor` repo-root marker, enforced by `hooks/codex-conductor-guard.py` (registered in `hooks/hooks.json`) |
 | Goal intake / long-horizon task discovery receipts | `goal-scout` / `goal-judge` / `goal-worker` global `~/.claude` agents (dispatched by plain name from the external goalbuddy skill; not bundled in this plugin) |
 | Post-run retrospective → project memory | `retro` agent — PM may dispatch at phase end; appends evidence-cited lessons to the project's `.claude/insights.md` |
 
 **Retired / deleted (do not route here):**
 
 - `codebase-perfection-loop` — deleted (rubric provenance distilled into `quality-eval`; directory removed) → use `adversarial-review-loop` (codebase or --lifecycle mode)
-- `pm-quality-harness-loop` / `swarm-bench` / `diagnosing-{llm-output-leaks,stale-runtime}` / `code-perfector` / `eval-run` — absorbed/retired 2026-06-07 → `adversarial-review-loop --lifecycle`, `swarm bench`, `diagnosing`, `residue-audit`, `/auto-pilot eval`
+- `pm-quality-harness-loop` / `code-perfector` / `eval-run` — absorbed/retired 2026-06-07 → `adversarial-review-loop --lifecycle`, `residue-audit`, `/auto-pilot eval`; `swarm` / `codex-orchestra` / `diagnosing` / `improve-codebase-architecture` removed 2026-06-20
 - `llm-wiki-architect` — deleted (per-module hand-maintained wiki = rot machine)
 - `doc-drift-audit` + `graphify-doc-rebuild` + interim `doc-sync` — absorbed into `doc-management` (AUDIT / REBUILD / MAINTAIN modes); old trigger phrases preserved in its description
 - claim-ledger pattern — NOT adopted (hand-maintained verification JSON rots like any hand-maintained doc); `doc-management` SHA-freshness + AUDIT replace it
-- `autopilot-swarm` skill name — renamed `swarm` (legacy trigger phrases kept in the skill description)
 
 `doc-management` bundles its L2 mechanical guard (`skills/doc-management/scripts/check-doc-reference-integrity.mjs`) and L3 freshness script (`skills/doc-management/scripts/check_design_doc_freshness.py`) as copy-into-repo assets.
 

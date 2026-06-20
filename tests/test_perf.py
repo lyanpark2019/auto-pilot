@@ -127,7 +127,7 @@ def test_pivot_check_within_budget(benchmark) -> None:
         "skills/adversarial-review-loop/SKILL.md",
         "agents/worker.md",
         "agents/pm-orchestrator.md",
-        "swarm/scripts/ticket_worker.py",
+        "scripts/headless-loop.py",
         ".claude-plugin/plugin.json",
         "hooks/gh-auth-preflight.sh",
         "scripts/_worktree.py",

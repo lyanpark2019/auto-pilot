@@ -33,6 +33,15 @@ RETIRED_NAMES = [
     "codex-adversarial",
     "security-reviewer",
     "tdd-enforcer",
+    # consolidation-3 (2026-06-20): dead-feature removal
+    "swarm-explorer",
+    "swarm-monitor",
+    "swarm-verifier",
+    "codex-orchestra",
+    "improve-codebase-architecture",
+    "/swarm",
+    "/codex-orchestra",
+    "/diagnosing",
 ]
 
 # A line mentioning a retired name is OK iff it explicitly marks retirement

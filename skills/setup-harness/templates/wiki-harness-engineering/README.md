@@ -53,7 +53,7 @@ Worker 02-draft MUST emit these sections in order:
 Mandatory gates (PM enforces, ticket JSON specifies):
 - Every paragraph has `path:line` citation
 - Deletion test passes: "deleting this paragraph would lose info that callers/users need"
-- `Module / Interface / Seam / Depth / Leverage / Locality` vocabulary used per `improve-codebase-architecture` skill
+- `Module / Interface / Seam / Depth / Leverage / Locality` boundary-analysis vocabulary
 
 ## Section spec for `index.md`
 
