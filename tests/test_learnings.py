@@ -629,3 +629,9 @@ def test_miner_bump_to_resolver_end_to_end(tmp_path):
     content = result.read_text()
     assert "# Injected learnings" in content
     assert "worker skipped verify gate" in content
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — ledger_dir_override on resolve_learnings (codex P1-5)
+# ---------------------------------------------------------------------------
+

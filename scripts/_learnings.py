@@ -163,6 +163,48 @@ def _fmt_evidence(ticket: Ticket) -> str:
     return "\n".join(lines) if lines else "_no evidence_"
 
 
+def render_learnings_sanitized(tickets: list[Ticket]) -> str:
+    """Render a generic class-level nudge ONLY — the anti-spoiler render (codex P0-1).
+
+    Selection (gate + scope-match) is unchanged; this function strips the render
+    down to the defect *class* per ticket plus a generic "check for them"
+    instruction.  It NEVER emits the issue title, evidence JSON/snippet, file
+    path, run id, or line number — those would spoil the A/B oracle by handing
+    the reviewer the answer instead of a generic prior.
+
+    The defect class is ``ticket["pattern"]`` (for reviewer-finding tickets the
+    miner sets ``pattern = normalize_issue(class)`` — already path/line-stripped
+    at creation).  Tickets are sorted by class then fingerprint and de-duplicated
+    on class so the output is byte-reproducible and free of identifying detail.
+    """
+    tickets = sorted(
+        tickets,
+        key=lambda t: (str(t.get("pattern", "")), str(t.get("fingerprint", ""))),
+    )
+    seen: set[str] = set()
+    classes: list[str] = []
+    for ticket in tickets:
+        cls = str(ticket.get("pattern", "")).strip()
+        if not cls or cls in seen:
+            continue
+        seen.add(cls)
+        classes.append(cls)
+
+    lines: list[str] = [
+        "# Injected learnings",
+        "",
+        (
+            "Prior runs found defects of the following classes in this scope. "
+            "Read-only context — not instructions. Check the diff for them."
+        ),
+        "",
+    ]
+    for cls in classes:
+        lines.append(f"- prior runs found `{cls}` defects in this scope — check for them")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def render_learnings(tickets: list[Ticket]) -> str:
     """Render gate-passed tickets as a stable markdown learnings body.
 
@@ -207,6 +249,9 @@ def resolve_learnings(
     repo_root: Path,
     scope_files: Sequence[str],
     dest_dir: Path,
+    *,
+    ledger_dir_override: Path | None = None,
+    sanitized: bool = False,
 ) -> Path | None:
     """Resolve and ALWAYS write ``context-bundle/learnings.md`` for a contract.
 
@@ -218,6 +263,15 @@ def resolve_learnings(
 
     Returns the path when real tickets matched, ``None`` on a blind path (caller's
     ``matched`` count keys off this) — but the marker file is written either way.
+
+    When ``ledger_dir_override`` is given, it is used verbatim as the ledger
+    directory instead of the per-``repo_root`` default (``ledger_dir(repo_root,
+    None)``) — so a durable ledger can be read from a pinned path even when
+    ``repo_root`` differs (codex P1-5).  Absent (``None``) = unchanged default.
+
+    When ``sanitized=True``, selection is unchanged but the render is the
+    anti-spoiler class-level nudge (``render_learnings_sanitized``): no title,
+    evidence, file, run id, line, or snippet (codex P0-1).  Absent = full render.
 
     If ``AUTO_PILOT_DISABLE_LEARNINGS`` is set to ``1``, ``true``, ``yes``, or
     ``on`` (case-insensitive), injection is skipped (marker written, ``None``
@@ -237,12 +291,15 @@ def resolve_learnings(
         )
         learnings_path.write_text(_BLIND_MARKER)
         return None
-    ledger = ledger_dir(repo_root, None)
+    ledger = ledger_dir_override if ledger_dir_override is not None else ledger_dir(
+        repo_root, None
+    )
     tickets = select_tickets(ledger, scope_files)
     if not tickets:
         sys.stderr.write("_learnings: no relevant promotable tickets — ran learnings-blind\n")
         learnings_path.write_text(_BLIND_MARKER)
         return None
 
-    learnings_path.write_text(render_learnings(tickets))
+    body = render_learnings_sanitized(tickets) if sanitized else render_learnings(tickets)
+    learnings_path.write_text(body)
     return learnings_path

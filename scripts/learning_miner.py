@@ -289,12 +289,20 @@ def run_miner(
     commit_to: Path | None,
     now: datetime,
     dry_run: bool,
+    run_id: str | None = None,
 ) -> dict[str, object]:
     """Scan inputs, bump ledger, collect tickets, compute verdict.
 
     Returns {'verdict', 'candidates', 'promotable_count', 'by_asset'}.
+
+    ``run_id`` overrides the state.json lookup when provided non-empty. It
+    satisfies the non-dry-run gate without a pre-written
+    ``.planning/auto-pilot/state.json`` (codex P0-2). When None/empty the
+    behavior is byte-identical to before: run_id derives from state.json and
+    an empty state still forces dry-run.
     """
-    run_id = current_run_id(repo_root)
+    if run_id is None or not run_id.strip():
+        run_id = current_run_id(repo_root)
     observations: list[Observation] = []
     observations.extend(scan_reviewer_findings(repo_root, run_id))
     observations.extend(scan_doom_loops(repo_root, run_id))
@@ -353,6 +361,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="opt-in: write ledger to this tracked path instead of ~/.claude/projects/",
     )
     parser.add_argument(
+        "--run-id",
+        default=None,
+        metavar="ID",
+        help=(
+            "run_id for the non-dry-run gate; overrides "
+            ".planning/auto-pilot/state.json (codex P0-2). Absent → state.json "
+            "lookup (empty state still dry-runs)."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="compute projected counts; write nothing",
@@ -379,7 +397,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     commit_to = Path(args.commit_to).resolve() if args.commit_to else None
     now = datetime.now(timezone.utc)
 
-    result = run_miner(repo_root, commit_to=commit_to, now=now, dry_run=args.dry_run)
+    result = run_miner(
+        repo_root,
+        commit_to=commit_to,
+        now=now,
+        dry_run=args.dry_run,
+        run_id=args.run_id,
+    )
 
     verdict_line = json.dumps(result, sort_keys=False)
     if not args.json_only:

@@ -269,3 +269,136 @@ def test_register_cli_subparsers_scope_repeatable():
     ])
 
     assert args.scope_files == ["scripts/", "hooks/"]
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — --ledger-dir override (codex P1-5)
+# ---------------------------------------------------------------------------
+
+def test_register_cli_subparsers_ledger_dir_and_sanitized_defaults():
+    """--ledger-dir defaults to None and --sanitized defaults to False."""
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd")
+    cli.register_cli_subparsers(sub)
+
+    args = parser.parse_args([
+        "resolve-learnings",
+        "--scope", "scripts/",
+        "--dest-dir", "/tmp/dest",
+    ])
+
+    assert args.ledger_dir is None
+    assert args.sanitized is False
+
+
+def test_ledger_dir_override_selects_seeded_ticket(tmp_path, capsys):
+    """A ticket seeded in a temp ledger dir is selected with --ledger-dir <tmp>.
+
+    The override is honoured WITHOUT mocking ledger_dir — proving it genuinely
+    wins over the per-repo-root default.
+    """
+    tmp_ledger = tmp_path / "durable-ledger"
+    ticket = _valid_ticket(
+        fingerprint="a" * 64,
+        state="candidate",
+        distinct_runs=2,  # gate-passed
+        source_path="scripts/_contract.py",
+    )
+    _write_ticket(tmp_ledger, ticket)
+
+    dest_dir = tmp_path / "bundle-ledgerdir"
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd")
+    cli.register_cli_subparsers(sub)
+    args = parser.parse_args([
+        "resolve-learnings",
+        "--repo-root", str(tmp_path / "unrelated-repo"),
+        "--scope", "scripts/",
+        "--dest-dir", str(dest_dir),
+        "--ledger-dir", str(tmp_ledger),
+    ])
+
+    rc = cli.cmd_resolve_learnings(args)
+    output = json.loads(capsys.readouterr().out.strip())
+
+    assert rc == 0
+    assert output["matched"] == 1, "override ledger ticket must be selected"
+    assert output["learnings_path"] is not None
+
+
+def test_default_ledger_does_not_see_tmp_ticket(tmp_path, capsys):
+    """Without --ledger-dir, the seeded tmp ticket is NOT visible.
+
+    The default ledger (mocked to an empty dir to stay hermetic) is read, so the
+    tmp ledger's ticket is invisible — proving the override is what makes it
+    visible above, not an ambient default.
+    """
+    tmp_ledger = tmp_path / "durable-ledger"
+    ticket = _valid_ticket(
+        fingerprint="a" * 64,
+        state="candidate",
+        distinct_runs=2,
+        source_path="scripts/_contract.py",
+    )
+    _write_ticket(tmp_ledger, ticket)
+
+    empty_default = tmp_path / "empty-default-ledger"  # absent → no tickets
+    dest_dir = tmp_path / "bundle-default"
+    args = _make_args(scope_files=["scripts/"], dest_dir=str(dest_dir))
+    args.ledger_dir = None
+    args.sanitized = False
+
+    with mock.patch("_learnings.ledger_dir", return_value=empty_default):
+        rc = cli.cmd_resolve_learnings(args)
+
+    output = json.loads(capsys.readouterr().out.strip())
+
+    assert rc == 0
+    assert output["matched"] == 0, "tmp ticket must be invisible without --ledger-dir"
+    assert output["learnings_path"] is None
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — --sanitized render mode (codex P0-1, anti-spoiler) via the CLI
+# ---------------------------------------------------------------------------
+
+def test_sanitized_cli_strips_leaky_fields(tmp_path, capsys):
+    """resolve-learnings --sanitized keeps selection but renders no leaky fields."""
+    tmp_ledger = tmp_path / "ledger"
+    ticket = _valid_ticket(
+        fingerprint="a" * 64,
+        state="candidate",
+        distinct_runs=2,
+        source_path="scripts/_contract.py",
+        run_id="run-leaky-7",
+        snippet="off-by-one at scripts/_contract.py:142 in write_contract",
+    )
+    ticket["pattern"] = "off-by-one"
+    _write_ticket(tmp_ledger, ticket)
+
+    dest_dir = tmp_path / "bundle-sani"
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd")
+    cli.register_cli_subparsers(sub)
+    args = parser.parse_args([
+        "resolve-learnings",
+        "--repo-root", str(tmp_path / "unrelated-repo"),
+        "--scope", "scripts/",
+        "--dest-dir", str(dest_dir),
+        "--ledger-dir", str(tmp_ledger),
+        "--sanitized",
+    ])
+
+    rc = cli.cmd_resolve_learnings(args)
+    output = json.loads(capsys.readouterr().out.strip())
+    assert rc == 0
+    assert output["matched"] == 1
+
+    body = Path(output["learnings_path"]).read_text()
+    assert "off-by-one" in body  # the class survives
+    assert "check for them" in body  # generic instruction
+    # NONE of the leaky fields:
+    assert "run-leaky-7" not in body
+    assert "write_contract" not in body
+    assert "scripts/_contract.py" not in body
+    assert "142" not in body

@@ -241,6 +241,87 @@ def test_fail_on_exit_code_two_when_promotable(
     assert lm.main(["--repo-root", str(root), "--fail-on", "promotable"]) == 2
 
 
+# ---------------------------------------------------------------------------
+# Task 3 (codex P0-2): --run-id satisfies the non-dry-run gate WITHOUT a
+# pre-written state.json; absent flag stays byte-identical (still dry-runs on
+# empty state).
+# ---------------------------------------------------------------------------
+
+
+def test_run_id_flag_persists_without_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """run_miner(run_id=X) over a JSONL whose lines carry X writes a PHYSICAL
+    ledger file even with NO state.json (the gate is satisfied by the param)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    # No state.json at all. Two distinct per-line run_ids of the SAME finding
+    # → distinct_runs must reach 2 and the ledger file must physically exist.
+    base = {"file": "a.py", "issue": "missing token check", "candidate_asset": "hook"}
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({**base, "run_id": "rA"}) + "\n"
+        + json.dumps({**base, "run_id": "rB"}) + "\n"
+    )
+    assert not (d / "state.json").exists()
+
+    res = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False, run_id="rA")
+
+    led = lm.imp.ledger_dir(root, None)
+    assert led.exists(), "ledger dir must be created when --run-id satisfies the gate"
+    tickets = _ledger_tickets(tmp_path / "home", root)
+    assert len(tickets) == 1, f"expected 1 physical ledger file, got {len(tickets)}"
+    assert tickets[0]["distinct_runs"] == 2, (
+        f"distinct_runs must reflect the two line run_ids, got {tickets[0]['distinct_runs']}"
+    )
+    assert res["verdict"] == "promotable"
+
+
+def test_run_id_flag_via_cli_persists_without_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The CLI --run-id path (main) creates a physical ledger file with no state.json."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    base = {"file": "a.py", "issue": "missing token check", "candidate_asset": "hook"}
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({**base, "run_id": "rA"}) + "\n"
+        + json.dumps({**base, "run_id": "rB"}) + "\n"
+    )
+    rc = lm.main(["--repo-root", str(root), "--run-id", "rA", "--fail-on", "promotable"])
+    assert rc == 2  # promotable
+    led = lm.imp.ledger_dir(root, None)
+    assert led.exists()
+
+
+def test_no_run_id_no_state_stays_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression-lock the gate: WITHOUT --run-id and WITHOUT state.json the same
+    input stays dry-run — NO physical ledger file is written."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    root = tmp_path / "repo"
+    d = root / ".planning" / "auto-pilot"
+    d.mkdir(parents=True)
+    base = {"file": "a.py", "issue": "missing token check", "candidate_asset": "hook"}
+    (d / "critic-rejections-phase-1.jsonl").write_text(
+        json.dumps({**base, "run_id": "rA"}) + "\n"
+        + json.dumps({**base, "run_id": "rB"}) + "\n"
+    )
+    assert not (d / "state.json").exists()
+
+    res = lm.run_miner(root, commit_to=None, now=NOW, dry_run=False)
+
+    led = lm.imp.ledger_dir(root, None)
+    assert not led.exists(), "empty state with no --run-id must stay dry-run (no ledger file)"
+    # Projected verdict still computes (dry-run path: one observation per line),
+    # but nothing is persisted to disk.
+    assert res["candidates"] == 2
+
+
 def test_valid_asset_types_matches_schema_enum() -> None:
     """VALID_ASSET_TYPES must mirror the schema candidate_asset enum (no drift)."""
     schema = json.loads(lm.imp.SCHEMA_PATH.read_text())

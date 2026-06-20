@@ -34,6 +34,20 @@ def register_cli_subparsers(sub: Any) -> None:
         "--dest-dir", required=True, dest="dest_dir",
         help="contract bundle directory; learnings.md written to <dest-dir>/context-bundle/",
     )
+    p.add_argument(
+        "--ledger-dir", default=None, dest="ledger_dir", metavar="PATH",
+        help=(
+            "override the ledger directory (default: per-repo-root home ledger). "
+            "Reads the durable ledger from a pinned path regardless of --repo-root."
+        ),
+    )
+    p.add_argument(
+        "--sanitized", action="store_true", dest="sanitized",
+        help=(
+            "render a generic class-level nudge only — no title/evidence/file/"
+            "run-id/line/snippet (anti-spoiler render for A/B oracle)."
+        ),
+    )
     p.set_defaults(func=cmd_resolve_learnings)
 
 
@@ -49,9 +63,15 @@ def cmd_resolve_learnings(args: Any) -> int:
     repo_root = Path(args.repo_root).resolve()
     scope_files: list[str] = list(args.scope_files)
     dest_dir = Path(args.dest_dir)
+    _ledger_arg = getattr(args, "ledger_dir", None)
+    ledger_override = Path(_ledger_arg).resolve() if _ledger_arg else None
+    sanitized: bool = bool(getattr(args, "sanitized", False))
 
     try:
-        result_path = _learnings.resolve_learnings(repo_root, scope_files, dest_dir)
+        result_path = _learnings.resolve_learnings(
+            repo_root, scope_files, dest_dir,
+            ledger_dir_override=ledger_override, sanitized=sanitized,
+        )
     except OSError as exc:
         # I/O failure writing the bundle (e.g. a non-directory dest-dir parent) must
         # not crash dispatch — injection is additive, so degrade to learnings-blind.
