@@ -1,0 +1,141 @@
+name: xmodel-review
+description: |
+  Cross-model adversarial code/design review. TWO independent reviewers see the SAME diff —
+  one Claude, one Codex — each emitting a self-identified APPROVE/REJECT verdict with findings.
+  A deterministic merge node prints both sets side by side and an overall verdict (REJECT if
+  EITHER rejects). The value is cross-MODEL DIVERSITY: a second model catches blind spots the
+  first misses — strongest on HARD reasoning (plans, designs, subtle/complex diffs), ~0 on easy
+  code where a single strong model already saturates.
+  Use when: "cross-model review", "adversarial review", "second opinion", "review this plan".
+
+provider: claude
+worktree:
+  enabled: false
+mutates_checkout: false
+tags: [review, cross-model]
+
+nodes:
+  - id: capture-diff
+    bash: |
+      set -euo pipefail
+      # Review the working-tree change: staged + unstaged vs HEAD. `git add -N` makes new
+      # (untracked) files visible to `git diff HEAD` without staging their content, so an
+      # added file is reviewed too. Falls back to the last commit when the tree is clean.
+      git add -N . >/dev/null 2>&1 || true
+      DIFF=$(git diff HEAD || true)
+      if [ -z "$DIFF" ]; then DIFF=$(git show --no-color --format=fuller HEAD || true); fi
+      printf '%s\n' "$DIFF" > "$ARTIFACTS_DIR/diff.patch"
+      BYTES=$(wc -c < "$ARTIFACTS_DIR/diff.patch" | tr -d ' ')
+      echo "captured ${BYTES} bytes of diff" >&2
+      printf '{"bytes": %s}\n' "$BYTES"
+    timeout: 30000
+
+  - id: review-claude
+    provider: claude
+    context: fresh
+    allowed_tools: [Read]
+    output_type: review-json
+    depends_on: [capture-diff]
+    prompt: |
+      You are a strict, adversarial reviewer. Be skeptical; default to REJECT when uncertain.
+      Review ONLY the change in this file — read it first:
+
+        $ARTIFACTS_DIR/diff.patch
+
+      If it is code, hunt for correctness bugs, security issues, broken edge cases, race
+      conditions, and silent failures. If it is a plan/design document, hunt for design-level
+      flaws: concurrency/lost-update hazards, unhandled failure modes, missing rollback,
+      unvalidated assumptions, spec non-compliance. Do not praise. Report only real defects with
+      a severity. APPROVE only if you found no P0/P1 defect. Set `reviewer` to exactly: claude
+    output_format:
+      type: object
+      properties:
+        reviewer: {type: string}
+        verdict: {type: string, enum: [APPROVE, REJECT]}
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity: {type: string, enum: [P0, P1, P2]}
+              title: {type: string}
+              detail: {type: string}
+            required: [severity, title, detail]
+      required: [reviewer, verdict, findings]
+
+  - id: review-codex
+    provider: codex
+    context: fresh
+    output_type: review-json
+    depends_on: [capture-diff]
+    prompt: |
+      You are a strict, adversarial reviewer. Be skeptical; default to REJECT when uncertain.
+      Review ONLY the change in this file — read it first:
+
+        $ARTIFACTS_DIR/diff.patch
+
+      If it is code, hunt for correctness bugs, security issues, broken edge cases, race
+      conditions, and silent failures. If it is a plan/design document, hunt for design-level
+      flaws: concurrency/lost-update hazards, unhandled failure modes, missing rollback,
+      unvalidated assumptions, spec non-compliance. Do not praise. Report only real defects with
+      a severity. APPROVE only if you found no P0/P1 defect. Set `reviewer` to exactly: codex
+    output_format:
+      type: object
+      properties:
+        reviewer: {type: string}
+        verdict: {type: string, enum: [APPROVE, REJECT]}
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity: {type: string, enum: [P0, P1, P2]}
+              title: {type: string}
+              detail: {type: string}
+            required: [severity, title, detail]
+      required: [reviewer, verdict, findings]
+
+  - id: merge
+    depends_on: [review-claude, review-codex]
+    trigger_rule: all_done
+    bash: |
+      set -euo pipefail
+      # Read both persisted reviews (nodes/<id>.md = bare JSON, gated by output_type) and print
+      # a combined report. trigger_rule:all_done so a single reviewer failure still reports the
+      # other. Overall verdict = REJECT if EITHER rejects; a missing/failed reviewer = ABSTAIN.
+      python3 - "$ARTIFACTS_DIR" <<'PY'
+      import json, sys
+      from pathlib import Path
+      adir = Path(sys.argv[1])
+      def load(name):
+          p = adir / "nodes" / f"{name}.md"
+          if not p.exists():
+              return None
+          try:
+              return json.loads(p.read_text())
+          except Exception:
+              return None
+      cl, cx = load("review-claude"), load("review-codex")
+      def line(tag, r):
+          if r is None:
+              return f"{tag:8} ABSTAIN (reviewer produced no parseable verdict)"
+          return f"{tag:8} {r.get('verdict','?')} ({len(r.get('findings',[]))} findings)"
+      print("=== CROSS-MODEL REVIEW ===")
+      print(line("claude", cl)); print(line("codex", cx))
+      print()
+      for tag, r in (("claude", cl), ("codex", cx)):
+          for fnd in (r or {}).get("findings", []):
+              print(f"[{tag} {fnd.get('severity','?')}] {fnd.get('title','')}")
+              print(f"    {fnd.get('detail','')}")
+      verdicts = [r.get("verdict") for r in (cl, cx) if r]
+      overall = "REJECT" if "REJECT" in verdicts else ("APPROVE" if verdicts else "ABSTAIN")
+      print()
+      print(f"OVERALL: {overall}")
+      Path(adir / "merge.json").write_text(json.dumps({
+          "overall": overall,
+          "claude": (cl or {}).get("verdict"),
+          "codex": (cx or {}).get("verdict"),
+      }))
+      PY
+      cat "$ARTIFACTS_DIR/merge.json"
+    timeout: 30000
