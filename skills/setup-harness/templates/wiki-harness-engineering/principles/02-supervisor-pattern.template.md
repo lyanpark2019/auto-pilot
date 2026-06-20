@@ -97,7 +97,7 @@ Calibrate to clean-architecture or DDD boundaries of YOUR codebase. {{PROJECT_NA
   "phase": "01-discover | 02-draft | 03-qa",
   "layer": "<one of 5>",
   "scope_files": ["glob1", "glob2"],
-  "vocabulary_ref": "improve-codebase-architecture SKILL.md",
+  "vocabulary_ref": "Module/Interface/Seam/Depth/Leverage/Locality lens",
   "doctrine_ref": ".planning/harness-rewrite/refs/doctrine.md",
   "deliverable_path": "outbox/worker-N/<ticket_id>.md",
   "format": {"sections": [...], "max_words": 3000, "fact_citation_required": true, "deletion_test": true},

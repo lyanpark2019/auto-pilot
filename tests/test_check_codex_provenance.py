@@ -102,29 +102,6 @@ def test_placeholder_revision_fails(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 4: self-authored allowlist — no license file required
-# ---------------------------------------------------------------------------
-
-
-def test_self_authored_allowlist_ok(tmp_path: Path) -> None:
-    """codex-orchestra with no license file but a valid UPSTREAM.md row → exit 0."""
-    _write(
-        tmp_path / "codex" / "skills" / "codex-orchestra" / "SKILL.md",
-        "# codex-orchestra\n",
-    )
-    _write(
-        tmp_path / "codex" / "UPSTREAM.md",
-        _UPSTREAM_HEADER
-        + "| codex-orchestra | (self-authored) | (self-authored)"
-        " | n/a self-authored | — | (none — self-authored) |\n",
-    )
-    r = _run(tmp_path)
-    assert r.returncode == 0, (
-        f"Expected exit 0 for allowlisted self-authored skill; got: {r.stdout}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Test 5: missing license file on a non-allowlisted skill fails
 # ---------------------------------------------------------------------------
 

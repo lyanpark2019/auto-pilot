@@ -86,7 +86,7 @@ function render() {
   // tree
   const bySub = {};
   D.assets.forEach(a => { (bySub[a.subsystem] = bySub[a.subsystem] || []).push(a); });
-  const order = ['docs-core','docs-vault-export','core-loop','review','quality','harness','swarm','deploy','conductor','diagnostics','goal','other'];
+  const order = ['docs-core','docs-vault-export','core-loop','review','quality','harness','deploy','goal','other'];
   document.getElementById('tree').innerHTML = order.filter(s=>bySub[s]).map(sub => {
     const cards = bySub[sub].map(a => {
       const key = a.type+':'+a.name;

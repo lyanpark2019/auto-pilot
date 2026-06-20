@@ -186,14 +186,6 @@ Paths are repo-root-relative: harness driver `scripts/evals/cli.py`, runner `scr
 | Workers touching files outside their contract | `auto-pilot-claude-reviewer` + `auto-pilot-codex-reviewer` scope-drift check (auto-REJECT on out-of-scope edits) |
 | Phase fails leaving partial commits | `scripts/headless-loop.py` snapshots HEAD pre-phase; on `status=failed` it calls `stash_if_dirty` (non-destructive stash with a recoverable label) — `$ROOT` is intentionally not reset hard so worktree cleanup is the recovery unit (`iter.fail_no_root_reset` event logged) |
 
-## Parallel execution backend
-
-The plugin's swarm subsystem is an alternative execution backend: a persistent tmux multi-worker pool (1 PM pane + 4-10 worker panes, each on its own git worktree, file-based ticket bus under `.planning/autopilot/`). Entry points: `/auto-pilot:swarm <init|start|status|stop|ticket|bench>` (bench absorbed swarm-bench 2026-06-07). Scripts live at `${CLAUDE_PLUGIN_ROOT}/swarm/`.
-
-When to prefer which:
-- **In-session subagents (this skill's default)** — spec-driven phased work in ONE session; PM context carries between phases; review fan-out + verify gates happen inline; ends when the spec ends.
-- **Swarm** — long-running or open-ended goals that should outlive this session, mixed Claude+Codex worker pools, or when you want workers surviving session restarts and observable in tmux. Swarm schedules by ticket scores/ledger, not by spec phases.
-
 ## handoff (세션 인수인계)
 
 Triggers: `/auto-pilot handoff`, "핸드오프", "세션 넘겨", "다음 세션 준비" — or the `hooks/context-watch.sh` advisory (context budget running low) recommends this command.

@@ -30,15 +30,12 @@ OUT = ROOT / "dashboard" / "data.js"
 SUBSYSTEM_RULES: list[tuple[str, str]] = [
     (r"^doc-management$", "docs-core"),
     (r"^(vault|nbm)", "docs-vault-export"),
-    (r"^(swarm|autopilot-swarm)", "swarm"),
     (r"^(harness|setup-harness|setup-claude-md)", "harness"),
     (r"^(adversarial-review-loop|quality|pm-quality|residue-audit|code-perfector)", "quality"),
     (r"^(auto-pilot|eval-run|worker$|pm-orchestrator$|retro$)", "core-loop"),
     (r"(reviewer|review-gatekeeper|tech-critic|specialist-pool)", "review"),
     (r"^(sha-deploy|deploy)", "deploy"),
-    (r"^(codex-orchestra)", "conductor"),
     (r"^(goal-)", "goal"),
-    (r"^(diagnosing|improve-codebase)", "diagnostics"),
 ]
 
 
@@ -128,9 +125,7 @@ SUBSYSTEM_PILLAR: dict[str, str] = {
     "quality": "core-loop",
     "docs-core": "docs",
     "docs-vault-export": "docs",
-    "diagnostics": "docs",
     "knowledge": "knowledge",
-    "swarm": "core-loop",
     "harness": "safety",
     "deploy": "safety",
     "goal": "core-loop",

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # Skills whose absence of a license file is expected (self-authored).
-_SELF_AUTHORED: frozenset[str] = frozenset({"codex-orchestra"})
+_SELF_AUTHORED: frozenset[str] = frozenset()
 
 # Column index (0-based) of the pinned-revision cell in the UPSTREAM.md table.
 # Table: skill | upstream source URL | upstream license | pinned upstream revision | …

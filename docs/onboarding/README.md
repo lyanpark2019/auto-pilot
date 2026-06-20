@@ -83,7 +83,6 @@ Use `graphify extract . --mode deep` only when you need a full headless semantic
 | Need | Owner |
 |---|---|
 | Build from a phased spec | `/auto-pilot` or `/auto-pilot-server` |
-| Parallel worker pool | `swarm` skill |
 | Branch/diff review | `adversarial-review-loop` branch mode |
 | Whole-codebase score/fix | `adversarial-review-loop` codebase mode |
 | Dead code or residue | `residue-audit` |

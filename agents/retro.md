@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Use this agent for post-run retrospectives after an auto-pilot phase, swarm run, or quality loop completes or aborts. Typical triggers include the PM dispatching it at phase end (after ADVANCE PHASE), a user asking "what went wrong this run" / "retro the last loop" / "why did we loop on that finding", and a post-mortem after a pivot-stop or repeated verify failures. NOT a reviewer — it issues no verdicts, gates nothing, and never blocks the loop. See "When to invoke" in the agent body for worked scenarios.
+description: Use this agent for post-run retrospectives after an auto-pilot phase or quality loop completes or aborts. Typical triggers include the PM dispatching it at phase end (after ADVANCE PHASE), a user asking "what went wrong this run" / "retro the last loop" / "why did we loop on that finding", and a post-mortem after a pivot-stop or repeated verify failures. NOT a reviewer — it issues no verdicts, gates nothing, and never blocks the loop. See "When to invoke" in the agent body for worked scenarios.
 model: sonnet
 color: magenta
 tools: ["Read", "Grep", "Glob", "Bash", "Write"]
@@ -41,7 +41,7 @@ Full binding: `skills/auto-pilot/references/project-context-resolution.md §Retr
 
 ## Inputs (read what exists, skip what doesn't)
 
-1. `.planning/*/state.json` — glob for it; auto-pilot runs use `.planning/auto-pilot/state.json` (phases, rounds, `pivot_detector` finding-hash counts), swarm runs use `.planning/autopilot/` (`ledger/`, `scores/`, `logs/`, `config.json`).
+1. `.planning/*/state.json` — glob for it; auto-pilot runs use `.planning/auto-pilot/state.json` (phases, rounds, `pivot_detector` finding-hash counts).
 2. Run artifacts when present: `.planning/auto-pilot/critic-rejections-phase-*.jsonl`, `sandbox-violations.jsonl`, `diffs/phase-*/`, verify logs (`verify-logs/`, `outputs/*/verify.log`), worker/PM logs.
 3. Available transcripts (e.g. paths the PM hands you in the dispatch prompt). If none are provided, work from state + artifacts alone — say so in the report.
 

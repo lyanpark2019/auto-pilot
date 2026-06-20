@@ -7,7 +7,7 @@
 # Project-Context Resolution — 4-step order (read before scanning any repo)
 
 Whenever an agent needs project understanding (PM PLAN ingestion, doc-management
-Phase-0/authoring, retro read-side, swarm-explorer mapping, setup-harness Step 1),
+Phase-0/authoring, retro read-side, setup-harness Step 1),
 resolve in THIS order:
 
 1. **Obsidian vault** `~/Documents/Knowledge/wiki/projects/<repo-slug>/` — read
@@ -33,7 +33,6 @@ retro-worthy event: note it so the knowledge layer grows.
 - `agents/pm-orchestrator.md` — PLAN ingestion
 - `skills/doc-management/SKILL.md` — Phase-0 diagnosis / authoring inputs
 - `agents/retro.md` — read-side (what context existed when the round ran)
-- `agents/swarm-explorer.md` — swarm bootstrap mapping
 - `skills/setup-harness/SKILL.md` Step 1 — project scan
 
 ## Retro write contract (system heart ② — closes the loop)

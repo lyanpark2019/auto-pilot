@@ -21,7 +21,7 @@ The main-session PM dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates ea
 
 The auto-pilot **loop** autonomously drives **spec-based feature / refactor / bugfix work on an EXISTING codebase to merged**. Target = brownfield. Examples: "add OAuth to auth", "refactor payments", "fix these P1 bugs".
 
-The loop is single-mode — **NOT** a greenfield generator and **NOT** a quality-eval loop. The plugin around it bundles other standalone tools (vault automation, doc-management, swarm, harness).
+The loop is single-mode — **NOT** a greenfield generator and **NOT** a quality-eval loop. The plugin around it bundles other standalone tools (vault automation, doc-management, harness).
 
 Why brownfield: every friction guard presupposes existing code — composition-root breakage (`__init__.py` must already exist), SSL cascade, source-first debug (Naver private-bug class), scope-drift REJECT (`scope_files` constrains edits inside an existing tree), worktree + atomic merge to `$ROOT`. Born from 381-session `/insights` friction, all existing-project maintenance accidents.
 
@@ -143,7 +143,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 18 agents · 7 commands · 27 hooks · 12 codex-skills = 75 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 7 skills · 15 agents · 7 commands · 26 hooks · 11 codex-skills = 66 assets total.
 
 ```
 auto-pilot/
@@ -157,29 +157,25 @@ auto-pilot/
 │   ├── quality-eval/                  # P①: 13-dim rubric SoT
 │   ├── residue-audit/                 # P②: semantic dead-code/duplicate audit
 │   ├── sha-deploy-standard/           # P④: SHA-pinned deploy standard
-│   ├── codex-orchestra/               # P①: Claude plans/reviews, Codex implements
-│   ├── swarm/{init,start,status,stop,ticket,bench}/   # P①: parallel execution backend
-│   ├── improve-codebase-architecture/, diagnosing/  # diagnostics (2 modes, merged 2026-06-07)
-│   └── (deleted: codebase-perfection-loop, pm-quality-harness-loop → ARL --lifecycle,
-│        swarm-bench → swarm bench, diagnosing-* pair → diagnosing; 2026-06-07)
-├── agents/  (16 contracts)
+│   └── (removed 2026-06-20: swarm, codex-orchestra, diagnosing, improve-codebase-architecture;
+│        earlier 2026-06-07: codebase-perfection-loop, pm-quality-harness-loop → ARL --lifecycle)
+├── agents/  (15 contracts)
 │   ├── core: pm-orchestrator, worker, retro
 │   ├── review (P①④): auto-pilot-{codex,claude}-reviewer (hardened pair —
 │   │         legacy codex-adversarial/claude-reviewer deleted 2026-06-07),
 │   │         tech-critic-lead, review-gatekeeper (tdd-enforcer + security-reviewer
 │   │         merged 2026-06-07), specialist-pool (code-perfector retired 2026-06-07)
 │   │         (harness-{planner,generator,evaluator} deleted 2026-06-07 — 1:1 duplicate of loop)
-│   ├── swarm: swarm-{explorer,monitor,verifier}
 │   └── vault (P③, 4 merged): vault-pm-orchestrator + vault-{edge,graph,knowledge,structure}-curator
 │       (25 legacy workers removed round-2; goal-* removed → global ~/.claude/agents/)
-├── hooks/  (27 wired, P④; hooks/hooks.json is wiring SoT; + _stdin_contract.py helper = 28 files)
+├── hooks/  (26 wired, P④; hooks/hooks.json is wiring SoT; + _stdin_contract.py helper = 27 files)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
 │   ├── worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
-│   └── guard-destructive.py + codex-conductor-guard.py + test_*.py (self-tests)
+│   └── guard-destructive.py + test_*.py (self-tests)
 ├── schemas/                           # PR1: contract/ticket/review/preflight JSON Schema 2020-12
 ├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers, build_dashboard_data.py
-├── prompts/ + vault/ + swarm/ + codex/  # PM/worker prompts; vault export; parallel backend; codex forks
+├── prompts/ + vault/ + codex/  # PM/worker prompts; vault export; codex forks
 ├── deploy/ + dashboard/ + evals/
 └── docs/
     ├── architecture.md (this file) + master-plan.md + perf-budget.md + 7-phase-template.md
@@ -365,7 +361,7 @@ The contract schema (`schemas/contract.schema.json`, `additionalProperties:false
 
 Authored skills/hooks bundled into this plugin as the canonical home. Key decisions from dual adversarial review:
 - `setup-harness` is a nested plugin (carries its own agents/commands); it does NOT bundle as a skill subtree — that would silently drop 11 components.
-- Only the two decision-guard hooks bundle: `guard-destructive.py` + `codex-conductor-guard.py`. Cleanup hooks excluded (destructive/personal-hardcoded).
+- Only the decision-guard hook bundles: `guard-destructive.py`. Cleanup hooks excluded (destructive/personal-hardcoded).
 - Plugin must validate (`claude plugin validate .`) and be installed before bundling has any observable effect; the installed plugin loads from a version-bucketed cache snapshot.
 - Path fixups in skill bodies use `$SKILL_DIR` self-location or relative paths — NOT `${CLAUDE_PLUGIN_ROOT}` (that var only expands in `hooks.json` command strings and the manifest).
 - Plugin skills are namespaced `auto-pilot:<skill>`. Cross-references within the plugin must be namespace-aware.
@@ -388,7 +384,7 @@ Then: `/auto-pilot start`.
 ## Non-goals
 
 - This is NOT a quality-eval / scoring loop — for that, use `adversarial-review-loop` skill (codebase mode).
-- This is NOT a one-shot review — for that, use `/code-review` or `/codex-orchestra`.
+- This is NOT a one-shot review — for that, use `/code-review`.
 - This is NOT a babysitter for already-merged PRs — for that, use `gh pr` + manual checks.
 
 `auto-pilot` is specifically: "given a spec with phases, drive it to done autonomously."

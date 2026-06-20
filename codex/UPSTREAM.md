@@ -6,7 +6,6 @@ fork is rebased against the upstream.
 
 | skill | upstream source URL | upstream license | pinned upstream revision | date of pin | attribution file in-tree |
 |---|---|---|---|---|---|
-| codex-orchestra | (self-authored — no upstream) | (self-authored) | n/a self-authored | — | (none — self-authored) |
 | diagnose | https://github.com/mattpocock/skills | MIT | 694fa30311e02c2639942308513555e61ee84a6f | 2026-06-13 | codex/skills/diagnose/LICENSE-upstream.txt |
 | grill-with-docs | https://github.com/mattpocock/skills | MIT | 694fa30311e02c2639942308513555e61ee84a6f | 2026-06-13 | codex/skills/grill-with-docs/LICENSE-upstream.txt |
 | handoff | https://github.com/mattpocock/skills | MIT | 694fa30311e02c2639942308513555e61ee84a6f | 2026-06-13 | codex/skills/handoff/LICENSE-upstream.txt |

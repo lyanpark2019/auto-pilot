@@ -54,7 +54,7 @@ _HISTORICAL_RE = re.compile(
     re.IGNORECASE,
 )
 _SOURCE_COMMENT_RE = re.compile(r"^\s*(#|//|/\*|\*)")
-_SOURCE_COMMENT_ROOTS = ("scripts", "hooks", "swarm", "vault")
+_SOURCE_COMMENT_ROOTS = ("scripts", "hooks", "vault")
 _SOURCE_COMMENT_EXTS = frozenset({".py", ".sh", ".mjs", ".js", ".ts"})
 _HOOK_DECL_RE = re.compile(r"\b(?P<num>\d+)\s+(?P<kind>scripts|hooks)\b", re.IGNORECASE)
 _HOOK_REF_RE = re.compile(r"hooks/([\w-]+\.(?:sh|py))")

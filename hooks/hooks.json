@@ -127,16 +127,6 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/codex-conductor-guard.py",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -293,7 +283,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-distill-stop.sh",
-            "description": "Advisory (never blocks): on Stop, if an auto-pilot run is active, write a deterministic session-record stub page into the vault under sessions/ (provenance capture only — distillation delegated to retro/miner)"
+            "description": "Advisory (never blocks): on Stop, if an auto-pilot run is active, write a deterministic session-record stub page into the vault under sessions/ (provenance capture only \u2014 distillation delegated to retro/miner)"
           }
         ]
       }
