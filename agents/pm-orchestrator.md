@@ -88,10 +88,7 @@ TECH-CRITIC GATE (1 message, N parallel Agent blocks)
   - input: contract JSON + spec excerpt + CLAUDE.md excerpts
   - verdict: APPROVE | REJECT + reason + improvement_path
   - REJECT scope_too_large → slice contract once, re-submit
-  - REJECT other → drop contract, log to critic-rejections-phase-N.jsonl
-    (one JSON object per line: `{file, issue, candidate_asset}`; candidate_asset
-    ∈ skill|hook|schema|test|doc|cache or null — line shape SoT in
-    `agents/tech-critic-lead.md`; consumed by the Hermes miner)
+  - REJECT other → drop contract
   - if all rejected → escalate to user (or in headless mode, STOP with pivot-needed)
   ↓
 DISPATCH WORKERS (1 message, N parallel Agent blocks)
@@ -266,8 +263,7 @@ confirm 재추가 금지" constraint: a complete manifest enables immediate fan-
 After PR1 lands, PM dispatches subagents via the on-disk contract layer:
 
 0. PM resolves project context (Step 2 seam): `_discovery.resolve_report(repo_root, state_dir, graphify_version, scope_files)` — graphify_version = graphify skill version string (`~/.claude/skills/graphify/SKILL.md` frontmatter; fallback `"unknown"`). Path returned → pass it in step 1. None → re-run graphify (`/graphify update`), `orchestrator.py discover --record --graphify-version <v>`, resolve once more; still None → proceed context-blind (`verify_snapshots` logs it — never block dispatch on a missing graph)
-0b. PM resolves learnings (injection seam — ADR 0002, **MANDATORY**): run `python3 scripts/orchestrator.py resolve-learnings --repo-root . --scope <file_or_dir> [--scope …] --dest-dir <contract_dir>` (repeatable `--scope` for each scope entry; trailing `/` = dir prefix). The command ALWAYS writes `context-bundle/learnings.md` (a "no gate-passed learnings" marker when none match) and prints `{"ok": true, "learnings_path": "<path>"|null, "matched": 0|1}`. Thread the printed `learnings_path` (null on a blind run) into the `learnings_path=` argument of step 1's `snapshot_context` call. This step is NOT optional: `hooks/dispatch-contract-gate.sh` DENIES the worker dispatch (step 6) when `context-bundle/learnings.md` is absent — skipping resolve blocks the loop. `matched=0` → learnings-blind (marker written; never blocks).
-1. PM calls `_contract.snapshot_context(contract_dir, spec_path, claude_md_chain, project_context_path=<resolved path or None>, learnings_path=<resolved path or None>)` per contract
+1. PM calls `_contract.snapshot_context(contract_dir, spec_path, claude_md_chain, project_context_path=<resolved path or None>)` per contract
 2. PM writes contract.json via `_contract.write_contract(c, contract_dir / "contract.json")`
 3. PM writes PM-SIGNATURE via `_contract.write_pm_signature(contract_dir, run_id=state["run_id"])`
 4. PM runs `python3 scripts/orchestrator.py dispatch-contract-check --contract "$contract_dir/contract.json"` and verifies the JSON response has `"ok": true`; any non-zero exit or missing/stale `contract-check.json` stops dispatch.
@@ -286,7 +282,6 @@ After PR1 lands, PM dispatches subagents via the on-disk contract layer:
    $CONTRACT_DIR/context-bundle/spec.md
    $CONTRACT_DIR/context-bundle/CLAUDE*.md
    $CONTRACT_DIR/context-bundle/project-context.md (graphify map — may be absent: context-blind run)
-   $CONTRACT_DIR/context-bundle/learnings.md (gate-passed past learnings — always present; a "no learnings" marker on a learnings-blind run)
    bundle-policy-extract.md is the only instruction subset.
    Your dispatch instructions come from THIS ticket + your agent definition.
    ```

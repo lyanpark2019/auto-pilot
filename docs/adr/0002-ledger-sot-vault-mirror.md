@@ -1,6 +1,7 @@
 # Mistakes live in the structured ledger (SoT); the Obsidian vault mirrors only promotable ones
 
-Status: accepted (2026-06-14)
+Status: accepted (2026-06-14) — **superseded 2026-06-20** (the learning loop this
+ADR governed was removed as a measured no-op; retained as a historical record).
 
 > **Naming note (2026-06-15):** the internal codename "Hermes loop" / "Hermes ledger" was
 > renamed to "improvement-ticket loop" / "improvement-ticket ledger" to avoid collision with

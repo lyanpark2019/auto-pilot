@@ -20,9 +20,10 @@ Today the deterministic loop either succeeds or hits a TERMINAL state and stops:
   `state["status"]="pivot-needed"` when the same finding repeats `count >= 3`. Terminal.
 - **Broken review-evidence chain** (`scripts/_evidence.py:159,176`): `gate_phase_end`
   returns `("evidence_failed", message)` and the phase never advances. Terminal.
-- **Promotion gate unmet** (`scripts/_promotion.py:142`): `transition` raises
-  `PromotionError("promotion gate unmet: …")` when any `promotion_gate` field is not
-  `True`. Terminal.
+
+> **2026-06-20:** the promotion-gate-unmet give-up point was removed with the
+> learning loop. `promotion-gate-unmet` stays a valid (manually-emittable) enum
+> value but is no longer auto-emitted.
 
 No typed escalation→tier-2-retry path exists for these cases today. inc 3 inserts
 escalation **before** the terminal state so determinism-can't-solve cases get enriched
@@ -58,7 +59,7 @@ tier-2 resolver on top.
 
 ## Phase 1 — emit seam (deterministic, pure, testable) — **IMPLEMENTED**
 
-Wire `_escalation.bump_or_create` at the three tier-1 give-up points. Each call is
+Wire `_escalation.bump_or_create` at the tier-1 give-up points (doom-loop, review-evidence chain). Each call is
 additive — the existing terminal behavior is preserved; escalation is emitted in
 addition to (not instead of) recording the terminal state.
 
@@ -67,7 +68,6 @@ addition to (not instead of) recording the terminal state.
 | Give-up point | File:line | problem_class |
 |---|---|---|
 | doom-loop `count >= 3` | `scripts/orchestrator.py:239` | `doom-loop` |
-| promotion FSM `PromotionError` on unmet gate fields | `scripts/_promotion.py:142` | `promotion-gate-unmet` |
 | review-evidence chain failure | `scripts/_evidence.py:176` | `contract-schema-gap` |
 
 The remaining enum values (`unknown-library`, `unresolved-error`, `enrich-gate-reject`,
@@ -75,7 +75,6 @@ The remaining enum values (`unknown-library`, `unresolved-error`, `enrich-gate-r
 not new gates.
 
 **scope:** `scripts/orchestrator.py` (emit at `cmd_pivot_check` doom-loop path),
-`scripts/_promotion.py` (emit on `PromotionError` in `transition`),
 `scripts/_evidence.py` (emit on `EvidenceError` in `gate_phase_end`),
 `tests/test_escalation_emit.py` (new, fixture-driven).
 
@@ -150,8 +149,7 @@ Output shape (all keys always present):
 - `recovery_rate_pct` (resolved/total*100; 0.0 when total==0)
 - `enrich_attempted`, `enrichment_pages_written`
 
-Mirrors `scripts/measure_learnings_injection.py:32` (rc-0-always, missing-ledger →
-all-zeros) and `scripts/measure_enrich_precision.py:41` (pure measure(list)->dict,
+Mirrors `scripts/measure_enrich_precision.py:41` (pure measure(list)->dict,
 byte-stable sorted sub-dicts, no datetime.now/random).
 
 Tests: `tests/test_measure_escalation.py` (15 cases incl. CLI smoke + missing-ledger).

@@ -45,7 +45,7 @@ Runs `scripts/orchestrator.py` which executes the PM-Worker-Reviewer loop. The P
 1. **READ** state from `.planning/auto-pilot/state.json` + spec + `CLAUDE.md` chain
 2. **DETECT PHASE MODE** — if spec has `## Phase N` headers, use spec's phases; else fall back to 7-phase template (`docs/7-phase-template.md`)
 3. **PLAN** non-overlapping work contracts for current phase (1 contract per parallel worker, max 10)
-4. **TECH-CRITIC GATE** (BEFORE worker dispatch) — fan out `tech-critic-lead` over each contract in parallel. "기능은 비용". Reject contracts that fail evidence/value/scope check. Drop or slice rejected ones. Log rejections to `.planning/auto-pilot/critic-rejections-phase-N.jsonl` (one JSON object per line: `{file, issue, candidate_asset}`, candidate_asset ∈ skill|hook|schema|test|doc|cache or null — shape SoT in `agents/tech-critic-lead.md`; the Hermes miner reads this). The dual reviewers' REJECT `review.json` findings (P0/P1) also land in this JSONL automatically at session end via the `learning-miner-stop` Stop hook (`capture-all-phases`) — those lines additionally carry a provenance `run_id`; no manual `capture-reviews` call is needed.
+4. **TECH-CRITIC GATE** (BEFORE worker dispatch) — fan out `tech-critic-lead` over each contract in parallel. "기능은 비용". Reject contracts that fail evidence/value/scope check. Drop or slice rejected ones (reject-shape SoT in `agents/tech-critic-lead.md`).
 5. **PREFLIGHT** path validation hook fires (kills typo-path failure class)
 6. **DISPATCH WORKERS** — N Sonnet-4.6-1M workers in 1 message (N parallel Agent blocks, `isolation: worktree`)
 7. **REVIEW FAN-OUT** in parallel per worker diff:

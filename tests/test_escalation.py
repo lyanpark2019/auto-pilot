@@ -287,7 +287,7 @@ class TestBumpOrCreate:
 
     def test_ledger_dir_home_store_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("HOME", str(tmp_path))
-        from _improvement import project_slug
+        from _identity import project_slug
         root = tmp_path / "repo"
         root.mkdir()
         led = ledger_dir(root, None)

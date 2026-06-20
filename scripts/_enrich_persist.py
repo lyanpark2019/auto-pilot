@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from _enrich_gate import evaluate
-from _mirror_learnings import resolve_vault
+from _identity import resolve_vault
 
 GENERATOR = "_enrich_persist"
 

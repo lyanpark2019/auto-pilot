@@ -39,9 +39,10 @@ purpose statements (architecture.md's 4-pillar table, CONTEXT.md's old Hermes ti
 Resolved: the **plugin** is a vault-grounded toolkit, the **vault** is the foundation,
 the **loop** stays single-mode. Approach: cherry-pick concepts from ruflo
 (GOAP-style deterministic-plan-then-escalate, retrieval memory) — reject its heavy
-infra (vector DB, consensus, federation) until evidence demands it. First increment =
+infra (vector DB, consensus, federation) until evidence demands it. The first increment was
 the **closed learning loop** (mistakes + conversation history → vault → injected back
-at dispatch); see `docs/specs/2026-06-14-closed-learning-loop.md`.
+at dispatch); its class-nudge injection was **removed 2026-06-20** as a measured no-op
+(see `docs/specs/2026-06-14-closed-learning-loop.md`, retained as a historical record).
 
 Increments 2 & 3 decisions are locked but not yet phase-specced (designed after
 increment 1 produces data) — see `docs/adr/0003-gated-ondemand-enrich-two-tier-escalation.md`:

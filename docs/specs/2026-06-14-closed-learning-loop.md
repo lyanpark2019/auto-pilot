@@ -12,6 +12,11 @@ manual_edit: true
 > Increments 2/3 are designed only after this lands live and produces data
 > ("measure before optimizing"). Identity SoT: `CONTEXT.md`. Decision: `docs/adr/0002-ledger-sot-vault-mirror.md`.
 
+> **REMOVED 2026-06-20.** This increment shipped, then its class-nudge injection
+> was deleted as a measured no-op (see auto-memory learning-loop-archon-port and
+> the removal note in `docs/architecture.md`). This page is retained as the
+> historical design record; the mechanism it describes is no longer in the code.
+
 ## Problem
 
 The learning loop is **open**. Mistakes are captured (improvement-ticket miner: critic

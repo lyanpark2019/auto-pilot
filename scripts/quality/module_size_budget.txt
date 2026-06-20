@@ -32,8 +32,6 @@ tests/test_hooks_guards.py|640
 # cmd_resume (~22 lines, cap-recovery); duplicate approved-count loop removed
 # (gate_phase_end now returns the count directly). Slice RES1 adds 2 lines
 # (_recover.register_cli_subparsers wiring; all logic in _recover.py).
-# Phase-2 learnings mirror adds 2 lines (_mirror_learnings.register_cli_subparsers
-# for improvements-mirror subcommand; all logic in _mirror_learnings.py).
 # Phase-2a enrich-persist adds 2 lines (_enrich_persist.register_cli_subparsers
 # for enrich subcommand; all logic in _enrich_persist.py).
 # inc3 Phase 1 adds 2 emit_escalation call sites (doom-loop + evidence_failed,
@@ -116,14 +114,6 @@ scripts/docs/check_doc_reference_integrity.py|515
 # Cap 510 = 505 + 5 headroom.
 tests/test_doc_reference_integrity.py|510
 #
-# test_mirror_learnings.py is the full acceptance suite for _mirror_learnings.py.
-# The 16 Fix-1 / Fix-2 regression tests (prune-safety + sentinel strict ownership)
-# share _valid_ticket / _write_ticket / render_gotcha helpers with the baseline
-# tests; splitting would duplicate helper definitions or require a conftest.
-# Fix-3 (section 13) adds 2 tests for the corrupt-ticket-blocks-prune invariant
-# (88 lines). Cap 710 = 694 current + 16 headroom.
-tests/test_mirror_learnings.py|710
-#
 # _escalation.py hosts both the enrichment-record writer (_record_enrichment) and the
 # resolution writer (record_resolution) + cmd_escalation_resolve CLI handler. Splitting
 # would force the CLI handlers to import each other's writers, creating circular-import
@@ -150,22 +140,3 @@ tests/test_escalation.py|550
 # so splitting would duplicate helper definitions or require a conftest. The P2
 # dry-run no-escalation test (section 6b) added ~55 lines. Cap 530 = 524 + 6 headroom.
 tests/test_enrich_persist.py|530
-#
-# test_demote.py is the full acceptance suite for the downvote/reinstate path;
-# all tests share _seed_promoted / _make_ledger_and_repo / _run helpers.
-# The P1 watermark fix added TestReinstateWatermark (2 tests) + TestDownvoteStateGuard
-# (3 tests) = +75 lines.  Splitting would duplicate helper definitions or require
-# a conftest.  Cap 510 = 501 current + 9 headroom.
-tests/test_demote.py|510
-#
-# test_learnings.py is the full acceptance suite for _learnings.py + snapshot
-# integration.  The A/B gate-vs-ungated tests (select_tickets gated=False,
-# resolve_learnings kill-switch) share _valid_ticket / _write_ticket / _bind_snapshot
-# helpers with the baseline tests; splitting would duplicate helper definitions or
-# require a conftest.  The cold-review opt-in env-parse fix added 5 new tests
-# (=0/=false/=true/=yes/not-disabled-extended) = +76 lines.  D2 PR-2 (always-write
-# marker + snapshot same-file guard) added test_snapshot_context_learnings_path_is_bundle_file
-# + marker assertions = +34 lines.  Conftest-split to share helpers is the deferred
-# cleaner fix (tracked since #92); bumping here keeps the acceptance suite cohesive.
-# Cap 640 = 631 current + 9 headroom.
-tests/test_learnings.py|640

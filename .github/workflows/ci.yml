@@ -105,7 +105,6 @@ jobs:
           python3 hooks/test_guard_destructive.py
           python3 hooks/test_codex_conductor_guard.py
           python3 hooks/test_notebooklm_delete_gate.py
-          python3 hooks/test_learning_miner_stop.py
           python3 hooks/test_pre_reviewer_write.py
           python3 hooks/test_worker_scope_gate.py
           python3 hooks/test_branch_lock.py

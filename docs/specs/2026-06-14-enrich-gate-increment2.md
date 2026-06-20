@@ -135,8 +135,7 @@ feeds Phase 2.
 `scripts/measure_enrich_precision.py` + `measure-enrich` CLI subcommand.
 Deterministic admit/reject rate + per-tier breakdown + reason histogram +
 evidence-complete rate + advisory-judge disagreement over candidate JSONs.
-Tested on fixtures (mirrors the G1 `measure_learnings_injection.py` precedent —
-instrument shipped, runs on real data later).
+Tested on fixtures (instrument shipped, runs on real data later).
 Acceptance met: fixture batches produce honest 0%/100%/mixed rates.
 
 ## Phase 4b — worker-output delta (DEFERRED)

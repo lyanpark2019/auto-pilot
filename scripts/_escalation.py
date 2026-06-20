@@ -17,7 +17,7 @@ from typing import Any
 import jsonschema
 
 import _contract
-from _improvement import PLUGIN_VERSION, ledger_lock, project_slug, repo_fingerprint
+from _identity import PLUGIN_VERSION, ledger_lock, project_slug, repo_fingerprint
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parent.parent / "schemas" / "escalation-record.schema.json"

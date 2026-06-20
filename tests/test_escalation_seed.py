@@ -181,7 +181,7 @@ class TestWriteRecords:
         monkeypatch.setenv("HOME", str(tmp_path))
         records = build_seed_records(count=3, resolved=1, abandoned=1, enriched=0, now=NOW)
         from _escalation import validate_escalation  # noqa: PLC0415
-        from _improvement import project_slug  # noqa: PLC0415
+        from _identity import project_slug  # noqa: PLC0415
 
         # Compute ledger path without going through ledger_dir (which may be mocked).
         slug = project_slug(tmp_path)
