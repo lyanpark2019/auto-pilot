@@ -65,7 +65,6 @@ Global Hard Rule "Discovery order = vault-first" is the SoT; this block just pin
 | `scripts/_contract.py` | PR1 | schema validate, atomic write, flock, snapshot SHAs, PM-SIGNATURE |
 | `scripts/_dispatch.py` | PR1 | ticket prep, diff freeze, `collect_round_outcome`, scope assert |
 | `scripts/_subagent_helpers.py` | PR1 | ticket read, exit-code, done.marker, finding-hash |
-| `scripts/_gc.py` | PR1 | bundle size cap, orphan ticket sweep |
 | `scripts/_worktree.py` | PR2 | `WorktreeManager` (create / apply_to_main / cleanup / reap) |
 | `scripts/_status.py` | PR2 | `WorkerStatus` enum + TERMINAL set |
 | `scripts/_reviewer_wrapper.py` | PR3 | parallel reviewer dispatch with isolated env dicts |
