@@ -37,7 +37,6 @@ Anti-trigger-competition map. Each job has exactly one owner; satellites are lis
 
 `doc-management` bundles its L2 mechanical guard (`skills/doc-management/scripts/check-doc-reference-integrity.mjs`) and L3 freshness script (`skills/doc-management/scripts/check_design_doc_freshness.py`) as copy-into-repo assets.
 
-Codex CLI skills (12, versioned under `codex/`): this repo is the source of truth — deploy with `codex/sync-to-codex.sh`, see `codex/README.md`.
 
 ## Principles (Nisi 2026-06)
 

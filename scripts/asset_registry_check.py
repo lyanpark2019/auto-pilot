@@ -7,7 +7,6 @@ Registry SoT: live scan of:
   skills/*/SKILL.md
   hooks/*.{sh,py}
   commands/*.md
-  codex/skills/*/  (frontmatter name/description)
 
 No new registry file — live scan only.
 
@@ -127,35 +126,12 @@ def _scan_commands() -> list[Asset]:
     return assets
 
 
-def _scan_codex_skills() -> list[Asset]:
-    assets: list[Asset] = []
-    codex_skills_dir = REPO_ROOT / "codex" / "skills"
-    if not codex_skills_dir.exists():
-        return assets
-    for skill_dir in codex_skills_dir.iterdir():
-        if skill_dir.is_dir():
-            assets.extend(_scan_codex_skill_dir(skill_dir))
-    return assets
-
-
-def _scan_codex_skill_dir(skill_dir: Path) -> list[Asset]:
-    for candidate in [skill_dir / "SKILL.md", *skill_dir.glob("*.md")]:
-        if not candidate.exists():
-            continue
-        fm = _parse_frontmatter(candidate.read_text(encoding="utf-8", errors="replace"))
-        if fm.get("name") or fm.get("description"):
-            return [Asset(fm.get("name", skill_dir.name), fm.get("description", ""),
-                          str(candidate.relative_to(REPO_ROOT)), "codex")]
-    return []
-
-
 def _scan_registry() -> list[Asset]:
     registry: list[Asset] = []
     registry.extend(_scan_agents())
     registry.extend(_scan_skills())
     registry.extend(_scan_hooks())
     registry.extend(_scan_commands())
-    registry.extend(_scan_codex_skills())
     return registry
 
 

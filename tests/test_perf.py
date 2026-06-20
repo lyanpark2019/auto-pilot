@@ -132,10 +132,10 @@ def test_pivot_check_within_budget(benchmark) -> None:
         "hooks/gh-auth-preflight.sh",
         "scripts/_worktree.py",
         "scripts/_budget.py",
-        "codex/worker-prompt.md",
+        "agents/auto-pilot-codex-reviewer.md",
         "vault/pipeline/build.py",
         "evals/harness.py",
-        "dashboard/scorecard.json",
+        "schemas/review.schema.json",
     ]
 
     benchmark(risk_assess.assess, paths)

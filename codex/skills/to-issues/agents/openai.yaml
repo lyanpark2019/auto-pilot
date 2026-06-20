@@ -1,4 +1,0 @@
-interface:
-  display_name: "To Issues"
-  short_description: "Slice specs into issue tickets"
-  default_prompt: "Use $to-issues to break this plan into independently grabbable issues."
