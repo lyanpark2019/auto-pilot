@@ -3,13 +3,6 @@
 # Enforced by scripts/quality/check-module-size.sh (wired into CI).
 # Add an entry ONLY with a justified reason in the comment above it.
 #
-# Vendored Codex-fork CLI (codex/ tree = repo-SoT, one-way synced out via
-# sync-to-codex.sh — spec "codex" subsystem row). Single-file by upstream fork
-# layout; splitting would diverge the synced surface. 907 lines at import
-# (7a6a6b3); cap 920 = small headroom only, not license to grow — split it if
-# it needs substantive new code.
-codex/skills/migrate-to-codex/scripts/cli.py|920
-#
 # SKILL.md files are prose interface specs read by the agent in one pass;
 # splitting them across files would break the single-load contract and the
 # relative scripts/references refs. adversarial-review-loop SKILL.md grew to

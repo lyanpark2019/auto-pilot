@@ -1,4 +1,0 @@
-interface:
-  display_name: "Triage"
-  short_description: "State-machine issue triage"
-  default_prompt: "Use $triage to classify and route these issues into actionable next states."

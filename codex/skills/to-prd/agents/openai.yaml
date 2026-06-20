@@ -1,4 +1,0 @@
-interface:
-  display_name: "To PRD"
-  short_description: "Convert context into a PRD"
-  default_prompt: "Use $to-prd to turn this conversation into a concise PRD issue draft."

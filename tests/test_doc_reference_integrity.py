@@ -44,8 +44,6 @@ def _write_minimal_assets(repo: Path) -> None:
     hooks = repo / "hooks"
     hooks.mkdir()
     (hooks / "guard.sh").write_text("#!/usr/bin/env bash\n")
-    codex_skill = repo / "codex" / "skills" / "audit"
-    codex_skill.mkdir(parents=True)
 
 
 class TestValidCitations:
@@ -126,19 +124,19 @@ class TestAssetCountClaims:
     def test_live_asset_count_mismatch_is_violation(self, repo: Path) -> None:
         _write_minimal_assets(repo)
         (repo / "docs" / "guide.md").write_text(
-            "Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): "
-            "2 skills · 1 agents · 1 commands · 1 hooks · 1 codex-skills = "
-            "6 assets total.\n"
+            "Live asset counts (from `collect_assets()`): "
+            "2 skills · 1 agents · 1 commands · 1 hooks = "
+            "5 assets total.\n"
         )
         r = _run(repo)
         assert r.returncode == 1
         assert "asset count mismatch" in r.stdout
         assert "skills: said 2, actual 1" in r.stdout
-        assert "assets: said 6, actual 5" in r.stdout
+        assert "assets: said 5, actual 4" in r.stdout
 
     def test_source_comment_collect_assets_count_mismatch_is_violation(self, repo: Path) -> None:
         (repo / "scripts" / "registry.py").write_text(
-            "# registry at 80 vs build_dashboard_data.collect_assets' canonical 77\n"
+            "# registry at 80 vs collect_assets' canonical 77\n"
         )
         r = _run(repo)
         assert r.returncode == 1
@@ -155,26 +153,9 @@ class TestAssetCountClaims:
     def test_asset_total_includes_skill_shells(self, repo: Path) -> None:
         (repo / "skills" / "retired-shell").mkdir(parents=True)
         (repo / "docs" / "guide.md").write_text(
-            "Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): "
-            "0 skills · 0 agents · 0 commands · 0 hooks · 0 codex-skills = "
+            "Live asset counts (from `collect_assets()`): "
+            "0 skills · 0 agents · 0 commands · 0 hooks = "
             "1 assets total.\n"
-        )
-        r = _run(repo)
-        assert r.returncode == 0
-
-    def test_asset_counts_use_build_dashboard_data_collect_assets(self, repo: Path) -> None:
-        (repo / "scripts" / "build_dashboard_data.py").write_text(
-            "def collect_assets():\n"
-            "    return [\n"
-            "        {'type': 'skill', 'name': 'alpha'},\n"
-            "        {'type': 'hook', 'name': 'one.sh'},\n"
-            "        {'type': 'hook', 'name': 'two.py'},\n"
-            "    ]\n"
-        )
-        (repo / "docs" / "guide.md").write_text(
-            "Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): "
-            "1 skills · 0 agents · 0 commands · 2 hooks · 0 codex-skills = "
-            "3 assets total.\n"
         )
         r = _run(repo)
         assert r.returncode == 0
@@ -248,9 +229,9 @@ class TestHookCountClaims:
         # asset line claims 1 hooks (matches _write_minimal_assets' single hook),
         # but hooks.json wires only a.sh — the hook guard must NOT fire here.
         (repo / "docs" / "architecture.md").write_text(
-            "Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): "
-            "1 skills · 1 agents · 1 commands · 1 hooks · 1 codex-skills = "
-            "5 assets total. See `hooks/hooks.json`.\n"
+            "Live asset counts (from `collect_assets()`): "
+            "1 skills · 1 agents · 1 commands · 1 hooks = "
+            "4 assets total. See `hooks/hooks.json`.\n"
         )
         r = _run(repo)
         assert r.returncode == 0, r.stdout

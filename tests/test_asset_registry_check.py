@@ -43,12 +43,11 @@ def test_scan_registry_excludes_hook_tests(tmp_path: Path, monkeypatch) -> None:
     _write(tmp_path / "hooks" / "guard.py", "# Guard destructive commands\n")
     _write(tmp_path / "hooks" / "test_guard.py", "# test only\n")
     _write(tmp_path / "commands" / "vault.md", "---\ndescription: Build vault\n---\n")
-    _write(tmp_path / "codex" / "skills" / "audit" / "SKILL.md", "---\nname: audit\ndescription: Audit code\n---\n")
     monkeypatch.setattr(arc, "REPO_ROOT", tmp_path)
 
     registry = arc._scan_registry()
 
-    assert {asset.asset_type for asset in registry} == {"agent", "skill", "hook", "command", "codex"}
+    assert {asset.asset_type for asset in registry} == {"agent", "skill", "hook", "command"}
     assert not any(asset.source.endswith("test_guard.py") for asset in registry)
 
 

@@ -37,7 +37,7 @@ import risk_assess  # noqa: E402
         ("scripts/_dispatch.py", "high"),
         ("ci/quality_gate.yml", "high"),
         # medium: plain source
-        ("scripts/build_dashboard_data.py", "medium"),
+        ("scripts/risk_assess.py", "medium"),
         ("deploy/run.sh", "medium"),
         ("web/src/index.ts", "medium"),
         # low: config (outside schemas/)

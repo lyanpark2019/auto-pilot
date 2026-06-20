@@ -84,8 +84,7 @@ retro appends evidence-cited gotchas to vault `intent/gotchas/` when a vault exi
 > Stop-hook miner, and the learnings-ab eval cases — was deleted after a live A/B
 > pilot proved the class-nudge a no-op for capable reviewers (they do not fail by
 > forgetting a defect class). Verdict + rig in auto-memory learning-loop-archon-port.
-> The cross-model differentiator was repackaged as a standalone Archon workflow under
-> `deliverable/xmodel-review/`. The vault-enrichment and typed-escalation layers below
+> The cross-model differentiator was repackaged as a standalone Archon workflow (maintained outside this repo). The vault-enrichment and typed-escalation layers below
 > are independent and remain.
 
 - **Increment-2 Phase-1 — enrichment gate shipped 2026-06-14** (`scripts/_enrich_gate.py` +
@@ -143,7 +142,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 7 skills · 15 agents · 7 commands · 26 hooks · 11 codex-skills = 66 assets total.
+Live asset counts: 7 skills · 15 agents · 7 commands · 26 hooks = 55 assets total.
 
 ```
 auto-pilot/
@@ -174,9 +173,9 @@ auto-pilot/
 │   ├── worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
 │   └── guard-destructive.py + test_*.py (self-tests)
 ├── schemas/                           # PR1: contract/ticket/review/preflight JSON Schema 2020-12
-├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers, build_dashboard_data.py
-├── prompts/ + vault/ + codex/  # PM/worker prompts; vault export; codex forks
-├── deploy/ + dashboard/ + evals/
+├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers
+├── prompts/ + vault/  # PM/worker prompts; vault export
+├── deploy/ + evals/
 └── docs/
     ├── architecture.md (this file) + master-plan.md + perf-budget.md + 7-phase-template.md
     ├── asset-charter.md               # pillar→asset mapping SoT

@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import re
 import sys
@@ -44,7 +43,7 @@ _SKIP_PATH_PREFIXES = ("node_modules/", ".git/", "__pycache__/", ".planning/")
 
 _ASSET_COUNT_RE = re.compile(
     r"(?<![<≤>≥=])\b(?P<num>\d+)\s+"
-    r"(?P<kind>codex[- ]skills?|skills?|agents?|commands?|hooks?|assets?)\b",
+    r"(?P<kind>skills?|agents?|commands?|hooks?|assets?)\b",
     re.IGNORECASE,
 )
 _CANONICAL_ASSET_RE = re.compile(r"\b(?:canonical|registry at)\s+(?P<num>\d+)\b", re.IGNORECASE)
@@ -106,12 +105,12 @@ def _is_skipped_path(raw_path: str) -> bool:
 
 _ASSET_TYPE_TO_KIND = {
     "skill": "skills", "agent": "agents", "command": "commands",
-    "hook": "hooks", "codex-skill": "codex-skills",
+    "hook": "hooks",
 }
 
 
 def _asset_counts_from_assets(assets: Iterable[Mapping[str, object]]) -> dict[str, int]:
-    counts = {"skills": 0, "agents": 0, "commands": 0, "hooks": 0, "codex-skills": 0}
+    counts = {"skills": 0, "agents": 0, "commands": 0, "hooks": 0}
     shells = 0
     for asset in assets:
         typ = str(asset.get("type", ""))
@@ -123,44 +122,22 @@ def _asset_counts_from_assets(assets: Iterable[Mapping[str, object]]) -> dict[st
     return counts
 
 
-def _collect_assets_via_dashboard(repo_root: Path) -> list[dict[str, object]] | None:
-    module_path = repo_root / "scripts" / "build_dashboard_data.py"
-    if not module_path.exists():
-        return None
-    spec = importlib.util.spec_from_file_location("_auto_pilot_build_dashboard_data", module_path)
-    if spec is None or spec.loader is None:
-        return None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    collect = getattr(module, "collect_assets", None)
-    if not callable(collect):
-        return None
-    loaded = collect()
-    return loaded if isinstance(loaded, list) else None
-
-
 def _collect_asset_counts(repo_root: Path) -> dict[str, int]:
-    assets = _collect_assets_via_dashboard(repo_root)
-    if assets is not None:
-        return _asset_counts_from_assets(assets)
-    fallback: list[dict[str, object]] = []
+    assets: list[dict[str, object]] = []
     skills_dir = repo_root / "skills"
     if skills_dir.is_dir():
-        fallback.extend({"type": "skill", "name": p.parent.name} for p in skills_dir.glob("*/SKILL.md"))
-        fallback.extend({"type": "skill-shell", "name": p.name}
-                        for p in skills_dir.iterdir() if p.is_dir() and not (p / "SKILL.md").exists())
+        assets.extend({"type": "skill", "name": p.parent.name} for p in skills_dir.glob("*/SKILL.md"))
+        assets.extend({"type": "skill-shell", "name": p.name}
+                      for p in skills_dir.iterdir() if p.is_dir() and not (p / "SKILL.md").exists())
     for sub, typ in (("agents", "agent"), ("commands", "command")):
         base = repo_root / sub
         if base.is_dir():
-            fallback.extend({"type": typ, "name": p.stem} for p in base.glob("*.md"))
+            assets.extend({"type": typ, "name": p.stem} for p in base.glob("*.md"))
     hooks_dir = repo_root / "hooks"
     if hooks_dir.is_dir():
-        fallback.extend({"type": "hook", "name": p.name} for p in hooks_dir.iterdir()
-                        if p.suffix in {".py", ".sh"} and not p.name.startswith("test_"))
-    codex_dir = repo_root / "codex" / "skills"
-    if codex_dir.is_dir():
-        fallback.extend({"type": "codex-skill", "name": p.name} for p in codex_dir.iterdir() if p.is_dir())
-    return _asset_counts_from_assets(fallback)
+        assets.extend({"type": "hook", "name": p.name} for p in hooks_dir.iterdir()
+                      if p.suffix in {".py", ".sh"} and not p.name.startswith("test_"))
+    return _asset_counts_from_assets(assets)
 
 
 def _asset_kind(raw_kind: str) -> str:
@@ -175,7 +152,6 @@ def _has_asset_count_context(raw_line: str) -> bool:
     return (
         "live asset counts" in lower
         or "collect_assets" in lower
-        or "build_dashboard_data" in lower
         or ("assets total" in lower and "=" in lower)
     )
 
@@ -185,7 +161,7 @@ def _asset_count_claims(raw_line: str) -> list[tuple[str, int, str]]:
         (_asset_kind(m.group("kind")), int(m.group("num")), m.group(0))
         for m in _ASSET_COUNT_RE.finditer(raw_line)
     ]
-    if "collect_assets" in raw_line or "build_dashboard_data" in raw_line:
+    if "collect_assets" in raw_line:
         claims.extend(("assets", int(m.group("num")), m.group(0))
                       for m in _CANONICAL_ASSET_RE.finditer(raw_line))
     return claims
@@ -203,7 +179,7 @@ def _actual_hook_count(repo_root: Path) -> int | None:
 def _is_hook_count_line(raw_line: str) -> bool:
     if _HISTORICAL_RE.search(raw_line):
         return False
-    if "collect_assets" in raw_line or "build_dashboard_data" in raw_line:
+    if "collect_assets" in raw_line:
         return False
     return "hooks.json" in raw_line
 

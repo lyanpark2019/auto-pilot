@@ -45,9 +45,6 @@ jobs:
       - name: asset count drift (hardcoded counts in CLAUDE.md vs live filesystem)
         run: python3 scripts/docs/check_asset_counts.py
 
-      - name: codex fork provenance (every fork has a recorded upstream pin)
-        run: python3 scripts/docs/check_codex_provenance.py
-
       - name: mypy --strict
         run: python -m mypy  # no args -> mypy.ini files = scripts/ + hooks/ (CI/local scope parity)
 
