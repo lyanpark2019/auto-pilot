@@ -37,10 +37,6 @@ text, not code-spans, so the doc-ref guard couples each cite to its own line onl
 - `scripts/_escalation.py:238` — record_resolution
 - agent: agents/escalation-resolver.md
 
-**Learnings inject gate** — worker dispatch DENIED unless gate-passed learnings resolved.
-- `scripts/_learnings.py:40` — is_gate_passed predicate
-- `hooks/dispatch-contract-gate.sh:205` — worker-ticket presence check
-
 **State writes** — state.json only via lock+atomic; root tree only via apply_to_main.
 - hooks/state-write-guard.sh
 

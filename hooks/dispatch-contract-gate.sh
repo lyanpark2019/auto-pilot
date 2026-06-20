@@ -193,19 +193,6 @@ print("OK")
 PY
 ) || deny "PM-SIGNATURE invalid in $contract_dir: $signature_result"
 
-# ── inject enforcement: a worker contract requires resolved learnings ──
-# resolve_learnings ALWAYS writes <contract_dir>/context-bundle/learnings.md
-# (a marker on the blind path), so its ABSENCE means the PM skipped the injection
-# step (orchestrator resolve-learnings). Trigger on the PRESENCE of the worker
-# ticket in the contract — not the prompt's TICKET= line — so a worker dispatched
-# via the contract_dir= marker alone cannot skip the check. The worker ticket is
-# written (prepare_subagent_ticket, step 5) AFTER learnings.md (step 0b), so its
-# existence implies learnings.md must already be there; reviewers in the same
-# contract also see the file, so this never false-denies a resolved flow.
-if [[ -f "$contract_dir/tickets/worker.json" && ! -f "$contract_dir/context-bundle/learnings.md" ]]; then
-  deny "Worker contract missing context-bundle/learnings.md in $contract_dir. Run orchestrator resolve-learnings (injection seam) before dispatch."
-fi
-
 # ── ⓓ-9: preflight phase check ──
 # Parse phase from contract.json (id or phase field)
 phase=$(python3 -c '

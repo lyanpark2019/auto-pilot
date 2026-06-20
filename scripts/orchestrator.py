@@ -16,7 +16,7 @@ Usage:
     python orchestrator.py round-budget --score-dir .planning/score --round N
     python orchestrator.py review-status
     python orchestrator.py ledger-append | ledger-rebalance [--apply] [--project-root PATH]
-    python orchestrator.py resume | discover (--check|--record) --graphify-version V [--scope-files a,b] | recover ... | improvements-list | improvements-gate | improvements-set-state | improvements-mirror ...
+    python orchestrator.py resume | discover (--check|--record) --graphify-version V [--scope-files a,b] | recover ...
 """
 from __future__ import annotations
 
@@ -559,16 +559,10 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     p_lr.add_argument("--project-root", default=None)
     p_lr.set_defaults(func=cmd_ledger_rebalance)
 
-    import _promotion  # noqa: PLC0415
-    _promotion.register_cli_subparsers(sub)
     import _recover  # noqa: PLC0415
     _recover.register_cli_subparsers(sub)
     import _round_budget  # noqa: PLC0415
     _round_budget.register_cli_subparsers(sub)
-    import _mirror_learnings  # noqa: PLC0415
-    _mirror_learnings.register_cli_subparsers(sub)
-    import measure_learnings_injection  # noqa: PLC0415
-    measure_learnings_injection.register_cli_subparsers(sub)
     import _enrich_persist  # noqa: PLC0415
     _enrich_persist.register_cli_subparsers(sub)
     import measure_enrich_precision  # noqa: PLC0415
@@ -579,12 +573,6 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     measure_escalation.register_cli_subparsers(sub)
     import _escalation_seed  # noqa: PLC0415
     _escalation_seed.register_cli_subparsers(sub)
-    import _resolve_learnings_cli  # noqa: PLC0415
-    _resolve_learnings_cli.register_cli_subparsers(sub)
-    import _capture_reviews  # noqa: PLC0415
-    _capture_reviews.register_cli_subparsers(sub)
-    import measure_cross_model  # noqa: PLC0415
-    measure_cross_model.register_cli_subparsers(sub)
 
     return parser
 

@@ -9,16 +9,15 @@
 # IMPORTANT: this hook has NO LLM.  It performs deterministic provenance
 # capture only — frontmatter stub (project, run_id, session_id, date,
 # raw-transcript link).  It does NOT distill decisions / mistakes /
-# what-worked.  That distillation is delegated to the retro agent + Hermes
-# miner, which carry conversation context this Stop hook does not.
+# what-worked.  That distillation is delegated to the retro agent, which
+# carries conversation context this Stop hook does not.
 #
 # Once-per-session idempotency: filename = session-<safe_session_id>.md.
 # Re-running for the same session overwrites the same file — never creates
 # a second page.
 #
 # Stop-hook reentry guard: if stop_hook_active is true in the payload, exit
-# immediately to avoid infinite Stop re-invocation (same idiom as
-# learning-miner-stop.sh).
+# immediately to avoid infinite Stop re-invocation (the standard Stop-hook idiom).
 set -euo pipefail
 
 payload=$(cat)
@@ -158,7 +157,7 @@ def main() -> None:
             f"# Session record — {p_project} — {date_str}\n"
             "\n"
             "> Deterministic capture (no LLM). Provenance only. Decisions, mistakes, and\n"
-            "> what-worked are distilled into the Hermes Ledger by the miner + retro agent,\n"
+            "> what-worked are distilled by the retro agent,\n"
             "> which carry conversation context this Stop hook does not.\n"
             "\n"
             f"- **Project:** {p_project}\n"
@@ -167,7 +166,7 @@ def main() -> None:
             f"- **Raw transcript:** `{p_transcript}`\n"
             "\n"
             "## Distillate\n"
-            "*(pending — populated by retro/miner from the Ledger)*\n"
+            "*(pending — populated by the retro agent)*\n"
         )
         # Atomic write: write to a temp file then os.replace (same filesystem).
         fd, tmp_path = tempfile.mkstemp(dir=sessions_dir, suffix=".md.tmp")

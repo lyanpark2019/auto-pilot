@@ -67,8 +67,6 @@ Examples by `problem_class`:
 - `doom-loop`: re-run the failing verify command with the enriched context injected
   into the dispatch bundle.
 - `unknown-library`: re-check whether the library is now documented in `vault/enrichment/`.
-- `promotion-gate-unmet`: re-evaluate the promotion gate fields against the enriched
-  evidence.
 - `enrich-gate-reject`: re-run `_enrich_gate.evaluate` with the newly admitted pages.
 
 Do NOT re-attempt more than once. If the first retry fails, move to Step 4b.
@@ -94,9 +92,8 @@ the escalation ledger and reports them as unresolved gaps to the human.
 - Do NOT emit a new escalation record for the retry failure — `abandoned` is the stop
   signal. The `TRANSITIONS` FSM (`scripts/_escalation.py:40`) enforces this; any
   attempt to re-open a terminal record raises `ValueError`.
-- Do NOT rewrite or relax a gate rule. A needed rule change goes through the Hermes
-  improvement-ticket path (`scripts/_improvement.py`, `agents/retro.md`), not through
-  this agent.
+- Do NOT rewrite or relax a gate rule. A needed rule change is a human decision
+  surfaced via the retro agent (`agents/retro.md`), not made by this agent.
 - Do NOT touch `state.json` directly — the `state-write-guard.sh` hook blocks it for
   this role.
 

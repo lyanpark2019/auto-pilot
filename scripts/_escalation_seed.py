@@ -29,7 +29,7 @@ from _escalation import (
     ledger_dir,
     validate_escalation,
 )
-from _improvement import PLUGIN_VERSION
+from _identity import PLUGIN_VERSION
 
 
 # ---------------------------------------------------------------------------

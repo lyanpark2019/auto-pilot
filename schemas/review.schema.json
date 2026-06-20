@@ -23,7 +23,6 @@
           "file":             { "type": "string" },
           "line":             { "type": ["integer", "null"] },
           "issue":            { "type": "string" },
-          "class":            { "description": "advisory defect-class tag; ANY value tolerated — the vocab is enforced in the learning_miner allow-list, never the schema, so a malformed/non-string tag can never fail review.json validation and sink the whole review" },
           "fix":              { "type": "string" },
           "finding_hash":     { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "addresses_prior":  { "type": ["string", "null"] }

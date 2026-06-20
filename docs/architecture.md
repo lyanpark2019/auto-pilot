@@ -11,7 +11,7 @@ manual_edit: true
 
 The main-session PM dispatches Sonnet 4.6 (1M ctx) workers in parallel, gates each diff through Codex + cold Claude dual adversarial review plus `review-gatekeeper` modes, runs phase verify checklists, commits atomically, advances phases until spec is complete. Full auto.
 
-> Single index of every policy the loop enforces (budget / routing / risk / sandbox / scope / escalation / learnings gate / state): `docs/governance.md`.
+> Single index of every policy the loop enforces (budget / routing / risk / sandbox / scope / escalation / state): `docs/governance.md`.
 
 ## Purpose
 
@@ -25,7 +25,7 @@ The loop is single-mode — **NOT** a greenfield generator and **NOT** a quality
 
 Why brownfield: every friction guard presupposes existing code — composition-root breakage (`__init__.py` must already exist), SSL cascade, source-first debug (Naver private-bug class), scope-drift REJECT (`scope_files` constrains edits inside an existing tree), worktree + atomic merge to `$ROOT`. Born from 381-session `/insights` friction, all existing-project maintenance accidents.
 
-**Vault-as-substrate reframe (2026-06-14):** the four pillars below sit on the vault as a knowledge substrate, not beside it — the vault is the shared memory the loop reads from and writes to. A continuous autoresearch loop enriches it with verified external knowledge; mistakes and the installed project's conversation history flow back in; the relevant slice is injected at dispatch. First increment = the **closed learning loop**: `docs/specs/2026-06-14-closed-learning-loop.md`. Store split (Ledger = SoT, vault = mirror): `docs/adr/0002-ledger-sot-vault-mirror.md`.
+**Vault-as-substrate reframe (2026-06-14):** the four pillars below sit on the vault as a knowledge substrate, not beside it — the vault is the shared memory the loop reads from and writes to. A continuous autoresearch loop enriches it with verified external knowledge; mistakes and the installed project's conversation history flow back in; the relevant slice is injected at dispatch. The first increment was a **closed learning loop** (`docs/specs/2026-06-14-closed-learning-loop.md`); its class-nudge injection was **removed 2026-06-20** as a measured no-op, leaving the vault-enrichment + escalation layers. Store split (Ledger = SoT, vault = mirror): `docs/adr/0002-ledger-sot-vault-mirror.md`.
 
 ## System Anatomy (round-2 §2.5)
 
@@ -77,90 +77,17 @@ Full contract schemas and enforcement contracts: see README "Binding contracts i
 **(b) Self-improvement loop** — round-N SCORE → … → dual review (plugin targets itself):
 retro appends evidence-cited gotchas to vault `intent/gotchas/` when a vault exists and to repo `.claude/insights.md` as the always-present memory surface. Converges via same stopping rule as product loop (same finding ≥2 rounds = escalation).
 
-### Improvement-ticket ledger (discover-only self-improvement, shipped 2026-06-09/10)
+### Vault enrichment + typed escalation (Increment-2/3)
 
-Structured layer under loop (b): `scripts/learning_miner.py` + `scripts/_improvement.py` +
-`schemas/improvement-ticket.schema.json`. Deterministic Python (no LLM), CLI shape mirrors
-`scripts/risk_assess.py` (advisory exit 0, `--fail-on` exit 2, one-line JSON verdict).
-Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
+> **Learning loop removed 2026-06-20.** The improvement-ticket learning loop —
+> class-nudge injection plus the learning-miner / promotion / mirror modules, the
+> Stop-hook miner, and the learnings-ab eval cases — was deleted after a live A/B
+> pilot proved the class-nudge a no-op for capable reviewers (they do not fail by
+> forgetting a defect class). Verdict + rig in auto-memory learning-loop-archon-port.
+> The cross-model differentiator was repackaged as a standalone Archon workflow under
+> `deliverable/xmodel-review/`. The vault-enrichment and typed-escalation layers below
+> are independent and remain.
 
-- **Discover-only** — writes `state=candidate` tickets; acting on a `promotable` verdict stays
-  human. Full FSM (candidate→…→promoted) declared in the schema; Phase-1 (2026-06-13) made the
-  later transitions code-enforced — see the Phase-1 bullet below (`_promotion.py:TRANSITIONS`).
-- **Durable ledger OUTSIDE the target repo** — `~/.claude/projects/<slug>/improvements/<fp>.json`.
-  Brownfield driver must never pollute the driven repo's VCS; `--commit-to` is the explicit opt-in.
-  Evidence is self-contained (snippet + run_id, never a dangling `path:line` into gitignored scratch).
-- **Fingerprint** = sha256(source ‖ file_basename ‖ normalized_issue ‖ asset); normalization strips
-  paths / line numbers / ISO dates / `phase-N`, keeps FULL issue text (8-token truncation collided).
-- **Gate on `distinct_runs`, not raw occurrences** — reviewer-finding ≥2, doom-loop/insight/other ≥3
-  → `promotable`; a worker re-tripping the same finding within one run cannot inflate the gate.
-  Captured reviewer-finding lines carry the `run_id` of the run that PRODUCED the review (read from
-  the contract's `PM-SIGNATURE`), so a later session re-sweeping persisted `review.json` files stamps
-  the SAME id and cannot inflate `distinct_runs` (an unsigned contract dir falls back to the
-  scan-time run_id — unreachable in normal dispatch, where ticket prep verifies the signature).
-  `scan_reviewer_findings` credits that per-line id;
-  a legacy line with no `run_id` collapses to one synthetic sentinel (`__legacy_no_run_id__`), never
-  the live state run_id, so re-mining it after the next `init` cannot inflate either. Genuine
-  cross-run recurrence is required (D1 2026-06-16; provenance + sentinel hardening D2 2026-06-17).
-- **R1 — reviewer-finding keys on a controlled-vocab `class`, not free prose (2026-06-17)** — R1
-  measured that `normalize_issue` keeps wording, so one defect phrased N ways fingerprints N times →
-  a 100%-recurring bug reviewed 6× yielded 0 promotable tickets. Fix: reviewers emit an optional
-  `class` from the `learning_miner.REVIEWER_FINDING_CLASSES` vocab (mirrored for reviewers in
-  `review-core.md`); `_capture_reviews` carries it into the JSONL; `scan_reviewer_findings` seeds the
-  fingerprint on `class` (normalized strip/lower, basename kept) when it is in that allow-list, else
-  falls back to `issue` — but a finding with neither a valid class nor a non-empty issue is SKIPPED
-  (no defect identity → cannot falsely promote, mirroring the `scan_insights` empty guard). Same
-  defect, different wording, now collapses to ONE ticket so `distinct_runs` accumulates. Mirrors the
-  long-standing `insight` class-tag pattern. The vocab is enforced in the miner allow-list, not the
-  schema — `review.schema.json` tolerates ANY `class` value (string, null, or a malformed non-string)
-  so a reviewer typo can NEVER fail review.json validation (a constrained type would otherwise sink the
-  whole review through the evidence gate's `read_review`); an out-of-vocab class degrades to
-  issue-keying. Honest limits: (1) the long tail with no fitting class still keys on prose;
-  (2) two genuinely-distinct defects in one file sharing a class across two runs over-collapse into one
-  promotable ticket — bounded by the human `user_approved` promotion gate, not eliminated; (3) a free
-  `issue` whose `normalize_issue` form equals a bare class token (e.g. a finding whose entire issue is
-  `null-deref`) aliases that class — near-unreachable with real sentence-form issues, not namespaced
-  (a prefix would migrate every prose-keyed fingerprint); (4) efficacy across the CROSS-MODEL pair
-  (codex vs claude independently picking the SAME token for one defect) — the real R1 unknown — now has
-  a built, deterministic-tested measurement harness: a pure analyzer `scripts/measure_cross_model.py`
-  (`orchestrator.py measure-cross-model`, reuses the real miner for the fingerprint/distinct_runs verdict),
-  a live producer `scripts/measure_cross_model_collect.py`, and a seeded fixture under
-  `evals/cases/cross-model-convergence/`. The first live attempt (2026-06-17) was codex-usage-blocked, so
-  cross-MODEL convergence stays UNMEASURED (evidence
-  `evals/cases/cross-model-convergence/results/2026-06-17-codex-usage-blocked.json`,
-  sha256 124a708ee2f4c6a22989deac455e531fe1d12a9b9169a8253912e8217f52471e; re-run the producer when codex
-  credits return). That run did re-confirm SAME-model class stability on real claude output (modal class
-  stable across 3 passes per defect); cross-model remains a hypothesis, not a closed result.
-- **Inputs** (3 scanners): `critic-rejections-phase-*.jsonl`, `state.json` pivot_detector, and
-  `insights.jsonl` — retro's structured sidecar where a class tag (not wording, not file) drives
-  identity, because measured recurrence is semantic/class-level and a literal fingerprint fragments
-  it. Honest corpus note: per-class volume measured WEAK (230 commits, ≤3 distinct days/class).
-  The first scanner is fed by a deterministic CODE producer — `scripts/_capture_reviews.py`
-  (`orchestrator.py capture-reviews` / `capture-all-phases`) converts dual-reviewer REJECT
-  `review.json` findings (P0/P1) into JSONL lines. The Stop hook (below) calls `capture-all-phases`
-  before mining, so capture fires automatically at session end across every phase — including
-  pivot-aborted phases that never reach a clean phase-end — with no PM prose (D2 2026-06-17).
-- **Phase-1 promotion CLI shipped 2026-06-13** (`scripts/_promotion.py:138`, three orchestrator
-  subcommands `improvements-list/gate/set-state`). FSM is now enforced on every transition: the
-  state machine in `_promotion.py:TRANSITIONS` rejects illegal jumps at write time. `promoted`
-  requires all three `promotion_gate` fields (`tests_pass`, `ci_pass`, `user_approved`) to be
-  `True` before the transition is accepted. Asset authoring and approval stay human — `user_approved`
-  is only set on an explicit user directive; the CLI records and validates, never auto-decides.
-- **Phase-2 vault mirror shipped 2026-06-14** (`scripts/_mirror_learnings.py`, `orchestrator.py
-  improvements-mirror`): derived, idempotent one-way sync — each gate-passed ticket becomes a
-  `gotchas/gotcha-<fp>.md` page in the project vault. Ledger is SoT (ADR 0002); vault is
-  human-browsable mirror only. Re-runs are byte-stable; pages for tickets no longer promotable
-  are pruned; hand-authored pages (no generator sentinel) are never touched. Shared predicate
-  `_learnings.is_gate_passed` (public since Phase-2) defines "gate-passed" for both injection
-  (Phase-3) and mirror (Phase-2).
-- **Wired via Stop hook** `hooks/learning-miner-stop.sh` (advisory, always exit 0, reentry-guarded):
-  it sweeps capture (`capture-all-phases`) THEN mines, so the producer→consumer chain runs at session
-  end with no PM prose. Once-per-session is sufficient: evidence dedups on (run_id, snippet), so
-  re-fires cannot inflate. SubagentStop rejected (races the PM's jsonl write); PM-prose step rejected
-  (enforce with code).
-- **No run identity → non-persisting scan** (ADR `docs/adr/0001-empty-run-id-non-persisting.md`):
-  empty/non-string `run_id` projects a verdict but persists nothing — a `""` phantom run otherwise
-  shortcuts the `distinct_runs` gate by one run. No fallback id synthesis (re-imports the gaming).
 - **Increment-2 Phase-1 — enrichment gate shipped 2026-06-14** (`scripts/_enrich_gate.py` +
   `schemas/enrichment-evidence.schema.json`): deterministic gate that must pass before any
   external fact enters the vault. Rules: `snippet` non-empty + `source_url` present +
@@ -182,47 +109,12 @@ Decisions locked by dual adversarial review (v1 draft was double-REJECTed):
   owns live MCP I/O (context7 → web → community); the Python module owns deterministic
   shaping and is fully testable with FakeFetcher. Agent never writes vault pages directly.
 - **Increment-2 Phase-3 — escalation-record schema + producer shipped 2026-06-14**
-  (`schemas/escalation-record.schema.json` + `scripts/_escalation.py`, 9 schemas total):
+  (`schemas/escalation-record.schema.json` + `scripts/_escalation.py`, 8 schemas total):
   typed escalation record `{problem_class, tried, evidence, suggested_enrich_query}` —
   the tier-1→tier-2 boundary marker (inc 3) and the enrich trigger.  A tier-1 gate that
   cannot resolve a case emits one; `suggested_enrich_query` feeds Phase-2 via
   `drive_enrich`.  CLI: `orchestrator.py escalation-record|escalation-list|escalation-enrich`.
   Inc 3 design SoT: `docs/specs/2026-06-15-two-tier-escalation-increment3.md`.
-- **Phase-4 measurement (G1 input) — 2026-06-14** (`scripts/measure_learnings_injection.py`,
-  `orchestrator.py measure-injection`): on the current real ledger all 7 gate-passed tickets are
-  file-less `insight` tickets (`scope_blind=7`, `scope_addressable_pct=0.0`); the one `doom-loop`
-  ticket sits at `candidate` below its promotion threshold and is excluded from gate-passed.
-  Scope-match injection serves ONLY file-anchored (reviewer-finding) tickets; there are 0 such
-  promotable tickets in the ledger yet, so the file-anchored path's in-the-wild recall is
-  **unmeasured**. The before/after delta is **null because nothing is injection-eligible** —
-  every contract runs learnings-blind on this ledger — not because injection is broken
-  (`test_select_tickets_matches_promotable_by_scope` proves the file-anchored path works).
-  **G1 decision input:** deterministic scope-match under-serves an insight-dominated ledger; a
-  non-file relevance signal (source/asset-type or semantic) would be needed for file-less tickets —
-  but per "measure before optimizing", DEFER G1 until an external-repo run produces file-anchored
-  reviewer-finding tickets to measure the file-anchored recall in the wild.
-- **D1 — code-side capture + organic recurrence proof shipped 2026-06-16** (`scripts/_capture_reviews.py`,
-  PR #97): the deterministic producer above plus the run-scoped `distinct_runs` fix make the
-  reviewer-finding path injectable from real reviewer output, not just a synthetic seed.
-  `tests/test_capture_reviews_e2e.py` drives capture→mine→resolve→measure on `review.json` fixtures
-  only (no `_improvement.bump_or_create` seeding): a genuine 2-run recurrence flips
-  `scope_addressable_pct` 0.0→100.0, and `test_stale_finding_not_recredited_to_new_run` guards the
-  anti-inflation semantics. Honest limits: fixtures hold issue wording constant — `normalize_issue`
-  strips path/line/date/phase noise but NOT wording, so real-reviewer phrasing variance across genuine
-  runs may prevent `distinct_runs` accumulation (untested in the wild); legacy prose lines without
-  `run_id` remain re-mine-inflatable; L2 (does injection improve outcomes) stays deferred per
-  `evals/cases/learnings-ab`.
-- **D2 — both-sides invocation enforcement + provenance run_id shipped 2026-06-17** (PR #99 capture
-  side + inject-side runtime gate): neither learning-loop side depends on PM prose any more. CAPTURE
-  fires automatically at the Stop hook (`learning-miner-stop.sh` runs `capture-all-phases` before
-  mining); each captured line's `run_id` comes from the contract's `PM-SIGNATURE` (provenance), so a
-  later session re-sweeping persisted `review.json` cannot inflate `distinct_runs`, and legacy
-  no-`run_id` lines collapse to one synthetic sentinel — superseding D1's "legacy lines remain
-  re-mine-inflatable" limit. INJECT is runtime-gated: `_learnings.resolve_learnings` ALWAYS writes
-  `context-bundle/learnings.md` (a marker on the blind path), and `hooks/dispatch-contract-gate.sh`
-  DENIES a worker dispatch whose bundle lacks it — skipping resolve blocks the loop. Residual: the
-  inject gate fires only on marked dispatches (the gate's documented no-marker bypass is unchanged);
-  R1 phrasing variance + L2 outcome stay deferred.
 
 ### Memory 3-layer
 
@@ -251,7 +143,7 @@ Built directly from `/insights` friction analysis on 381 sessions:
 
 ## Components (merged unified-coding-system layout, 2026-06)
 
-Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 18 agents · 7 commands · 28 hooks · 12 codex-skills = 76 assets total.
+Live asset counts (from `scripts/build_dashboard_data.collect_assets()`): 11 skills · 18 agents · 7 commands · 27 hooks · 12 codex-skills = 75 assets total.
 
 ```
 auto-pilot/
@@ -283,7 +175,7 @@ auto-pilot/
 ├── hooks/  (27 wired, P④; hooks/hooks.json is wiring SoT; + _stdin_contract.py helper = 28 files)
 │   ├── preflight/edit/bash/reviewer guards + post-deploy/doc-sync/notebooklm/pm-final
 │   ├── round-2/3 enforcement: branch/deletion/gh/ruff/dispatch/creation/context/artifact/subagent
-│   ├── learning-miner-stop + worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
+│   ├── worker-scope-gate (PreToolUse Edit/Write scope-allowlist)
 │   └── guard-destructive.py + codex-conductor-guard.py + test_*.py (self-tests)
 ├── schemas/                           # PR1: contract/ticket/review/preflight JSON Schema 2020-12
 ├── scripts/                           # orchestrator.py, headless-loop.py, _*.py helpers, build_dashboard_data.py
@@ -394,7 +286,7 @@ write contract.json
      contract_dir=<contract_dir>
 ```
 
-`hooks/dispatch-contract-gate.sh` derives the contract directory from those markers and rejects reviewer dispatch (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) during an active run when no `TICKET=` or `contract_dir=` marker is present — catching ad-hoc reviewer bypasses that skip the frozen-diff sha binding. Workers dispatch as `general-purpose` (non-reviewer type) but carry `TICKET=<contract_dir>/tickets/worker.json`, so the gate additionally DENIES a worker dispatch whose `context-bundle/learnings.md` is absent (D2 inject enforcement — `resolve_learnings` always writes that file, so absence means injection was skipped); other worker invariants are covered by the exit gate.
+`hooks/dispatch-contract-gate.sh` derives the contract directory from those markers and rejects reviewer dispatch (`auto-pilot-codex-reviewer` / `auto-pilot-claude-reviewer`) during an active run when no `TICKET=` or `contract_dir=` marker is present — catching ad-hoc reviewer bypasses that skip the frozen-diff sha binding. Workers dispatch as `general-purpose` (non-reviewer type) but carry `TICKET=<contract_dir>/tickets/worker.json`; other worker invariants are covered by the exit gate.
 
 Regression pins: `tests/test_pm_protocol_contract_dispatch.py` asserts `dispatch-contract-check` appears before `prepare_subagent_ticket` in the protocol section, and that `TICKET={ticket_path}` / `contract_dir={contract_dir}` literals are preserved.
 

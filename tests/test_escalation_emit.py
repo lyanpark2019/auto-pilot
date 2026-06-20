@@ -1,4 +1,4 @@
-"""Tests for scripts/_escalation_emit.py and the 3 emit-seam wiring points.
+"""Tests for scripts/_escalation_emit.py and the 2 emit-seam wiring points (doom-loop, contract-schema-gap).
 
 For each emit point the suite asserts BOTH:
   (a) side effect: a schema-valid escalation record is written with the correct
@@ -17,7 +17,6 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -25,9 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import _escalation
 import _escalation_emit
-import _improvement
 import orchestrator
-import _promotion
 from _escalation import validate_escalation
 from _escalation_emit import emit_escalation
 
@@ -55,30 +52,6 @@ def _find_escalation_files(ledger: Path) -> list[Path]:
     if not ledger.exists():
         return []
     return [p for p in ledger.glob("*.json") if not p.name.endswith(".lock")]
-
-
-def _seed_promotion_ticket(ledger: Path, fp: str, *, all_gates: bool = False) -> None:
-    ledger.mkdir(parents=True, exist_ok=True)
-    gate: dict[str, Any] = {"tests_pass": False, "ci_pass": False, "user_approved": False}
-    if all_gates:
-        gate = {"tests_pass": True, "ci_pass": True, "user_approved": True}
-    ticket = {
-        "schema_version": 1,
-        "fingerprint": fp,
-        "pattern": "bare except swallows error",
-        "source": "reviewer-finding",
-        "candidate_asset": "hook",
-        "state": "verified",
-        "distinct_runs": 2,
-        "occurrences": 3,
-        "first_seen": "2026-06-10T00:00:00Z",
-        "last_seen": "2026-06-15T00:00:00Z",
-        "plugin_version": "0.8.9",
-        "repo_fingerprint": "abc123",
-        "promotion_gate": gate,
-        "evidence": [{"run_id": "r1", "snippet": "bare-except-in-hook"}],
-    }
-    (ledger / f"{fp}.json").write_text(json.dumps(ticket, indent=2))
 
 
 # ===========================================================================
@@ -201,105 +174,6 @@ class TestEmitDoomLoop:
         orchestrator.main(["pivot-check", "--phase", "1", "--finding-hash", "h1"])
         rc = orchestrator.main(["pivot-check", "--phase", "1", "--finding-hash", "h1"])
         assert rc == 1
-
-
-# ===========================================================================
-# Emit point (b): promotion-gate-unmet — _promotion.cmd_improvements_set_state
-# ===========================================================================
-
-
-class TestEmitPromotionGateUnmet:
-    def _run_set_state(self, ledger: Path, fp: str, new_state: str) -> int:
-        import argparse
-        args = argparse.Namespace(prefix=fp[:8], new_state=new_state, repo_root=None)
-        # Override ledger_dir so it uses our tmp ledger
-        return _promotion.cmd_improvements_set_state(args)
-
-    def test_side_effect_escalation_written(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """(a) gate-unmet transition writes a promotion-gate-unmet escalation record."""
-        ledger = tmp_path / "improvements"
-        fp = "a" * 64
-        _seed_promotion_ticket(ledger, fp, all_gates=False)
-        escalation_ledger = tmp_path / "esc-ledger"
-        monkeypatch.setattr(_escalation, "ledger_dir", lambda r, c: escalation_ledger)
-        monkeypatch.setattr(_improvement, "ledger_dir", lambda r, c: ledger)
-
-        import argparse
-        args = argparse.Namespace(prefix=fp[:8], new_state="promoted", repo_root=None)
-        _promotion.cmd_improvements_set_state(args)
-
-        files = _find_escalation_files(escalation_ledger)
-        assert files, "promotion-gate-unmet escalation record must be written"
-        record = json.loads(files[0].read_text())
-        validate_escalation(record)
-        assert record["problem_class"] == "promotion-gate-unmet"
-
-    def test_control_flow_returns_1(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """(b) gate-unmet still returns 1 (error) as before."""
-        ledger = tmp_path / "improvements"
-        fp = "b" * 64
-        _seed_promotion_ticket(ledger, fp, all_gates=False)
-        monkeypatch.setattr(_improvement, "ledger_dir", lambda r, c: ledger)
-        monkeypatch.setattr(_escalation, "ledger_dir", lambda r, c: tmp_path / "esc")
-
-        import argparse
-        args = argparse.Namespace(prefix=fp[:8], new_state="promoted", repo_root=None)
-        rc = _promotion.cmd_improvements_set_state(args)
-        assert rc == 1
-
-    def test_non_gate_error_still_returns_1(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Non-gate PromotionError (illegal transition) still returns 1."""
-        ledger = tmp_path / "improvements"
-        fp = "c" * 64
-        _seed_promotion_ticket(ledger, fp, all_gates=False)
-        monkeypatch.setattr(_improvement, "ledger_dir", lambda r, c: ledger)
-
-        import argparse
-        # "candidate" → "promoted" is illegal FSM transition (not a gate error)
-        ticket = json.loads((ledger / f"{fp}.json").read_text())
-        ticket["state"] = "candidate"
-        (ledger / f"{fp}.json").write_text(json.dumps(ticket))
-        args = argparse.Namespace(prefix=fp[:8], new_state="promoted", repo_root=None)
-        rc = _promotion.cmd_improvements_set_state(args)
-        assert rc == 1
-
-    def test_red_isolation_emit_failure_does_not_change_return(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """RED: emit throws RuntimeError → gate-unmet still returns 1."""
-        ledger = tmp_path / "improvements"
-        fp = "d" * 64
-        _seed_promotion_ticket(ledger, fp, all_gates=False)
-        monkeypatch.setattr(_improvement, "ledger_dir", lambda r, c: ledger)
-        monkeypatch.setattr(
-            _escalation, "bump_or_create",
-            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("emit-fail"))
-        )
-
-        import argparse
-        args = argparse.Namespace(prefix=fp[:8], new_state="promoted", repo_root=None)
-        rc = _promotion.cmd_improvements_set_state(args)
-        assert rc == 1
-
-    def test_successful_transition_still_works(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """All-gates-met ticket can still be promoted (no regressions)."""
-        ledger = tmp_path / "improvements"
-        fp = "e" * 64
-        _seed_promotion_ticket(ledger, fp, all_gates=True)
-        monkeypatch.setattr(_improvement, "ledger_dir", lambda r, c: ledger)
-
-        import argparse
-        args = argparse.Namespace(prefix=fp[:8], new_state="promoted", repo_root=None)
-        rc = _promotion.cmd_improvements_set_state(args)
-        assert rc == 0
 
 
 # ===========================================================================
