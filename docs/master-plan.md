@@ -93,7 +93,7 @@ Runtime roles (easy to confuse):
 
 ### Not yet proven (honest gaps)
 - ~~Live e2e loop NEVER run~~ **PROVEN 2026-06-10** (Step 0 below): one full live cycle green.
-- ~~reviewer REJECT → fix round~~ **PROVEN** (run-4 phase 1, 2026-06-10/12 — seeded-defect round triggered dual REJECT, round-2 fix → APPROVE, spec `docs/specs/2026-06-10-run4-reject-and-conflict-smoke.md`). PR #28 is a harness fix shipped out of run-4 phases (reviewer prompt flag fix), not the proof artifact.
+- ~~reviewer REJECT → fix round~~ **PROVEN** (run-4 phase 1, 2026-06-10/12 — seeded-defect round triggered dual REJECT, round-2 fix → APPROVE). PR #28 is a harness fix shipped out of run-4 phases (reviewer prompt flag fix), not the proof artifact.
 - ~~merge-conflict path~~ **PROVEN** (run-4 phase 2, 2026-06-10/12 — EOF-collision conflict on parallel contracts, `git am --abort`, PM rebased + re-merged, main never dirty). PR #32 is the proof artifact (run-4 parallel-contract smoke tests); PR #31 is a harness fix shipped out of run-4 phases (preflight registry check).
 - ~~multi-contract parallel dispatch~~ **PROVEN** (run-4 phase 2, same run — two contracts dispatched in parallel with one conflict; proof artifact: PR #32).
 - ~~multi-phase advance~~ **PROVEN** (run-3 multi-phase smoke, 2026-06-10 — two phases in-loop under new evidence gates).
@@ -106,7 +106,7 @@ Dual adversarial review (Codex + cold Claude) found the original "graphify first
 
 ### Step 0 — prove the bare loop live — ✅ DONE 2026-06-10
 1. **Skill-fire smoke:** prose trigger ("Run the auto-pilot skill") FIRES the skill in `claude -p`; explicit `/auto-pilot <args>` as the `-p` prompt does NOT route through the Skill tool (answered ad-hoc). headless-loop's prose iteration prompt is the validated mechanism.
-2. **Bare e2e:** spec `docs/specs/2026-06-10-step0-brownfield-smoke.md` ran live end-to-end → commit `f4a2f59` on origin/main, CI green. Full chain exercised with real subagents: preflight → contract scaffold/sign → tech-critic → worktree → Sonnet worker → frozen diff → risk_assess → dual reviewers (codex 0 findings, claude 1 P2) → verify trio → `apply_to_main` + trailers → push → reap. ~10 min, 1 round.
+2. **Bare e2e:** ran live end-to-end → commit `f4a2f59` on origin/main, CI green. Full chain exercised with real subagents: preflight → contract scaffold/sign → tech-critic → worktree → Sonnet worker → frozen diff → risk_assess → dual reviewers (codex 0 findings, claude 1 P2) → verify trio → `apply_to_main` + trailers → push → reap. ~10 min, 1 round.
    Breaks captured (fixed same-day): pid-cap counted host-global claude processes (→ baseline-delta in `_budget.check_caps`); `.auto-pilot-worktree` sentinel untracked → false scope-trip (→ worktree-local `info/exclude`). Residuals closed: driver prompt 0-indexed phase (PR #40); `pm-final-report-*.md` rotation (keep 20, fix/loop-residuals); `phases[].approved` now written by `phase-end` from evidence gate count (fix/loop-residuals); `cost-cap` terminal status recoverable via `orchestrator.py resume` (fix/loop-residuals); specialist-pool tests-only row remapped to `review-gatekeeper` tdd-gate (fix/loop-residuals). No open P2/P3 residuals from Step 0.
 
 ### Step 1 — deterministic discovery seam + schema — ✅ DONE 2026-06-10
