@@ -25,7 +25,7 @@ The loop is single-mode — **NOT** a greenfield generator and **NOT** a quality
 
 Why brownfield: every friction guard presupposes existing code — composition-root breakage (`__init__.py` must already exist), SSL cascade, source-first debug (Naver private-bug class), scope-drift REJECT (`scope_files` constrains edits inside an existing tree), worktree + atomic merge to `$ROOT`. Born from 381-session `/insights` friction, all existing-project maintenance accidents.
 
-**Vault-as-substrate reframe (2026-06-14):** the four pillars below sit on the vault as a knowledge substrate, not beside it — the vault is the shared memory the loop reads from and writes to. A continuous autoresearch loop enriches it with verified external knowledge; mistakes and the installed project's conversation history flow back in; the relevant slice is injected at dispatch. The first increment was a **closed learning loop** (`docs/specs/2026-06-14-closed-learning-loop.md`); its class-nudge injection was **removed 2026-06-20** as a measured no-op, leaving the vault-enrichment + escalation layers. Store split (Ledger = SoT, vault = mirror): `docs/adr/0002-ledger-sot-vault-mirror.md`.
+**Vault-as-substrate reframe (2026-06-14):** the four pillars below sit on the vault as a knowledge substrate, not beside it — the vault is the shared memory the loop reads from and writes to. A continuous autoresearch loop enriches it with verified external knowledge; mistakes and the installed project's conversation history flow back in; the relevant slice is injected at dispatch. The first increment was a **closed learning loop**; its class-nudge injection was **removed 2026-06-20** as a measured no-op, leaving the vault-enrichment + escalation layers.
 
 ## System Anatomy (round-2 §2.5)
 

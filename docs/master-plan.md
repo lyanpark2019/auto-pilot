@@ -42,7 +42,7 @@ the **loop** stays single-mode. Approach: cherry-pick concepts from ruflo
 infra (vector DB, consensus, federation) until evidence demands it. The first increment was
 the **closed learning loop** (mistakes + conversation history → vault → injected back
 at dispatch); its class-nudge injection was **removed 2026-06-20** as a measured no-op
-(see `docs/specs/2026-06-14-closed-learning-loop.md`, retained as a historical record).
+(learning-loop design docs removed 2026-06-22).
 
 Increments 2 & 3 decisions are locked but not yet phase-specced (designed after
 increment 1 produces data) — see `docs/adr/0003-gated-ondemand-enrich-two-tier-escalation.md`:
