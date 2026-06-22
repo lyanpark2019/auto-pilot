@@ -154,8 +154,7 @@ def test_community_repro_passed_one_page(tmp_path: Path) -> None:
 # 6. Community hit + 2 corroborations on same exact hostname → rejected, zero pages
 # Note: the gate uses plain hostname comparison (no eTLD+1); two URLs on the
 # same hostname (e.g. both reddit.com/r/python/) are correctly rejected.
-# The www. vs old. subdomain residual is a deferred Phase-1 known limitation
-# documented in docs/specs/2026-06-14-enrich-gate-increment2.md.
+# The www. vs old. subdomain residual is a deferred Phase-1 known limitation.
 # ---------------------------------------------------------------------------
 
 

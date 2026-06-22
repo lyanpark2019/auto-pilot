@@ -113,7 +113,6 @@ retro appends evidence-cited gotchas to vault `intent/gotchas/` when a vault exi
   the tier-1→tier-2 boundary marker (inc 3) and the enrich trigger.  A tier-1 gate that
   cannot resolve a case emits one; `suggested_enrich_query` feeds Phase-2 via
   `drive_enrich`.  CLI: `orchestrator.py escalation-record|escalation-list|escalation-enrich`.
-  Inc 3 design SoT: `docs/specs/2026-06-15-two-tier-escalation-increment3.md`.
 
 ### Memory 3-layer
 
