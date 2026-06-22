@@ -1,0 +1,97 @@
+{
+  "skill_name": "doc-management",
+  "last_verified": "2026-06-22",
+  "evals": [
+    {
+      "id": "bootstrap-then-detect",
+      "prompt": "There are markdown docs under docs/ that lack frontmatter. Run bootstrap_frontmatter.py --write to stamp them, then run check_design_doc_freshness.py to detect a stale doc (one whose cited source file changed since source_commit).",
+      "expected_output": "bootstrap_frontmatter stamps all docs with type/topic/source_commit/manual_edit; check_design_doc_freshness.py then prints 'STALE <doc>' for the doc whose cited source changed and exits 1.",
+      "files": [
+        "skills/doc-management/scripts/bootstrap_frontmatter.py",
+        "skills/doc-management/scripts/check_design_doc_freshness.py"
+      ],
+      "assertions": [
+        {
+          "text": "After bootstrap --write, every .md in docs/ has all 4 required frontmatter keys (type, topic, source_commit, manual_edit)",
+          "passed": true,
+          "evidence": "Isolated git repo: after --write, every docs/*.md parsed with all of {type, topic, source_commit, manual_edit}."
+        },
+        {
+          "text": "source_commit values look like a 40-char hex sha",
+          "passed": true,
+          "evidence": "All source_commit values matched ^[0-9a-f]{40}$."
+        },
+        {
+          "text": "check_design_doc_freshness.py exits 1 and prints STALE for the doc whose cited source file was modified after its source_commit",
+          "passed": true,
+          "evidence": "Modified app/publisher.py after commit -> 'STALE docs/overview.md (... 1 cited source file(s) changed: app/publisher.py)', exit 1."
+        },
+        {
+          "text": "Docs that already have all 4 keys are not modified by bootstrap (idempotent)",
+          "passed": true,
+          "evidence": "Pre-stamped already.md reported as '1 already complete' and left unmodified by --write."
+        }
+      ]
+    },
+    {
+      "id": "sentinel-merge-preserves-user-block",
+      "prompt": "Given an existing doc with both <!-- @generated --> and <!-- @user --> regions, run sentinel_merge.py with a new generated doc. The @user block must be preserved byte-identical; the @generated region must contain the new content.",
+      "expected_output": "The merged output contains the new @generated content and the original @user block unchanged.",
+      "files": [
+        "skills/doc-management/scripts/sentinel_merge.py"
+      ],
+      "assertions": [
+        {
+          "text": "Merged output contains the new generated content (not the old)",
+          "passed": true,
+          "evidence": "sentinel_merge.py --demo: all assertions passed (generated region carries new content)."
+        },
+        {
+          "text": "The @user block text is byte-identical to the original",
+          "passed": true,
+          "evidence": "sentinel_merge.py --demo asserts the @user block is preserved byte-identical."
+        },
+        {
+          "text": "sentinel_merge demo() passes all its assert statements without error",
+          "passed": true,
+          "evidence": "'sentinel_merge demo: all assertions passed'."
+        },
+        {
+          "text": "When existing doc has no sentinels, full overwrite is applied and a warning is printed to stderr",
+          "passed": true,
+          "evidence": "stderr: 'sentinel_merge: existing doc has no sentinels — full overwrite applied'."
+        }
+      ]
+    },
+    {
+      "id": "affected-docs-selects-citing-doc",
+      "prompt": "Given docs/overview.md that mentions `app/publisher.py` in its body, and a changed file list of ['app/publisher.py'], affected_docs.py should include docs/overview.md in its output.",
+      "expected_output": "docs/overview.md is printed to stdout; docs/unrelated.md (which does not cite publisher.py) is not printed.",
+      "files": [
+        "skills/doc-management/scripts/affected_docs.py"
+      ],
+      "assertions": [
+        {
+          "text": "docs/overview.md appears in the output when app/publisher.py is the changed file",
+          "passed": true,
+          "evidence": "affected_docs.py --demo: all assertions passed (citing doc selected)."
+        },
+        {
+          "text": "docs/unrelated.md does NOT appear in the output",
+          "passed": true,
+          "evidence": "affected_docs.py --demo asserts the non-citing doc is excluded."
+        },
+        {
+          "text": "affected_docs demo() passes all its assert statements without error",
+          "passed": true,
+          "evidence": "'affected_docs demo: all assertions passed'."
+        },
+        {
+          "text": "When graphify is unavailable, falls back to basename/stem matching without error",
+          "passed": true,
+          "evidence": "--demo exercises the graphify-absent path via basename/stem matching with no error."
+        }
+      ]
+    }
+  ]
+}

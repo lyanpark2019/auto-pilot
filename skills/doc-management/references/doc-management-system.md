@@ -120,3 +120,68 @@ Why 층 위치는 프로젝트 선택: vault `intent/`(PickL 방식) 또는 repo
 - freshness v1 rename 미추적 (git --follow 비용).
 - semantic drift 는 AUDIT 주기 사이 창에서 존재 가능.
 - `_archive/` 추출-모델: 해당 영역 작업 시점에 검증 비용 발생 (선불 아님).
+
+## 10. 센티넬 컨벤션 + incremental refresh 체계 (v2)
+
+### 센티넬 마커 (sentinel convention)
+
+생성된 docs 와 사람이 수정하는 구역을 같은 파일에 공존시키는 규칙:
+
+```
+<!-- @generated -->
+...기계가 소유하는 구역 (MAINTAIN 이 덮어씀)...
+<!-- /@generated -->
+
+<!-- @user -->
+...사람이 소유하는 구역 (절대 덮어쓰지 않음)...
+<!-- /@user -->
+```
+
+- `<!-- @generated -->` 구역: graphify 질의 + 소스 re-read 로 교체. 리뷰 필요.
+- `<!-- @user -->` 구역: `sentinel_merge.py` 가 byte-identical 보존. 자동화가 절대 건드리지 않음.
+- 마커 없는 기존 문서: `sentinel_merge` 가 전체 overwrite + stderr warn 출력 (기존 동작 유지).
+
+### frontmatter bootstrap
+
+`scripts/bootstrap_frontmatter.py` — 4개 필수 키가 없는 docs 를 자동 주입:
+
+| 키 | 추론 방법 |
+|---|---|
+| `type` | path 세그먼트 (`architecture/`→architecture, `modules/`→module, `operations/`→operations, 기타→doc) |
+| `topic` | 파일명 stem (숫자/대시 접두사 제거) |
+| `source_commit` | `git rev-parse HEAD` |
+| `manual_edit` | `false` (기본) |
+
+기존 키 보존 (부분적으로 있는 frontmatter = merge). `--write` 없으면 dry-run. 멱등.
+
+**주의 (false-fresh 위험):** `source_commit=HEAD` 스탬프는 "이 문서는 HEAD 기준으로 정확하다"고 L3 freshness 게이트에 단언한다. 검증하지 않은/stale 문서에 bootstrap 을 실행하면 실제 drift 가 next 코드 변경 시까지 무음으로 숨겨진다. **bootstrap 은 AUDIT 패스 완료 후(또는 방금 직접 검증한 문서에만) 실행할 것 — 미감사 docs 의 post-audit 기준선 설정 도구이지, 검증 도구가 아니다.**
+
+### affected-docs impact selection
+
+`scripts/affected_docs.py` — 변경된 소스 파일에서 docs refresh 영향 셋을 확장:
+
+1. 변경 파일별로 `graphify affected <symbol>` 실행 (없으면 basename fallback).
+2. DOC_ROOT 전체를 grep — 영향받은 심볼/경로를 인용하는 docs 수집.
+3. 중복 제거 후 정렬 출력 → MAINTAIN 의 "refresh 대상 셋" 으로 소비.
+
+직접 STALE 인 docs 외에 sibling/dependent docs 까지 자동 확장.
+
+### local hook trigger model
+
+`scripts/install_doc_hooks.sh` — 현재 repo 의 `.git/hooks/` 에만 설치 (global 설치 없음):
+
+| hook | 동작 | 차단? |
+|---|---|---|
+| `post-commit` | `graphify update` (advisory) + freshness print | 아니오 |
+| `pre-push` | freshness check — STALE 이면 exit 1 | **예** |
+
+멱등 (marker 가 이미 있으면 append 안 함). CI hook 은 선택사항 — 로컬 게이트가 기본.
+
+### vault sentinel-aware sync
+
+`~/.claude/scripts/vault-sync.sh` (global deploy hook) 의 curated docs mirror 가
+`sentinel_merge.py` 를 통해 per-doc 쓰기를 수행:
+
+- vault 에 이미 docs 가 있으면 `<!-- @user -->` 구역 보존.
+- vault doc 미존재 시 그냥 write.
+- `sentinel_merge` 실패 시 plain copy fallback — deploy 절대 중단 않음.

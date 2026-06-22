@@ -2,18 +2,18 @@
 name: doc-management
 description: >-
   THE docs subsystem — one skill, three modes (REBUILD / MAINTAIN / AUDIT) that keeps a
-  repo's documentation matching its code, graphify-native. This skill should be used
-  whenever docs and code disagree, in any phrasing: "doc rot", "문서 개판", "docs don't
-  match code", "문서 전면 재작성", "rebuild docs from code", "graphify-native docs",
-  patchwork doc tree after a big refactor/migration (→ REBUILD); "doc sync", "문서
-  동기화", "docs behind code", "incremental doc update", "코드 바뀐 만큼만 문서 갱신",
-  stale design docs after merging a feature (→ MAINTAIN); "doc drift", "문서 최신화",
-  "docs audit", "주석이 옛날 정책", "sync docs to the codebase", docs that may be
-  aspirational or agent-written and need verification (→ AUDIT). Requests for a "claim
-  ledger" also land here — that pattern is retired; SHA freshness + AUDIT replace it.
-  NOT for: Obsidian/NotebookLM vault export (vault-build), harness bootstrap
-  (setup-harness), whole-codebase quality scoring (adversarial-review-loop),
-  DB-schema / env-config drift.
+  repo's documentation matching its code, graphify-native. Use when: "doc rot", "문서
+  개판", "docs don't match code", "문서 전면 재작성", "rebuild docs from code",
+  "graphify-native docs", patchwork doc tree after a big refactor/migration (→ REBUILD);
+  "doc sync", "문서 동기화", "docs behind code", "incremental doc update", "코드 바뀐
+  만큼만 문서 갱신", stale design docs after merging a feature, "bootstrap frontmatter",
+  "stamp docs with source_commit", "sentinel merge", "preserve user edits in vault",
+  "incremental vault refresh" (→ MAINTAIN); "doc drift", "문서 최신화", "docs audit",
+  "주석이 옛날 정책", "sync docs to the codebase", docs that may be aspirational or
+  agent-written and need verification (→ AUDIT). Requests for a "claim ledger" also land
+  here — that pattern is retired; SHA freshness + AUDIT replace it. NOT for:
+  Obsidian/NotebookLM vault export (vault-build), harness bootstrap (setup-harness),
+  whole-codebase quality scoring (adversarial-review-loop), DB-schema / env-config drift.
 ---
 
 # doc-management — one doc system, three modes
@@ -105,44 +105,72 @@ Full procedure (the proven 7-phase, end-to-end-verified on PickL-API):
    autonomous docs-only merge) → demote the vault to a re-exported mirror → handoff
    memory.
 
-## MODE: MAINTAIN — freshness scan → targeted refresh
+## MODE: MAINTAIN — incremental code→docs→vault refresh
 
-The steady-state mode. Detection is automatic, refresh is reviewed.
+The steady-state mode. Detection is automatic (zero-LLM); refresh is reviewed.
+Vault push happens via `vault-sync.sh` (now sentinel-aware) on deploy — not here.
 
-**Inputs.** The graph-freshness watcher (`${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-update.sh`,
-PostToolUse) marks `graphify-out/needs_update` whenever code is edited in a
-graphify-enabled repo — if the flag exists, rebuild the code-only graph first
-(deterministic, AST-only; filter snippet in `references/rebuild-phases.md` Phase 1 —
-single source, do not re-derive). Then, from the target repo root:
+**Step 0 — bootstrap frontmatter (if any docs lack it).**
+Run once before freshness detection; idempotent:
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/bootstrap_frontmatter.py --write [DOC_ROOT ...]
+```
+Injects `type` / `topic` / `source_commit` / `manual_edit` from path heuristics + HEAD sha.
+Skips docs already carrying all 4 keys. Docs with `manual_edit: true` are never touched.
 
+**CAVEAT:** bootstrap stamps `source_commit=HEAD`, which tells the L3 freshness
+gate "this doc is accurate as of HEAD". Run bootstrap only AFTER an AUDIT pass
+(or on docs you have just verified) — bootstrapping unaudited/stale docs silently
+marks them as fresh and masks real drift until the next code change touches their
+cited paths.
+
+**Step 1 — detect STALE set.**
+The graph-freshness watcher (`${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-update.sh`,
+PostToolUse) marks `graphify-out/needs_update` when code is edited — if the flag
+exists, rebuild the code-only graph first (filter snippet in
+`references/rebuild-phases.md` Phase 1 — single source, do not re-derive). Then:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py [DOC_ROOT ...]
 # default DOC_ROOT: docs — or run the repo's own installed copy
-# For this plugin repo, also pass .claude/design/ if needed: check_design_doc_freshness.py docs .claude/design
 ```
+Zero-LLM: per doc, diffs cited source paths against frontmatter `source_commit`
+(`git diff --name-only <commit>..HEAD -- <paths>`) → non-empty = **STALE** (exit 1).
+Missing required frontmatter keys = frontmatter-contract **WARN** (exit 0, advisory).
+Known limits: renames/moves untracked; cites only under the path-prefix allowlist
+(CONFIG block / `DOC_FRESHNESS_PATH_PREFIXES` env).
 
-Zero-LLM: per doc, diffs the body's cited source paths against frontmatter
-`source_commit` (`git diff --name-only <commit>..HEAD -- <paths>`) → non-empty =
-**STALE** (prints doc + changed files). Missing/empty required frontmatter keys
-(`type`/`topic`/`source_commit`/`manual_edit` — the section-5 contract) =
-frontmatter-contract **WARN**. `manual_edit: true` docs are skipped for freshness —
-automation never touches them. STALE exits 1 (blocking); frontmatter-contract WARN exits 0 (advisory). Known limits: renames/moves untracked (path-based
-diff); cites are collected only under the script's path-prefix allowlist (CONFIG
-block / `DOC_FRESHNESS_PATH_PREFIXES` env) — out-of-allowlist cites silently report
-fresh, so extend the list when a repo grows a new source tree.
+**Step 2 — expand impact set.**
+For each changed source file that caused STALE, expand to sibling/dependent docs:
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/affected_docs.py   --doc-root docs [CHANGED_FILE ...]
+```
+Runs `graphify affected <symbol>` per file (basename fallback when graphify absent);
+greps DOC_ROOT for docs citing any affected symbol. Union with the Step 1 STALE set
+= full refresh target list.
 
-**Per-doc refresh, for each STALE doc:**
-0. If docs structure or first-read paths are affected, update the onboarding hub using
-   `references/onboarding-hub.md` before reporting completion.
-1. Re-query the graph for the doc's topic (`graphify query`/`explain` against
-   `.graphify/code-only/...`) — find what structurally changed, including sibling
-   modules whose shared pages may also be stale.
+**Step 3 — regenerate each doc in the refresh set.**
+For each doc in the union set:
+0. If docs structure or first-read paths are affected, update the onboarding hub
+   (`references/onboarding-hub.md`) before reporting completion.
+1. Re-query the graph (`graphify query`/`explain` against `.graphify/code-only/...`)
+   — find what structurally changed.
 2. **READ the actual source files** that changed — never patch prose from the diff
    alone.
-3. Update cites + prose; untouched sections stay byte-identical (that contract keeps
-   refreshes cheap and reviewable).
-4. Bump frontmatter `source_commit` to current HEAD.
-5. Run the repo's L2 guard — must pass before reporting.
+3. Wrap machine-owned prose in `<!-- @generated --> ... <!-- /@generated -->` sentinels;
+   leave existing `<!-- @user --> ... <!-- /@user -->` regions untouched (they are
+   human-owned — see `references/doc-management-system.md §10`).
+4. Write via `sentinel_merge.py` to preserve `@user` blocks:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/sentinel_merge.py      <existing_doc> <new_generated_doc> --out <existing_doc>
+   ```
+5. Bump frontmatter `source_commit` to current HEAD.
+6. Run the repo's L2 guard — must pass before reporting.
+
+**Step 4 — note on vault push.**
+The Obsidian vault mirror is updated automatically via `~/.claude/scripts/vault-sync.sh`
+on the next deploy. That script now calls `sentinel_merge` per doc, so `@user` edits
+made directly in the vault are preserved across deploys. No manual vault action needed
+here.
 
 **Scope guards:**
 - **Skip dated/historical docs** (ADRs, `docs/audit/*`, dated plans) — they record
@@ -217,21 +245,29 @@ itself needs maintenance.
 
 ## Bundled assets
 
-- `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check_design_doc_freshness.py` — L3 freshness checker (zero-LLM, STALE blocks
-  exit 1; frontmatter-contract WARN advisory exit 0). Copy into the target repo's scripts dir or run from the skill.
-- `${CLAUDE_PLUGIN_ROOT}/skills/doc-management/scripts/check-doc-reference-integrity.mjs` — L2 deterministic guard
-  (project-agnostic, Node built-ins only). Copy in, edit the CONFIG block, wire into
-  CI. Parses all real-world anchor styles incl. `file.py:33,36,37` comma lists.
-- `references/doc-management-system.md` — canonical system spec (3-layer model,
-  contracts, automation table, known limits). The Why behind every rule here.
-- `references/gotchas.md` — 17 incident-backed gotcha→mitigation rows (single
-  source; read before running any mode).
-- `references/onboarding-hub.md` — AI / Developer onboarding hub contract distilled
-  from the shared Graphify docs-drift workflow.
+- `scripts/check_design_doc_freshness.py` — L3 freshness checker (zero-LLM, STALE blocks
+  exit 1; frontmatter-contract WARN advisory exit 0). Copy into target repo or run from skill.
+- `scripts/bootstrap_frontmatter.py` — inject missing frontmatter (type/topic/source_commit/
+  manual_edit) into docs lacking it. Dry-run by default; `--write` to apply. Idempotent.
+- `scripts/affected_docs.py` — expand changed-source-file list to full doc refresh impact
+  set via graphify affected + grep. Stdin or args; falls back to basename when graphify absent.
+- `scripts/sentinel_merge.py` — merge engine preserving `<!-- @user -->` blocks across
+  generated doc updates. CLI: `sentinel_merge.py <existing> <generated> [--out PATH]`.
+- `scripts/install_doc_hooks.sh` — installs LOCAL git hooks (post-commit advisory +
+  pre-push blocking freshness gate) into the current repo. Idempotent, no global install.
+- `scripts/check-doc-reference-integrity.mjs` — L2 deterministic guard (project-agnostic,
+  Node built-ins only). Copy in, edit CONFIG block, wire into CI.
+- `references/doc-management-system.md` — canonical system spec (3-layer model, contracts,
+  automation table, sentinel convention §10, known limits). The Why behind every rule here.
+- `references/gotchas.md` — 17 incident-backed gotcha→mitigation rows (single source; read
+  before running any mode).
+- `references/onboarding-hub.md` — AI / Developer onboarding hub contract.
 - `references/rebuild-phases.md` — full REBUILD procedure (7 phases, discovery slots,
   code-only filter snippet, red-flag table).
 - `references/audit-methodology.md` — full AUDIT methodology (auditor prompt template,
   evidence rules, guard install steps, anti-patterns).
+- `evals/evals.json` — skill-creator eval cases (bootstrap+detect, sentinel merge, affected
+  docs selection); `passed: false` placeholders for the eval loop to fill.
 
 ## Verification checklist (any mode, before reporting)
 
