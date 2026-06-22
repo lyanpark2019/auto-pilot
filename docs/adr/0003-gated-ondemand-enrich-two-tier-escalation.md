@@ -41,5 +41,5 @@ Grilled 2026-06-14. Two coupled control-flow decisions for the vault-grounded lo
 - Increments 2 and 3 share one seam: the escalation record is both the enrichment
   trigger and the tier-1→tier-2 boundary marker.
 - These designs are recorded but **not yet phase-specced** — full specs are written
-  after increment 1 (`docs/specs/2026-06-14-closed-learning-loop.md`) lands live and
+  after increment 1 (closed learning loop) lands live and
   produces data, per the project's measure-first discipline.
