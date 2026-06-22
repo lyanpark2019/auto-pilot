@@ -123,7 +123,7 @@ def _canonical_host(url: str) -> str:
       distinct canonical strings for the same real domain.
     Proper fix requires the ``publicsuffix2`` (PSL) and ``idna`` (UTS-46)
     third-party packages.  Deferred until evidence-justified by a live
-    producer; see docs/specs/2026-06-14-enrich-gate-increment2.md.
+    producer.
     """
     try:
         h = urllib.parse.urlparse(url).hostname or ""
