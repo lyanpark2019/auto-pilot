@@ -1,13 +1,18 @@
 ---
 name: adversarial-review-loop
 description: >
-  Dual-track review + improvement loop, three modes.
-  **branch mode** (default): Codex + Claude independently review the working branch/PR, cross-verify findings, fix, re-review until both approve. Triggers: "adversarial review", "codex review loop", "review until approve", "이중 리뷰", "PR cross-review", risky PR pre-merge.
-  **codebase mode**: scores the whole codebase on the quality-eval 13-dim rubric, fans out improvement contracts in parallel, re-scores until target. Triggers: "quality loop", "코드 품질 점수", "score this project", "95점", "빅테크 평가", "codebase quality improvement", "quality-eval". Supersedes quality-eval/quality-loop skills.
-  **multi-agent mode** (opt-in dispatch layer on codebase mode): PM main session + dim-routed Codex/Claude worker pool + cold-Claude reviewer pool; activation-gated by repo size + contract count. Triggers: `mode=multi-agent`, `--multi-agent`, "multi-agent review", "pm-worker loop", "코덱스 워커 풀".
-  **lifecycle mode** (superset orchestrator; absorbed pm-quality-harness-loop): whole-lifecycle quality lift then ship — CI-faithfulness gate → dimension fan-out → adversarial bug-hunt → honest re-score → harness-doc sync → autonomous merge. Use when the deliverable is "measurably better AND docs-synced AND merged", not just a score. Triggers: `mode=lifecycle`, `--lifecycle`, "big-tech 95", "quality lift then merge", "harden and ship", "코드 품질 빅테크로 올려줘", "score and fix this codebase then merge".
-  Git-baseline hygiene checks (uncommitted/unpushed/stash/conflicts) every round.
-  NOT for: dead-code/duplicate/stale-comment removal without a score target (residue-audit), doc↔code prose drift (doc-management), harness bootstrap (setup-harness), vault export/scoring (vault-build/vault-score) — route "코드 정리"/"clean up" requests to residue-audit unless the user asks for a score or a review verdict.
+  Review + improvement loop, four modes. **branch** (default): Codex + Claude review the
+  branch/PR, cross-verify, fix, re-review to dual approval. Triggers: "adversarial review",
+  "codex review loop", "이중 리뷰", "PR cross-review", risky pre-merge PR. **codebase**: score the
+  repo on the quality-eval 13-dim rubric, fan out fixes, re-score to target. Triggers: "quality
+  loop", "코드 품질 점수", "95점", "빅테크 평가" (supersedes quality-eval). **multi-agent** (codebase +
+  worker-pool dispatch, size/contract-gated). Triggers: `mode=multi-agent`, "multi-agent
+  review", "pm-worker loop", "코덱스 워커 풀". **lifecycle** (superset; lift then ship: CI-gate →
+  fan-out → bug-hunt → re-score → doc-sync → merge). Triggers: `mode=lifecycle`, "big-tech 95",
+  "harden and ship", "코드 품질 빅테크로 올려줘", "score and fix then merge". NOT for: cleanup without a
+  score target (residue-audit — route "코드 정리"/"clean up" there), doc↔code drift
+  (doc-management), harness bootstrap (setup-harness), vault export/score
+  (vault-build/vault-score).
 ---
 
 # Adversarial Review Loop (Codex × Claude)
