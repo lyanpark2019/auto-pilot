@@ -60,7 +60,7 @@ def _sig(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 def scan_module(path: Path) -> dict[str, Any]:
     """Scan module inputs into structured data."""
     try:
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(), filename=str(path))
     except (SyntaxError, UnicodeDecodeError):
         return {"public_classes": [], "public_functions": [], "signatures": {},
                 "docstring_first_line": "", "size_bytes": path.stat().st_size, "error": "parse_failed"}
