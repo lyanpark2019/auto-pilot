@@ -10,8 +10,7 @@ description: >-
   "stamp docs with source_commit", "sentinel merge", "preserve user edits in vault",
   "incremental vault refresh" (→ MAINTAIN); "doc drift", "문서 최신화", "docs audit",
   "주석이 옛날 정책", "sync docs to the codebase", docs that may be aspirational or
-  agent-written and need verification (→ AUDIT). Requests for a "claim ledger" also land
-  here — that pattern is retired; SHA freshness + AUDIT replace it. NOT for:
+  agent-written and need verification (→ AUDIT). "claim ledger" (retired) → AUDIT. NOT for:
   Obsidian/NotebookLM vault export (vault-build), harness bootstrap (setup-harness),
   whole-codebase quality scoring (adversarial-review-loop), DB-schema / env-config drift.
 ---
